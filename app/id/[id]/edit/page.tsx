@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
@@ -21,6 +20,28 @@ type UploadingPhoto = {
   error?: string;
 };
 
+type PlaceRow = {
+  id: string;
+  created_by: string;
+  title: string | null;
+  description: string | null;
+  city: string | null;
+  categories: string[] | null;
+  link: string | null;
+  address: string | null;
+  google_place_id: string | null;
+  lat: number | null;
+  lng: number | null;
+  photo_urls: unknown[] | null; // legacy
+  cover_url: unknown; // legacy
+};
+
+type PlacePhotoRow = {
+  url: string | null;
+  sort: number | null;
+  is_cover: boolean | null;
+};
+
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
 }
@@ -29,7 +50,7 @@ export default function EditPlacePage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const placeId = params?.id;
-  
+
   const { isLoaded } = useJsApiLoader({
     id: "google-maps-loader",
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY!,
@@ -51,7 +72,6 @@ export default function EditPlacePage() {
   const [lng, setLng] = useState<number | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
-  // Original values for comparison
   const [originalTitle, setOriginalTitle] = useState("");
   const [originalDescription, setOriginalDescription] = useState("");
   const [originalCity, setOriginalCity] = useState("");
@@ -72,55 +92,61 @@ export default function EditPlacePage() {
 
   const coverReady = useMemo(() => photos.some((p) => !!p.url), [photos]);
 
-  // Check if there are any changes
   const hasChanges = useMemo(() => {
     if (loading) return false;
-    
-    // Check title
+
     if (title.trim() !== originalTitle.trim()) return true;
-    
-    // Check description
     if ((description.trim() || "") !== (originalDescription.trim() || "")) return true;
-    
-    // Check city
     if ((city.trim() || "") !== (originalCity.trim() || "")) return true;
-    
-    // Check categories
+
     const currentCats = [...categories].sort().join(",");
     const origCats = [...originalCategories].sort().join(",");
     if (currentCats !== origCats) return true;
-    
-    // Check link
+
     if ((link.trim() || "") !== (originalLink.trim() || "")) return true;
-    
-    // Check address
     if ((address.trim() || "") !== (originalAddress.trim() || "")) return true;
-    
-    // Check Google place ID
+
     if (googlePlaceId !== originalGooglePlaceId) return true;
-    
-    // Check coordinates
     if (lat !== originalLat || lng !== originalLng) return true;
-    
-    // Check photos - compare URLs
-    const currentPhotoUrls = photos.map(p => p.url || p.preview).filter(Boolean).sort();
-    const origPhotoUrls = originalPhotos.map(p => p.url || p.preview).filter(Boolean).sort();
+
+    const currentPhotoUrls = photos.map((p) => p.url || p.preview).filter(Boolean).sort();
+    const origPhotoUrls = originalPhotos.map((p) => p.url || p.preview).filter(Boolean).sort();
+
     if (currentPhotoUrls.length !== origPhotoUrls.length) return true;
     for (let i = 0; i < currentPhotoUrls.length; i++) {
       if (currentPhotoUrls[i] !== origPhotoUrls[i]) return true;
     }
-    
+
     return false;
   }, [
-    title, description, city, categories, link, address, googlePlaceId, lat, lng, photos,
-    originalTitle, originalDescription, originalCity, originalCategories, originalLink,
-    originalAddress, originalGooglePlaceId, originalLat, originalLng, originalPhotos,
-    loading
+    title,
+    description,
+    city,
+    categories,
+    link,
+    address,
+    googlePlaceId,
+    lat,
+    lng,
+    photos,
+    originalTitle,
+    originalDescription,
+    originalCity,
+    originalCategories,
+    originalLink,
+    originalAddress,
+    originalGooglePlaceId,
+    originalLat,
+    originalLng,
+    originalPhotos,
+    loading,
   ]);
 
-  const canSave = useMemo(() => {
-    return title.trim().length > 0 && coverReady && hasChanges;
-  }, [title, coverReady, hasChanges]);
+  const canSave = useMemo(() => title.trim().length > 0 && coverReady && hasChanges, [
+    title,
+    coverReady,
+    hasChanges,
+  ]);
 
   useEffect(() => {
     (async () => {
@@ -139,13 +165,14 @@ export default function EditPlacePage() {
 
     (async () => {
       setLoading(true);
-      
-      // Load place
-      const { data: placeData, error: placeError } = await supabase
+
+      const { data: placeDataRaw, error: placeError } = await supabase
         .from("places")
         .select("*")
         .eq("id", placeId)
         .single();
+
+      const placeData = placeDataRaw as PlaceRow | null;
 
       if (placeError || !placeData) {
         setError("Place not found");
@@ -153,13 +180,11 @@ export default function EditPlacePage() {
         return;
       }
 
-      // Check permissions
       if (placeData.created_by !== userId) {
         router.push(`/id/${placeId}`);
         return;
       }
 
-      // Fill form with place data
       const placeTitle = placeData.title || "";
       const placeDescription = placeData.description || "";
       const placeCity = placeData.city || "";
@@ -167,8 +192,8 @@ export default function EditPlacePage() {
       const placeLink = placeData.link || "";
       const placeAddress = placeData.address || "";
       const placeGooglePlaceId = placeData.google_place_id || null;
-      const placeLat = placeData.lat || null;
-      const placeLng = placeData.lng || null;
+      const placeLat = placeData.lat ?? null;
+      const placeLng = placeData.lng ?? null;
 
       setTitle(placeTitle);
       setDescription(placeDescription);
@@ -180,7 +205,6 @@ export default function EditPlacePage() {
       setLat(placeLat);
       setLng(placeLng);
 
-      // Store original values
       setOriginalTitle(placeTitle);
       setOriginalDescription(placeDescription);
       setOriginalCity(placeCity);
@@ -191,45 +215,50 @@ export default function EditPlacePage() {
       setOriginalLat(placeLat);
       setOriginalLng(placeLng);
 
-      // Load photos from place_photos table
-      const { data: photosData, error: photosError } = await supabase
+      const { data: photosDataRaw, error: photosError } = await supabase
         .from("place_photos")
         .select("url, sort, is_cover")
         .eq("place_id", placeId)
         .order("sort", { ascending: true });
 
+      const photosData = (photosDataRaw as PlacePhotoRow[] | null) ?? [];
+
       let photoUrls: string[] = [];
-      
-      if (!photosError && photosData && photosData.length > 0) {
-        // Загружаем фото из таблицы place_photos
-        photoUrls = photosData.map((p: any) => p.url).filter(Boolean);
+
+      if (!photosError && photosData.length > 0) {
+        photoUrls = photosData
+          .map((p) => p.url)
+          .filter((u): u is string => typeof u === "string" && u.length > 0);
       } else {
-        // Fallback: используем старый формат (photo_urls или cover_url)
-        if (placeData.photo_urls && Array.isArray(placeData.photo_urls)) {
-          photoUrls.push(...placeData.photo_urls.filter((url): url is string => typeof url === "string" && url.length > 0));
+        // legacy fallback
+        if (Array.isArray(placeData.photo_urls)) {
+          const legacyUrls = placeData.photo_urls;
+          photoUrls.push(
+            ...legacyUrls.filter(
+              (u): u is string => typeof u === "string" && u.length > 0
+            )
+          );
         }
-        if (photoUrls.length === 0 && placeData.cover_url) {
+
+        if (photoUrls.length === 0 && typeof placeData.cover_url === "string" && placeData.cover_url.length > 0) {
           photoUrls.push(placeData.cover_url);
         }
       }
 
-      // Debug: логируем загруженные фото
       console.log("Loaded photos for editing:", {
-        photosFromTable: photosData?.length || 0,
+        photosFromTable: photosData.length,
         totalLoaded: photoUrls.length,
-        photoUrls: photoUrls
+        photoUrls,
       });
 
-      // Convert existing photos to UploadingPhoto format
       const existingPhotos: UploadingPhoto[] = photoUrls.map((url) => ({
         preview: url,
         uploading: false,
-        url: url,
+        url,
       }));
 
       setPhotos(existingPhotos);
-      // Store original photos for comparison
-      setOriginalPhotos(existingPhotos.map(p => ({ ...p })));
+      setOriginalPhotos(existingPhotos.map((p) => ({ ...p })));
       setLoading(false);
     })();
   }, [placeId, userId, router]);
@@ -250,9 +279,7 @@ export default function EditPlacePage() {
       setPhotos((prev) =>
         prev.map((p) => {
           if (p.preview !== item.preview) return p;
-          if (!result.url) {
-            return { ...p, uploading: false, error: result.error || "Upload failed" };
-          }
+          if (!result.url) return { ...p, uploading: false, error: result.error || "Upload failed" };
           return { ...p, uploading: false, url: result.url };
         })
       );
@@ -269,42 +296,33 @@ export default function EditPlacePage() {
         upsert: false,
       });
 
-      if (error) {
-        console.error("Upload error:", error);
-        return { url: null, error: error.message || "Upload failed" };
-      }
+      if (error) return { url: null, error: error.message || "Upload failed" };
 
       const { data } = supabase.storage.from("place-photos").getPublicUrl(path);
       return { url: data.publicUrl ?? null, error: null };
     } catch (err) {
-      console.error("Upload exception:", err);
       const errorMessage = err instanceof Error ? err.message : "Upload failed";
       return { url: null, error: errorMessage };
     }
   }
 
   function removePhoto(preview: string) {
-    setError(null); // Clear any previous errors
-    
+    setError(null);
+
     setPhotos((prev) => {
-      // Don't allow removing cover if it's the last photo
       const photoToRemove = prev.find((x) => x.preview === preview);
       if (!photoToRemove) return prev;
-      
-      // If this is the cover (first photo) and it's the last one, don't remove
+
       const isCover = prev.indexOf(photoToRemove) === 0;
       const isLast = prev.length === 1;
-      
+
       if (isCover && isLast) {
         setError("Cannot remove the last photo (cover is required)");
-        // Clear error after 3 seconds
         setTimeout(() => setError(null), 3000);
         return prev;
       }
 
-      if (photoToRemove.file) {
-        URL.revokeObjectURL(photoToRemove.preview);
-      }
+      if (photoToRemove.file) URL.revokeObjectURL(photoToRemove.preview);
       return prev.filter((x) => x.preview !== preview);
     });
   }
@@ -313,75 +331,39 @@ export default function EditPlacePage() {
     setError(null);
     setShowTitleError(false);
 
-    if (!userId || !placeId) {
-      setError("Please sign in to continue");
-      return;
-    }
+    if (!userId || !placeId) return setError("Please sign in to continue");
     if (!title.trim()) {
       setShowTitleError(true);
-      setError("Place name is required");
-      return;
+      return setError("Place name is required");
     }
-    if (!coverReady) {
-      setError("Add at least 1 photo (this will be the cover)");
-      return;
-    }
+    if (!coverReady) return setError("Add at least 1 photo (this will be the cover)");
 
-    // Validate categories
     const validCategories = categories.filter((cat) => CATEGORIES.includes(cat as any));
     if (categories.length > 0 && validCategories.length !== categories.length) {
-      setError("One or more selected categories are invalid");
-      return;
+      return setError("One or more selected categories are invalid");
     }
 
-    // Проверяем, что все фото загружены
-    const photosStillUploading = photos.some((p) => p.uploading);
-    const photosWithErrors = photos.filter((p) => p.error);
-    
-    if (photosStillUploading) {
-      setError("Please wait for all photos to finish uploading");
-      return;
-    }
+    if (photos.some((p) => p.uploading)) return setError("Please wait for all photos to finish uploading");
+    if (photos.some((p) => p.error)) return setError("Some photos failed to upload. Please remove them or try again.");
 
-    if (photosWithErrors.length > 0) {
-      setError(`Some photos failed to upload. Please remove them or try again.`);
-      return;
-    }
-
-    // Собираем все URL загруженных фото
-    const photoUrls = photos.map((p) => p.url).filter(Boolean) as string[];
-    
-    if (photoUrls.length === 0) {
-      setError("Add at least 1 photo (this will be the cover)");
-      return;
-    }
+    const photoUrls = photos.map((p) => p.url).filter((u): u is string => typeof u === "string" && u.length > 0);
+    if (photoUrls.length === 0) return setError("Add at least 1 photo (this will be the cover)");
 
     const coverUrl = photoUrls[0];
 
-    // Debug: логируем, что сохраняем
-    console.log("Updating place with photos:", {
-      totalPhotos: photos.length,
-      photosWithUrls: photoUrls.length,
-      photoUrls: photoUrls
-    });
-
     setSaving(true);
 
-    // Try to extract city from Google address if not set
     let finalCity = city.trim();
     if (!finalCity && address && autocompleteRef.current) {
       const place = autocompleteRef.current.getPlace();
-      if (place?.address_components) {
-        const cityComponent = place.address_components.find(
-          (comp) => comp.types.includes("locality") || comp.types.includes("administrative_area_level_1")
-        );
-        if (cityComponent) {
-          finalCity = cityComponent.long_name;
-        }
-      }
+      const comps = place?.address_components ?? [];
+      const cityComponent = comps.find(
+        (comp) =>
+          comp.types.includes("locality") || comp.types.includes("administrative_area_level_1")
+      );
+      if (cityComponent) finalCity = cityComponent.long_name;
     }
 
-    // Обновляем данные места
     const payload = {
       title: title.trim(),
       description: description.trim() || null,
@@ -390,46 +372,28 @@ export default function EditPlacePage() {
       categories: validCategories.length > 0 ? validCategories : null,
       address: address.trim() || null,
       google_place_id: googlePlaceId,
-      lat: lat,
-      lng: lng,
+      lat,
+      lng,
       link: link.trim() || null,
-      cover_url: coverUrl, // Оставляем для обратной совместимости
+      cover_url: coverUrl, // legacy
     };
 
-    const { error } = await supabase
-      .from("places")
-      .update(payload)
-      .eq("id", placeId)
-      .eq("created_by", userId);
+    const { error } = await supabase.from("places").update(payload).eq("id", placeId).eq("created_by", userId);
 
     if (error) {
-      console.error("Update error:", error);
-      setError(error.message || "Failed to save place. Please try again.");
       setSaving(false);
-      return;
+      return setError(error.message || "Failed to save place. Please try again.");
     }
 
-    // Получаем пользователя для сохранения фото
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data } = await supabase.auth.getUser();
+    const user = data.user;
     if (!user) {
-      setError("Not authenticated");
       setSaving(false);
-      return;
+      return setError("Not authenticated");
     }
 
-    // Удаляем старые фото из place_photos
-    const { error: deleteError } = await supabase
-      .from("place_photos")
-      .delete()
-      .eq("place_id", placeId)
-      .eq("user_id", user.id);
+    await supabase.from("place_photos").delete().eq("place_id", placeId).eq("user_id", user.id);
 
-    if (deleteError) {
-      console.error("Delete photos error:", deleteError);
-      // Не прерываем процесс, так как можем добавить новые фото
-    }
-
-    // Подготавливаем данные для вставки
     const rows = photoUrls.map((url, i) => ({
       place_id: placeId,
       user_id: user.id,
@@ -438,27 +402,13 @@ export default function EditPlacePage() {
       sort: i,
     }));
 
-    console.log("uid", user?.id);
-    console.log("rows", rows);
-
-    // Сохраняем все фото в таблицу place_photos
-    const { error: photosError } = await supabase
-      .from("place_photos")
-      .insert(rows);
+    const { error: photosError } = await supabase.from("place_photos").insert(rows);
 
     setSaving(false);
 
-    if (photosError) {
-      console.error("Photos save error:", photosError);
-      setError(photosError.message || "Failed to save photos. Please try again.");
-      return;
-    }
+    if (photosError) return setError(photosError.message || "Failed to save photos. Please try again.");
 
-    // Haptic feedback
-    if (navigator.vibrate) {
-      navigator.vibrate(10);
-    }
-
+    if (navigator.vibrate) navigator.vibrate(10);
     router.push(`/id/${placeId}`);
   }
 
@@ -469,36 +419,23 @@ export default function EditPlacePage() {
     setError(null);
 
     try {
-      const { error: deleteError } = await supabase
-        .from("places")
-        .delete()
-        .eq("id", placeId)
-        .eq("created_by", userId);
+      const { error: deleteError } = await supabase.from("places").delete().eq("id", placeId).eq("created_by", userId);
 
       if (deleteError) {
-        console.error("Delete error:", deleteError);
-        setError(deleteError.message || "Failed to delete place. Please try again.");
         setDeleting(false);
         setDeleteConfirmOpen(false);
-        return;
+        return setError(deleteError.message || "Failed to delete place. Please try again.");
       }
 
-      // Haptic feedback
-      if (navigator.vibrate) {
-        navigator.vibrate(10);
-      }
-
-      // Redirect to profile after successful deletion
+      if (navigator.vibrate) navigator.vibrate(10);
       router.push("/profile");
-    } catch (err) {
-      console.error("Delete exception:", err);
-      setError("An error occurred while deleting the place.");
+    } catch {
       setDeleting(false);
       setDeleteConfirmOpen(false);
+      setError("An error occurred while deleting the place.");
     }
   }
 
-  // Handle back navigation
   function handleBack() {
     router.push(`/id/${placeId}`);
   }
@@ -513,14 +450,10 @@ export default function EditPlacePage() {
 
   return (
     <main className="min-h-screen bg-[#faf9f7]">
-      {/* Header with olive green */}
       <div className="bg-[#6b7d47] text-white">
         <div className="mx-auto max-w-md px-4 pt-safe-top pt-3 pb-6">
           <div className="flex items-center justify-between mb-4">
-            <button
-              onClick={handleBack}
-              className="text-white/90 hover:text-white transition"
-            >
+            <button onClick={handleBack} className="text-white/90 hover:text-white transition">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
@@ -531,67 +464,45 @@ export default function EditPlacePage() {
               disabled={saving || !canSave}
               className={cx(
                 "px-4 py-1.5 rounded-xl text-sm font-medium transition",
-                canSave && !saving
-                  ? "bg-white/20 text-white hover:bg-white/30"
-                  : "bg-white/10 text-white/50 cursor-not-allowed"
+                canSave && !saving ? "bg-white/20 text-white hover:bg-white/30" : "bg-white/10 text-white/50 cursor-not-allowed"
               )}
             >
               {saving ? "Saving…" : "Save"}
             </button>
           </div>
-          <div className="text-sm text-white/80">
-            Cover photo is required (min 1)
-          </div>
+          <div className="text-sm text-white/80">Cover photo is required (min 1)</div>
         </div>
-        
-        {/* Soft rounded bottom */}
         <div className="h-4 bg-[#faf9f7] rounded-t-3xl"></div>
       </div>
 
-      {/* Main content card */}
       <div className="mx-auto max-w-md px-4 pb-10 -mt-4">
         <div className="rounded-3xl bg-white shadow-sm border border-[#6b7d47]/10">
           <div className="p-5 space-y-6">
-            {/* PHOTOS SECTION - Top Priority */}
             <section>
               <div className="flex items-center justify-between mb-3">
                 <div className="text-sm font-semibold text-[#2d2d2d]">Photos</div>
                 <label className="cursor-pointer rounded-xl bg-[#6b7d47] text-white px-4 py-2 text-xs font-medium hover:bg-[#556036] transition active:scale-[0.98]">
                   + Add photos
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => onPickFiles(e.target.files)}
-                  />
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => onPickFiles(e.target.files)} />
                 </label>
               </div>
 
               {photos.length === 0 ? (
                 <div className="mt-3 rounded-2xl border-2 border-dashed border-[#6b7d47]/20 bg-[#f5f4f2] p-8 text-center">
-                  <div className="text-sm text-[#6b7d47]/70">
-                    Add at least 1 photo (this will be the cover)
-                  </div>
+                  <div className="text-sm text-[#6b7d47]/70">Add at least 1 photo (this will be the cover)</div>
                 </div>
               ) : (
                 <div className="mt-3 grid grid-cols-3 gap-2">
                   {photos.map((p, idx) => (
-                    <div
-                      key={p.preview}
-                      className="relative"
-                      style={{ animation: "fadeInScale 0.3s ease-out forwards" }}
-                    >
-                      <img
-                        src={p.url || p.preview}
-                        alt=""
-                        className="h-24 w-full rounded-2xl object-cover border border-[#6b7d47]/10"
-                      />
+                    <div key={p.preview} className="relative" style={{ animation: "fadeInScale 0.3s ease-out forwards" }}>
+                      <img src={p.url || p.preview} alt="" className="h-24 w-full rounded-2xl object-cover border border-[#6b7d47]/10" />
+
                       {idx === 0 && (
                         <div className="absolute left-2 top-2 rounded-full bg-black/70 text-white text-[10px] px-2 py-0.5 font-medium">
                           Cover
                         </div>
                       )}
+
                       <button
                         type="button"
                         onClick={() => removePhoto(p.preview)}
@@ -606,6 +517,7 @@ export default function EditPlacePage() {
                           Uploading…
                         </div>
                       )}
+
                       {p.error && (
                         <div className="absolute inset-0 rounded-2xl bg-red-500/40 flex items-center justify-center text-white text-xs px-2 text-center">
                           {p.error}
@@ -617,7 +529,6 @@ export default function EditPlacePage() {
               )}
             </section>
 
-            {/* PLACE NAME */}
             <section>
               <label className="text-xs font-medium text-[#6b7d47] mb-2 block">Place name</label>
               <input
@@ -637,7 +548,6 @@ export default function EditPlacePage() {
               />
             </section>
 
-            {/* DESCRIPTION */}
             <section>
               <label className="text-xs font-medium text-[#6b7d47] mb-2 block">Description</label>
               <textarea
@@ -649,11 +559,9 @@ export default function EditPlacePage() {
               />
             </section>
 
-            {/* CATEGORIES */}
             <section>
               <label className="text-xs font-medium text-[#6b7d47] mb-2 block">
-                Categories
-                <span className="text-[#6b7d47]/60 font-normal ml-1">(optional)</span>
+                Categories <span className="text-[#6b7d47]/60 font-normal ml-1">(optional)</span>
               </label>
               <div className="mt-2 flex flex-wrap gap-2">
                 {CATEGORIES.map((cat) => (
@@ -661,27 +569,19 @@ export default function EditPlacePage() {
                     key={cat}
                     active={categories.includes(cat)}
                     onClick={() => {
-                      setCategories((prev) =>
-                        prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
-                      );
+                      setCategories((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]));
                     }}
                   >
                     {cat}
                   </Pill>
                 ))}
               </div>
-              {categories.length === 0 && (
-                <div className="mt-2 text-xs text-[#6b7d47]/60">
-                  Pick what best describes the vibe
-                </div>
-              )}
+              {categories.length === 0 && <div className="mt-2 text-xs text-[#6b7d47]/60">Pick what best describes the vibe</div>}
             </section>
 
-            {/* LOCATION */}
             <section>
               <label className="text-xs font-medium text-[#6b7d47] mb-2 block">Location</label>
-              
-              {/* City */}
+
               <div className="mb-3">
                 <input
                   value={city}
@@ -691,7 +591,6 @@ export default function EditPlacePage() {
                 />
               </div>
 
-              {/* Google Address Autocomplete */}
               {isLoaded ? (
                 <Autocomplete
                   onLoad={(a) => {
@@ -700,23 +599,21 @@ export default function EditPlacePage() {
                   onPlaceChanged={() => {
                     const place = autocompleteRef.current?.getPlace();
                     if (!place) return;
+
                     setAddress(place.formatted_address ?? "");
                     setGooglePlaceId(place.place_id ?? null);
-                    
-                    // Extract coordinates
+
                     if (place.geometry?.location) {
                       setLat(place.geometry.location.lat());
                       setLng(place.geometry.location.lng());
                     }
-                    
-                    // Extract city if not set
+
                     if (!city && place.address_components) {
                       const cityComponent = place.address_components.find(
-                        (comp) => comp.types.includes("locality") || comp.types.includes("administrative_area_level_1")
+                        (comp) =>
+                          comp.types.includes("locality") || comp.types.includes("administrative_area_level_1")
                       );
-                      if (cityComponent) {
-                        setCity(cityComponent.long_name);
-                      }
+                      if (cityComponent) setCity(cityComponent.long_name);
                     }
                   }}
                 >
@@ -741,16 +638,12 @@ export default function EditPlacePage() {
                 />
               )}
 
-              <div className="mt-2 text-xs text-[#6b7d47]/60">
-                We store address + Google place ID
-              </div>
+              <div className="mt-2 text-xs text-[#6b7d47]/60">We store address + Google place ID</div>
             </section>
 
-            {/* LINK */}
             <section>
               <label className="text-xs font-medium text-[#6b7d47] mb-2 block">
-                Link
-                <span className="text-[#6b7d47]/60 font-normal ml-1">(optional)</span>
+                Link <span className="text-[#6b7d47]/60 font-normal ml-1">(optional)</span>
               </label>
               <input
                 value={link}
@@ -760,14 +653,10 @@ export default function EditPlacePage() {
               />
             </section>
 
-            {/* Error message */}
             {error && (
-              <div className="rounded-xl border border-red-200 bg-red-50/50 p-3 text-sm text-red-700">
-                {error}
-              </div>
+              <div className="rounded-xl border border-red-200 bg-red-50/50 p-3 text-sm text-red-700">{error}</div>
             )}
 
-            {/* Actions */}
             <div className="space-y-3 pt-4 border-t border-[#6b7d47]/10 mt-4">
               <div className="flex gap-3">
                 <button
@@ -783,16 +672,13 @@ export default function EditPlacePage() {
                   disabled={saving || !canSave}
                   className={cx(
                     "flex-1 rounded-xl px-4 py-3 text-sm font-medium transition active:scale-[0.98]",
-                    canSave && !saving
-                      ? "bg-[#6b7d47] text-white hover:bg-[#556036]"
-                      : "bg-[#6b7d47]/40 text-white/70 cursor-not-allowed"
+                    canSave && !saving ? "bg-[#6b7d47] text-white hover:bg-[#556036]" : "bg-[#6b7d47]/40 text-white/70 cursor-not-allowed"
                   )}
                 >
                   {saving ? "Saving changes…" : "Save changes"}
                 </button>
               </div>
 
-              {/* Delete button */}
               <button
                 type="button"
                 onClick={() => setDeleteConfirmOpen(true)}
@@ -806,19 +692,12 @@ export default function EditPlacePage() {
         </div>
       </div>
 
-      {/* Delete confirmation modal */}
       {deleteConfirmOpen && (
         <div className="fixed inset-0 z-50">
-          <button
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => setDeleteConfirmOpen(false)}
-            aria-label="Close"
-          />
+          <button className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDeleteConfirmOpen(false)} aria-label="Close" />
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 mx-4 w-full max-w-sm">
             <div className="rounded-2xl bg-white shadow-xl border border-[#6b7d47]/10 p-6">
-              <div className="text-lg font-semibold text-[#2d2d2d] mb-2">
-                Delete place
-              </div>
+              <div className="text-lg font-semibold text-[#2d2d2d] mb-2">Delete place</div>
               <div className="text-sm text-[#6b7d47]/70 mb-6">
                 This action cannot be undone. The place will be permanently deleted.
               </div>
