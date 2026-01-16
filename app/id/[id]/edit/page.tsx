@@ -1,0 +1,849 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useParams } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
+import { Autocomplete, useJsApiLoader } from "@react-google-maps/api";
+import { CATEGORIES } from "../../../constants";
+import Pill from "../../../components/Pill";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+type UploadingPhoto = {
+  file?: File;
+  preview: string;
+  uploading: boolean;
+  url?: string;
+  error?: string;
+};
+
+function cx(...a: Array<string | false | undefined | null>) {
+  return a.filter(Boolean).join(" ");
+}
+
+export default function EditPlacePage() {
+  const router = useRouter();
+  const params = useParams<{ id: string }>();
+  const placeId = params?.id;
+  
+  const { isLoaded } = useJsApiLoader({
+    id: "google-maps-loader",
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY!,
+    libraries: ["places"],
+  });
+
+  const [userId, setUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [city, setCity] = useState("");
+  const [categories, setCategories] = useState<string[]>([]);
+  const [link, setLink] = useState("");
+
+  const [address, setAddress] = useState("");
+  const [googlePlaceId, setGooglePlaceId] = useState<string | null>(null);
+  const [lat, setLat] = useState<number | null>(null);
+  const [lng, setLng] = useState<number | null>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+
+  // Original values for comparison
+  const [originalTitle, setOriginalTitle] = useState("");
+  const [originalDescription, setOriginalDescription] = useState("");
+  const [originalCity, setOriginalCity] = useState("");
+  const [originalCategories, setOriginalCategories] = useState<string[]>([]);
+  const [originalLink, setOriginalLink] = useState("");
+  const [originalAddress, setOriginalAddress] = useState("");
+  const [originalGooglePlaceId, setOriginalGooglePlaceId] = useState<string | null>(null);
+  const [originalLat, setOriginalLat] = useState<number | null>(null);
+  const [originalLng, setOriginalLng] = useState<number | null>(null);
+  const [originalPhotos, setOriginalPhotos] = useState<UploadingPhoto[]>([]);
+
+  const [photos, setPhotos] = useState<UploadingPhoto[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showTitleError, setShowTitleError] = useState(false);
+
+  const coverReady = useMemo(() => photos.some((p) => !!p.url), [photos]);
+
+  // Check if there are any changes
+  const hasChanges = useMemo(() => {
+    if (loading) return false;
+    
+    // Check title
+    if (title.trim() !== originalTitle.trim()) return true;
+    
+    // Check description
+    if ((description.trim() || "") !== (originalDescription.trim() || "")) return true;
+    
+    // Check city
+    if ((city.trim() || "") !== (originalCity.trim() || "")) return true;
+    
+    // Check categories
+    const currentCats = [...categories].sort().join(",");
+    const origCats = [...originalCategories].sort().join(",");
+    if (currentCats !== origCats) return true;
+    
+    // Check link
+    if ((link.trim() || "") !== (originalLink.trim() || "")) return true;
+    
+    // Check address
+    if ((address.trim() || "") !== (originalAddress.trim() || "")) return true;
+    
+    // Check Google place ID
+    if (googlePlaceId !== originalGooglePlaceId) return true;
+    
+    // Check coordinates
+    if (lat !== originalLat || lng !== originalLng) return true;
+    
+    // Check photos - compare URLs
+    const currentPhotoUrls = photos.map(p => p.url || p.preview).filter(Boolean).sort();
+    const origPhotoUrls = originalPhotos.map(p => p.url || p.preview).filter(Boolean).sort();
+    if (currentPhotoUrls.length !== origPhotoUrls.length) return true;
+    for (let i = 0; i < currentPhotoUrls.length; i++) {
+      if (currentPhotoUrls[i] !== origPhotoUrls[i]) return true;
+    }
+    
+    return false;
+  }, [
+    title, description, city, categories, link, address, googlePlaceId, lat, lng, photos,
+    originalTitle, originalDescription, originalCity, originalCategories, originalLink,
+    originalAddress, originalGooglePlaceId, originalLat, originalLng, originalPhotos,
+    loading
+  ]);
+
+  const canSave = useMemo(() => {
+    return title.trim().length > 0 && coverReady && hasChanges;
+  }, [title, coverReady, hasChanges]);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      const u = data.user;
+      if (!u) {
+        router.push("/auth");
+        return;
+      }
+      setUserId(u.id);
+    })();
+  }, [router]);
+
+  useEffect(() => {
+    if (!placeId || !userId) return;
+
+    (async () => {
+      setLoading(true);
+      
+      // Load place
+      const { data: placeData, error: placeError } = await supabase
+        .from("places")
+        .select("*")
+        .eq("id", placeId)
+        .single();
+
+      if (placeError || !placeData) {
+        setError("Place not found");
+        setLoading(false);
+        return;
+      }
+
+      // Check permissions
+      if (placeData.created_by !== userId) {
+        router.push(`/id/${placeId}`);
+        return;
+      }
+
+      // Fill form with place data
+      const placeTitle = placeData.title || "";
+      const placeDescription = placeData.description || "";
+      const placeCity = placeData.city || "";
+      const placeCategories = Array.isArray(placeData.categories) ? placeData.categories : [];
+      const placeLink = placeData.link || "";
+      const placeAddress = placeData.address || "";
+      const placeGooglePlaceId = placeData.google_place_id || null;
+      const placeLat = placeData.lat || null;
+      const placeLng = placeData.lng || null;
+
+      setTitle(placeTitle);
+      setDescription(placeDescription);
+      setCity(placeCity);
+      setCategories(placeCategories);
+      setLink(placeLink);
+      setAddress(placeAddress);
+      setGooglePlaceId(placeGooglePlaceId);
+      setLat(placeLat);
+      setLng(placeLng);
+
+      // Store original values
+      setOriginalTitle(placeTitle);
+      setOriginalDescription(placeDescription);
+      setOriginalCity(placeCity);
+      setOriginalCategories(placeCategories);
+      setOriginalLink(placeLink);
+      setOriginalAddress(placeAddress);
+      setOriginalGooglePlaceId(placeGooglePlaceId);
+      setOriginalLat(placeLat);
+      setOriginalLng(placeLng);
+
+      // Load photos from place_photos table
+      const { data: photosData, error: photosError } = await supabase
+        .from("place_photos")
+        .select("url, sort, is_cover")
+        .eq("place_id", placeId)
+        .order("sort", { ascending: true });
+
+      let photoUrls: string[] = [];
+      
+      if (!photosError && photosData && photosData.length > 0) {
+        // Загружаем фото из таблицы place_photos
+        photoUrls = photosData.map((p: any) => p.url).filter(Boolean);
+      } else {
+        // Fallback: используем старый формат (photo_urls или cover_url)
+        if (placeData.photo_urls && Array.isArray(placeData.photo_urls)) {
+          photoUrls.push(...placeData.photo_urls.filter((url): url is string => typeof url === "string" && url.length > 0));
+        }
+        if (photoUrls.length === 0 && placeData.cover_url) {
+          photoUrls.push(placeData.cover_url);
+        }
+      }
+
+      // Debug: логируем загруженные фото
+      console.log("Loaded photos for editing:", {
+        photosFromTable: photosData?.length || 0,
+        totalLoaded: photoUrls.length,
+        photoUrls: photoUrls
+      });
+
+      // Convert existing photos to UploadingPhoto format
+      const existingPhotos: UploadingPhoto[] = photoUrls.map((url) => ({
+        preview: url,
+        uploading: false,
+        url: url,
+      }));
+
+      setPhotos(existingPhotos);
+      // Store original photos for comparison
+      setOriginalPhotos(existingPhotos.map(p => ({ ...p })));
+      setLoading(false);
+    })();
+  }, [placeId, userId, router]);
+
+  function onPickFiles(files: FileList | null) {
+    if (!files) return;
+
+    const next: UploadingPhoto[] = Array.from(files).map((file) => ({
+      file,
+      preview: URL.createObjectURL(file),
+      uploading: true,
+    }));
+
+    setPhotos((prev) => [...prev, ...next]);
+
+    next.forEach(async (item) => {
+      const result = await uploadToSupabase(item.file!);
+      setPhotos((prev) =>
+        prev.map((p) => {
+          if (p.preview !== item.preview) return p;
+          if (!result.url) {
+            return { ...p, uploading: false, error: result.error || "Upload failed" };
+          }
+          return { ...p, uploading: false, url: result.url };
+        })
+      );
+    });
+  }
+
+  async function uploadToSupabase(file: File): Promise<{ url: string | null; error: string | null }> {
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `places/${crypto.randomUUID()}.${ext}`;
+
+      const { error } = await supabase.storage.from("place-photos").upload(path, file, {
+        cacheControl: "3600",
+        upsert: false,
+      });
+
+      if (error) {
+        console.error("Upload error:", error);
+        return { url: null, error: error.message || "Upload failed" };
+      }
+
+      const { data } = supabase.storage.from("place-photos").getPublicUrl(path);
+      return { url: data.publicUrl ?? null, error: null };
+    } catch (err) {
+      console.error("Upload exception:", err);
+      const errorMessage = err instanceof Error ? err.message : "Upload failed";
+      return { url: null, error: errorMessage };
+    }
+  }
+
+  function removePhoto(preview: string) {
+    setError(null); // Clear any previous errors
+    
+    setPhotos((prev) => {
+      // Don't allow removing cover if it's the last photo
+      const photoToRemove = prev.find((x) => x.preview === preview);
+      if (!photoToRemove) return prev;
+      
+      // If this is the cover (first photo) and it's the last one, don't remove
+      const isCover = prev.indexOf(photoToRemove) === 0;
+      const isLast = prev.length === 1;
+      
+      if (isCover && isLast) {
+        setError("Cannot remove the last photo (cover is required)");
+        // Clear error after 3 seconds
+        setTimeout(() => setError(null), 3000);
+        return prev;
+      }
+
+      if (photoToRemove.file) {
+        URL.revokeObjectURL(photoToRemove.preview);
+      }
+      return prev.filter((x) => x.preview !== preview);
+    });
+  }
+
+  async function savePlace() {
+    setError(null);
+    setShowTitleError(false);
+
+    if (!userId || !placeId) {
+      setError("Please sign in to continue");
+      return;
+    }
+    if (!title.trim()) {
+      setShowTitleError(true);
+      setError("Place name is required");
+      return;
+    }
+    if (!coverReady) {
+      setError("Add at least 1 photo (this will be the cover)");
+      return;
+    }
+
+    // Validate categories
+    const validCategories = categories.filter((cat) => CATEGORIES.includes(cat as any));
+    if (categories.length > 0 && validCategories.length !== categories.length) {
+      setError("One or more selected categories are invalid");
+      return;
+    }
+
+    // Проверяем, что все фото загружены
+    const photosStillUploading = photos.some((p) => p.uploading);
+    const photosWithErrors = photos.filter((p) => p.error);
+    
+    if (photosStillUploading) {
+      setError("Please wait for all photos to finish uploading");
+      return;
+    }
+
+    if (photosWithErrors.length > 0) {
+      setError(`Some photos failed to upload. Please remove them or try again.`);
+      return;
+    }
+
+    // Собираем все URL загруженных фото
+    const photoUrls = photos.map((p) => p.url).filter(Boolean) as string[];
+    
+    if (photoUrls.length === 0) {
+      setError("Add at least 1 photo (this will be the cover)");
+      return;
+    }
+
+    const coverUrl = photoUrls[0];
+
+    // Debug: логируем, что сохраняем
+    console.log("Updating place with photos:", {
+      totalPhotos: photos.length,
+      photosWithUrls: photoUrls.length,
+      photoUrls: photoUrls
+    });
+
+    setSaving(true);
+
+    // Try to extract city from Google address if not set
+    let finalCity = city.trim();
+    if (!finalCity && address && autocompleteRef.current) {
+      const place = autocompleteRef.current.getPlace();
+      if (place?.address_components) {
+        const cityComponent = place.address_components.find(
+          (comp) => comp.types.includes("locality") || comp.types.includes("administrative_area_level_1")
+        );
+        if (cityComponent) {
+          finalCity = cityComponent.long_name;
+        }
+      }
+    }
+
+    // Обновляем данные места
+    const payload = {
+      title: title.trim(),
+      description: description.trim() || null,
+      city: finalCity || null,
+      country: null,
+      categories: validCategories.length > 0 ? validCategories : null,
+      address: address.trim() || null,
+      google_place_id: googlePlaceId,
+      lat: lat,
+      lng: lng,
+      link: link.trim() || null,
+      cover_url: coverUrl, // Оставляем для обратной совместимости
+    };
+
+    const { error } = await supabase
+      .from("places")
+      .update(payload)
+      .eq("id", placeId)
+      .eq("created_by", userId);
+
+    if (error) {
+      console.error("Update error:", error);
+      setError(error.message || "Failed to save place. Please try again.");
+      setSaving(false);
+      return;
+    }
+
+    // Получаем пользователя для сохранения фото
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setError("Not authenticated");
+      setSaving(false);
+      return;
+    }
+
+    // Удаляем старые фото из place_photos
+    const { error: deleteError } = await supabase
+      .from("place_photos")
+      .delete()
+      .eq("place_id", placeId)
+      .eq("user_id", user.id);
+
+    if (deleteError) {
+      console.error("Delete photos error:", deleteError);
+      // Не прерываем процесс, так как можем добавить новые фото
+    }
+
+    // Подготавливаем данные для вставки
+    const rows = photoUrls.map((url, i) => ({
+      place_id: placeId,
+      user_id: user.id,
+      url,
+      is_cover: i === 0,
+      sort: i,
+    }));
+
+    console.log("uid", user?.id);
+    console.log("rows", rows);
+
+    // Сохраняем все фото в таблицу place_photos
+    const { error: photosError } = await supabase
+      .from("place_photos")
+      .insert(rows);
+
+    setSaving(false);
+
+    if (photosError) {
+      console.error("Photos save error:", photosError);
+      setError(photosError.message || "Failed to save photos. Please try again.");
+      return;
+    }
+
+    // Haptic feedback
+    if (navigator.vibrate) {
+      navigator.vibrate(10);
+    }
+
+    router.push(`/id/${placeId}`);
+  }
+
+  async function deletePlace() {
+    if (!userId || !placeId) return;
+
+    setDeleting(true);
+    setError(null);
+
+    try {
+      const { error: deleteError } = await supabase
+        .from("places")
+        .delete()
+        .eq("id", placeId)
+        .eq("created_by", userId);
+
+      if (deleteError) {
+        console.error("Delete error:", deleteError);
+        setError(deleteError.message || "Failed to delete place. Please try again.");
+        setDeleting(false);
+        setDeleteConfirmOpen(false);
+        return;
+      }
+
+      // Haptic feedback
+      if (navigator.vibrate) {
+        navigator.vibrate(10);
+      }
+
+      // Redirect to profile after successful deletion
+      router.push("/profile");
+    } catch (err) {
+      console.error("Delete exception:", err);
+      setError("An error occurred while deleting the place.");
+      setDeleting(false);
+      setDeleteConfirmOpen(false);
+    }
+  }
+
+  // Handle back navigation
+  function handleBack() {
+    router.push(`/id/${placeId}`);
+  }
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-[#faf9f7] flex items-center justify-center">
+        <div className="text-sm text-[#6b7d47]/60">Loading…</div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-[#faf9f7]">
+      {/* Header with olive green */}
+      <div className="bg-[#6b7d47] text-white">
+        <div className="mx-auto max-w-md px-4 pt-safe-top pt-3 pb-6">
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={handleBack}
+              className="text-white/90 hover:text-white transition"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <div className="text-lg font-semibold">Edit place</div>
+            <button
+              onClick={savePlace}
+              disabled={saving || !canSave}
+              className={cx(
+                "px-4 py-1.5 rounded-xl text-sm font-medium transition",
+                canSave && !saving
+                  ? "bg-white/20 text-white hover:bg-white/30"
+                  : "bg-white/10 text-white/50 cursor-not-allowed"
+              )}
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+          <div className="text-sm text-white/80">
+            Cover photo is required (min 1)
+          </div>
+        </div>
+        
+        {/* Soft rounded bottom */}
+        <div className="h-4 bg-[#faf9f7] rounded-t-3xl"></div>
+      </div>
+
+      {/* Main content card */}
+      <div className="mx-auto max-w-md px-4 pb-10 -mt-4">
+        <div className="rounded-3xl bg-white shadow-sm border border-[#6b7d47]/10">
+          <div className="p-5 space-y-6">
+            {/* PHOTOS SECTION - Top Priority */}
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-semibold text-[#2d2d2d]">Photos</div>
+                <label className="cursor-pointer rounded-xl bg-[#6b7d47] text-white px-4 py-2 text-xs font-medium hover:bg-[#556036] transition active:scale-[0.98]">
+                  + Add photos
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => onPickFiles(e.target.files)}
+                  />
+                </label>
+              </div>
+
+              {photos.length === 0 ? (
+                <div className="mt-3 rounded-2xl border-2 border-dashed border-[#6b7d47]/20 bg-[#f5f4f2] p-8 text-center">
+                  <div className="text-sm text-[#6b7d47]/70">
+                    Add at least 1 photo (this will be the cover)
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {photos.map((p, idx) => (
+                    <div
+                      key={p.preview}
+                      className="relative"
+                      style={{ animation: "fadeInScale 0.3s ease-out forwards" }}
+                    >
+                      <img
+                        src={p.url || p.preview}
+                        alt=""
+                        className="h-24 w-full rounded-2xl object-cover border border-[#6b7d47]/10"
+                      />
+                      {idx === 0 && (
+                        <div className="absolute left-2 top-2 rounded-full bg-black/70 text-white text-[10px] px-2 py-0.5 font-medium">
+                          Cover
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(p.preview)}
+                        className="absolute right-2 top-2 h-6 w-6 rounded-full bg-black/70 text-white text-xs flex items-center justify-center hover:bg-black/80 transition"
+                        title="Remove"
+                      >
+                        ✕
+                      </button>
+
+                      {p.uploading && (
+                        <div className="absolute inset-0 rounded-2xl bg-black/40 flex items-center justify-center text-white text-xs">
+                          Uploading…
+                        </div>
+                      )}
+                      {p.error && (
+                        <div className="absolute inset-0 rounded-2xl bg-red-500/40 flex items-center justify-center text-white text-xs px-2 text-center">
+                          {p.error}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* PLACE NAME */}
+            <section>
+              <label className="text-xs font-medium text-[#6b7d47] mb-2 block">Place name</label>
+              <input
+                value={title}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  setShowTitleError(false);
+                  setError(null);
+                }}
+                placeholder="e.g. Secret rooftop bar"
+                className={cx(
+                  "w-full rounded-xl border px-4 py-3 text-sm text-[#2d2d2d] placeholder:text-[#6b7d47]/40 outline-none transition",
+                  showTitleError
+                    ? "border-red-300 bg-red-50/50 focus:bg-white focus:border-red-400"
+                    : "border-[#6b7d47]/20 bg-[#f5f4f2] focus:bg-white focus:border-[#6b7d47]/40"
+                )}
+              />
+            </section>
+
+            {/* DESCRIPTION */}
+            <section>
+              <label className="text-xs font-medium text-[#6b7d47] mb-2 block">Description</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Why it's special, best time to go, what locals know…"
+                rows={4}
+                className="w-full rounded-xl border border-[#6b7d47]/20 bg-[#f5f4f2] px-4 py-3 text-sm text-[#2d2d2d] placeholder:text-[#6b7d47]/40 outline-none focus:bg-white focus:border-[#6b7d47]/40 transition resize-none"
+              />
+            </section>
+
+            {/* CATEGORIES */}
+            <section>
+              <label className="text-xs font-medium text-[#6b7d47] mb-2 block">
+                Categories
+                <span className="text-[#6b7d47]/60 font-normal ml-1">(optional)</span>
+              </label>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {CATEGORIES.map((cat) => (
+                  <Pill
+                    key={cat}
+                    active={categories.includes(cat)}
+                    onClick={() => {
+                      setCategories((prev) =>
+                        prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
+                      );
+                    }}
+                  >
+                    {cat}
+                  </Pill>
+                ))}
+              </div>
+              {categories.length === 0 && (
+                <div className="mt-2 text-xs text-[#6b7d47]/60">
+                  Pick what best describes the vibe
+                </div>
+              )}
+            </section>
+
+            {/* LOCATION */}
+            <section>
+              <label className="text-xs font-medium text-[#6b7d47] mb-2 block">Location</label>
+              
+              {/* City */}
+              <div className="mb-3">
+                <input
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="City"
+                  className="w-full rounded-xl border border-[#6b7d47]/20 bg-[#f5f4f2] px-4 py-3 text-sm text-[#2d2d2d] placeholder:text-[#6b7d47]/40 outline-none focus:bg-white focus:border-[#6b7d47]/40 transition"
+                />
+              </div>
+
+              {/* Google Address Autocomplete */}
+              {isLoaded ? (
+                <Autocomplete
+                  onLoad={(a) => {
+                    autocompleteRef.current = a;
+                  }}
+                  onPlaceChanged={() => {
+                    const place = autocompleteRef.current?.getPlace();
+                    if (!place) return;
+                    setAddress(place.formatted_address ?? "");
+                    setGooglePlaceId(place.place_id ?? null);
+                    
+                    // Extract coordinates
+                    if (place.geometry?.location) {
+                      setLat(place.geometry.location.lat());
+                      setLng(place.geometry.location.lng());
+                    }
+                    
+                    // Extract city if not set
+                    if (!city && place.address_components) {
+                      const cityComponent = place.address_components.find(
+                        (comp) => comp.types.includes("locality") || comp.types.includes("administrative_area_level_1")
+                      );
+                      if (cityComponent) {
+                        setCity(cityComponent.long_name);
+                      }
+                    }
+                  }}
+                >
+                  <input
+                    value={address}
+                    onChange={(e) => {
+                      setAddress(e.target.value);
+                      setGooglePlaceId(null);
+                      setLat(null);
+                      setLng(null);
+                    }}
+                    placeholder="Start typing address…"
+                    className="w-full rounded-xl border border-[#6b7d47]/20 bg-[#f5f4f2] px-4 py-3 text-sm text-[#2d2d2d] placeholder:text-[#6b7d47]/40 outline-none focus:bg-white focus:border-[#6b7d47]/40 transition"
+                  />
+                </Autocomplete>
+              ) : (
+                <input
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Start typing address…"
+                  className="w-full rounded-xl border border-[#6b7d47]/20 bg-[#f5f4f2] px-4 py-3 text-sm text-[#2d2d2d] placeholder:text-[#6b7d47]/40 outline-none focus:bg-white focus:border-[#6b7d47]/40 transition"
+                />
+              )}
+
+              <div className="mt-2 text-xs text-[#6b7d47]/60">
+                We store address + Google place ID
+              </div>
+            </section>
+
+            {/* LINK */}
+            <section>
+              <label className="text-xs font-medium text-[#6b7d47] mb-2 block">
+                Link
+                <span className="text-[#6b7d47]/60 font-normal ml-1">(optional)</span>
+              </label>
+              <input
+                value={link}
+                onChange={(e) => setLink(e.target.value)}
+                placeholder="https://"
+                className="w-full rounded-xl border border-[#6b7d47]/20 bg-[#f5f4f2] px-4 py-3 text-sm text-[#2d2d2d] placeholder:text-[#6b7d47]/40 outline-none focus:bg-white focus:border-[#6b7d47]/40 transition"
+              />
+            </section>
+
+            {/* Error message */}
+            {error && (
+              <div className="rounded-xl border border-red-200 bg-red-50/50 p-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="space-y-3 pt-4 border-t border-[#6b7d47]/10 mt-4">
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => router.push(`/id/${placeId}`)}
+                  className="flex-1 rounded-xl border border-[#6b7d47]/20 bg-white px-4 py-3 text-sm font-medium text-[#6b7d47] hover:bg-[#f5f4f2] transition active:scale-[0.98]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={savePlace}
+                  disabled={saving || !canSave}
+                  className={cx(
+                    "flex-1 rounded-xl px-4 py-3 text-sm font-medium transition active:scale-[0.98]",
+                    canSave && !saving
+                      ? "bg-[#6b7d47] text-white hover:bg-[#556036]"
+                      : "bg-[#6b7d47]/40 text-white/70 cursor-not-allowed"
+                  )}
+                >
+                  {saving ? "Saving changes…" : "Save changes"}
+                </button>
+              </div>
+
+              {/* Delete button */}
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmOpen(true)}
+                disabled={deleting}
+                className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 hover:bg-red-100 transition active:scale-[0.98] disabled:opacity-50"
+              >
+                {deleting ? "Deleting…" : "Delete place"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Delete confirmation modal */}
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 z-50">
+          <button
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setDeleteConfirmOpen(false)}
+            aria-label="Close"
+          />
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 mx-4 w-full max-w-sm">
+            <div className="rounded-2xl bg-white shadow-xl border border-[#6b7d47]/10 p-6">
+              <div className="text-lg font-semibold text-[#2d2d2d] mb-2">
+                Delete place
+              </div>
+              <div className="text-sm text-[#6b7d47]/70 mb-6">
+                This action cannot be undone. The place will be permanently deleted.
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmOpen(false)}
+                  disabled={deleting}
+                  className="flex-1 rounded-xl border border-[#6b7d47]/20 bg-white px-4 py-3 text-sm font-medium text-[#6b7d47] hover:bg-[#f5f4f2] transition active:scale-[0.98] disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={deletePlace}
+                  disabled={deleting}
+                  className="flex-1 rounded-xl bg-red-600 text-white px-4 py-3 text-sm font-medium hover:bg-red-700 transition active:scale-[0.98] disabled:opacity-50"
+                >
+                  {deleting ? "Deleting…" : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}
