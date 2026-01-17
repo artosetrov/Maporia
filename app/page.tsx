@@ -61,6 +61,7 @@ export default function HomePage() {
   const router = useRouter();
   const [view, setView] = useState<"list" | "map">("map");
   const [searchFocused, setSearchFocused] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -283,69 +284,68 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-[#faf9f7] flex flex-col">
-      {/* TOP BAR - Fixed at top */}
-      <div className="fixed top-0 left-0 right-0 z-40 bg-[#faf9f7]/95 backdrop-blur-sm border-b border-[#6b7d47]/10">
-        <div className="mx-auto max-w-7xl px-4 pt-safe-top pt-3 pb-3">
-          <div className="flex items-center gap-3">
-            {/* Logo */}
-            <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden bg-[#6b7d47]/10 relative">
+      <TopBar
+        left={
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center overflow-hidden bg-[#6b7d47]/10 relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img 
-                src="/logo.png" 
-                alt="Maporia Logo" 
+              <img
+                src="/logo.png"
+                alt="Maporia"
                 className="w-8 h-8 object-contain"
-                style={{ display: 'block' }}
+                style={{ display: "block" }}
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
-                  // Пробуем другие возможные имена файлов
-                  if (target.src.includes('logo.png')) {
-                    target.src = '/logo.jpg';
-                  } else if (target.src.includes('logo.jpg')) {
-                    target.src = '/logo.jpeg';
-                  } else if (target.src.includes('logo.jpeg')) {
-                    target.src = '/logo.svg';
-                  } else {
-                    // Если все варианты не сработали, показываем заглушку
+                  if (target.src.includes("logo.png")) target.src = "/logo.jpg";
+                  else if (target.src.includes("logo.jpg")) target.src = "/logo.jpeg";
+                  else if (target.src.includes("logo.jpeg")) target.src = "/logo.svg";
+                  else {
                     target.style.display = "none";
                     const parent = target.parentElement;
-                    if (parent && !parent.querySelector('.logo-fallback')) {
-                      const fallback = document.createElement('span');
-                      fallback.className = 'logo-fallback text-[#6b7d47] font-bold text-sm';
-                      fallback.textContent = 'M';
-                      parent.appendChild(fallback);
+                    if (parent && !parent.querySelector(".logo-fallback")) {
+                      const fb = document.createElement("span");
+                      fb.className = "logo-fallback text-[#6b7d47] font-bold text-sm";
+                      fb.textContent = "M";
+                      parent.appendChild(fb);
                     }
                   }
                 }}
               />
             </div>
-
-            {/* Search input */}
-            <div className="flex-1 relative">
-              <input
-                value={searchDraft}
-                onChange={(e) => setSearchDraft(e.target.value)}
-                onFocus={() => setSearchFocused(true)}
-                onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    applySearch();
-                    setSearchFocused(false);
-                  }
-                }}
-                placeholder="Search by vibe, mood, or place"
-                className="w-full rounded-xl border border-[#6b7d47]/20 bg-white px-4 py-2.5 pl-10 text-sm text-[#2d2d2d] placeholder:text-[#6b7d47]/50 outline-none focus:border-[#6b7d47]/40 focus:bg-white transition"
-              />
-              <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6b7d47]/50"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            <span className="text-sm font-semibold text-[#2d2d2d] hidden sm:inline">Maporia</span>
+          </div>
+        }
+        right={
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-[#6b7d47]/70 hidden sm:inline">Map</span>
+              <button
+                onClick={() => setView(view === "map" ? "list" : "map")}
+                className={cx(
+                  "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#6b7d47] focus:ring-offset-2",
+                  view === "list" ? "bg-[#6b7d47]" : "bg-gray-300"
+                )}
+                role="switch"
+                aria-checked={view === "list"}
               >
+                <span
+                  className={cx(
+                    "inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-transform",
+                    view === "list" ? "translate-x-6" : "translate-x-0.5"
+                  )}
+                />
+              </button>
+              <span className="text-xs font-medium text-[#6b7d47]/70 hidden sm:inline">List</span>
+            </div>
+            <button
+              onClick={() => setSearchOpen(!searchOpen)}
+              className="h-10 w-10 rounded-xl flex items-center justify-center text-[#556036] hover:bg-[#f5f4f2] transition"
+              aria-label="Search"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-            </div>
-
-            {/* Filter button with badge */}
+            </button>
             <button
               onClick={() => setFilterOpen(true)}
               className="h-10 w-10 rounded-xl flex items-center justify-center text-[#556036] hover:bg-[#f5f4f2] transition relative"
@@ -361,60 +361,60 @@ export default function HomePage() {
               )}
             </button>
           </div>
-
-          {/* Quick search chips - shown on focus */}
-          {searchFocused && (
-            <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-              {quickSearchChips.map((chip) => (
-                <button
-                  key={chip}
-                  onClick={() => {
-                    setSearchDraft(chip);
-                    setQ(chip);
-                    setSearchFocused(false);
-                  }}
-                  className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#556036] bg-white border border-[#6b7d47]/20 hover:bg-[#f5f4f2] transition whitespace-nowrap"
-                >
-                  {chip}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Segmented switch for Map/List */}
-          <div className="mt-3 flex rounded-xl bg-[#f5f4f2] p-1">
-            <button
-              onClick={() => setView("map")}
-              className={cx(
-                "flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition",
-                view === "map"
-                  ? "bg-white text-[#556036] shadow-sm"
-                  : "text-[#6b7d47]/60 hover:text-[#556036]"
-              )}
-            >
-              Map
-            </button>
-            <button
-              onClick={() => setView("list")}
-              className={cx(
-                "flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition",
-                view === "list"
-                  ? "bg-white text-[#556036] shadow-sm"
-                  : "text-[#6b7d47]/60 hover:text-[#556036]"
-              )}
-            >
-              List
-            </button>
-          </div>
-        </div>
-      </div>
+        }
+        bottom={
+          <>
+            {searchOpen && (
+              <div className="mt-2">
+                <div className="relative">
+                  <input
+                    value={searchDraft}
+                    onChange={(e) => setSearchDraft(e.target.value)}
+                    onFocus={() => setSearchFocused(true)}
+                    onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        applySearch();
+                        setSearchFocused(false);
+                      }
+                    }}
+                    placeholder="Search by vibe, mood, or place"
+                    className="w-full rounded-xl border border-[#6b7d47]/20 bg-white px-4 py-2.5 pl-10 text-sm text-[#2d2d2d] placeholder:text-[#6b7d47]/50 outline-none focus:border-[#6b7d47]/40 focus:bg-white transition"
+                    autoFocus
+                  />
+                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6b7d47]/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                {searchFocused && (
+                  <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                    {quickSearchChips.map((chip) => (
+                      <button
+                        key={chip}
+                        onClick={() => {
+                          setSearchDraft(chip);
+                          setQ(chip);
+                          setSearchFocused(false);
+                        }}
+                        className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#556036] bg-white border border-[#6b7d47]/20 hover:bg-[#f5f4f2] transition whitespace-nowrap"
+                      >
+                        {chip}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        }
+      />
 
       {/* MAIN CONTENT - Map first (70% of screen) */}
-      <div className="flex-1 pt-[120px] pb-20 min-h-0">
+      <div className={`flex-1 min-h-0 ${searchOpen ? "pt-[180px]" : "pt-[64px]"}`}>
         {view === "map" ? (
           <MapView places={places} loading={loading} />
         ) : (
-          <div className="mx-auto max-w-7xl px-4">
+          <div className="mx-auto max-w-7xl px-4 pb-20">
             {loading ? (
               <Empty text="Loading…" />
             ) : places.length === 0 ? (

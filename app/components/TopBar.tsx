@@ -7,11 +7,15 @@ type TopBarProps = {
   left?: ReactNode;
   center?: ReactNode;
   right?: ReactNode;
+  title?: string;
+  bottom?: ReactNode;
   onBack?: () => void;
   backHref?: string;
 };
 
-export default function TopBar({ left, center, right, onBack, backHref }: TopBarProps) {
+export default function TopBar({ left, center, right, title, bottom, onBack, backHref }: TopBarProps) {
+  const centerContent = center ?? (title ? <div className="text-sm font-semibold text-[#2d2d2d]">{title}</div> : undefined);
+
   return (
     <div className="fixed top-0 left-0 right-0 z-40 bg-[#faf9f7]/95 backdrop-blur-sm border-b border-[#6b7d47]/10">
       <div className="mx-auto max-w-7xl px-4 pt-safe-top pt-3 pb-3">
@@ -46,11 +50,12 @@ export default function TopBar({ left, center, right, onBack, backHref }: TopBar
           </div>
 
           {/* Center */}
-          <div className="flex-1 min-w-0">{center}</div>
+          <div className="flex-1 min-w-0">{centerContent}</div>
 
           {/* Right */}
           <div className="flex-shrink-0">{right}</div>
         </div>
+        {bottom}
       </div>
     </div>
   );

@@ -1,5 +1,8 @@
 "use client";
-
+console.log(
+  "URL", process.env.NEXT_PUBLIC_SUPABASE_URL,
+  "KEY", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
@@ -48,7 +51,7 @@ export default function AuthPage() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: "http://localhost:3000/profile",
+        emailRedirectTo: `${window.location.origin}/profile`,
       },
     });
 

@@ -64,11 +64,7 @@ export default function SavedPage() {
 
   return (
     <main className="min-h-screen bg-[#faf9f7] flex flex-col">
-      <TopBar
-        center={
-          <div className="text-sm font-semibold text-[#2d2d2d]">Saved</div>
-        }
-      />
+      <TopBar title="Saved" />
 
       <div className="flex-1 pt-[80px] pb-20">
         <div className="mx-auto max-w-7xl px-4">

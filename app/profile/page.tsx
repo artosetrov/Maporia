@@ -7,7 +7,6 @@ import { createClient } from "@supabase/supabase-js";
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import PlaceCard from "../components/PlaceCard";
-import Pill from "../components/Pill";
 
 type Place = {
   id: string;
@@ -77,12 +76,10 @@ export default function ProfilePage() {
   const [added, setAdded] = useState<Place[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
 
-  const stats = useMemo(() => {
-    const addedCount = added.length;
-    const likedCount = liked.length;
-    const commentsCount = activity.filter((a) => a.type === "commented").length;
-    return { addedCount, likedCount, commentsCount };
-  }, [added, liked, activity]);
+  const stats = useMemo(() => ({
+    addedCount: added.length,
+    likedCount: liked.length,
+  }), [added, liked]);
 
   const activeList = useMemo(() => {
     if (tab === "added") return added;
@@ -399,143 +396,109 @@ export default function ProfilePage() {
 
   return (
     <main className="min-h-screen bg-[#faf9f7]">
-      {/* Header with soft rounded bottom */}
-      <div className="bg-[#6b7d47] text-white">
-        <div className="mx-auto max-w-md px-4 pt-safe-top pt-3 pb-6">
-          <div className="flex items-center justify-between mb-6">
-            <Link href="/" className="text-white/90 hover:text-white transition">
+      <TopBar
+        backHref="/"
+        title="Profile"
+        right={
+          <div className="flex items-center gap-2">
+            <Link
+              href="/add"
+              onClick={() => { if (navigator.vibrate) navigator.vibrate(10); }}
+              className="h-10 w-10 rounded-xl flex items-center justify-center text-[#556036] hover:bg-[#f5f4f2] transition"
+              aria-label="Add new place"
+            >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
             </Link>
-
-            <div className="flex items-center gap-2">
-              <Link
-                href="/add"
-                onClick={() => {
-                  if (navigator.vibrate) navigator.vibrate(10);
-                }}
-                className="h-10 w-10 rounded-xl flex items-center justify-center text-white/90 hover:bg-white/10 transition"
-                aria-label="Add new place"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-              </Link>
-              <button
-                ref={menuButtonRef}
-                onClick={(e) => {
-                  if (menuButtonRef.current) {
-                    const rect = menuButtonRef.current.getBoundingClientRect();
-                    setMenuPosition({
-                      top: rect.bottom + 8,
-                      right: window.innerWidth - rect.right,
-                    });
-                  }
-                  setMenuOpen(true);
-                }}
-                className="h-10 w-10 rounded-xl flex items-center justify-center text-white/90 hover:bg-white/10 transition"
-                aria-label="Menu"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-                </svg>
-              </button>
-            </div>
+            <button
+              ref={menuButtonRef}
+              onClick={() => {
+                if (menuButtonRef.current) {
+                  const rect = menuButtonRef.current.getBoundingClientRect();
+                  setMenuPosition({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+                }
+                setMenuOpen(true);
+              }}
+              className="h-10 w-10 rounded-xl flex items-center justify-center text-[#556036] hover:bg-[#f5f4f2] transition"
+              aria-label="Menu"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+              </svg>
+            </button>
           </div>
+        }
+      />
 
-          {/* User Block */}
-          <div className="flex items-start gap-4 mb-6">
+      <div className="pt-[80px]">
+        {/* Profile block */}
+        <div className="mx-auto max-w-md px-4 pt-6 pb-4 md:max-w-7xl">
+          <div className="flex items-start gap-4">
             {/* Avatar */}
-            <div className="h-16 w-16 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+            <div className="h-16 w-16 rounded-2xl bg-[#f5f4f2] border border-[#6b7d47]/20 flex items-center justify-center overflow-hidden flex-shrink-0">
               {profile?.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={profile.avatar_url} alt="avatar" className="h-full w-full object-cover" />
               ) : (
-                <span className="text-xl font-semibold">{initialsFromEmail(userEmail)}</span>
+                <span className="text-xl font-semibold text-[#6b7d47]">{initialsFromEmail(userEmail)}</span>
               )}
             </div>
 
             <div className="flex-1 min-w-0">
-              <div className="text-xl font-bold leading-tight text-white mb-1">{displayName}</div>
-              <div className="text-sm text-white/70 mb-2 truncate">{userEmail}</div>
+              <div className="text-xl font-bold leading-tight text-[#2d2d2d] mb-1">{displayName}</div>
               {profile?.bio ? (
-                <div className="text-sm text-white/85 line-clamp-2">{profile.bio}</div>
+                <div className="text-sm text-[#6b7d47]/80 line-clamp-2">{profile.bio}</div>
               ) : (
                 <button
                   onClick={() => setSettingsOpen(true)}
-                  className="text-sm text-white/85 hover:text-white underline underline-offset-2 transition"
+                  className="text-sm text-[#6b7d47]/70 hover:text-[#6b7d47] underline underline-offset-2 transition"
                 >
                   Add bio
                 </button>
               )}
             </div>
           </div>
-
-          {/* Stats Section */}
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            <StatCard
-              label="Added"
-              value={stats.addedCount}
-              onClick={() => setTab("added")}
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-              }
-            />
-            <StatCard
-              label="Liked"
-              value={stats.likedCount}
-              onClick={() => setTab("liked")}
-              icon={
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-                </svg>
-              }
-            />
-            <StatCard
-              label="Comments"
-              value={stats.commentsCount}
-              onClick={() => setTab("activity")}
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-              }
-            />
-          </div>
         </div>
-        
-        {/* Soft rounded bottom */}
-        <div className="h-4 bg-[#faf9f7] rounded-t-3xl"></div>
       </div>
 
       {/* Tabs + Content */}
       <div className="mx-auto max-w-7xl px-4 pb-20 pt-4">
-        {/* Tabs - Pills style */}
-        <div className="flex gap-2 mb-4">
-          <Pill
-            variant="tab"
-            active={tab === "activity"}
+        {/* Tabs — underline style */}
+        <div className="flex border-b border-[#6b7d47]/20 mb-4">
+          <button
             onClick={() => setTab("activity")}
+            className={cx(
+              "px-4 py-3 text-sm font-medium transition flex-shrink-0 -mb-px",
+              tab === "activity"
+                ? "text-[#6b7d47] border-b-2 border-[#6b7d47]"
+                : "text-[#6b7d47]/60 hover:text-[#6b7d47]/80"
+            )}
           >
-            Activity {activity.length > 0 && `(${activity.length})`}
-          </Pill>
-          <Pill
-            variant="tab"
-            active={tab === "added"}
+            Activity{activity.length > 0 ? ` (${activity.length})` : ""}
+          </button>
+          <button
             onClick={() => setTab("added")}
+            className={cx(
+              "px-4 py-3 text-sm font-medium transition flex-shrink-0 -mb-px",
+              tab === "added"
+                ? "text-[#6b7d47] border-b-2 border-[#6b7d47]"
+                : "text-[#6b7d47]/60 hover:text-[#6b7d47]/80"
+            )}
           >
-            Added {stats.addedCount > 0 && `(${stats.addedCount})`}
-          </Pill>
-          <Pill
-            variant="tab"
-            active={tab === "liked"}
+            Added{stats.addedCount > 0 ? ` (${stats.addedCount})` : ""}
+          </button>
+          <button
             onClick={() => setTab("liked")}
+            className={cx(
+              "px-4 py-3 text-sm font-medium transition flex-shrink-0 -mb-px",
+              tab === "liked"
+                ? "text-[#6b7d47] border-b-2 border-[#6b7d47]"
+                : "text-[#6b7d47]/60 hover:text-[#6b7d47]/80"
+            )}
           >
-            Liked {stats.likedCount > 0 && `(${stats.likedCount})`}
-          </Pill>
+            Liked{stats.likedCount > 0 ? ` (${stats.likedCount})` : ""}
+          </button>
         </div>
 
         <div className="transition-opacity duration-200">
@@ -760,32 +723,6 @@ export default function ProfilePage() {
     </main>
   );
 }
-
-function StatCard({
-  label,
-  value,
-  onClick,
-  icon,
-}: {
-  label: string;
-  value: number;
-  onClick: () => void;
-  icon: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="rounded-xl bg-white/15 border border-white/20 px-3 py-2.5 text-left hover:bg-white/20 transition active:scale-[0.98]"
-    >
-      <div className="flex items-center gap-1.5 mb-1 text-white/80">
-        {icon}
-        <div className="text-[11px] font-medium">{label}</div>
-      </div>
-      <div className="text-lg font-semibold text-white">{value}</div>
-    </button>
-  );
-}
-
 
 function ActivityCard({ item }: { item: ActivityItem }) {
   const getIcon = () => {
