@@ -2,10 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import { createClient } from "@supabase/supabase-js";
-import { Autocomplete, useJsApiLoader } from "@react-google-maps/api";
 import { CATEGORIES } from "../../../constants";
 import Pill from "../../../components/Pill";
+
+const AddressAutocomplete = dynamic(
+  () => import("../../../components/AddressAutocomplete"),
+  { ssr: false }
+);
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -46,16 +51,22 @@ function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
 }
 
+function generateUUID(): string {
+  if (typeof window !== "undefined" && window.crypto && window.crypto.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  // Fallback for build/Edge environments
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 export default function EditPlacePage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const placeId = params?.id;
-
-  const { isLoaded } = useJsApiLoader({
-    id: "google-maps-loader",
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY!,
-    libraries: ["places"],
-  });
 
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,7 +81,7 @@ export default function EditPlacePage() {
   const [googlePlaceId, setGooglePlaceId] = useState<string | null>(null);
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const autocompleteRef = useRef<any>(null);
 
   const [originalTitle, setOriginalTitle] = useState("");
   const [originalDescription, setOriginalDescription] = useState("");
@@ -228,16 +239,11 @@ export default function EditPlacePage() {
       if (!photosError && photosData.length > 0) {
         photoUrls = photosData
           .map((p) => p.url)
-          .filter((u): u is string => typeof u === "string" && u.length > 0);
+          .filter((u: string | null): u is string => typeof u === "string" && u.length > 0);
       } else {
         // legacy fallback
         if (Array.isArray(placeData.photo_urls)) {
-          const legacyUrls = placeData.photo_urls;
-          photoUrls.push(
-            ...legacyUrls.filter(
-              (u): u is string => typeof u === "string" && u.length > 0
-            )
-          );
+          photoUrls.push(...placeData.photo_urls.filter((url: unknown): url is string => typeof url === "string" && url.length > 0));
         }
 
         if (photoUrls.length === 0 && typeof placeData.cover_url === "string" && placeData.cover_url.length > 0) {
@@ -289,7 +295,7 @@ export default function EditPlacePage() {
   async function uploadToSupabase(file: File): Promise<{ url: string | null; error: string | null }> {
     try {
       const ext = file.name.split(".").pop() || "jpg";
-      const path = `places/${crypto.randomUUID()}.${ext}`;
+      const path = `places/${generateUUID()}.${ext}`;
 
       const { error } = await supabase.storage.from("place-photos").upload(path, file, {
         cacheControl: "3600",
@@ -346,7 +352,7 @@ export default function EditPlacePage() {
     if (photos.some((p) => p.uploading)) return setError("Please wait for all photos to finish uploading");
     if (photos.some((p) => p.error)) return setError("Some photos failed to upload. Please remove them or try again.");
 
-    const photoUrls = photos.map((p) => p.url).filter((u): u is string => typeof u === "string" && u.length > 0);
+    const photoUrls = photos.map((p) => p.url).filter((u: string | undefined): u is string => typeof u === "string" && u.length > 0);
     if (photoUrls.length === 0) return setError("Add at least 1 photo (this will be the cover)");
 
     const coverUrl = photoUrls[0];
@@ -354,14 +360,18 @@ export default function EditPlacePage() {
     setSaving(true);
 
     let finalCity = city.trim();
-    if (!finalCity && address && autocompleteRef.current) {
-      const place = autocompleteRef.current.getPlace();
-      const comps = place?.address_components ?? [];
-      const cityComponent = comps.find(
-        (comp) =>
-          comp.types.includes("locality") || comp.types.includes("administrative_area_level_1")
-      );
-      if (cityComponent) finalCity = cityComponent.long_name;
+    if (!finalCity && address && autocompleteRef.current && typeof autocompleteRef.current.getPlace === "function") {
+      try {
+        const place = autocompleteRef.current.getPlace();
+        const comps = place?.address_components ?? [];
+        const cityComponent = comps.find(
+          (comp: any) =>
+            comp.types.includes("locality") || comp.types.includes("administrative_area_level_1")
+        );
+        if (cityComponent) finalCity = cityComponent.long_name;
+      } catch {
+        // Ignore errors if Google Maps API is not available
+      }
     }
 
     const payload = {
@@ -591,52 +601,27 @@ export default function EditPlacePage() {
                 />
               </div>
 
-              {isLoaded ? (
-                <Autocomplete
-                  onLoad={(a) => {
-                    autocompleteRef.current = a;
-                  }}
-                  onPlaceChanged={() => {
-                    const place = autocompleteRef.current?.getPlace();
-                    if (!place) return;
-
-                    setAddress(place.formatted_address ?? "");
-                    setGooglePlaceId(place.place_id ?? null);
-
-                    if (place.geometry?.location) {
-                      setLat(place.geometry.location.lat());
-                      setLng(place.geometry.location.lng());
-                    }
-
-                    if (!city && place.address_components) {
-                      const cityComponent = place.address_components.find(
-                        (comp) =>
-                          comp.types.includes("locality") || comp.types.includes("administrative_area_level_1")
-                      );
-                      if (cityComponent) setCity(cityComponent.long_name);
-                    }
-                  }}
-                >
-                  <input
-                    value={address}
-                    onChange={(e) => {
-                      setAddress(e.target.value);
-                      setGooglePlaceId(null);
-                      setLat(null);
-                      setLng(null);
-                    }}
-                    placeholder="Start typing address…"
-                    className="w-full rounded-xl border border-[#6b7d47]/20 bg-[#f5f4f2] px-4 py-3 text-sm text-[#2d2d2d] placeholder:text-[#6b7d47]/40 outline-none focus:bg-white focus:border-[#6b7d47]/40 transition"
-                  />
-                </Autocomplete>
-              ) : (
-                <input
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Start typing address…"
-                  className="w-full rounded-xl border border-[#6b7d47]/20 bg-[#f5f4f2] px-4 py-3 text-sm text-[#2d2d2d] placeholder:text-[#6b7d47]/40 outline-none focus:bg-white focus:border-[#6b7d47]/40 transition"
-                />
-              )}
+              <AddressAutocomplete
+                value={address}
+                onChange={(value) => {
+                  setAddress(value);
+                  setGooglePlaceId(null);
+                  setLat(null);
+                  setLng(null);
+                }}
+                onPlaceSelect={(place) => {
+                  setAddress(place.address);
+                  setGooglePlaceId(place.googlePlaceId);
+                  setLat(place.lat);
+                  setLng(place.lng);
+                  if (place.city && !city) {
+                    setCity(place.city);
+                  }
+                }}
+                onAutocompleteRef={(ref) => {
+                  autocompleteRef.current = ref;
+                }}
+              />
 
               <div className="mt-2 text-xs text-[#6b7d47]/60">We store address + Google place ID</div>
             </section>
