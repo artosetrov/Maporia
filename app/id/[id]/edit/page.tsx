@@ -241,11 +241,6 @@ export default function EditPlacePage() {
           .map((p) => p.url)
           .filter((u: string | null): u is string => typeof u === "string" && u.length > 0);
       } else {
-        // legacy fallback
-        if (Array.isArray(placeData.photo_urls)) {
-          photoUrls.push(...placeData.photo_urls.filter((url: unknown): url is string => typeof url === "string" && url.length > 0));
-        }
-
         if (photoUrls.length === 0 && typeof placeData.cover_url === "string" && placeData.cover_url.length > 0) {
           photoUrls.push(placeData.cover_url);
         }
