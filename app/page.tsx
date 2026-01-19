@@ -420,7 +420,7 @@ export default function HomePage() {
             ) : places.length === 0 ? (
               <Empty text="No places with this vibe yet. Try fewer filters." />
             ) : (
-              <div className="grid grid-cols-1 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 {places.map((p) => {
                   const isFavorite = favorites.has(p.id);
                   const isHovered = hoveredPlaceId === p.id || selectedPlaceId === p.id;
@@ -577,7 +577,7 @@ export default function HomePage() {
               ) : places.length === 0 ? (
                 <Empty text="No places with this vibe yet. Try fewer filters." />
               ) : (
-                <div className="grid grid-cols-1 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   {places.map((p) => {
                     const isFavorite = favorites.has(p.id);
                     return (
@@ -968,6 +968,12 @@ function MapView({
           center={center}
           zoom={zoom}
           onLoad={(map) => setMapInstance(map)}
+          onClick={() => {
+            // Close InfoWindow when clicking on the map
+            if (!externalSelectedPlaceId) {
+              setInternalSelectedPlaceId(null);
+            }
+          }}
           onDragEnd={() => {
             if (isUpdatingFromPropsRef.current) return;
             if (mapInstance && onMapStateChangeRef.current) {
@@ -1079,6 +1085,7 @@ function MapView({
               >
                 {selectedPlaceId === place.id && (
                   <InfoWindow
+                    position={{ lat: place.lat!, lng: place.lng! }}
                     onCloseClick={() => {
                       if (!externalSelectedPlaceId) {
                         setInternalSelectedPlaceId(null);
@@ -1088,7 +1095,7 @@ function MapView({
                       pixelOffset: new (window as any).google.maps.Size(0, -10),
                     }}
                   >
-                    <div className="w-64">
+                    <div className="w-72">
                       <Link
                         href={`/id/${place.id}`}
                         onClick={(e) => {
@@ -1099,30 +1106,63 @@ function MapView({
                         }}
                         className="block"
                       >
-                        {place.cover_url && (
-                          <div className="relative w-full h-48 rounded-xl overflow-hidden mb-3">
+                        {place.cover_url ? (
+                          <div className="relative w-full h-56 rounded-2xl overflow-hidden">
                             <img
                               src={place.cover_url}
                               alt={place.title}
                               className="w-full h-full object-cover"
                             />
+                            {/* Overlay gradient for better text readability */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+                            
+                            {/* Content overlay */}
+                            <div className="absolute inset-0 flex flex-col justify-end p-4 text-white">
+                              <h3 className="text-lg font-semibold mb-2 line-clamp-1 drop-shadow-lg">
+                                {place.title}
+                              </h3>
+                              {place.address && (
+                                <div className="flex items-center gap-1.5 text-sm mb-1 drop-shadow-md">
+                                  <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                                  </svg>
+                                  <span className="line-clamp-1">{place.address}</span>
+                                </div>
+                              )}
+                              {place.city && (
+                                <div className="text-xs opacity-90 drop-shadow-md">
+                                  {place.city}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="relative w-full h-56 rounded-2xl overflow-hidden bg-[#f5f4f2]">
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <svg className="w-12 h-12 text-[#6b7d47]/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                            <div className="absolute inset-0 flex flex-col justify-end p-4 text-[#2d2d2d]">
+                              <h3 className="text-lg font-semibold mb-2 line-clamp-1">
+                                {place.title}
+                              </h3>
+                              {place.address && (
+                                <div className="flex items-center gap-1.5 text-sm mb-1 text-[#6b7d47]/70">
+                                  <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                                  </svg>
+                                  <span className="line-clamp-1">{place.address}</span>
+                                </div>
+                              )}
+                              {place.city && (
+                                <div className="text-xs text-[#6b7d47]/60">
+                                  {place.city}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
-                        <div className="px-1">
-                          <h3 className="text-base font-semibold text-[#2d2d2d] mb-1 line-clamp-1">
-                            {place.title}
-                          </h3>
-                          {place.address && (
-                            <div className="text-xs text-[#6b7d47]/70 mb-1 line-clamp-1">
-                              📍 {place.address}
-                            </div>
-                          )}
-                          {place.city && (
-                            <div className="text-xs text-[#6b7d47]/60">
-                              {place.city}
-                            </div>
-                          )}
-                        </div>
                       </Link>
                     </div>
                   </InfoWindow>
