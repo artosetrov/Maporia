@@ -162,8 +162,13 @@ export default function HomePage() {
     }
 
     const { data, error } = await query;
+    console.log("places data", data, error);
+    
     if (error) {
       console.error("Error loading places:", error);
+      setPlaces([]);
+    } else if (!data || data.length === 0) {
+      console.log("No places found");
       setPlaces([]);
     } else {
       setPlaces((data ?? []) as Place[]);
@@ -431,7 +436,8 @@ export default function HomePage() {
                       onMouseLeave={() => setHoveredPlaceId(null)}
                       onClick={() => {
                         setSelectedPlaceId(p.id);
-                        if (p.lat && p.lng) {
+                        // Обновляем карту только если есть координаты
+                        if (p.lat != null && p.lng != null) {
                           setMapCenter({ lat: p.lat, lng: p.lng });
                           setMapZoom(15);
                         }
