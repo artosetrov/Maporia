@@ -1,8 +1,5 @@
 "use client";
-console.log(
-  "URL", process.env.NEXT_PUBLIC_SUPABASE_URL,
-  "KEY", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
@@ -17,6 +14,7 @@ export default function AuthPage() {
 
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isAuthed, setIsAuthed] = useState(false);
@@ -27,7 +25,7 @@ export default function AuthPage() {
       const { data } = await supabase.auth.getUser();
       if (data.user) {
         setIsAuthed(true);
-        router.replace("/profile");
+        router.replace("/");
       }
     })();
 
@@ -35,7 +33,7 @@ export default function AuthPage() {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setIsAuthed(true);
-        router.replace("/profile");
+        router.replace("/");
       }
     });
 
@@ -44,81 +42,172 @@ export default function AuthPage() {
     };
   }, [router]);
 
-  async function signIn() {
+  async function signInWithEmail() {
     setError(null);
     setLoading(true);
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/profile`,
+        emailRedirectTo: `${window.location.origin}/`,
       },
     });
 
     setLoading(false);
-    if (error) setError(error.message);
-    else setSent(true);
+    if (error) {
+      setError(error.message);
+    } else {
+      setSent(true);
+    }
   }
 
-  async function logout() {
-    await supabase.auth.signOut();
-    setIsAuthed(false);
-    setSent(false);
-    setEmail("");
+  async function signInWithGoogle() {
+    setError(null);
+    setGoogleLoading(true);
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/`,
+      },
+    });
+
+    if (error) {
+      // Показываем более понятное сообщение об ошибке
+      if (error.message.includes("provider is not enabled") || error.message.includes("Unsupported provider")) {
+        setError("Google authentication is not enabled. Please contact support or use email login.");
+      } else {
+        setError(error.message);
+      }
+      setGoogleLoading(false);
+    }
+    // Если ошибки нет, пользователь будет перенаправлен на Google, поэтому не сбрасываем loading
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-white flex items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6 shadow-xl">
-        <div className="text-sm text-white/60">Maporia</div>
-        <h1 className="mt-1 text-2xl font-semibold">Login</h1>
-        <p className="mt-2 text-sm text-white/60">
-          Enter your email — we’ll send a magic link.
+    <main className="min-h-screen bg-[#faf9f7] flex items-center justify-center p-6">
+      <div className="w-full max-w-md rounded-3xl bg-white border border-[#6b7d47]/10 shadow-lg p-8 relative">
+        {/* Close Button */}
+        <button
+          onClick={() => router.push("/")}
+          className="absolute top-4 right-4 h-8 w-8 rounded-full flex items-center justify-center text-[#6b7d47]/60 hover:bg-[#f5f4f2] hover:text-[#6b7d47] transition"
+          aria-label="Close"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        {/* Logo */}
+        <div className="flex justify-start mb-6">
+          <div className="h-10 flex items-center justify-center">
+            <svg width="159" height="36" viewBox="0 0 159 36" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-8 w-auto">
+              <g clipPath="url(#clip0_288_14)">
+                <mask id="mask0_288_14" style={{ maskType: "luminance" }} maskUnits="userSpaceOnUse" x="0" y="0" width="145" height="36">
+                  <path d="M145 0H0V36H145V0Z" fill="white"/>
+                </mask>
+                <g mask="url(#mask0_288_14)">
+                  <path d="M0 27.8609V0.469565H7.58221L15.0863 17.8435H15.2426L22.6294 0.469565H30.1725V27.8609H24.31V9.74346H24.1536L17.8612 23.9478H12.1941L6.01887 9.74346H5.86253V27.8609H0ZM39.7597 28.3305C38.2226 28.3305 36.9589 28.0696 35.9688 27.5478C34.9787 27.0261 34.2491 26.3348 33.7801 25.4739C33.3371 24.587 33.1157 23.6087 33.1157 22.5392C33.1157 21.3652 33.4023 20.3348 33.9755 19.4478C34.5748 18.5348 35.4998 17.8174 36.7505 17.2957C38.0011 16.7739 39.6034 16.513 41.5576 16.513H46.3257C46.3257 15.6261 46.2085 14.9087 45.974 14.3609C45.7395 13.787 45.3619 13.3696 44.8406 13.1087C44.3458 12.8217 43.6814 12.6783 42.8473 12.6783C41.9355 12.6783 41.1409 12.8739 40.4632 13.2652C39.8121 13.6565 39.408 14.2696 39.2516 15.1044H33.6238C33.754 13.6696 34.2231 12.4304 35.0308 11.3869C35.8385 10.3174 36.9068 9.48262 38.2356 8.88259C39.5905 8.2826 41.1409 7.98259 42.8864 7.98259C44.7624 7.98259 46.391 8.2826 47.7718 8.88259C49.1788 9.48262 50.2603 10.3826 51.0158 11.5826C51.7974 12.7565 52.1883 14.2043 52.1883 15.9261V27.8609H47.3419L46.7166 24.9261H46.5602C46.1436 25.5 45.6875 26.0087 45.1923 26.4522C44.6975 26.8696 44.1633 27.2217 43.5899 27.5087C43.0427 27.7696 42.4436 27.9652 41.7921 28.0957C41.1409 28.2522 40.4632 28.3305 39.7597 28.3305ZM41.8311 23.8696C42.4827 23.8696 43.0427 23.7652 43.5117 23.5565C43.9807 23.3478 44.3849 23.0739 44.7233 22.7348C45.0884 22.3696 45.3748 21.9522 45.5832 21.4826C45.7919 21.0131 45.9482 20.5044 46.0522 19.9565H42.2611C41.5837 19.9565 41.0237 20.0478 40.5805 20.2305C40.1638 20.387 39.8512 20.6218 39.6425 20.9348C39.4341 21.2217 39.3298 21.5739 39.3298 21.9913C39.3298 22.4087 39.4341 22.7609 39.6425 23.0478C39.8512 23.3087 40.1505 23.5174 40.5414 23.6739C40.9322 23.8044 41.3621 23.8696 41.8311 23.8696ZM55.3048 35.687V8.45215H60.2293L60.5029 11.7782H60.6592C61.1544 10.9956 61.7274 10.3304 62.3789 9.78259C63.0562 9.2087 63.8379 8.7652 64.7239 8.45215C65.61 8.13911 66.5871 7.98259 67.6552 7.98259C69.4792 7.98259 71.0684 8.42609 72.4234 9.31302C73.7784 10.1739 74.8337 11.3739 75.5892 12.913C76.3447 14.4261 76.7226 16.1739 76.7226 18.1565C76.7226 20.1391 76.3447 21.9 75.5892 23.4392C74.8337 24.9522 73.7651 26.1522 72.3843 27.0392C71.0293 27.9 69.4269 28.3305 67.577 28.3305C66.1438 28.3305 64.8803 28.0696 63.7859 27.5478C62.6916 27 61.8189 26.3348 61.1673 25.5522V35.687H55.3048ZM65.8964 23.5957C66.8864 23.5957 67.7463 23.3739 68.476 22.9305C69.2057 22.4609 69.7657 21.8217 70.1566 21.013C70.5736 20.2044 70.7819 19.2652 70.7819 18.1957C70.7819 17.1261 70.5736 16.187 70.1566 15.3783C69.7657 14.5696 69.2057 13.9304 68.476 13.4609C67.7463 12.9913 66.8864 12.7565 65.8964 12.7565C64.9584 12.7565 64.1115 12.9913 63.356 13.4609C62.6005 13.9304 62.0143 14.5696 61.5973 15.3783C61.2064 16.187 61.011 17.1261 61.011 18.1957C61.011 19.2652 61.2064 20.2044 61.5973 21.013C62.0143 21.8217 62.6005 22.4609 63.356 22.9305C64.1115 23.3739 64.9584 23.5957 65.8964 23.5957ZM88.7275 28.3305C86.8515 28.3305 85.1451 27.9 83.6076 27.0392C82.0966 26.1522 80.8979 24.9522 80.0119 23.4392C79.1262 21.9 78.683 20.1391 78.683 18.1565C78.683 16.1739 79.1262 14.4131 80.0119 12.8739C80.8979 11.3348 82.0966 10.1348 83.6076 9.27389C85.1451 8.41302 86.8515 7.98259 88.7275 7.98259C90.6297 7.98259 92.3365 8.41302 93.8474 9.27389C95.3588 10.1348 96.5575 11.3348 97.4431 12.8739C98.3292 14.4131 98.772 16.1739 98.772 18.1565C98.772 20.1391 98.3292 21.9 97.4431 23.4392C96.5575 24.9522 95.3459 26.1522 93.8084 27.0392C92.2974 27.9 90.6035 28.3305 88.7275 28.3305ZM88.7275 23.3218C89.4834 23.3218 90.1607 23.1391 90.7598 22.7739C91.3852 22.3826 91.8804 21.8087 92.245 21.0522C92.6101 20.2696 92.7922 19.3044 92.7922 18.1565C92.7922 17.0087 92.6101 16.0565 92.245 15.3C91.8804 14.5174 91.3852 13.9435 90.7598 13.5783C90.1607 13.1869 89.4963 12.9913 88.7666 12.9913C88.0111 12.9913 87.3205 13.1869 86.6952 13.5783C86.0698 13.9435 85.575 14.5174 85.21 15.3C84.8453 16.0565 84.6628 17.0087 84.6628 18.1565C84.6628 19.3044 84.8453 20.2696 85.21 21.0522C85.575 21.8087 86.0698 22.3826 86.6952 22.7739C87.3205 23.1391 87.9982 23.3218 88.7275 23.3218ZM101.33 27.8609V8.45215H106.294L106.802 12.7174H106.958C107.506 11.3609 108.118 10.3435 108.795 9.6652C109.499 8.98695 110.293 8.54349 111.179 8.33476C112.065 8.09998 113.042 7.98259 114.111 7.98259V14.2044H112.508C111.674 14.2044 110.919 14.2957 110.241 14.4783C109.59 14.6609 109.03 14.9609 108.561 15.3783C108.118 15.7695 107.779 16.3043 107.545 16.9826C107.31 17.6348 107.193 18.4435 107.193 19.4087V27.8609H101.33ZM116.458 27.8609V8.45215H122.321V27.8609H116.458ZM119.429 6.41737C118.386 6.41737 117.527 6.1174 116.849 5.51737C116.198 4.89129 115.872 4.12175 115.872 3.2087C115.872 2.29565 116.198 1.53913 116.849 0.939131C117.527 0.313044 118.386 0 119.429 0C120.497 0 121.357 0.313044 122.008 0.939131C122.659 1.53913 122.985 2.29565 122.985 3.2087C122.985 4.12175 122.659 4.89129 122.008 5.51737C121.357 6.1174 120.497 6.41737 119.429 6.41737ZM132.355 28.3305C130.817 28.3305 129.553 28.0696 128.563 27.5478C127.573 27.0261 126.844 26.3348 126.375 25.4739C125.932 24.587 125.71 23.6087 125.71 22.5392C125.71 21.3652 125.997 20.3348 126.57 19.4478C127.169 18.5348 128.094 17.8174 129.345 17.2957C130.596 16.7739 132.198 16.513 134.152 16.513H138.921C138.921 15.6261 138.803 14.9087 138.569 14.3609C138.334 13.787 137.956 13.3696 137.435 13.1087C136.94 12.8217 136.276 12.6783 135.442 12.6783C134.53 12.6783 133.735 12.8739 133.058 13.2652C132.407 13.6565 132.003 14.2696 131.846 15.1044H126.218C126.349 13.6696 126.818 12.4304 127.625 11.3869C128.433 10.3174 129.501 9.48262 130.83 8.88259C132.185 8.2826 133.735 7.98259 135.481 7.98259C137.357 7.98259 138.985 8.2826 140.367 8.88259C141.774 9.48262 142.855 10.3826 143.611 11.5826C144.392 12.7565 144.783 14.2043 144.783 15.9261V27.8609H139.937L139.311 24.9261H139.155C138.738 25.5 138.282 26.0087 137.787 26.4522C137.292 26.8696 136.758 27.2217 136.185 27.5087C135.638 27.7696 135.038 27.9652 134.387 28.0957C133.735 28.2522 133.058 28.3305 132.355 28.3305ZM134.426 23.8696C135.077 23.8696 135.638 23.7652 136.107 23.5565C136.576 23.3478 136.979 23.0739 137.318 22.7348C137.683 22.3696 137.969 21.9522 138.178 21.4826C138.386 21.0131 138.543 20.5044 138.647 19.9565H134.856C134.178 19.9565 133.618 20.0478 133.175 20.2305C132.758 20.387 132.446 20.6218 132.237 20.9348C132.029 21.2217 131.925 21.5739 131.925 21.9913C131.925 22.4087 132.029 22.7609 132.237 23.0478C132.446 23.3087 132.745 23.5174 133.136 23.6739C133.527 23.8044 133.957 23.8696 134.426 23.8696Z" fill="#81904C"/>
+                </g>
+                <path d="M153.07 1C152.081 1 151.115 1.29324 150.292 1.84265C149.47 2.39206 148.829 3.17295 148.451 4.08658C148.072 5.00021 147.973 6.00555 148.166 6.97545C148.359 7.94536 148.836 8.83627 149.535 9.53553C150.234 10.2348 151.125 10.711 152.095 10.9039C153.065 11.0969 154.07 10.9978 154.984 10.6194C155.897 10.241 156.678 9.6001 157.228 8.77785C157.777 7.95561 158.07 6.98891 158.07 6C158.07 4.67392 157.544 3.40215 156.606 2.46447C155.668 1.52678 154.396 1 153.07 1ZM153.07 10C152.279 10 151.506 9.7654 150.848 9.32588C150.19 8.88635 149.678 8.26164 149.375 7.53073C149.072 6.79983 148.993 5.99556 149.147 5.21964C149.302 4.44371 149.682 3.73098 150.242 3.17157C150.801 2.61216 151.514 2.2312 152.29 2.07686C153.066 1.92252 153.87 2.00173 154.601 2.30448C155.332 2.60723 155.957 3.11992 156.396 3.77772C156.836 4.43552 157.07 5.20887 157.07 6C157.07 7.06087 156.649 8.07828 155.899 8.82843C155.149 9.57857 154.131 10 153.07 10Z" fill="#81904C"/>
+                <path d="M155.07 5C155.07 4.60218 154.912 4.22064 154.631 3.93934C154.35 3.65804 153.968 3.5 153.57 3.5H151.07V8.5H152.07V6.5H152.8L154.135 8.5H155.335L153.96 6.44C154.277 6.35461 154.558 6.16748 154.758 5.90734C154.959 5.64721 155.068 5.32845 155.07 5ZM153.57 5.5H152.07V4.5H153.57C153.703 4.5 153.83 4.55268 153.924 4.64645C154.018 4.74021 154.07 4.86739 154.07 5C154.07 5.13261 154.018 5.25979 153.924 5.35355C153.83 5.44732 153.703 5.5 153.57 5.5Z" fill="#81904C"/>
+              </g>
+              <defs>
+                <clipPath id="clip0_288_14">
+                  <rect width="159" height="36" fill="white"/>
+                </clipPath>
+              </defs>
+            </svg>
+          </div>
+        </div>
+
+        {/* Title */}
+        <h2 className="text-xl font-semibold text-[#2d2d2d] mb-2">
+          Welcome back
+        </h2>
+        <p className="text-sm text-[#6b7d47]/70 mb-6">
+          Sign in to save hidden places and explore local gems
         </p>
 
-        <label className="mt-5 block text-sm text-white/70">Email</label>
+        {/* Email Input */}
         <input
-          className="mt-2 w-full rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-white placeholder:text-white/40 outline-none focus:border-white/30 focus:bg-white/15"
+          type="email"
+          className="w-full rounded-xl border border-[#6b7d47]/20 bg-white px-4 py-3 text-[#2d2d2d] placeholder:text-[#6b7d47]/40 outline-none focus:border-[#6b7d47]/40 focus:ring-2 focus:ring-[#6b7d47]/10 transition mb-4"
           placeholder="you@email.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          disabled={loading || isAuthed}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !loading && !sent && email) {
+              signInWithEmail();
+            }
+          }}
+          disabled={loading || googleLoading || sent || isAuthed}
         />
 
-        {error && <div className="mt-3 text-sm text-red-300">{error}</div>}
-
-        {isAuthed ? (
-          <div className="mt-4 space-y-2">
-            <button
-              className="w-full rounded-xl bg-white text-black py-3 font-medium hover:bg-white/90"
-              onClick={() => router.push("/profile")}
-            >
-              Continue to Profile
-            </button>
-            <button
-              className="w-full rounded-xl border border-white/15 bg-white/10 py-3 text-sm hover:bg-white/15"
-              onClick={logout}
-            >
-              Log out
-            </button>
+        {error && (
+          <div className="mb-4 text-sm text-red-500 bg-red-50 border border-red-200 rounded-xl px-4 py-2">
+            {error}
           </div>
-        ) : sent ? (
-          <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white/80">
-            ✅ Link sent. Check your inbox (and spam).
-          </div>
-        ) : (
-          <button
-            className="mt-4 w-full rounded-xl bg-white text-black py-3 font-medium hover:bg-white/90 disabled:opacity-50"
-            onClick={signIn}
-            disabled={!email || loading}
-          >
-            {loading ? "Sending..." : "Send magic link"}
-          </button>
         )}
 
-        <div className="mt-4 text-xs text-white/40">
-          Tip: open the magic link in the same browser.
-        </div>
+        {sent ? (
+          <div className="mb-4 rounded-xl border border-[#6b7d47]/20 bg-[#6b7d47]/5 p-4 text-sm text-[#6b7d47] text-center">
+            ✅ Magic link sent! Check your inbox (and spam folder).
+          </div>
+        ) : (
+          <>
+            {/* Continue Button */}
+            <button
+              className="w-full rounded-xl bg-[#6b7d47] text-white py-3 font-medium hover:bg-[#556036] transition disabled:opacity-50 disabled:cursor-not-allowed mb-4"
+              onClick={signInWithEmail}
+              disabled={!email || loading || googleLoading}
+            >
+              {loading ? "Sending..." : "Send magic link"}
+            </button>
+
+            {/* Divider */}
+            <div className="flex items-center mb-4">
+              <div className="flex-1 border-t border-[#6b7d47]/20"></div>
+              <span className="px-3 text-xs text-[#6b7d47]/50">or</span>
+              <div className="flex-1 border-t border-[#6b7d47]/20"></div>
+            </div>
+
+            {/* Google Button */}
+            <button
+              className="w-full rounded-xl border border-[#6b7d47]/20 bg-white text-[#2d2d2d] py-3 font-medium hover:bg-[#f5f4f2] transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+              onClick={signInWithGoogle}
+              disabled={loading || googleLoading}
+            >
+              {googleLoading ? (
+                "Connecting..."
+              ) : (
+                <>
+                  <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+                    <g fill="none" fillRule="evenodd">
+                      <path
+                        d="M17.64 9.2045c0-.6371-.0573-1.2516-.1636-1.8409H9v3.4814h4.8436c-.2086 1.125-.8427 2.0782-1.7955 2.7164v2.2581h2.9087c1.7018-1.5668 2.6836-3.874 2.6836-6.6149z"
+                        fill="#4285F4"
+                      />
+                      <path
+                        d="M9 18c2.43 0 4.4673-.806 5.9564-2.1805l-2.9087-2.2581c-.8059.54-1.8368.859-3.0477.859-2.344 0-4.3282-1.5831-5.036-3.7104H.9573v2.3318C2.4382 15.9832 5.482 18 9 18z"
+                        fill="#34A853"
+                      />
+                      <path
+                        d="M3.9636 10.71c-.18-.54-.2822-1.1168-.2822-1.71s.1023-1.17.2823-1.71V4.9582H.9573C.3482 6.1732 0 7.5477 0 9s.3482 2.8268.9573 4.0418L3.9636 10.71z"
+                        fill="#FBBC05"
+                      />
+                      <path
+                        d="M9 3.5795c1.3214 0 2.5077.4541 3.4405 1.3459l2.5813-2.5814C13.4632.8918 11.426 0 9 0 5.482 0 2.4382 2.0168.9573 4.9582L3.9636 7.29C4.6714 5.1627 6.6556 3.5795 9 3.5795z"
+                        fill="#EA4335"
+                      />
+                    </g>
+                  </svg>
+                  Continue with Google
+                </>
+              )}
+            </button>
+          </>
+        )}
       </div>
     </main>
   );

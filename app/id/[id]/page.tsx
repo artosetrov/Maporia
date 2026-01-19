@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
 import { CATEGORIES } from "../../constants";
-import Pill from "../../components/Pill";
+import TopBar from "../../components/TopBar";
+import BottomNav from "../../components/BottomNav";
 
 type Place = {
   id: string;
@@ -34,7 +36,12 @@ type Comment = {
   user_username?: string | null;
   user_avatar_url?: string | null;
 };
-type CreatorProfile = { display_name: string | null; username: string | null; email: string | null };
+
+type CreatorProfile = { 
+  display_name: string | null; 
+  username: string | null; 
+  avatar_url: string | null;
+};
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
@@ -80,7 +87,8 @@ export default function PlacePage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
 
-  const [tab, setTab] = useState<"info" | "map" | "comments">("info");
+  const [activeSection, setActiveSection] = useState<"overview" | "photos" | "details" | "map" | "comments">("overview");
+  const [stickyNavVisible, setStickyNavVisible] = useState(false);
   const [place, setPlace] = useState<Place | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState("");
@@ -93,51 +101,23 @@ export default function PlacePage() {
   const [commentError, setCommentError] = useState<string | null>(null);
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [photosExpanded, setPhotosExpanded] = useState(false);
 
-  // Handle back navigation intelligently
-  function handleBack() {
-    if (typeof window === "undefined") {
-      router.push("/");
-      return;
-    }
-
-    // Check if we have a referrer from our app
-    const referrer = document.referrer;
-    const isFromOurApp = referrer && (
-      referrer.includes(window.location.origin) && 
-      !referrer.includes(`/id/${id}`)
-    );
-    
-    // If we came from our app, use browser back
-    // Otherwise, navigate to home
-    if (isFromOurApp) {
-      router.back();
-    } else {
-      // If no referrer or came from outside, go to home
-      router.push("/");
-    }
-  }
+  // Refs for smooth scrolling
+  const overviewRef = useRef<HTMLDivElement>(null);
+  const photosRef = useRef<HTMLDivElement>(null);
+  const detailsRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const commentsRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLDivElement>(null);
 
   const tags = useMemo(() => place?.tags ?? [], [place]);
   const categories = useMemo(() => place?.categories ?? [], [place]);
   const isOwner = place?.created_by === userId;
-  
-  // Get 1-2 vibe chips from tags (prioritize common vibe words, fallback to first tags)
-  const vibeChips = useMemo(() => {
-    if (tags.length === 0) return [];
-    const vibeKeywords = ["quiet", "romantic", "scenic", "cozy", "hidden", "sunset", "rooftop", "beach", "nature", "vintage"];
-    const matched = tags.filter(tag => 
-      vibeKeywords.some(keyword => tag.toLowerCase().includes(keyword.toLowerCase()))
-    );
-    // If we found matches, use them; otherwise use first 2 tags
-    return matched.length > 0 ? matched.slice(0, 2) : tags.slice(0, 2);
-  }, [tags]);
 
+  // Get photos from place_photos table
   const [loadedPhotos, setLoadedPhotos] = useState<string[]>([]);
 
-  // Загружаем фото из таблицы place_photos
   useEffect(() => {
     if (!id || !place) return;
 
@@ -151,12 +131,8 @@ export default function PlacePage() {
       if (!error && photosData && photosData.length > 0) {
         const urls = photosData.map((p: any) => p.url).filter(Boolean);
         setLoadedPhotos(urls);
-        console.log("Loaded photos from place_photos:", {
-          totalPhotos: urls.length,
-          photos: urls
-        });
       } else {
-        // Fallback: используем старый формат
+        // Fallback: use legacy format
         const photos: string[] = [];
         if (place.photo_urls && Array.isArray(place.photo_urls) && place.photo_urls.length > 0) {
           photos.push(...place.photo_urls.filter((url): url is string => typeof url === "string" && url.length > 0));
@@ -168,12 +144,10 @@ export default function PlacePage() {
     })();
   }, [id, place?.id]);
 
-  // Собираем все доступные фото
   const allPhotos = useMemo(() => {
     if (loadedPhotos.length > 0) {
       return loadedPhotos;
     }
-    // Fallback для обратной совместимости
     if (!place) return [];
     const photos: string[] = [];
     if (place.photo_urls && Array.isArray(place.photo_urls) && place.photo_urls.length > 0) {
@@ -183,6 +157,63 @@ export default function PlacePage() {
     }
     return photos;
   }, [loadedPhotos, place?.photo_urls, place?.cover_url]);
+
+  // Sticky nav visibility on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      if (heroRef.current) {
+        const heroBottom = heroRef.current.getBoundingClientRect().bottom;
+        setStickyNavVisible(heroBottom < 0);
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Active section detection on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollPos = window.scrollY + 100;
+      
+      if (commentsRef.current && scrollPos >= commentsRef.current.offsetTop - 200) {
+        setActiveSection("comments");
+      } else if (mapRef.current && scrollPos >= mapRef.current.offsetTop - 200) {
+        setActiveSection("map");
+      } else if (detailsRef.current && scrollPos >= detailsRef.current.offsetTop - 200) {
+        setActiveSection("details");
+      } else if (photosRef.current && scrollPos >= photosRef.current.offsetTop - 200) {
+        setActiveSection("photos");
+      } else {
+        setActiveSection("overview");
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [place]);
+
+  // Smooth scroll to section
+  const scrollToSection = (section: "overview" | "photos" | "details" | "map" | "comments") => {
+    setActiveSection(section);
+    const refs = {
+      overview: overviewRef,
+      photos: photosRef,
+      details: detailsRef,
+      map: mapRef,
+      comments: commentsRef,
+    };
+    const ref = refs[section];
+    if (ref.current) {
+      const offset = 80; // Account for sticky nav
+      const elementPosition = ref.current.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.scrollY - offset;
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: "smooth",
+      });
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -214,14 +245,14 @@ export default function PlacePage() {
       if (placeItem.created_by) {
         const { data: profileData } = await supabase
           .from("profiles")
-          .select("display_name, username")
+          .select("display_name, username, avatar_url")
           .eq("id", placeItem.created_by)
           .single();
 
         setCreatorProfile({
           display_name: profileData?.display_name ?? null,
           username: profileData?.username ?? null,
-          email: null,
+          avatar_url: profileData?.avatar_url ?? null,
         });
       }
 
@@ -235,12 +266,10 @@ export default function PlacePage() {
 
       if (commentErr) {
         console.error("Error loading comments:", commentErr);
-        // Only set error if we don't have comments yet
         if (comments.length === 0) {
           setCommentError("Failed to load comments. Please refresh the page.");
         }
       } else {
-        // Загружаем профили пользователей для комментариев
         const userIds = Array.from(new Set((commentData ?? []).map((c: any) => c.user_id)));
         const profilesMap = new Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>();
 
@@ -259,7 +288,6 @@ export default function PlacePage() {
           });
         }
 
-        // Объединяем комментарии с профилями
         const commentsWithProfiles: Comment[] = (commentData ?? []).map((c: any) => {
           const profile = profilesMap.get(c.user_id);
           return {
@@ -299,11 +327,6 @@ export default function PlacePage() {
     })();
   }, [id, userId]);
 
-  // Сбрасываем индекс фото при изменении места
-  useEffect(() => {
-    setCurrentPhotoIndex(0);
-  }, [place?.id]);
-
   async function toggleFavorite() {
     if (!userId || !id) {
       router.push("/auth");
@@ -311,16 +334,12 @@ export default function PlacePage() {
     }
 
     setFavoriteLoading(true);
-
     if (navigator.vibrate) {
       navigator.vibrate(10);
     }
 
     try {
       if (isFavorite) {
-        // Удаляем из избранного
-        console.log("Removing favorite - place_id:", id, "user_id:", userId);
-        
         const { error } = await supabase
           .from("reactions")
           .delete()
@@ -329,16 +348,11 @@ export default function PlacePage() {
           .eq("reaction", "like");
 
         if (error) {
-          console.error("Error removing favorite - full error:", JSON.stringify(error, null, 2));
-          const errorMessage = error.message || error.details || error.hint || JSON.stringify(error);
-          alert("Failed to remove from favorites: " + errorMessage);
+          console.error("Error removing favorite:", error);
         } else {
           setIsFavorite(false);
-          console.log("Removed from favorites");
         }
       } else {
-        // Добавляем в избранное
-        // Сначала проверяем, не существует ли уже запись
         const { data: existingData } = await supabase
           .from("reactions")
           .select("id")
@@ -348,55 +362,32 @@ export default function PlacePage() {
           .maybeSingle();
 
         if (existingData) {
-          // Запись уже существует, просто обновляем состояние
-          console.log("Favorite already exists, updating state");
           setIsFavorite(true);
         } else {
-          // Записи нет, создаем новую
-          const insertData = {
-            place_id: id,
-            user_id: userId,
-            reaction: "like",
-          };
-          
-          console.log("Inserting favorite:", insertData);
-          
-          const { data, error } = await supabase
+          const { error } = await supabase
             .from("reactions")
-            .insert(insertData)
-            .select();
+            .insert({
+              place_id: id,
+              user_id: userId,
+              reaction: "like",
+            });
 
           if (error) {
-            // Если ошибка о дублировании ключа, это означает что запись уже существует
-            if (error.code === '23505' || error.message?.includes('duplicate key')) {
-              console.log("Favorite already exists (race condition), updating state");
-              setIsFavorite(true);
-            } else {
-              console.error("Error adding favorite - full error:", JSON.stringify(error, null, 2));
-              console.error("Error code:", error.code);
-              console.error("Error message:", error.message);
-              console.error("Error details:", error.details);
-              console.error("Error hint:", error.hint);
-              
-              const errorMessage = error.message || error.details || error.hint || JSON.stringify(error);
-              alert("Failed to add to favorites: " + errorMessage);
-            }
+            console.error("Error adding favorite:", error);
           } else {
-            console.log("Successfully added to favorites:", data);
             setIsFavorite(true);
           }
         }
       }
     } catch (err) {
-      console.error("Toggle favorite error:", err);
-      alert("An error occurred. Please try again.");
+      console.error("Unexpected error:", err);
     } finally {
       setFavoriteLoading(false);
     }
   }
 
   async function addComment() {
-    if (!commentText.trim() || !place) return;
+    if (!place || !commentText.trim() || sending) return;
 
     setSending(true);
     setCommentError(null);
@@ -450,7 +441,6 @@ export default function PlacePage() {
       }
       
       if (data) {
-        // Загружаем профиль пользователя для нового комментария
         const { data: profileData } = await supabase
           .from("profiles")
           .select("display_name, username, avatar_url")
@@ -485,13 +475,12 @@ export default function PlacePage() {
         .from("comments")
         .delete()
         .eq("id", commentId)
-        .eq("user_id", userId); // Дополнительная проверка безопасности
+        .eq("user_id", userId);
 
       if (error) {
         console.error("Error deleting comment:", error);
         setCommentError("Failed to delete comment. Please try again.");
       } else {
-        // Удаляем комментарий из списка
         setComments((prev) => prev.filter((c) => c.id !== commentId));
       }
     } catch (err) {
@@ -502,366 +491,103 @@ export default function PlacePage() {
     }
   }
 
-  const hasMultiplePhotos = allPhotos.length > 1;
-  const currentPhoto = allPhotos[currentPhotoIndex] || null;
-  const creatorName = creatorProfile?.display_name || creatorProfile?.username || creatorProfile?.email?.split("@")[0] || "User";
-
-  function nextPhoto() {
-    if (allPhotos.length === 0) return;
-    setCurrentPhotoIndex((prev) => (prev + 1) % allPhotos.length);
-  }
-
-  function prevPhoto() {
-    if (allPhotos.length === 0) return;
-    setCurrentPhotoIndex((prev) => (prev - 1 + allPhotos.length) % allPhotos.length);
-  }
-
-  // Минимальное расстояние для свайпа
-  const minSwipeDistance = 50;
-
-  function onTouchStart(e: React.TouchEvent) {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-  }
-
-  function onTouchMove(e: React.TouchEvent) {
-    setTouchEnd(e.targetTouches[0].clientX);
-  }
-
-  function onTouchEnd() {
-    if (!touchStart || !touchEnd || allPhotos.length <= 1) return;
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
-
-    if (isLeftSwipe) {
-      nextPhoto();
-    }
-    if (isRightSwipe) {
-      prevPhoto();
-    }
-  }
+  const creatorName = creatorProfile?.display_name || creatorProfile?.username || "User";
 
   if (!place) {
     return (
-      <main className="min-h-screen bg-[#faf9f7] flex items-center justify-center">
+      <main className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-sm text-[#6b7d47]/60">Loading…</div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#faf9f7]">
-      {/* Compact Media Header - 16:9, ~30-40% viewport */}
-      <div className="relative mx-auto max-w-md" style={{ maxHeight: "min(40vh, 280px)" }}>
-        {currentPhoto ? (
-          <>
-            {/* Minimal Header Controls */}
-            <div className="absolute top-0 left-0 right-0 z-10">
-              <div className="px-4 pt-safe-top pt-3 pb-2">
-                <div className="flex items-center justify-between">
-                  <button
-                    onClick={handleBack}
-                    className="h-9 w-9 rounded-xl bg-white/95 backdrop-blur-sm flex items-center justify-center text-[#2d2d2d] hover:bg-white transition shadow-sm"
-                    aria-label="Back"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
+    <main className="min-h-screen bg-white">
+      <TopBar
+        onBack={() => router.back()}
+        showDesktopTabs={false}
+        userAvatar={null}
+        userDisplayName={null}
+        userEmail={null}
+      />
 
-                  <div className="flex items-center gap-2">
-                    {userId && !isOwner && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          toggleFavorite();
-                        }}
-                        disabled={favoriteLoading}
-                        className={cx(
-                          "h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center transition backdrop-blur-sm",
-                          favoriteLoading && "opacity-50"
-                        )}
-                        aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                      >
-                        <svg
-                          className={`w-4 h-4 text-white transition-transform ${isFavorite ? "scale-110" : ""}`}
-                          fill={isFavorite ? "currentColor" : "none"}
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                          />
-                        </svg>
-                      </button>
-                    )}
-                    {isOwner && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            toggleFavorite();
-                          }}
-                          disabled={favoriteLoading}
-                          className={cx(
-                            "h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center transition backdrop-blur-sm",
-                            favoriteLoading && "opacity-50"
-                          )}
-                          aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                        >
-                          <svg
-                            className={`w-4 h-4 text-white transition-transform ${isFavorite ? "scale-110" : ""}`}
-                            fill={isFavorite ? "currentColor" : "none"}
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                            />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => router.push(`/id/${id}/edit`)}
-                          className="h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center transition backdrop-blur-sm"
-                          aria-label="Edit"
-                        >
-                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                      </>
-                    )}
-                  </div>
+      {/* Hero Photo Gallery */}
+      <div ref={heroRef} className="relative w-full" style={{ height: "min(60vh, 600px)" }}>
+        {allPhotos.length > 0 ? (
+          <div className="relative w-full h-full bg-[#f5f4f2] rounded-b-3xl overflow-hidden">
+            {allPhotos.length === 1 ? (
+              <img
+                src={allPhotos[0]}
+                alt={place.title}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="grid grid-cols-2 h-full gap-1">
+                {/* Main large photo on left */}
+                <div className="relative">
+                  <img
+                    src={allPhotos[0]}
+                    alt={place.title}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
-              </div>
-            </div>
-
-            {/* Image Slider */}
-            <div 
-              className="w-full aspect-video bg-[#f5f4f2] overflow-hidden relative"
-              onTouchStart={onTouchStart}
-              onTouchMove={onTouchMove}
-              onTouchEnd={onTouchEnd}
-            >
-              {/* Images container with swipe support */}
-              <div className="relative w-full h-full" style={{ touchAction: 'pan-y pinch-zoom' }}>
-                {allPhotos.map((photo, index) => (
-                  <div
-                    key={index}
-                    className={cx(
-                      "absolute inset-0 transition-opacity duration-300",
-                      index === currentPhotoIndex ? "opacity-100 z-0" : "opacity-0 z-0 pointer-events-none"
-                    )}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={photo}
-                      alt={`${place.title} - Photo ${index + 1}`}
-                      className="w-full h-full object-cover select-none"
-                      draggable={false}
-                    />
-                  </div>
-                ))}
-              </div>
-
-              {/* Navigation arrows - only show if multiple photos */}
-              {hasMultiplePhotos && (
-                <>
-                  <button
-                    onClick={prevPhoto}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 z-20 h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center transition backdrop-blur-sm"
-                    aria-label="Previous photo"
-                  >
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={nextPhoto}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 z-20 h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center transition backdrop-blur-sm"
-                    aria-label="Next photo"
-                  >
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-
-                  {/* Photo indicator dots */}
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
-                    {allPhotos.map((_, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setCurrentPhotoIndex(index)}
-                        className={cx(
-                          "h-1.5 rounded-full transition-all",
-                          index === currentPhotoIndex
-                            ? "w-6 bg-white"
-                            : "w-1.5 bg-white/50 hover:bg-white/75"
-                        )}
-                        aria-label={`Go to photo ${index + 1}`}
+                {/* Grid of smaller photos on right */}
+                <div className="grid grid-rows-2 gap-1">
+                  {allPhotos.slice(1, 3).map((photo, index) => (
+                    <div key={index} className="relative overflow-hidden">
+                      <img
+                        src={photo}
+                        alt={`${place.title} - Photo ${index + 2}`}
+                        className="w-full h-full object-cover"
                       />
-                    ))}
-                  </div>
-
-                  {/* Photo counter - в центре между кнопками */}
-                  <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 rounded-full bg-black/50 backdrop-blur-sm text-white text-xs px-2 py-1 font-medium">
-                    {currentPhotoIndex + 1} / {allPhotos.length}
-                  </div>
-                </>
-              )}
-
-              {/* Favorite button overlay */}
-              {userId && !isOwner && (
-                <div className="absolute top-2 right-2 z-20">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      toggleFavorite();
-                    }}
-                    disabled={favoriteLoading}
-                    className="h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center transition backdrop-blur-sm disabled:opacity-50"
-                    title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                  >
-                    <svg
-                      className={`w-4 h-4 text-white transition-transform ${isFavorite ? "scale-110" : ""}`}
-                      fill={isFavorite ? "currentColor" : "none"}
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                    </div>
+                  ))}
+                  {allPhotos.length > 3 && (
+                    <button
+                      onClick={() => scrollToSection("photos")}
+                      className="relative bg-black/40 hover:bg-black/50 transition group"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+                      <img
+                        src={allPhotos[3]}
+                        alt={`${place.title} - Photo 4`}
+                        className="w-full h-full object-cover opacity-60 group-hover:opacity-70"
                       />
-                    </svg>
-                  </button>
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="w-full aspect-video bg-[#f5f4f2] flex items-center justify-center relative">
-            {/* Header Controls */}
-            <div className="absolute top-0 left-0 right-0 z-10">
-              <div className="px-4 pt-safe-top pt-3 pb-2">
-                <div className="flex items-center justify-between">
-                  <button
-                    onClick={handleBack}
-                    className="h-9 w-9 rounded-xl bg-white/95 backdrop-blur-sm flex items-center justify-center text-[#2d2d2d] hover:bg-white transition shadow-sm"
-                    aria-label="Back"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-
-                  <div className="flex items-center gap-2">
-                    {userId && !isOwner && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          toggleFavorite();
-                        }}
-                        disabled={favoriteLoading}
-                        className={cx(
-                          "h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center transition backdrop-blur-sm",
-                          favoriteLoading && "opacity-50"
-                        )}
-                        aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                      >
-                        <svg
-                          className={`w-4 h-4 text-white transition-transform ${isFavorite ? "scale-110" : ""}`}
-                          fill={isFavorite ? "currentColor" : "none"}
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                          />
-                        </svg>
-                      </button>
-                    )}
-                    {isOwner && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            toggleFavorite();
-                          }}
-                          disabled={favoriteLoading}
-                          className={cx(
-                            "h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center transition backdrop-blur-sm",
-                            favoriteLoading && "opacity-50"
-                          )}
-                          aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                        >
-                          <svg
-                            className={`w-4 h-4 text-white transition-transform ${isFavorite ? "scale-110" : ""}`}
-                            fill={isFavorite ? "currentColor" : "none"}
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                            />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => router.push(`/id/${id}/edit`)}
-                          className="h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center transition backdrop-blur-sm"
-                          aria-label="Edit"
-                        >
-                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                      </>
-                    )}
-                  </div>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-white font-semibold text-lg">
+                          +{allPhotos.length - 3}
+                        </span>
+                      </div>
+                    </button>
+                  )}
                 </div>
               </div>
-            </div>
+            )}
             
-            {/* Favorite button overlay for places without cover */}
-            {userId && !isOwner && (
-              <div className="absolute top-2 right-2 z-10">
+            {/* Navigation buttons */}
+            <button
+              onClick={() => router.back()}
+              className="absolute top-4 left-4 h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#2d2d2d] hover:bg-white transition shadow-sm z-10"
+              aria-label="Back"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+
+            <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+              {userId && (
                 <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    toggleFavorite();
-                  }}
+                  onClick={toggleFavorite}
                   disabled={favoriteLoading}
-                  className="h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center transition backdrop-blur-sm disabled:opacity-50"
-                  title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                  className={cx(
+                    "h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center transition shadow-sm",
+                    isFavorite ? "text-[#6b7d47]" : "text-[#6b7d47]/60",
+                    favoriteLoading && "opacity-50"
+                  )}
+                  aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
                 >
                   <svg
-                    className={`w-4 h-4 text-white transition-transform ${isFavorite ? "scale-110" : ""}`}
+                    className="w-5 h-5"
                     fill={isFavorite ? "currentColor" : "none"}
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -874,466 +600,459 @@ export default function PlacePage() {
                     />
                   </svg>
                 </button>
-              </div>
-            )}
+              )}
+              {isOwner && (
+                <button
+                  onClick={() => router.push(`/id/${id}/edit`)}
+                  className="h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#2d2d2d] hover:bg-white transition shadow-sm"
+                  aria-label="Edit"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="w-full h-full bg-[#f5f4f2] flex items-center justify-center rounded-b-3xl">
+            <svg className="w-16 h-16 text-[#6b7d47]/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
           </div>
         )}
       </div>
 
-      {/* Content */}
-      <div className="mx-auto max-w-md px-4 pb-20 pt-4">
-        {/* Place Summary */}
-        <div className="mb-5">
-          <div className="flex items-start justify-between gap-4 mb-2">
-            <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold text-[#2d2d2d] mb-1">{place.title}</h1>
-              <div className="text-sm text-[#6b7d47]/70">
-                {place.city ?? "—"}
-                {place.country && `, ${place.country}`}
-              </div>
+      {/* Title and Meta Section */}
+      <div className="mx-auto max-w-7xl px-4 lg:px-8 pt-6 pb-4">
+        <div className="flex items-start justify-between gap-4 mb-3">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl lg:text-3xl font-semibold text-[#2d2d2d] mb-2">{place.title}</h1>
+            <div className="flex items-center gap-2 text-sm text-[#6b7d47]/70 mb-3">
+              {place.city && <span>{place.city}</span>}
+              {place.country && place.city && <span>·</span>}
+              {place.country && <span>{place.country}</span>}
             </div>
-            {userId && !isOwner && !isFavorite && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  toggleFavorite();
-                }}
-                disabled={favoriteLoading}
-                className="rounded-xl bg-[#6b7d47] text-white px-4 py-2 text-sm font-medium hover:bg-[#556036] transition active:scale-[0.98] flex-shrink-0"
-              >
-                Save
-              </button>
-            )}
           </div>
-
-          {/* Vibe chips - 1-2 max */}
-          {vibeChips.length > 0 && (
-            <div className="flex gap-2 mt-3">
-              {vibeChips.map((chip) => (
-                <span
-                  key={chip}
-                  className="rounded-full px-3 py-1 text-xs font-medium text-[#6b7d47] bg-[#f5f4f2] border border-[#6b7d47]/20"
-                >
-                  {chip}
-                </span>
-              ))}
-            </div>
-          )}
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-4">
-          <Pill variant="tab" active={tab === "info"} onClick={() => setTab("info")}>
-            Info
-          </Pill>
-          <Pill variant="tab" active={tab === "map"} onClick={() => setTab("map")}>
-            Map
-          </Pill>
-          <Pill variant="tab" active={tab === "comments"} onClick={() => setTab("comments")}>
-            Comments
-          </Pill>
-        </div>
+        {/* Category chips */}
+        {categories.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {categories.map((cat) => (
+              <Link
+                key={cat}
+                href={`/?category=${encodeURIComponent(cat)}`}
+                className="px-3 py-1.5 rounded-full text-xs font-medium text-[#6b7d47] bg-[#f5f4f2] border border-[#6b7d47]/20 hover:bg-[#6b7d47]/5 transition"
+              >
+                {cat}
+              </Link>
+            ))}
+          </div>
+        )}
 
-        <div className="transition-opacity duration-200">
-          {tab === "info" && (
-            <div className="space-y-4">
-              {/* Description */}
-              {place.description && (
-                <div className="text-sm text-[#2d2d2d] leading-relaxed whitespace-pre-wrap">
-                  {place.description}
-                </div>
-              )}
-
-              {/* Category chips - clickable */}
-              {categories.length > 0 && (
-                <div>
-                  <div className="flex flex-wrap gap-2">
-                    {categories.map((cat) => (
-                      <Pill
-                        key={cat}
-                        onClick={() => router.push(`/?category=${encodeURIComponent(cat)}`)}
-                      >
-                        {cat}
-                      </Pill>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* External Link */}
-              {place.link && (
-                <div>
-                  <a
-                    href={place.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#6b7d47] text-white px-4 py-2.5 text-sm font-medium hover:bg-[#556036] transition active:scale-[0.98]"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                    Visit Website
-                  </a>
-                </div>
-              )}
-
-              {/* Meta */}
-              <div className="pt-3 border-t border-[#6b7d47]/10">
-                <div className="text-xs text-[#6b7d47]/60">
-                  Added by {creatorName} · {timeAgo(place.created_at)}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {tab === "map" && (
-            <PlaceMapView place={place} />
-          )}
-
-          {tab === "comments" && (
-            <div className="space-y-4">
-              {/* Add comment CTA */}
-              {userId ? (
-                <div className="rounded-xl border border-[#6b7d47]/10 bg-white p-4">
-                  <textarea
-                    className="w-full bg-transparent text-sm outline-none text-[#2d2d2d] placeholder:text-[#6b7d47]/40 resize-none"
-                    placeholder="Add a comment"
-                    rows={3}
-                    value={commentText}
-                    onChange={(e) => {
-                      setCommentText(e.target.value);
-                      setCommentError(null);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                        e.preventDefault();
-                        if (commentText.trim() && !sending) {
-                          addComment();
-                        }
-                      }
-                    }}
-                  />
-                  {commentError && (
-                    <div className="mt-2 text-xs text-red-600">
-                      {commentError}
-                    </div>
-                  )}
-                  <div className="mt-3 flex justify-end">
-                    <button
-                      onClick={addComment}
-                      disabled={!commentText.trim() || sending}
-                      className="rounded-xl bg-[#6b7d47] text-white px-4 py-2 text-sm font-medium hover:bg-[#556036] disabled:opacity-50 transition active:scale-[0.98]"
-                    >
-                      {sending ? "Posting…" : "Post"}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-[#6b7d47]/10 bg-white p-4 text-center">
-                  <div className="text-sm text-[#6b7d47]/60 mb-2">Sign in to post comments</div>
-                  <button
-                    onClick={() => router.push("/auth")}
-                    className="rounded-xl bg-[#6b7d47] text-white px-4 py-2 text-sm font-medium hover:bg-[#556036] transition active:scale-[0.98]"
-                  >
-                    Sign In
-                  </button>
-                </div>
-              )}
-
-              {/* Comments list - minimal */}
-              {commentsLoading ? (
-                <div className="text-center py-12 rounded-xl bg-white border border-[#6b7d47]/10">
-                  <div className="text-sm text-[#6b7d47]/60">Loading comments…</div>
-                </div>
-              ) : comments.length === 0 && commentError && commentError.includes("Failed to load") ? (
-                <div className="text-center py-12 rounded-xl bg-white border border-red-200 bg-red-50/50">
-                  <div className="text-sm text-red-600 mb-2">{commentError}</div>
-                  <button
-                    onClick={() => {
-                      setCommentError(null);
-                      setCommentsLoading(true);
-                      if (id) {
-                        (async () => {
-                          const { data: commentData, error: commentErr } = await supabase
-                            .from("comments")
-                            .select("id,text,created_at,user_id")
-                            .eq("place_id", id)
-                            .order("created_at", { ascending: false });
-
-                          if (commentErr) {
-                            console.error("Error loading comments:", commentErr);
-                            setCommentError("Failed to load comments. Please refresh the page.");
-                          } else {
-                            setComments((commentData ?? []) as Comment[]);
-                            setCommentError(null);
-                          }
-                          setCommentsLoading(false);
-                        })();
-                      }
-                    }}
-                    className="text-xs text-[#6b7d47] hover:text-[#556036] underline"
-                  >
-                    Try again
-                  </button>
-                </div>
-              ) : comments.length === 0 ? (
-                <div className="text-center py-12 rounded-xl bg-white border border-[#6b7d47]/10">
-                  <div className="text-sm text-[#6b7d47]/60 mb-1">No comments yet</div>
-                  <div className="text-xs text-[#6b7d47]/50">Be the first to add context</div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {comments.map((c) => {
-                    const isMyComment = userId && c.user_id === userId;
-                    const userName = c.user_display_name || c.user_username || "User";
-                    const userAvatar = c.user_avatar_url;
-                    const userInitials = initialsFromName(c.user_display_name, c.user_username);
-                    
-                    return (
-                      <div
-                        key={c.id}
-                        className="rounded-xl border border-[#6b7d47]/10 bg-white p-4 relative"
-                      >
-                        <div className="flex items-start gap-3">
-                          {/* Аватарка пользователя */}
-                          <div className="flex-shrink-0">
-                            {userAvatar ? (
-                              <div className="w-10 h-10 rounded-full bg-[#f5f4f2] overflow-hidden border border-[#6b7d47]/10">
-                                <img
-                                  src={userAvatar}
-                                  alt={userName}
-                                  className="w-full h-full object-cover"
-                                />
-                              </div>
-                            ) : (
-                              <div className="w-10 h-10 rounded-full bg-[#6b7d47]/20 flex items-center justify-center border border-[#6b7d47]/10">
-                                <span className="text-sm font-medium text-[#6b7d47]">
-                                  {userInitials}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          
-                          {/* Контент комментария */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2 mb-1">
-                              <div className="flex items-center gap-2">
-                                <div className="text-sm font-semibold text-[#2d2d2d]">
-                                  {userName}
-                                </div>
-                                <div className="text-xs text-[#6b7d47]/60">
-                                  {timeAgo(c.created_at)}
-                                </div>
-                              </div>
-                              {isMyComment && (
-                                <button
-                                  onClick={() => {
-                                    if (confirm("Delete this comment?")) {
-                                      deleteComment(c.id);
-                                    }
-                                  }}
-                                  disabled={deletingCommentId === c.id}
-                                  className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50 transition flex items-center gap-1 flex-shrink-0"
-                                  title="Delete comment"
-                                >
-                                  {deletingCommentId === c.id ? (
-                                    <>
-                                      <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                      </svg>
-                                      Deleting...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                      </svg>
-                                      Delete
-                                    </>
-                                  )}
-                                </button>
-                              )}
-                            </div>
-                            <div className="text-sm text-[#2d2d2d] leading-relaxed">
-                              {c.text}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+        {/* Added by */}
+        <div className="flex items-center gap-2 text-sm text-[#6b7d47]/60">
+          <span>Added by {creatorName}</span>
+          <span>·</span>
+          <span>{timeAgo(place.created_at)}</span>
         </div>
       </div>
+
+      {/* Sticky Sub-Navigation */}
+      <div
+        className={cx(
+          "sticky top-[64px] z-30 bg-white border-b border-[#6b7d47]/10 transition-all duration-200",
+          stickyNavVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+        )}
+      >
+        <div className="mx-auto max-w-7xl px-4 lg:px-8">
+          {/* Desktop: Full-width tabs */}
+          <div className="hidden lg:flex items-center gap-1">
+            {(["overview", "photos", "details", "map", "comments"] as const).map((section) => (
+              <button
+                key={section}
+                onClick={() => scrollToSection(section)}
+                className={cx(
+                  "px-4 py-3 text-sm font-medium transition border-b-2",
+                  activeSection === section
+                    ? "text-[#6b7d47] border-[#6b7d47]"
+                    : "text-[#6b7d47]/60 border-transparent hover:text-[#6b7d47]"
+                )}
+              >
+                {section.charAt(0).toUpperCase() + section.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          {/* Mobile: Horizontally scrollable tabs */}
+          <div className="lg:hidden overflow-x-auto scrollbar-hide -mx-4 px-4">
+            <div className="flex items-center gap-1 min-w-max">
+              {(["overview", "photos", "details", "map", "comments"] as const).map((section) => (
+                <button
+                  key={section}
+                  onClick={() => scrollToSection(section)}
+                  className={cx(
+                    "px-4 py-3 text-sm font-medium transition whitespace-nowrap border-b-2",
+                    activeSection === section
+                      ? "text-[#6b7d47] border-[#6b7d47]"
+                      : "text-[#6b7d47]/60 border-transparent"
+                  )}
+                >
+                  {section.charAt(0).toUpperCase() + section.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Content Sections */}
+      <div className="mx-auto max-w-7xl px-4 lg:px-8 py-8">
+        {/* Overview Section */}
+        <section ref={overviewRef} id="overview" className="mb-16">
+          {place.description && (
+            <div className="mb-6">
+              <p className="text-base text-[#2d2d2d] leading-relaxed whitespace-pre-wrap">
+                {place.description}
+              </p>
+            </div>
+          )}
+
+          {/* Highlights */}
+          {tags.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold text-[#2d2d2d] mb-3">Highlights</h3>
+              <div className="flex flex-wrap gap-2">
+                {tags.slice(0, 6).map((tag) => (
+                  <span
+                    key={tag}
+                    className="px-3 py-1.5 rounded-full text-sm text-[#6b7d47] bg-[#f5f4f2] border border-[#6b7d47]/20"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Photos Section */}
+        <section ref={photosRef} id="photos" className="mb-16">
+          <h2 className="text-2xl font-semibold text-[#2d2d2d] mb-6">Photos</h2>
+          {allPhotos.length === 0 ? (
+            <div className="text-center py-12 text-[#6b7d47]/60">No photos available</div>
+          ) : (
+            <>
+              <div className={cx(
+                "grid gap-2",
+                photosExpanded || allPhotos.length <= 4
+                  ? "grid-cols-2 lg:grid-cols-3"
+                  : "grid-cols-2 lg:grid-cols-4"
+              )}>
+                {(photosExpanded ? allPhotos : allPhotos.slice(0, 4)).map((photo, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      setCurrentPhotoIndex(index);
+                      setPhotosExpanded(true);
+                    }}
+                    className="aspect-square rounded-xl overflow-hidden bg-[#f5f4f2] group"
+                  >
+                    <img
+                      src={photo}
+                      alt={`${place.title} - Photo ${index + 1}`}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                    />
+                  </button>
+                ))}
+              </div>
+              {allPhotos.length > 4 && !photosExpanded && (
+                <button
+                  onClick={() => setPhotosExpanded(true)}
+                  className="mt-4 w-full py-3 rounded-xl border border-[#6b7d47]/20 text-[#6b7d47] font-medium hover:bg-[#f5f4f2] transition"
+                >
+                  Show all {allPhotos.length} photos
+                </button>
+              )}
+            </>
+          )}
+        </section>
+
+        {/* Details Section */}
+        <section ref={detailsRef} id="details" className="mb-16">
+          <h2 className="text-2xl font-semibold text-[#2d2d2d] mb-6">Details</h2>
+          
+          <div className="space-y-6">
+            {/* Address */}
+            {place.address && (
+              <div>
+                <h3 className="text-sm font-semibold text-[#2d2d2d] mb-2">Address</h3>
+                <p className="text-sm text-[#6b7d47]/70">{place.address}</p>
+              </div>
+            )}
+
+            {/* Tags/Vibes */}
+            {tags.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-[#2d2d2d] mb-2">Vibes</h3>
+                <div className="flex flex-wrap gap-2">
+                  {tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="px-3 py-1.5 rounded-full text-sm text-[#6b7d47] bg-[#f5f4f2] border border-[#6b7d47]/20"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Added by */}
+            <div>
+              <h3 className="text-sm font-semibold text-[#2d2d2d] mb-2">Added by</h3>
+              <div className="flex items-center gap-3">
+                {creatorProfile?.avatar_url ? (
+                  <img
+                    src={creatorProfile.avatar_url}
+                    alt={creatorName}
+                    className="w-10 h-10 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-[#6b7d47]/20 flex items-center justify-center">
+                    <span className="text-sm font-semibold text-[#6b7d47]">
+                      {initialsFromName(creatorProfile?.display_name, creatorProfile?.username)}
+                    </span>
+                  </div>
+                )}
+                <div>
+                  <div className="text-sm font-medium text-[#2d2d2d]">{creatorName}</div>
+                  <div className="text-xs text-[#6b7d47]/60">{timeAgo(place.created_at)}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* External Link */}
+            {place.link && (
+              <div>
+                <a
+                  href={place.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#6b7d47] text-white text-sm font-medium hover:bg-[#556036] transition"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  Visit Website
+                </a>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Map Section */}
+        <section ref={mapRef} id="map" className="mb-16">
+          <h2 className="text-2xl font-semibold text-[#2d2d2d] mb-6">Location</h2>
+          {place.lat && place.lng ? (
+            <div className="space-y-4">
+              <div className="h-[400px] lg:h-[500px] rounded-xl overflow-hidden bg-[#f5f4f2]">
+                <PlaceMapView place={place} />
+              </div>
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-[#6b7d47]/20 text-[#6b7d47] text-sm font-medium hover:bg-[#f5f4f2] transition"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                Open in Maps
+              </a>
+            </div>
+          ) : (
+            <div className="text-center py-12 text-[#6b7d47]/60">Location not available</div>
+          )}
+        </section>
+
+        {/* Comments Section */}
+        <section ref={commentsRef} id="comments" className="mb-16">
+          <h2 className="text-2xl font-semibold text-[#2d2d2d] mb-6">Comments</h2>
+
+          {/* Add comment */}
+          {userId ? (
+            <div className="mb-6 rounded-xl border border-[#6b7d47]/10 bg-white p-4">
+              <textarea
+                className="w-full bg-transparent text-sm outline-none text-[#2d2d2d] placeholder:text-[#6b7d47]/40 resize-none mb-3"
+                placeholder="Share your thoughts..."
+                rows={3}
+                value={commentText}
+                onChange={(e) => {
+                  setCommentText(e.target.value);
+                  setCommentError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    if (commentText.trim() && !sending) {
+                      addComment();
+                    }
+                  }
+                }}
+              />
+              {commentError && (
+                <div className="mb-3 text-xs text-red-500">{commentError}</div>
+              )}
+              <div className="flex justify-end">
+                <button
+                  onClick={addComment}
+                  disabled={!commentText.trim() || sending}
+                  className="px-4 py-2 rounded-xl bg-[#6b7d47] text-white text-sm font-medium hover:bg-[#556036] disabled:opacity-50 transition"
+                >
+                  {sending ? "Posting…" : "Post"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mb-6 rounded-xl border border-[#6b7d47]/10 bg-white p-4 text-center">
+              <div className="text-sm text-[#6b7d47]/60 mb-2">Sign in to post comments</div>
+              <button
+                onClick={() => router.push("/auth")}
+                className="px-4 py-2 rounded-xl bg-[#6b7d47] text-white text-sm font-medium hover:bg-[#556036] transition"
+              >
+                Sign In
+              </button>
+            </div>
+          )}
+
+          {/* Comments list */}
+          {commentsLoading ? (
+            <div className="text-center py-12 text-[#6b7d47]/60">Loading comments…</div>
+          ) : comments.length === 0 ? (
+            <div className="text-center py-12 text-[#6b7d47]/60">
+              <div className="mb-1">No comments yet</div>
+              <div className="text-sm">Be the first to share your thoughts</div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {comments.map((c) => {
+                const isMyComment = userId && c.user_id === userId;
+                const userName = c.user_display_name || c.user_username || "User";
+                const userAvatar = c.user_avatar_url;
+                const userInitials = initialsFromName(c.user_display_name, c.user_username);
+                
+                return (
+                  <div
+                    key={c.id}
+                    className="rounded-xl border border-[#6b7d47]/10 bg-white p-4"
+                  >
+                    <div className="flex items-start gap-3">
+                      {userAvatar ? (
+                        <img
+                          src={userAvatar}
+                          alt={userName}
+                          className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-[#6b7d47]/20 flex items-center justify-center flex-shrink-0">
+                          <span className="text-sm font-semibold text-[#6b7d47]">
+                            {userInitials}
+                          </span>
+                        </div>
+                      )}
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm font-semibold text-[#2d2d2d]">
+                              {userName}
+                            </div>
+                            <div className="text-xs text-[#6b7d47]/60">
+                              {timeAgo(c.created_at)}
+                            </div>
+                          </div>
+                          {isMyComment && (
+                            <button
+                              onClick={() => {
+                                if (confirm("Delete this comment?")) {
+                                  deleteComment(c.id);
+                                }
+                              }}
+                              disabled={deletingCommentId === c.id}
+                              className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50 transition flex-shrink-0"
+                            >
+                              {deletingCommentId === c.id ? "Deleting..." : "Delete"}
+                            </button>
+                          )}
+                        </div>
+                        <div className="text-sm text-[#2d2d2d] leading-relaxed">
+                          {c.text}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
+
+      <BottomNav />
     </main>
   );
 }
 
-// Функция для создания круглого изображения
-function createRoundIcon(imageUrl: string, size: number): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        reject(new Error("Could not get canvas context"));
-        return;
-      }
-      
-      // Создаем круглую обрезку
-      ctx.beginPath();
-      ctx.arc(size / 2, size / 2, size / 2, 0, 2 * Math.PI);
-      ctx.clip();
-      
-      // Рисуем изображение
-      ctx.drawImage(img, 0, 0, size, size);
-      
-      // Добавляем белую обводку
-      ctx.beginPath();
-      ctx.arc(size / 2, size / 2, size / 2 - 2, 0, 2 * Math.PI);
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      
-      resolve(canvas.toDataURL());
-    };
-    img.onerror = reject;
-    img.src = imageUrl;
-  });
-}
-
+// Map View Component
 function PlaceMapView({ place }: { place: Place }) {
-  const [roundIcon, setRoundIcon] = useState<string | null>(null);
   const { isLoaded } = useJsApiLoader({
     id: "google-maps-loader",
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY!,
     libraries: ["places"],
   });
-  
-  // Создаем круглую иконку для места
-  useEffect(() => {
-    if (place.cover_url && isLoaded) {
-      createRoundIcon(place.cover_url, 40).then(setRoundIcon).catch(console.error);
-    }
-  }, [place.cover_url, isLoaded]);
-
-  const center = useMemo(() => {
-    if (place.lat && place.lng) {
-      return { lat: place.lat, lng: place.lng };
-    }
-    return null;
-  }, [place.lat, place.lng]);
-
-  function openFullMap() {
-    if (place.lat && place.lng) {
-      window.open(`https://www.google.com/maps?q=${place.lat},${place.lng}`, "_blank");
-    } else if (place.address) {
-      window.open(`https://www.google.com/maps?q=${encodeURIComponent(place.address)}`, "_blank");
-    }
-  }
 
   if (!place.lat || !place.lng) {
-    if (place.address) {
-      return (
-        <div className="space-y-3">
-          <div className="text-sm text-[#6b7d47]/60 py-8 text-center rounded-xl bg-white border border-[#6b7d47]/10">
-            Address available but no coordinates. Click below to view in Maps.
-          </div>
-          <button
-            onClick={openFullMap}
-            className="w-full rounded-xl bg-[#6b7d47] text-white px-4 py-3 text-sm font-medium hover:bg-[#556036] transition active:scale-[0.98]"
-          >
-            Open in Maps
-          </button>
-        </div>
-      );
-    }
     return (
-      <div className="text-sm text-[#6b7d47]/60 py-8 text-center rounded-xl bg-white border border-[#6b7d47]/10">
-        No location available
+      <div className="w-full h-full flex items-center justify-center text-[#6b7d47]/60">
+        Location not available
       </div>
     );
   }
 
   if (!isLoaded) {
     return (
-      <div className="h-64 flex items-center justify-center rounded-xl bg-white border border-[#6b7d47]/10">
-        <div className="text-sm text-[#6b7d47]/60">Loading map…</div>
+      <div className="w-full h-full flex items-center justify-center text-[#6b7d47]/60">
+        Loading map…
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
-      <div className="rounded-xl overflow-hidden border border-[#6b7d47]/10 bg-white">
-        <div style={{ height: "64vh", minHeight: "400px", width: "100%" }}>
-          <GoogleMap
-            mapContainerStyle={{ width: "100%", height: "100%" }}
-            center={center!}
-            zoom={15}
-            options={{
-              disableDefaultUI: false,
-              zoomControl: true,
-              streetViewControl: false,
-              mapTypeControl: false,
-              fullscreenControl: false,
-              styles: [
-                {
-                  featureType: "poi",
-                  elementType: "labels",
-                  stylers: [{ visibility: "off" }],
-                },
-              ],
-            }}
-          >
-            {typeof window !== "undefined" && (window as any).google?.maps && (() => {
-              const coverUrl = place.cover_url;
-              const iconSize = 40;
-              
-              const iconConfig = coverUrl && roundIcon ? {
-                url: roundIcon,
-                scaledSize: new (window as any).google.maps.Size(iconSize, iconSize),
-                anchor: new (window as any).google.maps.Point(iconSize / 2, iconSize / 2),
-              } : coverUrl ? {
-                url: coverUrl,
-                scaledSize: new (window as any).google.maps.Size(iconSize, iconSize),
-                anchor: new (window as any).google.maps.Point(iconSize / 2, iconSize / 2),
-              } : {
-                path: (window as any).google.maps.SymbolPath?.CIRCLE,
-                scale: 8,
-                fillColor: "#556036",
-                fillOpacity: 1,
-                strokeColor: "#ffffff",
-                strokeWeight: 2,
-              };
-
-              return (
-                <Marker
-                  position={{ lat: place.lat, lng: place.lng }}
-                  title={place.title}
-                  icon={iconConfig}
-                />
-              );
-            })()}
-          </GoogleMap>
-        </div>
-      </div>
-      <button
-        onClick={openFullMap}
-        className="w-full rounded-xl bg-[#6b7d47] text-white px-4 py-3 text-sm font-medium hover:bg-[#556036] transition active:scale-[0.98]"
-      >
-        Open in Maps
-      </button>
-    </div>
+    <GoogleMap
+      mapContainerStyle={{ width: "100%", height: "100%" }}
+      center={{ lat: place.lat, lng: place.lng }}
+      zoom={15}
+      options={{
+        disableDefaultUI: false,
+        zoomControl: true,
+        streetViewControl: false,
+        mapTypeControl: false,
+        fullscreenControl: false,
+        styles: [
+          {
+            featureType: "poi",
+            elementType: "labels",
+            stylers: [{ visibility: "off" }],
+          },
+        ],
+      }}
+    >
+      <Marker
+        position={{ lat: place.lat, lng: place.lng }}
+        title={place.title}
+      />
+    </GoogleMap>
   );
 }
