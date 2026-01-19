@@ -1,6 +1,6 @@
 "use client";
 export const dynamic = "force-dynamic";
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
@@ -78,7 +78,7 @@ function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
 }
 
-export default function ProfilePage() {
+function ProfileInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -111,7 +111,7 @@ export default function ProfilePage() {
 
   // Открываем модальное окно редактирования, если в URL есть параметр edit=true
   useEffect(() => {
-    const editParam = searchParams.get("edit");
+    const editParam = searchParams?.get("edit");
     if (editParam === "true" && !editProcessedRef.current) {
       editProcessedRef.current = true;
       setSettingsOpen(true);
@@ -809,5 +809,17 @@ function Empty({ text }: { text: string }) {
     <div className="text-center py-16 px-4">
       <div className="text-sm text-[#6b7d47]/60">{text}</div>
     </div>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-[#faf9f7] flex items-center justify-center">
+        <div className="text-sm text-[#6b7d47]/60">Loading…</div>
+      </main>
+    }>
+      <ProfileInner />
+    </Suspense>
   );
 }
