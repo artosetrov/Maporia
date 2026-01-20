@@ -74,7 +74,7 @@ export default function HomePage() {
   // search + filters
   const [searchDraft, setSearchDraft] = useState("");
   const [q, setQ] = useState("");
-  const [city, setCity] = useState("");
+  const [selectedCities, setSelectedCities] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedTag, setSelectedTag] = useState<string>("");
 
@@ -143,7 +143,10 @@ export default function HomePage() {
 
     let query = supabase.from("places").select("*").order("created_at", { ascending: false });
 
-    if (city) query = query.ilike("city", city);
+    // Фильтрация по городам - если выбраны города, проверяем что place.city входит в список
+    if (selectedCities.length > 0) {
+      query = query.in("city", selectedCities);
+    }
 
     // Фильтрация по категориям - если выбраны категории, проверяем что place.categories содержит хотя бы одну из них
     if (selectedCategories.length > 0) {
@@ -237,7 +240,7 @@ export default function HomePage() {
   useEffect(() => {
     loadPlaces();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, city, selectedCategories, selectedTag]);
+  }, [q, selectedCities, selectedCategories, selectedTag]);
 
   // Live search: автоматически применяем поиск при вводе (с небольшой задержкой)
   useEffect(() => {
@@ -253,11 +256,17 @@ export default function HomePage() {
   }
 
   function resetFilters() {
-    setCity("");
+    setSelectedCities([]);
     setSelectedCategories([]);
     setQ("");
     setSearchDraft("");
     setSelectedTag("");
+  }
+
+  function toggleCity(cityName: string) {
+    setSelectedCities((prev) =>
+      prev.includes(cityName) ? prev.filter((c) => c !== cityName) : [...prev, cityName]
+    );
   }
 
   function toggleCategory(category: string) {
@@ -324,11 +333,11 @@ export default function HomePage() {
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (selectedCategories.length > 0) count += selectedCategories.length;
-    if (city) count += 1;
+    if (selectedCities.length > 0) count += selectedCities.length;
     if (q.trim()) count += 1;
     if (selectedTag) count += 1;
     return count;
-  }, [selectedCategories, city, q, selectedTag]);
+  }, [selectedCategories, selectedCities, q, selectedTag]);
 
   // Quick search chips
   const quickSearchChips = ["Romantic", "Quiet", "Sunset", "Coffee", "Nature"];
@@ -470,7 +479,7 @@ export default function HomePage() {
                           setMapZoom(15);
                         }
                       }}
-                      className={`transition-all relative z-0 ${isHovered ? "ring-2 ring-[#6b7d47]/30 ring-offset-2 rounded-xl" : ""}`}
+                      className="transition-all relative z-0"
                     >
                       <PlaceCard
                         place={p}
@@ -723,19 +732,31 @@ export default function HomePage() {
                 </div>
 
                 <div>
-                  <label className="text-xs font-medium text-[#6b7d47] mb-2 block">City</label>
-                  <select
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    className="w-full rounded-xl border border-[#6b7d47]/20 bg-[#f5f4f2] px-4 py-3 text-sm outline-none focus:bg-white focus:border-[#6b7d47]/40 text-[#2d2d2d] transition"
-                  >
-                    <option value="">All cities</option>
+                  <label className="text-xs font-medium text-[#6b7d47] mb-2 block">Cities</label>
+                  <div className="flex flex-wrap gap-2">
                     {cities.map((c) => (
-                      <option key={c} value={c}>
+                      <button
+                        key={c}
+                        onClick={() => toggleCity(c)}
+                        className={cx(
+                          "px-3 py-2 rounded-full text-sm border transition",
+                          selectedCities.includes(c)
+                            ? "bg-[#6b7d47] text-white border-[#6b7d47]"
+                            : "bg-white border-[#6b7d47]/20 text-[#2d2d2d] hover:bg-[#f5f4f2]"
+                        )}
+                      >
                         {c}
-                      </option>
+                      </button>
                     ))}
-                  </select>
+                  </div>
+                  {selectedCities.length > 0 && (
+                    <button
+                      onClick={() => setSelectedCities([])}
+                      className="mt-2 text-xs text-[#6b7d47]/70 hover:text-[#556036]"
+                    >
+                      Clear all
+                    </button>
+                  )}
                 </div>
 
                 <div>
