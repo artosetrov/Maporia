@@ -5,10 +5,14 @@ import { useRouter } from "next/navigation";
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
+import { DEFAULT_CITY } from "../constants";
 
 export default function SettingsPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
+  const [userAvatar, setUserAvatar] = useState<string | null>(null);
+  const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -18,6 +22,24 @@ export default function SettingsPage() {
         return;
       }
       setUserId(data.user.id);
+      setUserEmail(data.user.email ?? null);
+
+      // Load profile
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name, avatar_url")
+        .eq("id", data.user.id)
+        .maybeSingle();
+      
+      if (profile?.display_name) {
+        setUserDisplayName(profile.display_name);
+      } else {
+        setUserDisplayName(data.user.email?.split("@")[0] || null);
+      }
+      
+      if (profile?.avatar_url) {
+        setUserAvatar(profile.avatar_url);
+      }
     })();
   }, [router]);
 
@@ -29,10 +51,24 @@ export default function SettingsPage() {
   return (
     <main className="min-h-screen bg-[#faf9f7] flex flex-col">
       <TopBar
-        backHref="/profile"
-        center={
-          <div className="text-sm font-semibold text-[#2d2d2d]">Settings</div>
-        }
+        showSearchBar={true}
+        searchValue={""}
+        onSearchChange={(value) => {
+          const params = new URLSearchParams();
+          if (value) params.set("q", value);
+          router.push(`/map?${params.toString()}`);
+        }}
+        selectedCity={null}
+        onCityChange={(city) => {
+          const params = new URLSearchParams();
+          if (city) params.set("city", city);
+          router.push(`/map?${params.toString()}`);
+        }}
+        onFiltersClick={() => router.push("/map")}
+        activeFiltersCount={0}
+        userAvatar={userAvatar}
+        userDisplayName={userDisplayName}
+        userEmail={userEmail}
       />
 
       <div className="flex-1 pt-[80px] pb-20">

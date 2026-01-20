@@ -7,7 +7,7 @@ export default function BottomNav() {
   const pathname = usePathname();
 
   const navItems = [
-    { href: "/", label: "Map", icon: MapIcon },
+    { href: "/map", label: "Map", icon: MapIcon },
     { href: "/saved", label: "Saved", icon: SavedIcon },
     { href: "/profile", label: "Profile", icon: ProfileIcon },
   ];
@@ -17,7 +17,7 @@ export default function BottomNav() {
       <div className="mx-auto max-w-md">
         <div className="flex items-center justify-around px-4 pt-2 pb-2">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+            const isActive = pathname === item.href || (item.href !== "/map" && pathname.startsWith(item.href));
             const Icon = item.icon;
             return (
               <Link

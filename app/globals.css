@@ -91,3 +91,133 @@ body {
 button.gm-ui-hover-effect {
   display: none !important;
 }
+
+/* Safe area support for mobile */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Home page responsive variables */
+:root {
+  /* Mobile S (< 390px) */
+  --home-page-padding: 16px;
+  --home-carousel-gap: 12px;
+  --home-card-width: 220px;
+}
+
+@media (min-width: 390px) {
+  /* Mobile L (390-599px) */
+  :root {
+    --home-page-padding: 16px;
+    --home-carousel-gap: 12px;
+    --home-card-width: 250px;
+  }
+}
+
+@media (min-width: 600px) {
+  /* Tablet (600-899px) */
+  :root {
+    --home-page-padding: 20px;
+    --home-carousel-gap: 14px;
+    --home-card-width: 270px;
+  }
+}
+
+@media (min-width: 900px) {
+  /* Small Desktop (900-1119px) - 7 cards visible */
+  /* Container max-width: 960px, header+arrows: ~280px, available: ~680px */
+  /* Card width: (680 - 96 gaps) / 7 ≈ 83px, но используем больший размер для читаемости */
+  /* Используем фиксированную ширину карточки и ограничиваем контейнер */
+  :root {
+    --home-page-padding: 24px;
+    --home-carousel-gap: 16px;
+    --home-card-width: 200px;
+  }
+}
+
+@media (min-width: 1120px) {
+  /* Desktop (1120-1439px) - 7 cards visible */
+  /* Container max-width: 1120px, header+arrows: ~300px, available: ~820px */
+  /* Card width: (820 - 96) / 7 ≈ 103px */
+  :root {
+    --home-page-padding: 24px;
+    --home-carousel-gap: 16px;
+    --home-card-width: 220px;
+  }
+}
+
+@media (min-width: 1440px) {
+  /* Desktop XL (>= 1440px) - 7 cards visible */
+  /* Container max-width: 1440px, header+arrows: ~320px, available: ~1120px */
+  /* Card width: (1120 - 96) / 7 ≈ 146px */
+  :root {
+    --home-page-padding: 24px;
+    --home-carousel-gap: 16px;
+    --home-card-width: 185px;
+  }
+}
+
+@media (min-width: 1920px) {
+  /* Very Large Desktop (>= 1920px) - 7 cards visible */
+  /* Container max-width: 1920px, header+arrows: ~350px, available: ~1570px */
+  /* Card width: (1570 - 96) / 7 ≈ 210px */
+  :root {
+    --home-page-padding: 32px;
+    --home-carousel-gap: 16px;
+    --home-card-width: 220px;
+  }
+}
+
+/* Map page: предотвращаем растягивание карточек в grid */
+.map-grid-fixed-cards {
+  grid-auto-rows: max-content;
+}
+
+/* Фиксируем размер карточек - они занимают ровно 1fr (равную долю колонки) */
+/* Размер карточек зависит ТОЛЬКО от ширины контейнера и количества колонок, НЕ от фильтров */
+.map-grid-fixed-cards > * {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Убеждаемся, что PlaceCard внутри grid не растягивается */
+.map-grid-fixed-cards .place-card-wrapper {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* PlaceCard должен занимать всю ширину своего контейнера */
+.map-grid-fixed-cards .place-card-wrapper > a {
+  width: 100%;
+  display: block;
+  box-sizing: border-box;
+}
+
+/* Фиксируем ширину левого блока списка - НЕ должна меняться в зависимости от фильтров или выбранного города */
+/* Ширина зависит ТОЛЬКО от разрешения экрана */
+.map-list-container {
+  flex-shrink: 0 !important;
+  flex-grow: 0 !important;
+}
+
+@media (min-width: 1120px) and (max-width: 1439px) {
+  .map-list-container {
+    width: 62.5% !important;
+  }
+}
+
+@media (min-width: 1440px) and (max-width: 1919px) {
+  .map-list-container {
+    width: 60% !important;
+  }
+}
+
+@media (min-width: 1920px) {
+  .map-list-container {
+    width: 1152px !important;
+    max-width: 1152px !important;
+  }
+}

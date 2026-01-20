@@ -1,0 +1,172 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { CITIES, DEFAULT_CITY } from "../constants";
+
+type SearchModalProps = {
+  isOpen: boolean;
+  onClose: () => void;
+  onCitySelect: (city: string | null) => void;
+  selectedCity?: string | null;
+};
+
+export default function SearchModal({
+  isOpen,
+  onClose,
+  onCitySelect,
+  selectedCity,
+}: SearchModalProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [recentCities, setRecentCities] = useState<string[]>([]);
+
+  // Load recent cities from localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("recentCities");
+      if (stored) {
+        try {
+          setRecentCities(JSON.parse(stored));
+        } catch (e) {
+          console.error("Error parsing recent cities:", e);
+        }
+      }
+    }
+  }, []);
+
+  // Save city to recent cities
+  const saveToRecent = (city: string) => {
+    if (typeof window !== "undefined") {
+      const updated = [city, ...recentCities.filter((c) => c !== city)].slice(0, 5);
+      setRecentCities(updated);
+      localStorage.setItem("recentCities", JSON.stringify(updated));
+    }
+  };
+
+  const handleCitySelect = (city: string | null) => {
+    if (city) {
+      saveToRecent(city);
+    }
+    onCitySelect(city);
+    onClose();
+  };
+
+  // Filter cities based on search query
+  const filteredCities = CITIES.filter((city) =>
+    city.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-white">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[#6b7d47]/10">
+        <button
+          onClick={onClose}
+          className="w-10 h-10 rounded-full hover:bg-[#f5f4f2] transition flex items-center justify-center"
+          aria-label="Close"
+        >
+          <svg className="w-6 h-6 text-[#2d2d2d]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        <h2 className="text-lg font-semibold text-[#2d2d2d]">Search destinations</h2>
+        <div className="w-10" /> {/* Spacer for centering */}
+      </div>
+
+      {/* Search Input */}
+      <div className="px-4 py-4 border-b border-[#6b7d47]/10">
+        <div className="relative">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search destinations"
+            className="w-full px-4 py-3 pl-12 rounded-xl border-2 border-[#6b7d47]/20 focus:border-[#6b7d47] focus:outline-none text-[#2d2d2d]"
+            autoFocus
+          />
+          <svg
+            className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#6b7d47]/60"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+      </div>
+
+      {/* Content (scrollable) */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        {/* Recent Cities */}
+        {recentCities.length > 0 && searchQuery === "" && (
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-[#2d2d2d] mb-3">Recent</h3>
+            <div className="space-y-2">
+              {recentCities.map((city) => (
+                <button
+                  key={city}
+                  onClick={() => handleCitySelect(city)}
+                  className="w-full text-left px-4 py-3 rounded-xl hover:bg-[#f5f4f2] transition flex items-center justify-between"
+                >
+                  <span className="text-[#2d2d2d]">{city}</span>
+                  {selectedCity === city && (
+                    <svg className="w-5 h-5 text-[#6b7d47]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Popular Cities / Search Results */}
+        <div>
+          <h3 className="text-sm font-semibold text-[#2d2d2d] mb-3">
+            {searchQuery ? "Search results" : "Popular cities"}
+          </h3>
+          <div className="space-y-2">
+            {filteredCities.length > 0 ? (
+              filteredCities.map((city) => (
+                <button
+                  key={city}
+                  onClick={() => handleCitySelect(city)}
+                  className="w-full text-left px-4 py-3 rounded-xl hover:bg-[#f5f4f2] transition flex items-center justify-between"
+                >
+                  <span className="text-[#2d2d2d]">{city}</span>
+                  {selectedCity === city && (
+                    <svg className="w-5 h-5 text-[#6b7d47]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </button>
+              ))
+            ) : (
+              <div className="px-4 py-8 text-center text-[#6b7d47]/60">
+                No cities found
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Anywhere option */}
+        {searchQuery === "" && (
+          <div className="mt-6 pt-6 border-t border-[#6b7d47]/10">
+            <button
+              onClick={() => handleCitySelect(null)}
+              className="w-full text-left px-4 py-3 rounded-xl hover:bg-[#f5f4f2] transition flex items-center justify-between"
+            >
+              <span className="text-[#2d2d2d] font-medium">Anywhere</span>
+              {!selectedCity && (
+                <svg className="w-5 h-5 text-[#6b7d47]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
