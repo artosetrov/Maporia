@@ -30,15 +30,24 @@ export default function FiltersModal({
   appliedFilters,
   getFilteredCount,
 }: FiltersModalProps) {
+  // Ensure appliedFilters is always defined
+  const safeAppliedFilters: ActiveFilters = appliedFilters || {
+    vibes: [],
+    categories: [],
+    tags: [],
+    distance: null,
+    sort: null,
+  };
+  
   // Draft state (changes while modal is open)
-  const [draftFilters, setDraftFilters] = useState<ActiveFilters>(appliedFilters);
+  const [draftFilters, setDraftFilters] = useState<ActiveFilters>(safeAppliedFilters);
 
   // Reset draft to applied when modal opens
   useEffect(() => {
     if (isOpen) {
-      setDraftFilters(appliedFilters);
+      setDraftFilters(safeAppliedFilters);
     }
-  }, [isOpen, appliedFilters]);
+  }, [isOpen, safeAppliedFilters]);
 
   if (!isOpen) return null;
 
@@ -100,12 +109,12 @@ export default function FiltersModal({
 
   const handleClose = () => {
     // Reset draft to applied state
-    setDraftFilters(appliedFilters);
+    setDraftFilters(safeAppliedFilters);
     onClose();
   };
 
   const hasChanges =
-    JSON.stringify(draftFilters) !== JSON.stringify(appliedFilters);
+    JSON.stringify(draftFilters) !== JSON.stringify(safeAppliedFilters);
   const filteredCount = getFilteredCount ? getFilteredCount() : null;
 
   return (
