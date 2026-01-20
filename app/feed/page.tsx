@@ -3,19 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
+import { supabase } from "../lib/supabase";
 
 type ActivityItem =
   | { type: "liked"; created_at: string; placeId: string; placeTitle?: string | null; coverUrl?: string | null; address?: string | null; userId: string; userName: string; userAvatar: string | null }
   | { type: "commented"; created_at: string; placeId: string; placeTitle?: string | null; commentText?: string | null; coverUrl?: string | null; address?: string | null; userId: string; userName: string; userAvatar: string | null }
   | { type: "added"; created_at: string; placeId: string; placeTitle?: string | null; coverUrl?: string | null; address?: string | null; userId: string; userName: string; userAvatar: string | null };
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 function initialsFromName(name?: string | null) {
   if (!name) return "U";
@@ -156,11 +151,15 @@ export default function FeedPage() {
         setUserEmail(data.user.email || null);
 
         // Загружаем профиль пользователя
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("display_name, avatar_url")
           .eq("id", data.user.id)
-          .single();
+          .maybeSingle();
+
+        if (profileError) {
+          console.error("Error loading user profile:", profileError);
+        }
 
         if (profile) {
           setUserDisplayName(profile.display_name);

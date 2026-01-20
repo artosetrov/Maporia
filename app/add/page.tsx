@@ -3,16 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 import { Autocomplete, useJsApiLoader } from "@react-google-maps/api";
 import { CATEGORIES } from "../constants";
 import Pill from "../components/Pill";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../config/googleMaps";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabase } from "../lib/supabase";
 
 type UploadingPhoto = {
   file: File;
@@ -189,11 +184,9 @@ export default function AddPlacePage() {
       lng: lng,
       address: address,
       googlePlaceId: googlePlaceId,
-      payload: {
-        title: title.trim(),
-        city: city.trim(),
-        address: address.trim(),
-      }
+      hasCoordinates: lat !== null && lng !== null,
+      latType: typeof lat,
+      lngType: typeof lng,
     });
 
     setSaving(true);
@@ -221,17 +214,20 @@ export default function AddPlacePage() {
       categories: validCategories.length > 0 ? validCategories : null,
       address: address.trim() || null,
       google_place_id: googlePlaceId,
-      lat: lat,
-      lng: lng,
+      lat: lat !== null && lat !== undefined ? Number(lat) : null,
+      lng: lng !== null && lng !== undefined ? Number(lng) : null,
       link: link.trim() || null,
       cover_url: coverUrl, // Оставляем для обратной совместимости
       created_by: userId,
     };
 
+    console.log("Inserting place with payload:", payload);
+    console.log("Coordinates in payload:", { lat: payload.lat, lng: payload.lng, types: { lat: typeof payload.lat, lng: typeof payload.lng } });
+    
     const { data, error } = await supabase
       .from("places")
       .insert(payload)
-      .select("id")
+      .select("id, lat, lng")
       .single();
 
     if (error) {
@@ -241,6 +237,8 @@ export default function AddPlacePage() {
       setSaving(false);
       return;
     }
+    
+    console.log("Place saved, returned data:", data);
 
     if (!data || !data.id) {
       console.error("No data returned after insert");
@@ -303,11 +301,9 @@ export default function AddPlacePage() {
       alert("Место успешно сохранено! Однако оно не будет отображаться на карте, так как координаты не были установлены. Выберите адрес из списка Google Autocomplete, чтобы место появилось на карте.");
     }
 
-    // Перенаправляем на главную страницу с параметром для обновления данных
-    // Используем router.push с параметром, чтобы заставить обновление данных
-    router.push("/?refresh=" + Date.now());
-    // Также пробуем router.refresh() для обновления серверных данных
-    router.refresh();
+    // Перенаправляем на главную страницу
+    // Используем window.location для полной перезагрузки страницы, чтобы данные обновились
+    window.location.href = "/";
   }
 
   return (
@@ -488,10 +484,18 @@ export default function AddPlacePage() {
                     setAddress(place.formatted_address ?? "");
                     setGooglePlaceId(place.place_id ?? null);
                     
-                    // Extract coordinates
+                    // Extract coordinates - location может быть LatLng объектом или объектом с lat/lng
                     if (place.geometry?.location) {
-                      setLat(place.geometry.location.lat());
-                      setLng(place.geometry.location.lng());
+                      const location = place.geometry.location;
+                      // Проверяем, является ли location объектом LatLng с методами
+                      if (typeof location.lat === 'function') {
+                        setLat(location.lat());
+                        setLng(location.lng());
+                      } else if (typeof location.lat === 'number') {
+                        // Если это объект с полями lat и lng
+                        setLat(location.lat);
+                        setLng(location.lng);
+                      }
                     }
                     
                     // Extract city if not set

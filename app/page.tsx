@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
 import { CATEGORIES } from "./constants";
 import TopBar from "./components/TopBar";
@@ -11,6 +10,7 @@ import BottomNav from "./components/BottomNav";
 import PlaceCard from "./components/PlaceCard";
 import Pill from "./components/Pill";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "./config/googleMaps";
+import { supabase } from "./lib/supabase";
 
 type Place = {
   id: string;
@@ -26,12 +26,6 @@ type Place = {
   lng: number | null;
   created_at: string;
 };
-
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
@@ -123,11 +117,15 @@ export default function HomePage() {
     setUserId(u.id);
 
     // Загружаем профиль для получения display_name и avatar_url
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("display_name, avatar_url")
       .eq("id", u.id)
-      .single();
+      .maybeSingle();
+    
+    if (profileError) {
+      console.error("Error loading user profile:", profileError);
+    }
     
     if (profile?.display_name) {
       setUserDisplayName(profile.display_name);
@@ -172,7 +170,27 @@ export default function HomePage() {
       console.log("No places found");
       setPlaces([]);
     } else {
-      setPlaces((data ?? []) as Place[]);
+      const placesWithCoords = (data ?? []).map((p: any) => ({
+        ...p,
+        lat: p.lat ?? null,
+        lng: p.lng ?? null,
+      }));
+      const placesWithValidCoords = placesWithCoords.filter((p: any) => p.lat !== null && p.lng !== null);
+      console.log("Loaded places:", placesWithCoords.length, "places with coordinates:", placesWithValidCoords.length);
+      
+      // Логируем места без координат для отладки
+      const placesWithoutCoords = placesWithCoords.filter((p: any) => p.lat === null || p.lng === null);
+      if (placesWithoutCoords.length > 0) {
+        console.warn("Places without coordinates:", placesWithoutCoords.map((p: any) => ({
+          id: p.id,
+          title: p.title,
+          address: p.address,
+          lat: p.lat,
+          lng: p.lng,
+        })));
+      }
+      
+      setPlaces(placesWithCoords as Place[]);
     }
 
     setLoading(false);
@@ -195,14 +213,23 @@ export default function HomePage() {
     }
 
     (async () => {
-      const { data } = await supabase
-        .from("reactions")
-        .select("place_id")
-        .eq("user_id", userId)
-        .eq("reaction", "like");
+      try {
+        const { data, error } = await supabase
+          .from("reactions")
+          .select("place_id")
+          .eq("user_id", userId)
+          .eq("reaction", "like");
 
-      if (data) {
-        setFavorites(new Set(data.map((r) => r.place_id)));
+        if (error) {
+          console.error("Error loading favorites:", error);
+          return;
+        }
+
+        if (data) {
+          setFavorites(new Set(data.map((r) => r.place_id)));
+        }
+      } catch (err) {
+        console.error("Exception loading favorites:", err);
       }
     })();
   }, [userId]);
@@ -370,7 +397,7 @@ export default function HomePage() {
           {/* Left: Scrollable list */}
           <div className="w-1/2 overflow-y-auto px-4">
             {/* Search and Filter Bar */}
-            <div className="sticky top-0 z-10 bg-[#faf9f7] pt-4 pb-3 border-b border-[#6b7d47]/10 mb-4">
+            <div className="sticky top-0 z-30 bg-[#faf9f7] pt-4 pb-3 border-b border-[#6b7d47]/10 mb-4">
               <div className="flex items-center gap-2 mb-2">
                 <div className="flex-1 relative">
                   <input
@@ -443,7 +470,7 @@ export default function HomePage() {
                           setMapZoom(15);
                         }
                       }}
-                      className={`transition-all ${isHovered ? "ring-2 ring-[#6b7d47]/30 ring-offset-2 rounded-xl" : ""}`}
+                      className={`transition-all relative z-0 ${isHovered ? "ring-2 ring-[#6b7d47]/30 ring-offset-2 rounded-xl" : ""}`}
                     >
                       <PlaceCard
                         place={p}
@@ -514,7 +541,7 @@ export default function HomePage() {
         {/* Mobile/Tablet: Toggle view (≤1023px) */}
         <div className="lg:hidden h-full flex flex-col transition-opacity duration-300">
           {/* Search and Filter for Mobile */}
-          <div className="sticky top-[64px] z-10 bg-[#faf9f7] pb-4 -mt-4 px-4 flex-shrink-0">
+          <div className="sticky top-[64px] z-30 bg-[#faf9f7] pb-4 -mt-4 px-4 flex-shrink-0">
             <div className="flex items-center gap-2 mb-2">
               <div className="relative flex-1">
                 <input

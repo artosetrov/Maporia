@@ -3,12 +3,12 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
 import { CATEGORIES } from "../../constants";
 import TopBar from "../../components/TopBar";
 import BottomNav from "../../components/BottomNav";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../../config/googleMaps";
+import { supabase } from "../../lib/supabase";
 
 type Place = {
   id: string;
@@ -77,11 +77,6 @@ function initialsFromName(displayName?: string | null, username?: string | null)
   }
   return "U";
 }
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 export default function PlacePage() {
   const router = useRouter();
@@ -237,11 +232,15 @@ export default function PlacePage() {
         setUserEmail(data.user.email ?? null);
 
         // Загружаем профиль пользователя
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("display_name, avatar_url")
           .eq("id", data.user.id)
-          .single();
+          .maybeSingle();
+
+        if (profileError) {
+          console.error("Error loading user profile:", profileError);
+        }
 
         if (profile) {
           setUserDisplayName(profile.display_name);
@@ -270,11 +269,15 @@ export default function PlacePage() {
 
       // Load creator profile
       if (placeItem.created_by) {
-        const { data: profileData } = await supabase
+        const { data: profileData, error: profileError } = await supabase
           .from("profiles")
           .select("display_name, username, avatar_url")
           .eq("id", placeItem.created_by)
-          .single();
+          .maybeSingle();
+
+        if (profileError) {
+          console.error("Error loading creator profile:", profileError);
+        }
 
         setCreatorProfile({
           display_name: profileData?.display_name ?? null,
@@ -340,16 +343,23 @@ export default function PlacePage() {
     }
 
     (async () => {
-      const { data, error } = await supabase
-        .from("reactions")
-        .select("id")
-        .eq("place_id", id)
-        .eq("user_id", userId)
-        .eq("reaction", "like")
-        .maybeSingle();
+      try {
+        const { data, error } = await supabase
+          .from("reactions")
+          .select("place_id")
+          .eq("place_id", id)
+          .eq("user_id", userId)
+          .eq("reaction", "like")
+          .maybeSingle();
 
-      if (!error) {
+        if (error) {
+          console.error("Error checking favorite status:", error);
+          return;
+        }
+
         setIsFavorite(!!data);
+      } catch (err) {
+        console.error("Exception checking favorite status:", err);
       }
     })();
   }, [id, userId]);

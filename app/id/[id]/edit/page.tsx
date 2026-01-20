@@ -3,18 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import { createClient } from "@supabase/supabase-js";
 import { CATEGORIES } from "../../../constants";
 import Pill from "../../../components/Pill";
+import { supabase } from "../../../lib/supabase";
 
 const AddressAutocomplete = dynamic(
   () => import("../../../components/AddressAutocomplete"),
   { ssr: false }
-);
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
 type UploadingPhoto = {
@@ -69,6 +64,7 @@ export default function EditPlacePage() {
   const placeId = params?.id;
 
   const [userId, setUserId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
 
   const [title, setTitle] = useState("");
@@ -161,13 +157,34 @@ export default function EditPlacePage() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.auth.getUser();
-      const u = data.user;
-      if (!u) {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) {
+        console.error("Error getting user:", error);
         router.push("/auth");
         return;
       }
+      const u = data.user;
+      if (!u) {
+        console.log("No user found, redirecting to auth");
+        router.push("/auth");
+        return;
+      }
+      console.log("User loaded in edit page:", u.id);
       setUserId(u.id);
+
+      // Проверяем, является ли пользователь администратором
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("is_admin")
+        .eq("id", u.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error("Error checking admin status:", profileError);
+      } else if (profile?.is_admin) {
+        console.log("User is admin");
+        setIsAdmin(true);
+      }
     })();
   }, [router]);
 
@@ -191,9 +208,25 @@ export default function EditPlacePage() {
         return;
       }
 
-      if (placeData.created_by !== userId) {
+      // Проверяем права доступа: пользователь должен быть создателем ИЛИ администратором
+      // Сначала проверяем, является ли пользователь администратором
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("is_admin")
+        .eq("id", userId)
+        .maybeSingle();
+
+      const userIsAdmin = profile?.is_admin === true;
+
+      if (placeData.created_by !== userId && !userIsAdmin) {
+        // Пользователь не создатель и не администратор - перенаправляем на страницу просмотра
         router.push(`/id/${placeId}`);
         return;
+      }
+
+      if (userIsAdmin) {
+        setIsAdmin(true);
+        console.log("Admin user editing place");
       }
 
       const placeTitle = placeData.title || "";
@@ -377,21 +410,44 @@ export default function EditPlacePage() {
       categories: validCategories.length > 0 ? validCategories : null,
       address: address.trim() || null,
       google_place_id: googlePlaceId,
-      lat,
-      lng,
+      lat: lat !== null && lat !== undefined ? Number(lat) : null,
+      lng: lng !== null && lng !== undefined ? Number(lng) : null,
       link: link.trim() || null,
       cover_url: coverUrl, // legacy
     };
 
-    const { error } = await supabase.from("places").update(payload).eq("id", placeId).eq("created_by", userId);
+    console.log("Updating place with payload:", payload);
+    console.log("Coordinates:", { 
+      lat, 
+      lng, 
+      hasCoordinates: lat !== null && lng !== null,
+      latType: typeof lat,
+      lngType: typeof lng,
+      payloadLat: payload.lat,
+      payloadLng: payload.lng,
+    });
 
+    const { error, data } = await supabase
+      .from("places")
+      .update(payload)
+      .eq("id", placeId)
+      .eq("created_by", userId)
+      .select("id, lat, lng");
+    
     if (error) {
+      console.error("Update error:", error);
       setSaving(false);
       return setError(error.message || "Failed to save place. Please try again.");
     }
+    
+    if (data && data.length > 0) {
+      console.log("Place updated, returned data:", data[0]);
+    } else {
+      console.warn("Update succeeded but no data returned");
+    }
 
-    const { data } = await supabase.auth.getUser();
-    const user = data.user;
+    const { data: authData } = await supabase.auth.getUser();
+    const user = authData.user;
     if (!user) {
       setSaving(false);
       return setError("Not authenticated");
@@ -414,30 +470,195 @@ export default function EditPlacePage() {
     if (photosError) return setError(photosError.message || "Failed to save photos. Please try again.");
 
     if (navigator.vibrate) navigator.vibrate(10);
-    router.push(`/id/${placeId}`);
+    
+    // Перенаправляем на страницу места с полной перезагрузкой для обновления данных
+    window.location.href = `/id/${placeId}`;
   }
 
   async function deletePlace() {
-    if (!userId || !placeId) return;
+    console.log("=== DELETE PLACE START ===");
+    console.log("deletePlace called", { userId, placeId, deleting });
+    
+    if (!userId || !placeId) {
+      const errorMsg = `User ID or Place ID is missing. userId: ${userId}, placeId: ${placeId}`;
+      console.error(errorMsg);
+      setError(errorMsg);
+      return;
+    }
 
     setDeleting(true);
     setError(null);
 
     try {
-      const { error: deleteError } = await supabase.from("places").delete().eq("id", placeId).eq("created_by", userId);
+      // Сначала проверяем, что пользователь является создателем места
+      const { data: placeCheck, error: checkError } = await supabase
+        .from("places")
+        .select("id, created_by, title")
+        .eq("id", placeId)
+        .single();
 
-      if (deleteError) {
+      if (checkError) {
+        console.error("Error checking place:", checkError);
+        const errorMsg = "Failed to verify place ownership. " + checkError.message;
+        setError(errorMsg);
         setDeleting(false);
-        setDeleteConfirmOpen(false);
-        return setError(deleteError.message || "Failed to delete place. Please try again.");
+        // Не закрываем модальное окно, чтобы пользователь видел ошибку
+        return;
       }
 
-      if (navigator.vibrate) navigator.vibrate(10);
-      router.push("/profile");
-    } catch {
-      setDeleting(false);
+      if (!placeCheck) {
+        console.error("Place not found:", placeId);
+        setError("Place not found.");
+        setDeleting(false);
+        // Не закрываем модальное окно, чтобы пользователь видел ошибку
+        return;
+      }
+
+      // Проверяем права: пользователь должен быть создателем ИЛИ администратором
+      if (placeCheck.created_by !== userId && !isAdmin) {
+        console.error("User is not the creator and not admin", { 
+          placeCreatedBy: placeCheck.created_by, 
+          currentUserId: userId,
+          isAdmin: isAdmin
+        });
+        setError("You don't have permission to delete this place.");
+        setDeleting(false);
+        // Не закрываем модальное окно, чтобы пользователь видел ошибку
+        return;
+      }
+
+      if (isAdmin && placeCheck.created_by !== userId) {
+        console.log("Admin deleting place created by another user");
+      }
+
+      console.log("Deleting place:", { 
+        placeId, 
+        title: placeCheck.title,
+        userId, 
+        createdBy: placeCheck.created_by 
+      });
+
+      // Удаляем связанные данные сначала
+      // 1. Удаляем фото
+      const { error: photosError } = await supabase
+        .from("place_photos")
+        .delete()
+        .eq("place_id", placeId);
+
+      if (photosError) {
+        console.warn("Warning deleting photos:", photosError);
+        // Продолжаем удаление даже если фото не удалились
+      } else {
+        console.log("Photos deleted successfully");
+      }
+
+      // 2. Удаляем комментарии
+      const { error: commentsError } = await supabase
+        .from("comments")
+        .delete()
+        .eq("place_id", placeId);
+
+      if (commentsError) {
+        console.warn("Warning deleting comments:", commentsError);
+        // Продолжаем удаление даже если комментарии не удалились
+      } else {
+        console.log("Comments deleted successfully");
+      }
+
+      // 3. Удаляем реакции (лайки)
+      const { error: reactionsError } = await supabase
+        .from("reactions")
+        .delete()
+        .eq("place_id", placeId);
+
+      if (reactionsError) {
+        console.warn("Warning deleting reactions:", reactionsError);
+      } else {
+        console.log("Reactions deleted successfully");
+      }
+
+      // 4. Удаляем само место
+      console.log("Attempting to delete place from database...");
+      // Администраторы могут удалять любые места, обычные пользователи - только свои
+      let deleteQuery = supabase
+        .from("places")
+        .delete()
+        .eq("id", placeId);
+      
+      // Если пользователь не администратор, добавляем проверку created_by
+      if (!isAdmin) {
+        deleteQuery = deleteQuery.eq("created_by", userId);
+      }
+      
+      const { error: deleteError } = await deleteQuery;
+
+      if (deleteError) {
+        console.error("Error deleting place:", deleteError);
+        console.error("Error details:", JSON.stringify(deleteError, null, 2));
+        const errorMsg = deleteError.message || "Failed to delete place. Please try again.";
+        setError(errorMsg);
+        setDeleting(false);
+        // Не закрываем модальное окно при ошибке, чтобы пользователь видел сообщение
+        return;
+      }
+
+      console.log("Delete query executed successfully");
+
+      // Небольшая задержка перед проверкой, чтобы дать базе данных время обработать удаление
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Проверяем, что место действительно удалено, делая повторный запрос
+      const { data: verifyData, error: verifyError } = await supabase
+        .from("places")
+        .select("id")
+        .eq("id", placeId)
+        .maybeSingle();
+
+      if (verifyError) {
+        console.warn("Error verifying deletion:", verifyError);
+        // Если ошибка при проверке, но не ошибка "not found", это может быть проблема
+        if (verifyError.code !== 'PGRST116') {
+          console.error("Unexpected error during verification:", verifyError);
+          setError(`Failed to verify deletion: ${verifyError.message}. The place might still exist.`);
+          setDeleting(false);
+          return;
+        }
+        // PGRST116 означает "not found", что хорошо - место удалено
+        console.log("Place not found (deleted successfully)");
+      } else if (verifyData) {
+        console.error("Place still exists after delete attempt!");
+        console.error("This indicates an RLS (Row Level Security) policy issue.");
+        console.error("The DELETE query executed, but RLS policy is preventing the actual deletion.");
+        console.error("Solution: Run the SQL script 'fix-rls-policies.sql' in Supabase Dashboard > SQL Editor");
+        setError("Failed to delete place. The database security policy (RLS) is blocking deletion. Please run the fix-rls-policies.sql script in Supabase Dashboard to fix this issue.");
+        setDeleting(false);
+        return;
+      } else {
+        // verifyData is null, что означает место не найдено - успешно удалено
+        console.log("Place verified as deleted (not found in database)");
+      }
+
+      console.log("Place deleted successfully and verified");
+      console.log("=== DELETE PLACE SUCCESS ===");
+
+      // Закрываем модальное окно перед редиректом
       setDeleteConfirmOpen(false);
-      setError("An error occurred while deleting the place.");
+      setDeleting(false);
+
+      if (navigator.vibrate) navigator.vibrate(10);
+      
+      // Перенаправляем на профиль с полной перезагрузкой
+      console.log("Redirecting to profile page...");
+      setTimeout(() => {
+        window.location.href = "/profile";
+      }, 100);
+    } catch (err) {
+      console.error("=== DELETE PLACE EXCEPTION ===");
+      console.error("Exception deleting place:", err);
+      console.error("Exception details:", err instanceof Error ? err.stack : String(err));
+      setDeleting(false);
+      // Не закрываем модальное окно при ошибке
+      setError(err instanceof Error ? err.message : "An error occurred while deleting the place.");
     }
   }
 
@@ -661,7 +882,12 @@ export default function EditPlacePage() {
 
               <button
                 type="button"
-                onClick={() => setDeleteConfirmOpen(true)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log("Delete button clicked");
+                  setDeleteConfirmOpen(true);
+                }}
                 disabled={deleting}
                 className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 hover:bg-red-100 transition active:scale-[0.98] disabled:opacity-50"
               >
@@ -674,27 +900,54 @@ export default function EditPlacePage() {
 
       {deleteConfirmOpen && (
         <div className="fixed inset-0 z-50">
-          <button className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDeleteConfirmOpen(false)} aria-label="Close" />
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 mx-4 w-full max-w-sm">
+          <button 
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm" 
+            onClick={(e) => {
+              if (!deleting) {
+                setDeleteConfirmOpen(false);
+              }
+            }} 
+            aria-label="Close"
+            disabled={deleting}
+          />
+          <div 
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 mx-4 w-full max-w-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="rounded-2xl bg-white shadow-xl border border-[#6b7d47]/10 p-6">
               <div className="text-lg font-semibold text-[#2d2d2d] mb-2">Delete place</div>
               <div className="text-sm text-[#6b7d47]/70 mb-6">
                 This action cannot be undone. The place will be permanently deleted.
               </div>
+              {error && (
+                <div className="mb-4 rounded-xl border border-red-200 bg-red-50/50 p-3 text-sm text-red-700">{error}</div>
+              )}
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setDeleteConfirmOpen(false)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!deleting) {
+                      setDeleteConfirmOpen(false);
+                      setError(null);
+                    }
+                  }}
                   disabled={deleting}
-                  className="flex-1 rounded-xl border border-[#6b7d47]/20 bg-white px-4 py-3 text-sm font-medium text-[#6b7d47] hover:bg-[#f5f4f2] transition active:scale-[0.98] disabled:opacity-50"
+                  className="flex-1 rounded-xl border border-[#6b7d47]/20 bg-white px-4 py-3 text-sm font-medium text-[#6b7d47] hover:bg-[#f5f4f2] transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  onClick={deletePlace}
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log("Confirm delete button clicked");
+                    await deletePlace();
+                  }}
                   disabled={deleting}
-                  className="flex-1 rounded-xl bg-red-600 text-white px-4 py-3 text-sm font-medium hover:bg-red-700 transition active:scale-[0.98] disabled:opacity-50"
+                  className="flex-1 rounded-xl bg-red-600 text-white px-4 py-3 text-sm font-medium hover:bg-red-700 transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {deleting ? "Deleting…" : "Delete"}
                 </button>

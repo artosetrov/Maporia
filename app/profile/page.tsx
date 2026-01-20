@@ -3,10 +3,10 @@ export const dynamic = "force-dynamic";
 import { useEffect, useMemo, useState, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import PlaceCard from "../components/PlaceCard";
+import { supabase } from "../lib/supabase";
 
 type Place = {
   id: string;
@@ -30,11 +30,6 @@ type Profile = {
   bio: string | null;
   avatar_url: string | null;
 };
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 function initialsFromEmail(email?: string | null) {
   if (!email) return "U";
@@ -149,11 +144,15 @@ function ProfileInner() {
       setUserEmail(user.email ?? null);
 
       // profile
-      const { data: prof } = await supabase
+      const { data: prof, error: profError } = await supabase
         .from("profiles")
         .select("id, username, display_name, bio, avatar_url")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
+      
+      if (profError) {
+        console.error("Error loading profile:", profError);
+      }
 
       if (mounted) {
         setProfile((prof as Profile) ?? null);

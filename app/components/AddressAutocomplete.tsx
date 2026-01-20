@@ -37,18 +37,60 @@ export default function AddressAutocomplete({
 
   const handlePlaceChanged = () => {
     const place = autocompleteRef.current?.getPlace();
-    if (!place) return;
+    if (!place) {
+      console.warn("AddressAutocomplete: No place selected");
+      return;
+    }
 
-    onPlaceSelect({
+    console.log("AddressAutocomplete: Place selected", {
+      formatted_address: place.formatted_address,
+      place_id: place.place_id,
+      geometry: place.geometry,
+    });
+
+    // Извлекаем координаты - location может быть LatLng объектом или объектом с lat/lng
+    let lat: number | null = null;
+    let lng: number | null = null;
+    
+    if (place.geometry?.location) {
+      const location = place.geometry.location;
+      console.log("AddressAutocomplete: Location object", {
+        location,
+        latType: typeof location.lat,
+        hasLatFunction: typeof location.lat === 'function',
+        hasLatNumber: typeof location.lat === 'number',
+      });
+      
+      // Проверяем, является ли location объектом LatLng с методами
+      if (typeof location.lat === 'function') {
+        lat = location.lat();
+        lng = location.lng();
+        console.log("AddressAutocomplete: Extracted coordinates (function):", { lat, lng });
+      } else if (typeof location.lat === 'number') {
+        // Если это объект с полями lat и lng
+        lat = location.lat;
+        lng = location.lng;
+        console.log("AddressAutocomplete: Extracted coordinates (number):", { lat, lng });
+      } else {
+        console.warn("AddressAutocomplete: Unknown location format", location);
+      }
+    } else {
+      console.warn("AddressAutocomplete: No geometry.location in place");
+    }
+
+    const placeData = {
       address: place.formatted_address ?? "",
       googlePlaceId: place.place_id ?? null,
-      lat: place.geometry?.location?.lat() ?? null,
-      lng: place.geometry?.location?.lng() ?? null,
+      lat,
+      lng,
       city: place.address_components?.find(
         (comp: any) =>
           comp.types.includes("locality") || comp.types.includes("administrative_area_level_1")
       )?.long_name,
-    });
+    };
+    
+    console.log("AddressAutocomplete: Calling onPlaceSelect with:", placeData);
+    onPlaceSelect(placeData);
   };
 
   if (!isLoaded) {

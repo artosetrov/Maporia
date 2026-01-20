@@ -2,12 +2,7 @@
 
 import Link from "next/link";
 import { ReactNode, useEffect, useState, useRef } from "react";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabase } from "../lib/supabase";
 
 type PlaceCardProps = {
   place: {
@@ -65,11 +60,19 @@ export default function PlaceCard({ place, favoriteButton, onClick, onTagClick, 
     
     (async () => {
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from("profiles")
           .select("display_name, username, avatar_url")
           .eq("id", userId)
-          .single();
+          .maybeSingle();
+        
+        if (error) {
+          if (!cancelled) {
+            console.error("Error loading creator profile:", error);
+            loadedUserIdRef.current = null;
+          }
+          return;
+        }
         
         if (!cancelled && data && loadedUserIdRef.current === userId) {
           setCreatorProfile({
@@ -80,7 +83,7 @@ export default function PlaceCard({ place, favoriteButton, onClick, onTagClick, 
         }
       } catch (error) {
         if (!cancelled) {
-          console.error("Error loading creator profile:", error);
+          console.error("Exception loading creator profile:", error);
           loadedUserIdRef.current = null;
         }
       }
@@ -116,9 +119,9 @@ export default function PlaceCard({ place, favoriteButton, onClick, onTagClick, 
     <Link
       href={`/id/${place.id}`}
       onClick={onClick}
-      className="block cursor-pointer group relative h-full"
+      className="block cursor-pointer group relative h-full z-0"
     >
-      <div className="flex flex-col h-full rounded-2xl bg-white border border-[#6b7d47]/10 overflow-hidden hover:border-[#6b7d47]/20 transition-all duration-200">
+      <div className="flex flex-col h-full rounded-2xl bg-white border border-[#6b7d47]/10 overflow-hidden hover:border-[#6b7d47]/20 transition-all duration-200 relative z-0">
         {/* Top: Photo (4:3 aspect ratio) - using padding-bottom trick for reliable aspect ratio */}
         <div className="relative w-full flex-shrink-0" style={{ paddingBottom: '75%' }}>
           {place.cover_url ? (

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "fix-rls": "node scripts/fix-rls-policies.mjs"
   },
   "dependencies": {
     "@react-google-maps/api": "^2.20.8",
