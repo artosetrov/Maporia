@@ -96,7 +96,7 @@ export default function TopBar({ left, center, right, title, bottom, onBack, bac
 
   return (
     <div className="fixed top-0 left-0 right-0 z-40 bg-[#faf9f7]/95 backdrop-blur-sm border-b border-[#6b7d47]/10">
-      <div className="mx-auto max-w-7xl px-4 pt-safe-top pt-3 pb-3">
+      <div className="px-4 lg:px-8 pt-safe-top pt-3 pb-3">
         <div className="flex items-center gap-3">
           {/* Left */}
           <div className="flex-shrink-0">

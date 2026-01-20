@@ -59,3 +59,35 @@ body {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* Убираем белую рамку Google Maps InfoWindow */
+.gm-style-iw-c {
+  background: transparent !important;
+  padding: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.gm-style-iw-d {
+  background: transparent !important;
+  padding: 0 !important;
+  border: none !important;
+  overflow: visible !important;
+}
+
+.gm-style-iw-t {
+  background: transparent !important;
+}
+
+.gm-style-iw-t::after {
+  display: none !important;
+}
+
+/* Скрываем стандартную кнопку закрытия Google Maps */
+.gm-ui-hover-effect {
+  display: none !important;
+}
+
+button.gm-ui-hover-effect {
+  display: none !important;
+}

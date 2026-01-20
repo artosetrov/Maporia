@@ -7,6 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 import { Autocomplete, useJsApiLoader } from "@react-google-maps/api";
 import { CATEGORIES } from "../constants";
 import Pill from "../components/Pill";
+import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../config/googleMaps";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -30,8 +31,8 @@ export default function AddPlacePage() {
   
   const { isLoaded } = useJsApiLoader({
     id: "google-maps-loader",
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY!,
-    libraries: ["places"],
+    googleMapsApiKey: getGoogleMapsApiKey(),
+    libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
   const [userId, setUserId] = useState<string | null>(null);
@@ -174,11 +175,25 @@ export default function AddPlacePage() {
 
     const coverUrl = photoUrls[0];
 
+    // Проверяем наличие координат
+    if (!lat || !lng) {
+      console.warn("Warning: Place is being saved without coordinates. It won't appear on the map.");
+    }
+
     // Debug: логируем, что сохраняем
     console.log("Saving place with photos:", {
       totalPhotos: photos.length,
       photosWithUrls: photoUrls.length,
-      photoUrls: photoUrls
+      photoUrls: photoUrls,
+      lat: lat,
+      lng: lng,
+      address: address,
+      googlePlaceId: googlePlaceId,
+      payload: {
+        title: title.trim(),
+        city: city.trim(),
+        address: address.trim(),
+      }
     });
 
     setSaving(true);
@@ -221,12 +236,21 @@ export default function AddPlacePage() {
 
     if (error) {
       console.error("Save error:", error);
+      console.error("Error details:", JSON.stringify(error, null, 2));
       setError(error.message || "Failed to save place. Please try again.");
       setSaving(false);
       return;
     }
 
+    if (!data || !data.id) {
+      console.error("No data returned after insert");
+      setError("Failed to save place. No data returned.");
+      setSaving(false);
+      return;
+    }
+
     const placeId = data.id;
+    console.log("Place saved successfully with ID:", placeId);
 
     // Получаем пользователя для сохранения фото
     const { data: { user } } = await supabase.auth.getUser();
@@ -255,22 +279,35 @@ export default function AddPlacePage() {
       .from("place_photos")
       .insert(rows);
 
-    setSaving(false);
-
     if (photosError) {
       console.error("Photos save error:", photosError);
+      console.error("Photos error details:", JSON.stringify(photosError, null, 2));
+      setSaving(false);
       setError(photosError.message || "Failed to save photos. Please try again.");
       // Удаляем созданное место, если фото не удалось сохранить
       await supabase.from("places").delete().eq("id", placeId);
       return;
     }
 
+    console.log("Photos saved successfully for place:", placeId);
+    setSaving(false);
+
     // Haptic feedback
     if (navigator.vibrate) {
       navigator.vibrate(10);
     }
 
-    router.push("/profile");
+    // Показываем сообщение об успешном сохранении
+    if (!lat || !lng) {
+      // Если нет координат, показываем предупреждение
+      alert("Место успешно сохранено! Однако оно не будет отображаться на карте, так как координаты не были установлены. Выберите адрес из списка Google Autocomplete, чтобы место появилось на карте.");
+    }
+
+    // Перенаправляем на главную страницу с параметром для обновления данных
+    // Используем router.push с параметром, чтобы заставить обновление данных
+    router.push("/?refresh=" + Date.now());
+    // Также пробуем router.refresh() для обновления серверных данных
+    router.refresh();
   }
 
   return (

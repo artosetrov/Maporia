@@ -115,7 +115,7 @@ export default function SavedPage() {
       />
 
       <div className="flex-1 pt-[80px] pb-20">
-        <div className="mx-auto max-w-7xl px-4">
+        <div className="px-4 lg:px-8">
           {loading ? (
             <div className="text-center py-16">
               <div className="text-sm text-[#6b7d47]/60">Loading…</div>
@@ -126,9 +126,11 @@ export default function SavedPage() {
               <div className="text-xs text-[#6b7d47]/50">Saved places appear here</div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {places.map((place) => (
-                <PlaceCard key={place.id} place={place} />
+                <div key={place.id} className="h-full">
+                  <PlaceCard place={place} />
+                </div>
               ))}
             </div>
           )}

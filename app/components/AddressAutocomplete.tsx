@@ -2,6 +2,7 @@
 
 import { useRef, useEffect } from "react";
 import { Autocomplete, useJsApiLoader } from "@react-google-maps/api";
+import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../config/googleMaps";
 
 type AddressAutocompleteProps = {
   value: string;
@@ -26,8 +27,8 @@ export default function AddressAutocomplete({
 
   const { isLoaded } = useJsApiLoader({
     id: "google-maps-loader",
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY!,
-    libraries: ["places"],
+    googleMapsApiKey: getGoogleMapsApiKey(),
+    libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
   useEffect(() => {

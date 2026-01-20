@@ -116,24 +116,25 @@ export default function PlaceCard({ place, favoriteButton, onClick, onTagClick, 
     <Link
       href={`/id/${place.id}`}
       onClick={onClick}
-      className="block cursor-pointer group relative"
+      className="block cursor-pointer group relative h-full"
     >
-      <div className="flex flex-col rounded-2xl bg-white border border-[#6b7d47]/10 overflow-hidden hover:border-[#6b7d47]/20 transition-all duration-200">
-        {/* Top: Photo (4:3 aspect ratio) */}
-        <div className="relative w-full aspect-[4/3]">
+      <div className="flex flex-col h-full rounded-2xl bg-white border border-[#6b7d47]/10 overflow-hidden hover:border-[#6b7d47]/20 transition-all duration-200">
+        {/* Top: Photo (4:3 aspect ratio) - using padding-bottom trick for reliable aspect ratio */}
+        <div className="relative w-full flex-shrink-0" style={{ paddingBottom: '75%' }}>
           {place.cover_url ? (
             <div
               onClick={handlePhotoClick}
-              className="w-full h-full rounded-t-2xl overflow-hidden bg-[#f5f4f2] cursor-pointer"
+              className="absolute inset-0 w-full h-full rounded-t-2xl overflow-hidden bg-[#f5f4f2] cursor-pointer"
             >
               <img
                 src={place.cover_url}
                 alt={place.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                style={{ objectFit: 'cover', width: '100%', height: '100%' }}
               />
             </div>
           ) : (
-            <div className="w-full h-full rounded-t-2xl bg-[#f5f4f2] flex items-center justify-center">
+            <div className="absolute inset-0 w-full h-full rounded-t-2xl bg-[#f5f4f2] flex items-center justify-center">
               <svg className="w-12 h-12 text-[#6b7d47]/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
@@ -147,7 +148,7 @@ export default function PlaceCard({ place, favoriteButton, onClick, onTagClick, 
         </div>
 
         {/* Bottom: Content */}
-        <div className="p-4 flex flex-col gap-2">
+        <div className="p-4 flex flex-col gap-2 flex-1">
           {/* 1. Title */}
           <div className="text-base font-bold text-[#2d2d2d] line-clamp-1">{place.title}</div>
 

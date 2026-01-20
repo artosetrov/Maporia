@@ -10,6 +10,7 @@ import TopBar from "./components/TopBar";
 import BottomNav from "./components/BottomNav";
 import PlaceCard from "./components/PlaceCard";
 import Pill from "./components/Pill";
+import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "./config/googleMaps";
 
 type Place = {
   id: string;
@@ -840,8 +841,8 @@ function MapView({
   }, [onMapStateChange]);
   const { isLoaded } = useJsApiLoader({
     id: "google-maps-loader",
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY!,
-    libraries: ["places"],
+    googleMapsApiKey: getGoogleMapsApiKey(),
+    libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
   const selectedPlaceId = externalSelectedPlaceId ?? internalSelectedPlaceId;
