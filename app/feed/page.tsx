@@ -405,7 +405,7 @@ export default function FeedPage() {
       />
 
       <div className="flex-1 pt-[64px] pb-20">
-        <div className="mx-auto max-w-2xl px-4 pt-4">
+        <div className="mx-auto max-w-2xl px-6 pt-4">
           {loading ? (
             <div className="text-center py-12 text-[#6b7d47]/60">Loading...</div>
           ) : activities.length === 0 ? (

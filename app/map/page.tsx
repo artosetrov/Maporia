@@ -12,10 +12,13 @@ import BottomNav from "../components/BottomNav";
 import PlaceCard from "../components/PlaceCard";
 import Pill from "../components/Pill";
 import FiltersModal, { ActiveFilters } from "../components/FiltersModal";
+import FavoriteIcon from "../components/FavoriteIcon";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../config/googleMaps";
 import { supabase } from "../lib/supabase";
 import { LAYOUT_BREAKPOINTS, LAYOUT_CONFIG } from "../config/layout";
 import { DEFAULT_CITY } from "../constants";
+import { useUserAccess } from "../hooks/useUserAccess";
+import { isPlacePremium } from "../lib/access";
 
 type Place = {
   id: string;
@@ -84,6 +87,9 @@ function MapPageContent() {
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+
+  // User access for premium filtering
+  const { access } = useUserAccess();
 
   // Applied filters (current state, affects data)
   // Инициализируем из URL сразу, чтобы фильтры применялись при первом рендере
@@ -453,8 +459,12 @@ function MapPageContent() {
       return;
     }
 
+    // Don't filter premium places - show them as locked with pseudo names
+    // Premium places will be displayed with "Secret place #234" title for non-premium users
+    let filteredData = data;
+
     // Если выбрана сортировка по комментариям или лайкам, нужно загрузить счетчики
-    let placesWithCounts = data;
+    let placesWithCounts = filteredData;
     if (activeFilters.sort === "most_commented" || activeFilters.sort === "most_liked") {
       const placeIds = data.map((p: any) => p.id);
       
@@ -1050,6 +1060,9 @@ function MapPageContent() {
                     >
                       <PlaceCard
                         place={p}
+                        userAccess={access}
+                        userId={userId}
+                        isFavorite={isFavorite}
                         favoriteButton={
                           userId ? (
                             <button
@@ -1058,28 +1071,16 @@ function MapPageContent() {
                                 e.stopPropagation();
                                 toggleFavorite(p.id, e);
                               }}
-                              className={`h-8 w-8 rounded-full bg-white border border-[#6b7d47]/20 hover:bg-[#f5f4f2] hover:border-[#6b7d47]/40 flex items-center justify-center transition shadow-sm ${
-                                isFavorite ? "bg-[#6b7d47]/10 border-[#6b7d47]/30" : ""
+                              className={`h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors ${
+                                isFavorite ? "bg-[#FAFAF7] border-[#8F9E4F]" : ""
                               }`}
                               title={isFavorite ? "Remove from favorites" : "Add to favorites"}
                             >
-                              <svg
-                                className={`w-4 h-4 transition-transform ${
-                                  isFavorite 
-                                    ? "text-[#6b7d47] scale-110" 
-                                    : "text-[#6b7d47]/60"
-                                }`}
-                                fill={isFavorite ? "currentColor" : "none"}
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                                />
-                              </svg>
+                              <FavoriteIcon 
+                                isActive={isFavorite} 
+                                size={16}
+                                className={isFavorite ? "scale-110" : ""}
+                              />
                             </button>
                           ) : undefined
                         }
@@ -1216,6 +1217,9 @@ function MapPageContent() {
                     <div key={p.id} className="transition-all relative z-0 place-card-wrapper">
                       <PlaceCard
                         place={p}
+                        userAccess={access}
+                        userId={userId}
+                        isFavorite={isFavorite}
                         favoriteButton={
                           userId ? (
                             <button
@@ -1224,28 +1228,16 @@ function MapPageContent() {
                                 e.stopPropagation();
                                 toggleFavorite(p.id, e);
                               }}
-                              className={`h-8 w-8 rounded-full bg-white border border-gray-200 hover:bg-gray-50 flex items-center justify-center transition shadow-sm ${
-                                isFavorite ? "bg-[#6b7d47]/10 border-[#6b7d47]/30" : ""
+                              className={`h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors ${
+                                isFavorite ? "bg-[#FAFAF7] border-[#8F9E4F]" : ""
                               }`}
                               title={isFavorite ? "Remove from favorites" : "Add to favorites"}
                             >
-                              <svg
-                                className={`w-4 h-4 transition-transform ${
-                                  isFavorite 
-                                    ? "text-[#6b7d47] scale-110" 
-                                    : "text-gray-400"
-                                }`}
-                                fill={isFavorite ? "currentColor" : "none"}
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                                />
-                              </svg>
+                              <FavoriteIcon 
+                                isActive={isFavorite} 
+                                size={16}
+                                className={isFavorite ? "scale-110" : ""}
+                              />
                             </button>
                           ) : undefined
                         }
@@ -1267,7 +1259,7 @@ function MapPageContent() {
 
         {/* Tablet: List only (600px - 899px) */}
         <div className="hidden min-[600px]:max-[899px]:block h-full">
-          <div className="max-w-[680px] mx-auto px-4">
+          <div className="max-w-[680px] mx-auto px-6">
             {/* Header in List Column */}
             <div className="sticky top-[64px] z-30 bg-[#faf9f7] pt-12 pb-3 border-b border-[#6b7d47]/10 mb-4">
               <div className="flex items-center gap-3 mb-2">
@@ -1335,6 +1327,9 @@ function MapPageContent() {
                     <div key={p.id} className="transition-all relative z-0 place-card-wrapper w-full">
                       <PlaceCard
                         place={p}
+                        userAccess={access}
+                        userId={userId}
+                        isFavorite={isFavorite}
                         favoriteButton={
                           userId ? (
                             <button
@@ -1343,28 +1338,16 @@ function MapPageContent() {
                                 e.stopPropagation();
                                 toggleFavorite(p.id, e);
                               }}
-                              className={`h-8 w-8 rounded-full bg-white border border-gray-200 hover:bg-gray-50 flex items-center justify-center transition shadow-sm ${
-                                isFavorite ? "bg-[#6b7d47]/10 border-[#6b7d47]/30" : ""
+                              className={`h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors ${
+                                isFavorite ? "bg-[#FAFAF7] border-[#8F9E4F]" : ""
                               }`}
                               title={isFavorite ? "Remove from favorites" : "Add to favorites"}
                             >
-                              <svg
-                                className={`w-4 h-4 transition-transform ${
-                                  isFavorite 
-                                    ? "text-[#6b7d47] scale-110" 
-                                    : "text-gray-400"
-                                }`}
-                                fill={isFavorite ? "currentColor" : "none"}
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                                />
-                              </svg>
+                              <FavoriteIcon 
+                                isActive={isFavorite} 
+                                size={16}
+                                className={isFavorite ? "scale-110" : ""}
+                              />
                             </button>
                           ) : undefined
                         }
@@ -1618,7 +1601,7 @@ function MapPageContent() {
                   {/* Sheet content */}
                   <div 
                     ref={(el) => setListScrollRef(el)}
-                    className="flex-1 overflow-y-auto scrollbar-hide px-4 pb-20"
+                    className="flex-1 overflow-y-auto scrollbar-hide px-6 pb-20"
                   >
                     {selectedPlaceId ? (
                       <div className="py-4">
@@ -1629,6 +1612,8 @@ function MapPageContent() {
                           return (
                             <PlaceCard
                               place={selectedPlace}
+                              userAccess={access}
+                              userId={userId}
                               favoriteButton={
                                 userId ? (
                                   <button
@@ -1641,23 +1626,11 @@ function MapPageContent() {
                                     }`}
                                     title={isFavorite ? "Remove from favorites" : "Add to favorites"}
                                   >
-                                    <svg
-                                      className={`w-4 h-4 transition-transform ${
-                                        isFavorite 
-                                          ? "text-[#6b7d47] scale-110" 
-                                          : "text-gray-400"
-                                      }`}
-                                      fill={isFavorite ? "currentColor" : "none"}
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                                      />
-                                    </svg>
+                                    <FavoriteIcon 
+                                      isActive={isFavorite} 
+                                      size={16}
+                                      className={isFavorite ? "scale-110" : ""}
+                                    />
                                   </button>
                                 ) : undefined
                               }
@@ -1697,6 +1670,9 @@ function MapPageContent() {
                                 >
                                   <PlaceCard
                                     place={p}
+                                    userAccess={access}
+                                    userId={userId}
+                                    isFavorite={isFavorite}
                                     favoriteButton={
                                       userId ? (
                                         <button
@@ -1705,28 +1681,16 @@ function MapPageContent() {
                                             e.stopPropagation();
                                             toggleFavorite(p.id, e);
                                           }}
-                                          className={`h-8 w-8 rounded-full bg-white border border-gray-200 hover:bg-gray-50 flex items-center justify-center transition shadow-sm ${
-                                            isFavorite ? "bg-[#6b7d47]/10 border-[#6b7d47]/30" : ""
+                                          className={`h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors ${
+                                            isFavorite ? "bg-[#FAFAF7] border-[#8F9E4F]" : ""
                                           }`}
                                           title={isFavorite ? "Remove from favorites" : "Add to favorites"}
                                         >
-                                          <svg
-                                            className={`w-4 h-4 transition-transform ${
-                                              isFavorite 
-                                                ? "text-[#6b7d47] scale-110" 
-                                                : "text-gray-400"
-                                            }`}
-                                            fill={isFavorite ? "currentColor" : "none"}
-                                            stroke="currentColor"
-                                            viewBox="0 0 24 24"
-                                          >
-                                            <path
-                                              strokeLinecap="round"
-                                              strokeLinejoin="round"
-                                              strokeWidth={2}
-                                              d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                                            />
-                                          </svg>
+                                          <FavoriteIcon 
+                                            isActive={isFavorite} 
+                                            size={16}
+                                            className={isFavorite ? "scale-110" : ""}
+                                          />
                                         </button>
                                       ) : undefined
                                     }
@@ -1836,7 +1800,7 @@ function MapPageContent() {
               </div>
             </>
           ) : (
-            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-4 pb-24">
+            <div className="flex-1 overflow-y-auto scrollbar-hide px-6 pt-4 pb-24">
               {loading ? (
                 <Empty text="Loading…" />
               ) : places.length === 0 ? (
@@ -1850,7 +1814,9 @@ function MapPageContent() {
                       <div key={p.id} className="w-full place-card-wrapper">
                         <PlaceCard
                           place={p}
-                        favoriteButton={
+                          userAccess={access}
+                          userId={userId}
+                          favoriteButton={
                           userId ? (
                             <button
                               onClick={(e) => {
@@ -1862,23 +1828,11 @@ function MapPageContent() {
                               }`}
                               title={isFavorite ? "Remove from favorites" : "Add to favorites"}
                             >
-                              <svg
-                                className={`w-4 h-4 transition-transform ${
-                                  isFavorite 
-                                    ? "text-[#6b7d47] scale-110" 
-                                    : "text-gray-400"
-                                }`}
-                                fill={isFavorite ? "currentColor" : "none"}
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                                />
-                              </svg>
+                              <FavoriteIcon 
+                                isActive={isFavorite} 
+                                size={16}
+                                className={isFavorite ? "scale-110" : ""}
+                              />
                             </button>
                           ) : undefined
                         }
@@ -2515,23 +2469,11 @@ function MapView({
                                     title={favorites?.has(place.id) ? "Remove from favorites" : "Add to favorites"}
                                     aria-label={favorites?.has(place.id) ? "Remove from favorites" : "Add to favorites"}
                                   >
-                                    <svg
-                                      className={`w-4 h-4 transition-transform ${
-                                        favorites?.has(place.id)
-                                          ? "text-[#6b7d47] scale-110"
-                                          : "text-[#6b7d47]/60"
-                                      }`}
-                                      fill={favorites?.has(place.id) ? "currentColor" : "none"}
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                                      />
-                                    </svg>
+                                    <FavoriteIcon 
+                                      isActive={favorites?.has(place.id) || false} 
+                                      size={16}
+                                      className={favorites?.has(place.id) ? "scale-110" : ""}
+                                    />
                                   </button>
                                 )}
                                 <button

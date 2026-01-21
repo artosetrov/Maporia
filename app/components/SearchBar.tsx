@@ -60,16 +60,16 @@ export default function SearchBar({
           // For now, just focus the search input
           onSearchChange("");
         }}
-        className="w-full h-12 rounded-full border border-[#6b7d47]/20 bg-white shadow-sm hover:shadow-md transition flex items-center gap-3 px-4 text-left"
+        className="w-full h-11 rounded-full border border-[#E5E8DB] bg-white hover:border-[#8F9E4F] transition-colors flex items-center gap-3 px-4 text-left"
       >
-        <svg className="w-5 h-5 text-[#6b7d47]/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5 text-[#A8B096] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
-        <span className="flex-1 text-sm text-[#6b7d47]/60">
+        <span className="flex-1 text-sm text-[#A8B096]">
           {searchValue || "Search by vibe, mood, or place"}
         </span>
         {activeFiltersCount > 0 && (
-          <span className="h-5 w-5 rounded-full bg-[#6b7d47] text-white text-[10px] font-medium flex items-center justify-center">
+          <span className="h-5 w-5 rounded-full bg-[#8F9E4F] text-white text-[10px] font-medium flex items-center justify-center">
             {activeFiltersCount > 9 ? "9+" : activeFiltersCount}
           </span>
         )}
@@ -79,22 +79,22 @@ export default function SearchBar({
 
   // Desktop: full search bar (Airbnb-style pill)
   return (
-    <div className="flex items-center gap-0 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow border border-[#6b7d47]/10 max-w-[920px] w-full">
+    <div className="flex items-center gap-0 bg-white rounded-full border border-[#E5E8DB] hover:border-[#8F9E4F] transition-colors max-w-[920px] w-full">
       {/* City Selector */}
       <div ref={cityDropdownRef} className="relative flex-shrink-0">
         <button
           onClick={() => setCityDropdownOpen(!cityDropdownOpen)}
-          className="h-14 px-6 rounded-l-full hover:bg-[#f5f4f2] transition flex flex-col items-start justify-center border-r border-[#6b7d47]/10 min-w-[120px]"
+          className="h-11 px-6 rounded-l-full hover:bg-[#FAFAF7] transition-colors flex items-center justify-center border-r border-[#E5E8DB] min-w-[120px]"
         >
-          <span className="text-xs font-medium text-[#6b7d47]/60 uppercase tracking-wide">Where</span>
-          <span className="text-sm font-medium text-[#2d2d2d] mt-0.5 truncate max-w-[100px]">
+          <span className="text-sm font-medium text-[#1F2A1F] truncate max-w-[100px]">
             {isAnywhere ? "Anywhere" : displayCity}
           </span>
         </button>
 
         {/* City Dropdown Popover */}
         {cityDropdownOpen && (
-          <div className="absolute top-full left-0 mt-2 bg-white rounded-2xl shadow-xl border border-[#6b7d47]/10 overflow-hidden z-50 min-w-[200px] shadow-xl">
+          <div className="absolute top-full left-0 mt-2 bg-white rounded-2xl border border-[#ECEEE4] overflow-hidden z-50 min-w-[200px]"
+               style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
             {CITIES.map((city) => {
               const isSelected = selectedCity === city;
               return (
@@ -106,14 +106,13 @@ export default function SearchBar({
                     }
                     setCityDropdownOpen(false);
                   }}
-                  className={`w-full px-4 py-3 text-left transition ${
+                  className={`w-full px-4 py-3 text-left transition-colors ${
                     isSelected
-                      ? "bg-[#6b7d47]/10 text-[#6b7d47] font-medium"
-                      : "text-[#2d2d2d] hover:bg-[#f5f4f2]"
+                      ? "bg-[#FAFAF7] text-[#8F9E4F] font-medium"
+                      : "text-[#1F2A1F] hover:bg-[#FAFAF7]"
                   }`}
                 >
                   <div className="font-semibold text-sm">{city}</div>
-                  <div className="text-xs text-[#6b7d47]/60 mt-0.5">City</div>
                 </button>
               );
             })}
@@ -124,10 +123,10 @@ export default function SearchBar({
                 }
                 setCityDropdownOpen(false);
               }}
-              className={`w-full px-4 py-3 text-left transition border-t border-[#6b7d47]/10 ${
+              className={`w-full px-4 py-3 text-left transition-colors border-t border-[#ECEEE4] ${
                 isAnywhere
-                  ? "bg-[#6b7d47]/10 text-[#6b7d47] font-medium"
-                  : "text-[#2d2d2d] hover:bg-[#f5f4f2]"
+                  ? "bg-[#FAFAF7] text-[#8F9E4F] font-medium"
+                  : "text-[#1F2A1F] hover:bg-[#FAFAF7]"
               }`}
             >
               <div className="font-semibold text-sm">Anywhere</div>
@@ -142,9 +141,9 @@ export default function SearchBar({
           value={searchValue}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search by vibe, mood, or place"
-          className="w-full h-14 px-6 pr-12 text-sm text-[#2d2d2d] placeholder:text-[#6b7d47]/50 outline-none bg-transparent"
+          className="w-full h-11 px-6 pr-12 text-sm text-[#1F2A1F] placeholder:text-[#A8B096] outline-none bg-transparent focus:placeholder:text-[#6F7A5A]"
         />
-        <svg className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#6b7d47]/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#A8B096]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
       </div>
@@ -152,10 +151,10 @@ export default function SearchBar({
       {/* Filters Button */}
       <button
         onClick={onFiltersClick}
-        className="h-14 px-6 rounded-r-full hover:bg-[#f5f4f2] transition flex items-center gap-2 border-l border-[#6b7d47]/10 flex-shrink-0 relative"
+        className="h-11 px-6 rounded-r-full hover:bg-[#FAFAF7] transition-colors flex items-center gap-2 border-l border-[#E5E8DB] flex-shrink-0 relative"
       >
         {/* Filter icon - three horizontal lines of varying lengths */}
-        <svg className="w-5 h-5 text-[#2d2d2d]" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg className="w-5 h-5 text-[#1F2A1F]" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
           {/* Top line - longest */}
           <line x1="2" y1="6" x2="18" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           {/* Middle line - medium */}
@@ -163,9 +162,9 @@ export default function SearchBar({
           {/* Bottom line - shortest */}
           <line x1="2" y1="14" x2="10" y2="14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
-        <span className="text-sm font-medium text-[#2d2d2d] hidden min-[600px]:inline">Filters</span>
+        <span className="text-sm font-medium text-[#1F2A1F] hidden min-[600px]:inline">Filters</span>
         {activeFiltersCount > 0 && (
-          <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-[#2d2d2d] text-white text-[10px] font-medium flex items-center justify-center">
+          <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-[#8F9E4F] text-white text-[10px] font-medium flex items-center justify-center">
             {activeFiltersCount > 9 ? "9+" : activeFiltersCount}
           </span>
         )}

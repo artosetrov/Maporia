@@ -3,8 +3,10 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import PlaceCard from "./PlaceCard";
+import FavoriteIcon from "./FavoriteIcon";
 import { supabase } from "../lib/supabase";
 import { HomeSectionFilter } from "../constants/homeSections";
+import { type UserAccess } from "../lib/access";
 
 type Place = {
   id: string;
@@ -25,11 +27,27 @@ type HomeSectionProps = {
   section: HomeSectionFilter;
   userId?: string | null;
   favorites?: Set<string>;
+  userAccess?: UserAccess;
   onToggleFavorite?: (placeId: string, e: React.MouseEvent) => void;
   onTagClick?: (tag: string) => void;
 };
 
-export default function HomeSection({ section, userId, favorites, onToggleFavorite, onTagClick }: HomeSectionProps) {
+// Helper function to get recently viewed place IDs from localStorage
+function getRecentlyViewedPlaceIds(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const stored = localStorage.getItem('recentlyViewedPlaces');
+    if (!stored) return [];
+    const data = JSON.parse(stored);
+    // Return array of place IDs, most recent first
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('Error reading recently viewed places:', error);
+    return [];
+  }
+}
+
+export default function HomeSection({ section, userId, favorites, userAccess, onToggleFavorite, onTagClick }: HomeSectionProps) {
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -37,6 +55,40 @@ export default function HomeSection({ section, userId, favorites, onToggleFavori
   useEffect(() => {
     async function loadPlaces() {
       setLoading(true);
+      
+      // Special handling for "Recently viewed" section
+      if (section.recentlyViewed) {
+        const recentlyViewedIds = getRecentlyViewedPlaceIds();
+        
+        if (recentlyViewedIds.length === 0) {
+          setPlaces([]);
+          setLoading(false);
+          return;
+        }
+
+        // Load places by IDs, preserving the order from localStorage
+        const { data, error } = await supabase
+          .from("places")
+          .select("*")
+          .in("id", recentlyViewedIds)
+          .limit(10);
+
+        if (error) {
+          console.error("Error loading recently viewed places:", error);
+          setPlaces([]);
+        } else {
+          // Sort by the order in recentlyViewedIds (most recent first)
+          const placesMap = new Map((data || []).map((p: any) => [p.id, p]));
+          const orderedPlaces = recentlyViewedIds
+            .map(id => placesMap.get(id))
+            .filter((p): p is Place => p !== undefined)
+            .slice(0, 10);
+          setPlaces(orderedPlaces);
+        }
+        
+        setLoading(false);
+        return;
+      }
       
       let query = supabase.from("places").select("*");
 
@@ -95,12 +147,56 @@ export default function HomeSection({ section, userId, favorites, onToggleFavori
     section.tag || '',
     section.daysAgo || 0,
     section.sort || '',
-    section.categories ? section.categories.join(',') : ''
+    section.categories ? section.categories.join(',') : '',
+    section.recentlyViewed || false
   ]);
+
+  // For "Recently viewed" section, reload when page becomes visible (user returns from viewing a place)
+  useEffect(() => {
+    if (!section.recentlyViewed) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Reload places when page becomes visible
+        async function reloadPlaces() {
+          const recentlyViewedIds = getRecentlyViewedPlaceIds();
+          
+          if (recentlyViewedIds.length === 0) {
+            setPlaces([]);
+            return;
+          }
+
+          const { data, error } = await supabase
+            .from("places")
+            .select("*")
+            .in("id", recentlyViewedIds)
+            .limit(10);
+
+          if (!error && data) {
+            const placesMap = new Map((data || []).map((p: any) => [p.id, p]));
+            const orderedPlaces = recentlyViewedIds
+              .map(id => placesMap.get(id))
+              .filter((p): p is Place => p !== undefined)
+              .slice(0, 10);
+            setPlaces(orderedPlaces);
+          }
+        }
+        reloadPlaces();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [section.recentlyViewed]);
 
 
   // Формируем URL для "See all"
   const getSeeAllUrl = () => {
+    // For "Recently viewed", just go to map page
+    if (section.recentlyViewed) {
+      return "/map";
+    }
+    
     const params = new URLSearchParams();
     if (section.city) {
       params.set("city", section.city);
@@ -141,9 +237,9 @@ export default function HomeSection({ section, userId, favorites, onToggleFavori
     return (
       <div className="mb-12">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-[#2d2d2d]">{section.title}</h2>
+          <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F]">{section.title}</h2>
         </div>
-        <div className="text-sm text-[#6b7d47]/60">Loading...</div>
+        <div className="text-sm text-[#6F7A5A]">Loading...</div>
       </div>
     );
   }
@@ -156,54 +252,72 @@ export default function HomeSection({ section, userId, favorites, onToggleFavori
     <div className="mb-6 min-[600px]:mb-8 min-[900px]:mb-9">
       {/* Header: Title + See all arrow + Scroll arrows (desktop only) */}
       <div className="flex items-center justify-between mb-3 min-[600px]:mb-4 h-10 min-[600px]:h-12">
+        {/* Left: Title + See all arrow (desktop) or just Title (mobile) */}
         <div className="flex items-center gap-2">
-          <h2 className="text-lg min-[600px]:text-xl font-semibold text-[#2d2d2d]">{section.title}</h2>
+          <h2 className="font-fraunces text-lg min-[600px]:text-xl font-semibold text-[#1F2A1F]">{section.title}</h2>
+          {/* See all arrow - only on desktop, next to title */}
           <Link
             href={getSeeAllUrl()}
-            className="w-8 h-8 rounded-full bg-white border border-gray-200 hover:bg-gray-50 flex items-center justify-center transition shadow-sm"
+            className="hidden min-[900px]:flex w-8 h-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] items-center justify-center transition-colors"
             aria-label="See all"
           >
-            <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </Link>
         </div>
-        {/* Стрелки прокрутки только на desktop >= 900px и если карточек >= 7 */}
-        {places.length >= 7 && (
-          <div className="hidden min-[900px]:flex items-center gap-2">
-            <button
-              onClick={scrollLeft}
-              className="w-8 h-8 rounded-full bg-white border border-gray-200 hover:bg-gray-50 flex items-center justify-center transition shadow-sm"
-              aria-label="Scroll left"
-            >
-              <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <button
-              onClick={scrollRight}
-              className="w-8 h-8 rounded-full bg-white border border-gray-200 hover:bg-gray-50 flex items-center justify-center transition shadow-sm"
-              aria-label="Scroll right"
-            >
-              <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-        )}
+        {/* Right: See all arrow (mobile) or Scroll arrows (desktop) */}
+        <div className="flex items-center gap-2">
+          {/* Стрелки прокрутки только на desktop >= 900px и если карточек >= 7 */}
+          {places.length >= 7 && (
+            <div className="hidden min-[900px]:flex items-center gap-2">
+              <button
+                onClick={scrollLeft}
+                className="w-8 h-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] flex items-center justify-center transition-colors"
+                aria-label="Scroll left"
+              >
+                <svg className="w-4 h-4 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <button
+                onClick={scrollRight}
+                className="w-8 h-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] flex items-center justify-center transition-colors"
+                aria-label="Scroll right"
+              >
+                <svg className="w-4 h-4 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          )}
+          {/* See all arrow - only on mobile, on the right */}
+          <Link
+            href={getSeeAllUrl()}
+            className="min-[900px]:hidden w-8 h-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] flex items-center justify-center transition-colors"
+            aria-label="See all"
+          >
+            <svg className="w-4 h-4 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
+        </div>
       </div>
       
-      {/* Carousel container - ограничиваем ширину чтобы помещалось ровно 7 карточек */}
+      {/* Carousel container */}
       <div className="relative">
         <div 
           ref={scrollContainerRef}
-          className="overflow-x-auto scrollbar-hide"
+          className="overflow-x-auto scrollbar-hide max-[599px]:-mr-6 min-[600px]:mr-0"
           style={{ 
             scrollPaddingLeft: 'var(--home-page-padding, 16px)',
             scrollSnapType: 'x mandatory',
             WebkitOverflowScrolling: 'touch',
-            // Ограничиваем ширину контейнера: 7 карточек + 6 gaps
-            maxWidth: 'calc(7 * var(--home-card-width) + 6 * var(--home-carousel-gap))'
+            // Для "Recently viewed": ограничиваем ширину контейнера для 5 карточек на десктопе
+            // Для остальных: 7 карточек + 6 gaps
+            maxWidth: section.recentlyViewed 
+              ? 'calc(5 * var(--recently-viewed-card-width, var(--home-card-width)) + 4 * var(--home-carousel-gap))'
+              : 'calc(7 * var(--home-card-width) + 6 * var(--home-carousel-gap))'
           }}
         >
           <div 
@@ -215,19 +329,27 @@ export default function HomeSection({ section, userId, favorites, onToggleFavori
           >
             {places.map((place) => {
               const isFavorite = favorites?.has(place.id);
+              // Вычисляем ширину карточки для "Recently viewed"
+              const cardWidth = section.recentlyViewed 
+                ? 'var(--recently-viewed-card-width, var(--home-card-width))'
+                : 'var(--home-card-width, 220px)';
+              
               return (
                 <div 
                   key={place.id} 
                   data-card
                   className="flex-shrink-0"
                   style={{
-                    width: 'var(--home-card-width, 220px)',
+                    width: cardWidth,
                     scrollSnapAlign: 'start'
                   }}
                 >
                   <div className="[&_.place-card-image]:!pb-[100%]">
                     <PlaceCard
                       place={place}
+                      userAccess={userAccess}
+                      userId={userId}
+                      isFavorite={isFavorite}
                       favoriteButton={
                       userId && onToggleFavorite ? (
                         <button
@@ -236,28 +358,16 @@ export default function HomeSection({ section, userId, favorites, onToggleFavori
                             e.stopPropagation();
                             onToggleFavorite(place.id, e);
                           }}
-                          className={`h-8 w-8 rounded-full bg-white border border-[#6b7d47]/20 hover:bg-[#f5f4f2] hover:border-[#6b7d47]/40 flex items-center justify-center transition shadow-sm ${
-                            isFavorite ? "bg-[#6b7d47]/10 border-[#6b7d47]/30" : ""
+                          className={`h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors ${
+                            isFavorite ? "bg-[#FAFAF7] border-[#8F9E4F]" : ""
                           }`}
                           title={isFavorite ? "Remove from favorites" : "Add to favorites"}
                         >
-                          <svg
-                            className={`w-4 h-4 transition-transform ${
-                              isFavorite 
-                                ? "text-[#6b7d47] scale-110" 
-                                : "text-[#6b7d47]/60"
-                            }`}
-                            fill={isFavorite ? "currentColor" : "none"}
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                            />
-                          </svg>
+                          <FavoriteIcon 
+                            isActive={isFavorite} 
+                            size={16}
+                            className={isFavorite ? "scale-110" : ""}
+                          />
                         </button>
                       ) : undefined
                     }
@@ -278,7 +388,8 @@ export default function HomeSection({ section, userId, favorites, onToggleFavori
                     scrollSnapAlign: 'start'
                   }}
                 >
-                <div className="flex flex-col h-full rounded-[18px] min-[600px]:rounded-[20px] min-[900px]:rounded-[22px] bg-white border border-gray-200 overflow-hidden transition-all duration-200 relative z-0 shadow-sm hover:shadow-md cursor-pointer">
+                <div className="flex flex-col h-full rounded-2xl bg-white border border-[#ECEEE4] overflow-hidden transition-all duration-200 relative z-0 hover:scale-[1.02] cursor-pointer"
+                     style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
                   {/* Image collage section - aspect 1:1 */}
                   <div className="relative w-full aspect-square">
                     <div className="absolute inset-0 bg-gray-100 p-2 flex flex-wrap gap-1">
@@ -309,7 +420,7 @@ export default function HomeSection({ section, userId, favorites, onToggleFavori
                   {/* Text section - фиксированная высота ~52px */}
                   <div className="p-3 min-[600px]:p-4 flex items-center justify-center" style={{ minHeight: '52px' }}>
                     <div className="text-center">
-                      <div className="text-base min-[600px]:text-lg font-semibold text-[#2d2d2d]">See all</div>
+                      <div className="text-base min-[600px]:text-lg font-semibold text-[#1F2A1F]">See all</div>
                     </div>
                   </div>
                 </div>

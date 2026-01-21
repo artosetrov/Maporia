@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { ReactNode, useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
+import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
+import PremiumBadge from "./PremiumBadge";
+import LockedPlaceOverlay from "./LockedPlaceOverlay";
 
 type PlaceCardProps = {
   place: {
@@ -16,12 +19,24 @@ type PlaceCardProps = {
     categories?: string[] | null;
     tags?: string[] | null;
     created_by?: string | null;
+    accessLevel?: "public" | "premium"; // For draft places in wizard
+    is_premium?: boolean; // TODO: Use when schema has this field
+    premium_only?: boolean; // TODO: Use when schema has this field
+    access_level?: string; // TODO: Use when schema has this field
   };
+  userAccess?: UserAccess; // User's access level
+  userId?: string | null; // Current user ID to check ownership
   favoriteButton?: ReactNode;
+  isFavorite?: boolean; // Whether the place is in favorites (to show button always vs only on hover)
   onClick?: () => void;
   onTagClick?: (tag: string) => void;
   onPhotoClick?: () => void;
+  onRemoveFavorite?: (placeId: string, e: React.MouseEvent) => void;
 };
+
+function cx(...a: Array<string | false | undefined | null>) {
+  return a.filter(Boolean).join(" ");
+}
 
 function initialsFromName(name?: string | null) {
   if (!name) return "U";
@@ -31,7 +46,7 @@ function initialsFromName(name?: string | null) {
   return (a + b).slice(0, 2);
 }
 
-export default function PlaceCard({ place, favoriteButton, onClick, onTagClick, onPhotoClick }: PlaceCardProps) {
+export default function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite = false, onClick, onTagClick, onPhotoClick, onRemoveFavorite }: PlaceCardProps) {
   const [creatorProfile, setCreatorProfile] = useState<{ display_name: string | null; username: string | null; avatar_url: string | null } | null>(null);
   const loadedUserIdRef = useRef<string | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
@@ -201,14 +216,51 @@ export default function PlaceCard({ place, favoriteButton, onClick, onTagClick, 
   const currentPhoto = photos[currentPhotoIndex] || place.cover_url;
   const hasMultiplePhotos = photos.length > 1;
 
+  // Premium access checks
+  const defaultUserAccess: UserAccess = userAccess ?? { hasPremium: false };
+  const isPremium = isPlacePremium(place);
+  const canView = canUserViewPlace(defaultUserAccess, place);
+  const isOwner = userId && place.created_by === userId;
+  const isLocked = isPremium && !canView && !isOwner; // Owner always sees full content
+
+  // Generate pseudo title for locked places (e.g., "Maporia Secret #1")
+  const getPseudoPlaceNumber = (placeId: string): number => {
+    // Convert UUID to a number by taking characters and converting to number
+    // Use a consistent method to get a number between 1-9999
+    const hash = placeId.replace(/-/g, '').substring(0, 8);
+    const num = parseInt(hash, 16) % 9999;
+    return num + 1; // Ensure it's between 1-9999
+  };
+
+  const displayTitle = isLocked ? `Maporia Secret #${getPseudoPlaceNumber(place.id)}` : place.title;
+  const pseudoTitle = isPremium ? `Maporia Secret #${getPseudoPlaceNumber(place.id)}` : null;
+
   const handlePhotoClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    // Don't allow navigation if place is locked
+    if (isLocked) {
+      return;
+    }
+    
     if (onPhotoClick) {
       onPhotoClick();
     } else {
       // Default: navigate to place page
       window.location.href = `/id/${place.id}`;
+    }
+  };
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Prevent navigation if place is locked
+    if (isLocked) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (onClick) {
+      onClick();
     }
   };
 
@@ -222,9 +274,9 @@ export default function PlaceCard({ place, favoriteButton, onClick, onTagClick, 
 
   return (
     <Link
-      href={`/id/${place.id}`}
-      onClick={onClick}
-      className="block cursor-pointer group relative w-full"
+      href={isLocked ? "#" : `/id/${place.id}`}
+      onClick={handleCardClick}
+      className={`block group relative w-full ${isLocked ? "cursor-not-allowed" : "cursor-pointer"}`}
     >
       {/* Photo with rounded corners */}
       <div 
@@ -239,12 +291,15 @@ export default function PlaceCard({ place, favoriteButton, onClick, onTagClick, 
         {currentPhoto ? (
           <div
             onClick={handlePhotoClick}
-            className="absolute inset-0 w-full h-full rounded-[18px] min-[600px]:rounded-[20px] min-[900px]:rounded-[22px] overflow-hidden bg-[#f5f4f2] cursor-pointer"
+            className="absolute inset-0 w-full h-full rounded-2xl overflow-hidden bg-[#FAFAF7] cursor-pointer"
           >
             <img
               src={currentPhoto}
-              alt={place.title}
-              className="absolute inset-0 w-full h-full object-cover"
+              alt={displayTitle}
+              className={cx(
+                "absolute inset-0 w-full h-full object-cover",
+                isLocked && !isOwner && "blur-md brightness-75"
+              )}
               style={{ objectFit: 'cover', width: '100%', height: '100%' }}
             />
             
@@ -254,12 +309,13 @@ export default function PlaceCard({ place, favoriteButton, onClick, onTagClick, 
                 {/* Left arrow */}
                 <button
                   onClick={handlePreviousPhoto}
-                  className={`absolute left-2 top-1/2 -translate-y-1/2 z-20 h-8 w-8 rounded-full bg-white/90 hover:bg-white shadow-lg flex items-center justify-center transition-opacity duration-200 ${
+                  className={`absolute left-2 top-1/2 -translate-y-1/2 z-20 h-8 w-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center transition-opacity duration-200 ${
                     isHovered ? 'opacity-100' : 'opacity-0'
                   }`}
+                  style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
                   aria-label="Previous photo"
                 >
-                  <svg className="w-4 h-4 text-[#2d2d2d]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
@@ -267,12 +323,13 @@ export default function PlaceCard({ place, favoriteButton, onClick, onTagClick, 
                 {/* Right arrow */}
                 <button
                   onClick={handleNextPhoto}
-                  className={`absolute right-2 top-1/2 -translate-y-1/2 z-20 h-8 w-8 rounded-full bg-white/90 hover:bg-white shadow-lg flex items-center justify-center transition-opacity duration-200 ${
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 z-20 h-8 w-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center transition-opacity duration-200 ${
                     isHovered ? 'opacity-100' : 'opacity-0'
                   }`}
+                  style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
                   aria-label="Next photo"
                 >
-                  <svg className="w-4 h-4 text-[#2d2d2d]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
@@ -296,45 +353,82 @@ export default function PlaceCard({ place, favoriteButton, onClick, onTagClick, 
                 ))}
               </div>
             )}
+
+            {/* Premium badge - top left */}
+            {isPremium && (
+              <div className="absolute top-2 left-2 z-20">
+                <PremiumBadge />
+              </div>
+            )}
+
+            {/* Locked overlay - shown when user doesn't have premium access */}
+            {isLocked && (
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-30 rounded-2xl">
+                <div className="text-center p-4">
+                  <PremiumBadge />
+                </div>
+              </div>
+            )}
           </div>
         ) : (
-          <div className="absolute inset-0 w-full h-full rounded-[18px] min-[600px]:rounded-[20px] min-[900px]:rounded-[22px] bg-[#f5f4f2] flex items-center justify-center">
-            <svg className="w-12 h-12 text-[#999999]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="absolute inset-0 w-full h-full rounded-2xl bg-[#FAFAF7] flex items-center justify-center">
+            <svg className="w-12 h-12 text-[#A8B096]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </div>
         )}
         
-        {/* Favorite button */}
+        {/* Favorite button - visible always if favorite, only on hover if not favorite */}
         {favoriteButton && (
-          <div className="absolute top-2 right-2 z-10">{favoriteButton}</div>
+          <div className={`absolute top-2 right-2 z-10 transition-opacity duration-200 ${
+            isFavorite ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`}>
+            {favoriteButton}
+          </div>
+        )}
+        
+        {/* Remove from favorites button - appears on hover (for saved page) */}
+        {onRemoveFavorite && (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onRemoveFavorite(place.id, e);
+            }}
+            className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/90 backdrop-blur-sm rounded-lg p-2 badge-shadow hover:bg-white z-10"
+            aria-label="Remove from favorites"
+          >
+            <svg className="w-5 h-5 text-[#C96A5B]" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+            </svg>
+          </button>
         )}
       </div>
 
       {/* Text content - directly under photo, no container */}
       <div className="flex flex-col gap-1">
-        {/* Title */}
-        <div className="text-base font-semibold text-[#2d2d2d] line-clamp-1">{place.title}</div>
+        {/* Title - Fraunces font */}
+        <div className="font-fraunces text-base font-semibold text-[#1F2A1F] line-clamp-1">{place.title}</div>
 
         {/* City */}
         {place.city && (
-          <div className="text-sm text-[#666666] line-clamp-1">{place.city}</div>
+          <div className="text-sm text-[#6F7A5A] line-clamp-1">{place.city}</div>
         )}
 
-        {/* Tags */}
-        {place.tags && place.tags.length > 0 && (
+        {/* Tags - hide for locked places */}
+        {!isLocked && place.tags && place.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-0.5">
             {place.tags.slice(0, 3).map((tag, index) => (
               <button
                 key={index}
                 onClick={(e) => handleTagClick(e, tag)}
-                className="text-xs text-[#666666] bg-[#f5f5f5] px-2 py-0.5 rounded-full hover:bg-[#e5e5e5] transition"
+                className="text-xs text-[#6F7A5A] bg-[#FAFAF7] px-2 py-0.5 rounded-full hover:bg-[#ECEEE4] transition-colors"
               >
                 #{tag}
               </button>
             ))}
             {place.tags.length > 3 && (
-              <span className="text-xs text-[#999999] px-2 py-0.5">+{place.tags.length - 3}</span>
+              <span className="text-xs text-[#A8B096] px-2 py-0.5">+{place.tags.length - 3}</span>
             )}
           </div>
         )}

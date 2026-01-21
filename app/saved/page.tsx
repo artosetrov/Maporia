@@ -9,6 +9,7 @@ import PlaceCard from "../components/PlaceCard";
 import FiltersModal, { ActiveFilters } from "../components/FiltersModal";
 import { supabase } from "../lib/supabase";
 import { DEFAULT_CITY } from "../constants";
+import { useUserAccess } from "../hooks/useUserAccess";
 
 type Place = {
   id: string;
@@ -39,6 +40,9 @@ export default function SavedPage() {
   });
   const [filterOpen, setFilterOpen] = useState(false);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
+
+  // User access for premium filtering
+  const { access } = useUserAccess();
 
   useEffect(() => {
     (async () => {
@@ -98,8 +102,39 @@ export default function SavedPage() {
       if (!error && data) {
         setPlaces(data as Place[]);
       }
+    } else {
+      setPlaces([]);
     }
     setLoading(false);
+  }
+
+  async function handleRemoveFavorite(placeId: string, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!userId) return;
+
+    try {
+      const { error } = await supabase
+        .from("reactions")
+        .delete()
+        .eq("place_id", placeId)
+        .eq("user_id", userId)
+        .eq("reaction", "like");
+
+      if (error) {
+        console.error("Error removing favorite:", error);
+      } else {
+        // Remove from local state
+        setPlaces((prev) => prev.filter((p) => p.id !== placeId));
+        // Reload to ensure consistency
+        if (userId) {
+          await loadSavedPlaces(userId);
+        }
+      }
+    } catch (err) {
+      console.error("Remove favorite error:", err);
+    }
   }
 
   return (
@@ -166,7 +201,7 @@ export default function SavedPage() {
       />
 
       <div className="flex-1 pt-[80px] pb-20">
-        <div className="px-4 lg:px-8">
+        <div className="px-6 lg:px-8">
           {loading ? (
             <div className="text-center py-16">
               <div className="text-sm text-[#6b7d47]/60">Loading…</div>
@@ -180,7 +215,12 @@ export default function SavedPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {places.map((place) => (
                 <div key={place.id} className="h-full">
-                  <PlaceCard place={place} />
+                  <PlaceCard 
+                    place={place}
+                    userAccess={access}
+                    userId={userId}
+                    onRemoveFavorite={handleRemoveFavorite}
+                  />
                 </div>
               ))}
             </div>

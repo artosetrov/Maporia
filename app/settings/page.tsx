@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
-import { DEFAULT_CITY } from "../constants";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -49,7 +48,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#faf9f7] flex flex-col">
+    <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
       <TopBar
         showSearchBar={true}
         searchValue={""}
@@ -72,15 +71,15 @@ export default function SettingsPage() {
       />
 
       <div className="flex-1 pt-[80px] pb-20">
-        <div className="mx-auto max-w-md px-4">
-          <div className="space-y-4">
+        <div className="mx-auto max-w-md px-6">
+          <div className="space-y-6">
             {/* Account Section */}
             <div>
-              <div className="text-xs font-medium text-[#6b7d47] mb-3">Account</div>
-              <div className="rounded-2xl bg-white border border-[#6b7d47]/10 p-4 space-y-3">
+              <div className="text-xs font-medium text-[#6F7A5A] mb-3 uppercase tracking-wide">Account</div>
+              <div className="rounded-2xl bg-white border border-[#ECEEE4] p-5 space-y-3">
                 <button
                   onClick={() => router.push("/profile")}
-                  className="w-full text-left text-sm text-[#2d2d2d] hover:text-[#6b7d47] transition"
+                  className="w-full text-left text-sm text-[#1F2A1F] hover:text-[#8F9E4F] transition-colors"
                 >
                   Edit profile
                 </button>
@@ -89,9 +88,9 @@ export default function SettingsPage() {
 
             {/* Preferences Section */}
             <div>
-              <div className="text-xs font-medium text-[#6b7d47] mb-3">Preferences</div>
-              <div className="rounded-2xl bg-white border border-[#6b7d47]/10 p-4 space-y-3">
-                <div className="text-sm text-[#6b7d47]/60">More options coming soon</div>
+              <div className="text-xs font-medium text-[#6F7A5A] mb-3 uppercase tracking-wide">Preferences</div>
+              <div className="rounded-2xl bg-white border border-[#ECEEE4] p-5 space-y-3">
+                <div className="text-sm text-[#A8B096]">More options coming soon</div>
               </div>
             </div>
 
@@ -99,7 +98,7 @@ export default function SettingsPage() {
             <div className="pt-4">
               <button
                 onClick={handleLogout}
-                className="w-full rounded-xl bg-white border border-red-200 text-red-600 px-4 py-3 text-sm font-medium hover:bg-red-50 transition"
+                className="w-full rounded-xl bg-white border border-[#ECEEE4] text-[#C96A5B] px-5 py-3 text-sm font-medium hover:bg-[#FAFAF7] transition-colors"
               >
                 Logout
               </button>

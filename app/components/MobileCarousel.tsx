@@ -7,6 +7,7 @@ interface MobileCarouselProps {
   title: string;
   height?: string; // e.g., "56vh"
   onShowAll?: () => void;
+  onPhotoClick?: (index: number) => void;
 }
 
 export default function MobileCarousel({
@@ -14,6 +15,7 @@ export default function MobileCarousel({
   title,
   height = "56vh",
   onShowAll,
+  onPhotoClick,
 }: MobileCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -92,37 +94,29 @@ export default function MobileCarousel({
             key={index}
             className="w-full h-full flex-shrink-0 relative"
           >
-            <img
-              src={photo}
-              alt={`${title} - Photo ${index + 1}`}
-              className="w-full h-full object-cover"
-            />
+            <button
+              onClick={() => onPhotoClick?.(index)}
+              className="w-full h-full"
+            >
+              <img
+                src={photo}
+                alt={`${title} - Photo ${index + 1}`}
+                className="w-full h-full object-cover"
+              />
+            </button>
           </div>
         ))}
       </div>
 
-      {/* Navigation arrows (if more than 1 photo) */}
+      {/* Photo counter badge (e.g., "1/19") */}
       {photos.length > 1 && (
-        <>
-          <button
-            onClick={goToPrevious}
-            className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-white/90 hover:bg-white shadow-lg flex items-center justify-center z-10"
-            aria-label="Previous photo"
-          >
-            <svg className="w-4 h-4 text-[#2d2d2d]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <button
-            onClick={goToNext}
-            className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-white/90 hover:bg-white shadow-lg flex items-center justify-center z-10"
-            aria-label="Next photo"
-          >
-            <svg className="w-4 h-4 text-[#2d2d2d]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </>
+        <div className="absolute bottom-12 right-6 z-30 pointer-events-none">
+          <div className="bg-black/70 backdrop-blur-sm rounded-lg px-3 py-1.5 badge-shadow">
+            <span className="text-white text-sm font-medium">
+              {currentIndex + 1}/{photos.length}
+            </span>
+          </div>
+        </div>
       )}
 
       {/* Pagination dots */}
@@ -143,15 +137,6 @@ export default function MobileCarousel({
         </div>
       )}
 
-      {/* Show all photos button */}
-      {onShowAll && photos.length > 1 && (
-        <button
-          onClick={onShowAll}
-          className="absolute bottom-3 right-3 px-3 py-1.5 rounded-lg bg-white/90 backdrop-blur-sm text-sm font-medium text-[#2d2d2d] hover:bg-white transition shadow-sm z-10"
-        >
-          Show all {photos.length}
-        </button>
-      )}
     </div>
   );
 }

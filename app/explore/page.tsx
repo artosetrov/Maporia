@@ -9,10 +9,13 @@ import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import PlaceCard from "../components/PlaceCard";
 import Pill from "../components/Pill";
+import FavoriteIcon from "../components/FavoriteIcon";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../config/googleMaps";
 import { supabase } from "../lib/supabase";
 import { DEFAULT_CITY } from "../constants";
 import { LAYOUT_BREAKPOINTS, LAYOUT_CONFIG } from "../config/layout";
+import { useUserAccess } from "../hooks/useUserAccess";
+import { isPlacePremium } from "../lib/access";
 
 type Place = {
   id: string;
@@ -75,6 +78,9 @@ export default function ExplorePage() {
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+
+  // User access for premium filtering
+  const { loading: accessLoading, access } = useUserAccess();
 
   // search + filters - инициализируем из query params
   const [searchDraft, setSearchDraft] = useState("");
@@ -183,6 +189,15 @@ export default function ExplorePage() {
     if (selectedTag) {
       query = query.contains("tags", [selectedTag]);
     }
+
+    // TODO: Filter premium places if schema has premium field
+    // If user doesn't have premium access, filter out premium places
+    // if (!access.hasPremium) {
+    //   query = query.eq("is_premium", false);
+    //   // OR query = query.neq("access_level", "premium");
+    //   // OR query = query.eq("premium_only", false);
+    // }
+    // For now, we filter client-side after fetching
 
     const { data, error } = await query;
     console.log("places data", data, error);
@@ -532,6 +547,9 @@ export default function ExplorePage() {
                     >
                       <PlaceCard
                         place={p}
+                        userAccess={access}
+                        userId={userId}
+                        isFavorite={isFavorite}
                         favoriteButton={
                           userId ? (
                             <button
@@ -540,28 +558,16 @@ export default function ExplorePage() {
                                 e.stopPropagation();
                                 toggleFavorite(p.id, e);
                               }}
-                              className={`h-8 w-8 rounded-full bg-white border border-[#6b7d47]/20 hover:bg-[#f5f4f2] hover:border-[#6b7d47]/40 flex items-center justify-center transition shadow-sm ${
-                                isFavorite ? "bg-[#6b7d47]/10 border-[#6b7d47]/30" : ""
+                              className={`h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors ${
+                                isFavorite ? "bg-[#FAFAF7] border-[#8F9E4F]" : ""
                               }`}
                               title={isFavorite ? "Remove from favorites" : "Add to favorites"}
                             >
-                              <svg
-                                className={`w-4 h-4 transition-transform ${
-                                  isFavorite 
-                                    ? "text-[#6b7d47] scale-110" 
-                                    : "text-[#6b7d47]/60"
-                                }`}
-                                fill={isFavorite ? "currentColor" : "none"}
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                                />
-                              </svg>
+                              <FavoriteIcon 
+                                isActive={isFavorite} 
+                                size={16}
+                                className={isFavorite ? "scale-110" : ""}
+                              />
                             </button>
                           ) : undefined
                         }
@@ -654,6 +660,9 @@ export default function ExplorePage() {
                     <div key={p.id} className="transition-all relative z-0">
                       <PlaceCard
                         place={p}
+                        userAccess={access}
+                        userId={userId}
+                        isFavorite={isFavorite}
                         favoriteButton={
                           userId ? (
                             <button
@@ -662,28 +671,16 @@ export default function ExplorePage() {
                                 e.stopPropagation();
                                 toggleFavorite(p.id, e);
                               }}
-                              className={`h-8 w-8 rounded-full bg-white border border-gray-200 hover:bg-gray-50 flex items-center justify-center transition shadow-sm ${
-                                isFavorite ? "bg-[#6b7d47]/10 border-[#6b7d47]/30" : ""
+                              className={`h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors ${
+                                isFavorite ? "bg-[#FAFAF7] border-[#8F9E4F]" : ""
                               }`}
                               title={isFavorite ? "Remove from favorites" : "Add to favorites"}
                             >
-                              <svg
-                                className={`w-4 h-4 transition-transform ${
-                                  isFavorite 
-                                    ? "text-[#6b7d47] scale-110" 
-                                    : "text-gray-400"
-                                }`}
-                                fill={isFavorite ? "currentColor" : "none"}
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                                />
-                              </svg>
+                              <FavoriteIcon 
+                                isActive={isFavorite} 
+                                size={16}
+                                className={isFavorite ? "scale-110" : ""}
+                              />
                             </button>
                           ) : undefined
                         }
@@ -705,7 +702,7 @@ export default function ExplorePage() {
 
         {/* Tablet: List only (600px - 899px) */}
         <div className="hidden min-[600px]:max-[899px]:block h-full">
-          <div className="max-w-[680px] mx-auto px-4">
+          <div className="max-w-[680px] mx-auto px-6">
             {/* Search and Filter Bar */}
             <div className="sticky top-[64px] z-30 bg-[#faf9f7] pt-4 pb-3 border-b border-gray-200 mb-4">
               <div className="flex items-center gap-2 mb-2">
@@ -754,6 +751,9 @@ export default function ExplorePage() {
                     <div key={p.id} className="transition-all relative z-0">
                       <PlaceCard
                         place={p}
+                        userAccess={access}
+                        userId={userId}
+                        isFavorite={isFavorite}
                         favoriteButton={
                           userId ? (
                             <button
@@ -762,28 +762,16 @@ export default function ExplorePage() {
                                 e.stopPropagation();
                                 toggleFavorite(p.id, e);
                               }}
-                              className={`h-8 w-8 rounded-full bg-white border border-gray-200 hover:bg-gray-50 flex items-center justify-center transition shadow-sm ${
-                                isFavorite ? "bg-[#6b7d47]/10 border-[#6b7d47]/30" : ""
+                              className={`h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors ${
+                                isFavorite ? "bg-[#FAFAF7] border-[#8F9E4F]" : ""
                               }`}
                               title={isFavorite ? "Remove from favorites" : "Add to favorites"}
                             >
-                              <svg
-                                className={`w-4 h-4 transition-transform ${
-                                  isFavorite 
-                                    ? "text-[#6b7d47] scale-110" 
-                                    : "text-gray-400"
-                                }`}
-                                fill={isFavorite ? "currentColor" : "none"}
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                                />
-                              </svg>
+                              <FavoriteIcon 
+                                isActive={isFavorite} 
+                                size={16}
+                                className={isFavorite ? "scale-110" : ""}
+                              />
                             </button>
                           ) : undefined
                         }
@@ -806,7 +794,7 @@ export default function ExplorePage() {
         {/* Mobile: List or Map view (< 600px) */}
         <div className="min-[600px]:hidden h-full flex flex-col transition-opacity duration-300">
           {/* Search and Filter for Mobile */}
-          <div className="sticky top-[64px] z-30 bg-[#faf9f7] pb-4 -mt-4 px-4 flex-shrink-0">
+          <div className="sticky top-[64px] z-30 bg-[#faf9f7] pb-4 -mt-4 px-6 flex-shrink-0">
             <div className="flex items-center gap-2 mb-2">
               <div className="relative flex-1">
                 <input
@@ -926,6 +914,8 @@ export default function ExplorePage() {
                           return (
                             <PlaceCard
                               place={selectedPlace}
+                              userAccess={access}
+                              userId={userId}
                               favoriteButton={
                                 userId ? (
                                   <button
@@ -938,23 +928,11 @@ export default function ExplorePage() {
                                     }`}
                                     title={isFavorite ? "Remove from favorites" : "Add to favorites"}
                                   >
-                                    <svg
-                                      className={`w-4 h-4 transition-transform ${
-                                        isFavorite 
-                                          ? "text-[#6b7d47] scale-110" 
-                                          : "text-gray-400"
-                                      }`}
-                                      fill={isFavorite ? "currentColor" : "none"}
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                                      />
-                                    </svg>
+                                    <FavoriteIcon 
+                                      isActive={isFavorite} 
+                                      size={16}
+                                      className={isFavorite ? "scale-110" : ""}
+                                    />
                                   </button>
                                 ) : undefined
                               }
@@ -992,6 +970,7 @@ export default function ExplorePage() {
                                 >
                                   <PlaceCard
                                     place={p}
+                                    isFavorite={isFavorite}
                                     favoriteButton={
                                       userId ? (
                                         <button
@@ -1000,28 +979,16 @@ export default function ExplorePage() {
                                             e.stopPropagation();
                                             toggleFavorite(p.id, e);
                                           }}
-                                          className={`h-8 w-8 rounded-full bg-white border border-gray-200 hover:bg-gray-50 flex items-center justify-center transition shadow-sm ${
-                                            isFavorite ? "bg-[#6b7d47]/10 border-[#6b7d47]/30" : ""
+                                          className={`h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors ${
+                                            isFavorite ? "bg-[#FAFAF7] border-[#8F9E4F]" : ""
                                           }`}
                                           title={isFavorite ? "Remove from favorites" : "Add to favorites"}
                                         >
-                                          <svg
-                                            className={`w-4 h-4 transition-transform ${
-                                              isFavorite 
-                                                ? "text-[#6b7d47] scale-110" 
-                                                : "text-gray-400"
-                                            }`}
-                                            fill={isFavorite ? "currentColor" : "none"}
-                                            stroke="currentColor"
-                                            viewBox="0 0 24 24"
-                                          >
-                                            <path
-                                              strokeLinecap="round"
-                                              strokeLinejoin="round"
-                                              strokeWidth={2}
-                                              d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                                            />
-                                          </svg>
+                                          <FavoriteIcon 
+                                            isActive={isFavorite} 
+                                            size={16}
+                                            className={isFavorite ? "scale-110" : ""}
+                                          />
                                         </button>
                                       ) : undefined
                                     }
@@ -1045,7 +1012,7 @@ export default function ExplorePage() {
               </div>
             </>
           ) : (
-            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-4 pb-24">
+            <div className="flex-1 overflow-y-auto scrollbar-hide px-6 pt-4 pb-24">
               {loading ? (
                 <Empty text="Loading…" />
               ) : places.length === 0 ? (
@@ -1058,6 +1025,9 @@ export default function ExplorePage() {
                       <PlaceCard
                         key={p.id}
                         place={p}
+                        userAccess={access}
+                        userId={userId}
+                        isFavorite={isFavorite}
                         favoriteButton={
                           userId ? (
                             <button
@@ -1065,28 +1035,16 @@ export default function ExplorePage() {
                                 e.preventDefault();
                                 toggleFavorite(p.id, e);
                               }}
-                              className={`h-8 w-8 rounded-full bg-white border border-gray-200 hover:bg-gray-50 flex items-center justify-center transition shadow-sm ${
-                                isFavorite ? "bg-[#6b7d47]/10 border-[#6b7d47]/30" : ""
+                              className={`h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors ${
+                                isFavorite ? "bg-[#FAFAF7] border-[#8F9E4F]" : ""
                               }`}
                               title={isFavorite ? "Remove from favorites" : "Add to favorites"}
                             >
-                              <svg
-                                className={`w-4 h-4 transition-transform ${
-                                  isFavorite 
-                                    ? "text-[#6b7d47] scale-110" 
-                                    : "text-gray-400"
-                                }`}
-                                fill={isFavorite ? "currentColor" : "none"}
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                                />
-                              </svg>
+                              <FavoriteIcon 
+                                isActive={isFavorite} 
+                                size={16}
+                                className={isFavorite ? "scale-110" : ""}
+                              />
                             </button>
                           ) : undefined
                         }
@@ -1117,7 +1075,6 @@ export default function ExplorePage() {
         </div>
       </div>
 
-      <BottomNav />
 
       {/* FILTER MODAL */}
       {filterOpen && (
@@ -1255,6 +1212,8 @@ export default function ExplorePage() {
           </div>
         </div>
       )}
+
+      <BottomNav />
     </main>
   );
 }
@@ -1855,23 +1814,11 @@ function MapView({
                                     title={favorites?.has(place.id) ? "Remove from favorites" : "Add to favorites"}
                                     aria-label={favorites?.has(place.id) ? "Remove from favorites" : "Add to favorites"}
                                   >
-                                    <svg
-                                      className={`w-4 h-4 transition-transform ${
-                                        favorites?.has(place.id)
-                                          ? "text-[#6b7d47] scale-110"
-                                          : "text-[#6b7d47]/60"
-                                      }`}
-                                      fill={favorites?.has(place.id) ? "currentColor" : "none"}
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                                      />
-                                    </svg>
+                                    <FavoriteIcon 
+                                      isActive={favorites?.has(place.id) || false} 
+                                      size={16}
+                                      className={favorites?.has(place.id) ? "scale-110" : ""}
+                                    />
                                   </button>
                                 )}
                                 <button

@@ -5,9 +5,14 @@ export type HomeSectionFilter = {
   tag?: string;
   sort?: "popular" | "newest";
   daysAgo?: number; // для "New this week" - created_at >= now - daysAgo
+  recentlyViewed?: boolean; // для "Recently viewed" - загружает из localStorage
 };
 
 export const HOME_SECTIONS: HomeSectionFilter[] = [
+  {
+    title: "Recently viewed",
+    recentlyViewed: true,
+  },
   {
     title: "Popular in Fort Lauderdale",
     city: "Fort Lauderdale",

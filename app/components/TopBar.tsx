@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabase";
 import { CATEGORIES, DEFAULT_CITY } from "../constants";
 import SearchBar from "./SearchBar";
 import SearchModal from "./SearchModal";
+import FavoriteIcon from "./FavoriteIcon";
 
 type TopBarProps = {
   // Search bar props (only for /map page) - Airbnb style
@@ -23,6 +24,15 @@ type TopBarProps = {
   userAvatar?: string | null;
   userDisplayName?: string | null;
   userEmail?: string | null;
+  // Custom props for profile page
+  showBackButton?: boolean;
+  showAddPlaceButton?: boolean;
+  onBackClick?: () => void;
+  // Custom props for place page
+  onShareClick?: () => void;
+  onFavoriteClick?: () => void;
+  isFavorite?: boolean;
+  favoriteLoading?: boolean;
 };
 
 function initialsFromEmail(email?: string | null) {
@@ -54,6 +64,13 @@ export default function TopBar({
   userAvatar,
   userDisplayName,
   userEmail,
+  showBackButton,
+  showAddPlaceButton,
+  onBackClick,
+  onShareClick,
+  onFavoriteClick,
+  isFavorite,
+  favoriteLoading,
 }: TopBarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -113,7 +130,8 @@ export default function TopBar({
   };
 
   const isHome = pathname === "/";
-  const showBackButton = !isHome;
+  const shouldShowBackButton = showBackButton !== undefined ? showBackButton : !isHome;
+  const shouldShowAddPlace = showAddPlaceButton !== undefined ? showAddPlaceButton : isAuthenticated;
 
   return (
     <>
@@ -129,58 +147,128 @@ export default function TopBar({
         selectedCity={selectedCity}
       />
 
-      <div className="fixed top-0 left-0 right-0 z-40 bg-[#faf9f7]/95 backdrop-blur-sm border-b border-[#6b7d47]/10">
+      <div className="fixed top-0 left-0 right-0 z-40 bg-white border-b border-[#ECEEE4]">
         {/* Mobile TopBar (< 600px) */}
-        <div className="max-[600px]:block hidden">
+        <div className="max-[600px]:block hidden relative">
           <div className="px-4 pt-safe-top pt-3 pb-3">
             <div className="flex items-center gap-3">
-              {/* Left: Back button (hidden on Home) */}
-              {showBackButton ? (
+              {/* Left: Back button */}
+              {shouldShowBackButton ? (
                 <button
-                  onClick={() => router.push("/")}
-                  className="w-10 h-10 rounded-full hover:bg-[#f5f4f2] transition flex items-center justify-center flex-shrink-0"
+                  onClick={() => {
+                    if (onBackClick) {
+                      onBackClick();
+                    } else {
+                      router.push("/");
+                    }
+                  }}
+                  className="w-10 h-10 rounded-full hover:bg-[#FAFAF7] transition-colors flex items-center justify-center flex-shrink-0"
                   aria-label="Back to Home"
                 >
-                  <svg className="w-6 h-6 text-[#2d2d2d]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-6 h-6 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
-              ) : (
-                <div className="w-10" />
-              )}
+              ) : null}
 
-              {/* Center: Search pill (clickable) */}
-              <button
-                onClick={() => setSearchModalOpen(true)}
-                className="flex-1 min-w-0 bg-white rounded-full shadow-sm border border-[#6b7d47]/10 hover:shadow-md transition-shadow px-4 py-2.5 text-left"
-              >
-                <div className="text-sm font-medium text-[#2d2d2d] truncate">
-                  {selectedCity || "Anywhere"}
+              {/* Place page: Share and Favorite buttons on the right */}
+              {pathname.startsWith("/id/") && onShareClick && onFavoriteClick ? (
+                <div className="flex items-center gap-2 ml-auto">
+                  {/* Share button */}
+                  <button
+                    onClick={onShareClick}
+                    className="w-10 h-10 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] transition-colors flex items-center justify-center flex-shrink-0"
+                    aria-label="Share"
+                  >
+                    <svg className="w-5 h-5 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                    </svg>
+                  </button>
+                  {/* Favorite button */}
+                  <button
+                    onClick={onFavoriteClick}
+                    disabled={favoriteLoading}
+                    className={`w-10 h-10 rounded-full border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center flex-shrink-0 ${
+                      favoriteLoading ? "opacity-50" : ""
+                    }`}
+                    aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                  >
+                    <FavoriteIcon isActive={isFavorite} size={20} />
+                  </button>
                 </div>
-                {activeFiltersSummary && (
-                  <div className="text-xs text-[#6b7d47]/60 truncate mt-0.5">
-                    {activeFiltersSummary}
-                  </div>
-                )}
-              </button>
+              ) : (
+                <>
+                  {/* Logo - left of search (hidden on home page and map page) */}
+                  {pathname !== "/profile" && pathname !== "/" && pathname !== "/map" && !pathname.startsWith("/id/") && (
+                    <Link href="/" className="flex-shrink-0 w-10 h-10 rounded-full bg-[#8F9E4F] flex items-center justify-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none" className="h-7 w-7">
+                        <g fill="white" fillRule="evenodd" clipRule="evenodd">
+                          <path d="M512 132C391 132 292 231 292 352C292 442 346 516 420 570C458 598 476 636 493 674L512 716L531 674C548 636 566 598 604 570C678 516 732 442 732 352C732 231 633 132 512 132ZM512 232C595 232 662 299 662 382C662 465 595 532 512 532C429 532 362 465 362 382C362 299 429 232 512 232Z"/>
+                          <path d="M232 604C232 574 256 550 286 550L338 550C358 550 376 560 388 576L512 740L636 576C648 560 666 550 686 550L738 550C768 550 792 574 792 604L792 836C792 866 768 890 738 890L706 890C676 890 652 866 652 836L652 702L552 834C542 848 527 856 512 856C497 856 482 848 472 834L372 702L372 836C372 866 348 890 318 890L286 890C256 890 232 866 232 836Z"/>
+                        </g>
+                      </svg>
+                    </Link>
+                  )}
 
-              {/* Right: Filter button */}
-              <button
-                onClick={onFiltersClick}
-                className="w-10 h-10 rounded-full bg-white border border-[#6b7d47]/10 hover:bg-[#f5f4f2] transition flex items-center justify-center flex-shrink-0 relative"
-                aria-label="Filters"
-              >
-                <svg className="w-5 h-5 text-[#2d2d2d]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                </svg>
-                {activeFiltersCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#6b7d47] text-white text-xs font-medium flex items-center justify-center">
-                    {activeFiltersCount}
-                  </span>
-                )}
-              </button>
+                  {/* Center: Search pill (clickable) - hidden on profile page and place page */}
+                  {pathname !== "/profile" && !pathname.startsWith("/id/") && (
+                    <button
+                      onClick={() => setSearchModalOpen(true)}
+                      className={`flex-1 min-w-0 bg-white rounded-full border border-[#E5E8DB] hover:border-[#8F9E4F] transition-colors px-4 py-2.5 flex items-center gap-3 ${pathname === "/" ? "justify-center" : "text-left"}`}
+                    >
+                      {pathname === "/" && (
+                        <svg className="w-5 h-5 text-[#A8B096] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      )}
+                      <div className={`text-sm font-medium text-[#1F2A1F] ${pathname === "/" ? "" : "truncate"}`}>
+                        {pathname === "/" ? "Start to your search" : (selectedCity || "Anywhere")}
+                      </div>
+                      {activeFiltersSummary && pathname !== "/" && (
+                        <div className="text-xs text-[#6F7A5A] truncate mt-0.5">
+                          {activeFiltersSummary}
+                        </div>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Right: Filter button (other pages, not profile, not home, not place page) */}
+                  {pathname !== "/profile" && pathname !== "/" && !pathname.startsWith("/id/") && (
+                    <button
+                      onClick={onFiltersClick}
+                      className="w-10 h-10 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] transition-colors flex items-center justify-center flex-shrink-0 relative"
+                      aria-label="Filters"
+                    >
+                      <svg className="w-5 h-5 text-[#1F2A1F]" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <line x1="2" y1="6" x2="18" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="2" y1="10" x2="14" y2="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="2" y1="14" x2="10" y2="14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                      {activeFiltersCount > 0 && (
+                        <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#8F9E4F] text-white text-xs font-medium flex items-center justify-center">
+                          {activeFiltersCount}
+                        </span>
+                      )}
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
+          
+          {/* Add Place button - fixed in top right corner (on profile page) */}
+          {pathname === "/profile" && shouldShowAddPlace && (
+            <Link
+                href="/add"
+                onClick={() => { if (navigator.vibrate) navigator.vibrate(10); }}
+                className="absolute top-safe-top top-3 right-4 w-10 h-10 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] transition-colors flex items-center justify-center z-10"
+                aria-label="Add new place"
+              >
+                <svg className="w-5 h-5 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </Link>
+          )}
         </div>
 
         {/* Desktop TopBar (>= 600px) */}
@@ -211,50 +299,32 @@ export default function TopBar({
             </div>
           </Link>
 
-          {/* Center: SearchBar (on /map) or Tabs (other pages) */}
-          {showSearchBar ? (
-            <>
-              {/* Desktop SearchBar */}
-              <div className="hidden min-[1120px]:flex items-center justify-center flex-1 px-4">
-                <SearchBar
-                  selectedCity={selectedCity}
-                  onCityChange={onCityChange}
-                  searchValue={searchValue}
-                  onSearchChange={onSearchChange || (() => {})}
-                  onFiltersClick={onFiltersClick || (() => {})}
-                  activeFiltersCount={activeFiltersCount}
-                />
-              </div>
-              {/* Mobile SearchBar */}
-              <div className="flex min-[1120px]:hidden items-center flex-1 px-2">
-                <SearchBar
-                  selectedCity={selectedCity}
-                  onCityChange={onCityChange}
-                  searchValue={searchValue}
-                  onSearchChange={onSearchChange || (() => {})}
-                  onFiltersClick={onFiltersClick || (() => {})}
-                  activeFiltersCount={activeFiltersCount}
-                  isMobile={true}
-                />
-              </div>
-            </>
-          ) : (
-            <div className="hidden min-[900px]:flex items-center gap-1 flex-1 justify-center">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`px-4 py-2 text-sm font-medium transition rounded-lg ${
-                    isActive(item.href)
-                      ? "text-[#6b7d47] bg-[#6b7d47]/10"
-                      : "text-[#6b7d47]/60 hover:text-[#6b7d47] hover:bg-[#f5f4f2]"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
+          {/* Center: SearchBar (always on desktop and tablet) */}
+          <>
+            {/* Desktop SearchBar */}
+            <div className="hidden min-[1120px]:flex items-center justify-center flex-1 px-4">
+              <SearchBar
+                selectedCity={selectedCity}
+                onCityChange={onCityChange}
+                searchValue={searchValue}
+                onSearchChange={onSearchChange || (() => {})}
+                onFiltersClick={onFiltersClick || (() => {})}
+                activeFiltersCount={activeFiltersCount}
+              />
             </div>
-          )}
+            {/* Tablet SearchBar */}
+            <div className="flex min-[1120px]:hidden min-[900px]:flex items-center flex-1 px-2">
+              <SearchBar
+                selectedCity={selectedCity}
+                onCityChange={onCityChange}
+                searchValue={searchValue}
+                onSearchChange={onSearchChange || (() => {})}
+                onFiltersClick={onFiltersClick || (() => {})}
+                activeFiltersCount={activeFiltersCount}
+                isMobile={true}
+              />
+            </div>
+          </>
 
           {/* Right: Auth area */}
           <div className="flex-shrink-0 flex items-center gap-3 ml-auto">
@@ -263,7 +333,7 @@ export default function TopBar({
               <Link
                 href="/add"
                 onClick={() => { if (navigator.vibrate) navigator.vibrate(10); }}
-                className="h-10 w-10 rounded-xl flex items-center justify-center text-[#556036] hover:bg-[#f5f4f2] transition"
+                className="h-10 w-10 rounded-xl flex items-center justify-center text-[#8F9E4F] hover:bg-[#FAFAF7] transition-colors"
                 aria-label="Add new place"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -275,7 +345,7 @@ export default function TopBar({
             {!isAuthenticated && (
               <Link
                 href="/auth"
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#6b7d47] text-white text-sm font-medium hover:bg-[#556036] transition"
+                className="flex items-center gap-2 px-5 py-2.5 h-11 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:brightness-110 active:brightness-90 transition-all"
               >
                 Login
               </Link>
@@ -293,9 +363,9 @@ export default function TopBar({
                     }
                     setMenuOpen(!menuOpen);
                   }}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#f5f4f2] transition"
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#FAFAF7] transition-colors"
                 >
-                  <div className="w-8 h-8 rounded-full bg-[#f5f4f2] overflow-hidden flex-shrink-0 border border-[#6b7d47]/10">
+                  <div className="w-8 h-8 rounded-full bg-[#FAFAF7] overflow-hidden flex-shrink-0 border border-[#ECEEE4]">
                     {userAvatar ? (
                       <img
                         src={userAvatar}
@@ -303,12 +373,12 @@ export default function TopBar({
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <span className="text-xs font-semibold text-[#6b7d47] flex items-center justify-center h-full">
+                      <span className="text-xs font-semibold text-[#8F9E4F] flex items-center justify-center h-full">
                         {userDisplayName ? initialsFromName(userDisplayName) : initialsFromEmail(userEmail)}
                       </span>
                     )}
                   </div>
-                  <svg className="w-4 h-4 text-[#6b7d47]/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-[#A8B096]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
@@ -326,10 +396,11 @@ export default function TopBar({
                     />
                     <div
                       ref={menuRef}
-                      className="absolute bg-white rounded-2xl shadow-xl border border-[#6b7d47]/10 overflow-hidden min-w-[200px]"
+                      className="absolute bg-white rounded-2xl border border-[#ECEEE4] overflow-hidden min-w-[200px]"
                       style={{
                         top: `${menuPosition.top}px`,
                         right: `${menuPosition.right}px`,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
                       }}
                     >
                       <Link
@@ -338,7 +409,7 @@ export default function TopBar({
                           setMenuOpen(false);
                           setMenuPosition(null);
                         }}
-                        className="w-full px-4 py-3 text-left text-sm text-[#2d2d2d] hover:bg-[#f5f4f2] transition flex items-center gap-3"
+                        className="w-full px-4 py-3 text-left text-sm text-[#1F2A1F] hover:bg-[#FAFAF7] transition-colors flex items-center gap-3"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -351,7 +422,7 @@ export default function TopBar({
                           setMenuOpen(false);
                           setMenuPosition(null);
                         }}
-                        className="w-full px-4 py-3 text-left text-sm text-[#2d2d2d] hover:bg-[#f5f4f2] transition flex items-center gap-3 border-t border-[#6b7d47]/10"
+                        className="w-full px-4 py-3 text-left text-sm text-[#1F2A1F] hover:bg-[#FAFAF7] transition-colors flex items-center gap-3 border-t border-[#ECEEE4]"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -364,11 +435,9 @@ export default function TopBar({
                           setMenuOpen(false);
                           setMenuPosition(null);
                         }}
-                        className="w-full px-4 py-3 text-left text-sm text-[#2d2d2d] hover:bg-[#f5f4f2] transition flex items-center gap-3 border-t border-[#6b7d47]/10"
+                        className="w-full px-4 py-3 text-left text-sm text-[#1F2A1F] hover:bg-[#FAFAF7] transition-colors flex items-center gap-3 border-t border-[#ECEEE4]"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                        </svg>
+                        <FavoriteIcon isActive={true} size={16} />
                         Saved
                       </Link>
                       <Link
@@ -377,7 +446,7 @@ export default function TopBar({
                           setMenuOpen(false);
                           setMenuPosition(null);
                         }}
-                        className="w-full px-4 py-3 text-left text-sm text-[#2d2d2d] hover:bg-[#f5f4f2] transition flex items-center gap-3 border-t border-[#6b7d47]/10"
+                        className="w-full px-4 py-3 text-left text-sm text-[#1F2A1F] hover:bg-[#FAFAF7] transition-colors flex items-center gap-3 border-t border-[#ECEEE4]"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -391,7 +460,7 @@ export default function TopBar({
                           setMenuPosition(null);
                           handleLogout();
                         }}
-                        className="w-full px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50 transition flex items-center gap-3 border-t border-[#6b7d47]/10"
+                        className="w-full px-4 py-3 text-left text-sm text-[#C96A5B] hover:bg-[#FAFAF7] transition-colors flex items-center gap-3 border-t border-[#ECEEE4]"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -406,9 +475,9 @@ export default function TopBar({
           </div>
         </div>
 
-            {/* Mobile Search Bar (on /map, tablet) */}
+            {/* Mobile Search Bar (only on mobile, not tablet) */}
             {showSearchBar && (
-              <div className="min-[1120px]:hidden mt-3">
+              <div className="min-[900px]:hidden mt-3">
                 <SearchBar
                   selectedCity={selectedCity}
                   onCityChange={onCityChange}

@@ -153,13 +153,14 @@ export default function FiltersModal({
       />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-[860px] min-[900px]:max-w-[980px] max-h-[80vh] flex flex-col mx-4">
+      <div className="relative bg-white rounded-2xl w-full max-w-[860px] min-[900px]:max-w-[980px] max-h-[80vh] flex flex-col mx-4 border border-[#ECEEE4]"
+           style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#6b7d47]/10">
-          <h2 className="text-xl font-semibold text-[#2d2d2d]">Filters</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#ECEEE4]">
+          <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F]">Filters</h2>
           <button
             onClick={handleClose}
-            className="w-8 h-8 rounded-full hover:bg-[#f5f4f2] transition flex items-center justify-center text-[#6b7d47]/60"
+            className="w-8 h-8 rounded-full hover:bg-[#FAFAF7] transition-colors flex items-center justify-center text-[#A8B096]"
             aria-label="Close"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -172,7 +173,7 @@ export default function FiltersModal({
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8">
           {/* Vibe / Emotions Section */}
           <div>
-            <h3 className="text-sm font-semibold text-[#2d2d2d] mb-4">Vibe / Emotions</h3>
+            <h3 className="text-sm font-semibold text-[#1F2A1F] mb-4">Vibe / Emotions</h3>
             <div className="flex flex-wrap gap-2">
               {VIBES.map((vibe) => {
                 const isSelected = draftFilters.vibes.includes(vibe);
@@ -180,10 +181,10 @@ export default function FiltersModal({
                   <button
                     key={vibe}
                     onClick={() => handleToggleVibe(vibe)}
-                    className={`px-4 py-2 rounded-full border-2 transition ${
+                    className={`px-4 py-2 rounded-full border-2 transition-colors ${
                       isSelected
-                        ? "border-[#6b7d47] bg-[#6b7d47]/10 text-[#6b7d47] font-medium"
-                        : "border-[#6b7d47]/20 bg-white text-[#2d2d2d] hover:border-[#6b7d47]/40 hover:bg-[#f5f4f2]"
+                        ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#8F9E4F] font-medium"
+                        : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
                     }`}
                   >
                     <span className="text-sm">{vibe}</span>
@@ -195,7 +196,7 @@ export default function FiltersModal({
 
           {/* Categories Section */}
           <div>
-            <h3 className="text-sm font-semibold text-[#2d2d2d] mb-4">Category</h3>
+            <h3 className="text-sm font-semibold text-[#1F2A1F] mb-4">Category</h3>
             <div className="grid grid-cols-2 min-[600px]:grid-cols-3 min-[900px]:grid-cols-4 gap-3">
               {CATEGORIES.map((category) => {
                 const isSelected = draftFilters.categories.includes(category);
@@ -203,10 +204,10 @@ export default function FiltersModal({
                   <button
                     key={category}
                     onClick={() => handleToggleCategory(category)}
-                    className={`px-4 py-3 rounded-xl border-2 transition text-left ${
+                    className={`px-4 py-3 rounded-xl border-2 transition-colors text-left ${
                       isSelected
-                        ? "border-[#6b7d47] bg-[#6b7d47]/10 text-[#6b7d47] font-medium"
-                        : "border-[#6b7d47]/20 bg-white text-[#2d2d2d] hover:border-[#6b7d47]/40 hover:bg-[#f5f4f2]"
+                        ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#8F9E4F] font-medium"
+                        : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
                     }`}
                   >
                     <span className="text-sm">{category}</span>
@@ -218,7 +219,7 @@ export default function FiltersModal({
 
           {/* Sort Section */}
           <div>
-            <h3 className="text-sm font-semibold text-[#2d2d2d] mb-4">Sort</h3>
+            <h3 className="text-sm font-semibold text-[#1F2A1F] mb-4">Sort</h3>
             <div className="space-y-2">
               {SORT_OPTIONS.map((option) => {
                 const isSelected = draftFilters.sort === option.value;
@@ -226,10 +227,10 @@ export default function FiltersModal({
                   <button
                     key={option.value}
                     onClick={() => handleSortChange(option.value)}
-                    className={`w-full text-left px-4 py-3 rounded-xl border-2 transition ${
+                    className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-colors ${
                       isSelected
-                        ? "border-[#6b7d47] bg-[#6b7d47]/10 text-[#6b7d47] font-medium"
-                        : "border-[#6b7d47]/20 bg-white text-[#2d2d2d] hover:border-[#6b7d47]/40 hover:bg-[#f5f4f2]"
+                        ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#8F9E4F] font-medium"
+                        : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
                     }`}
                   >
                     <span className="text-sm">{option.label}</span>
@@ -241,20 +242,20 @@ export default function FiltersModal({
         </div>
 
         {/* Footer (sticky) */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[#6b7d47]/10 bg-white rounded-b-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-[#ECEEE4] bg-white rounded-b-2xl">
           <button
             onClick={handleClearAll}
-            className="text-sm font-medium text-[#6b7d47] hover:text-[#556036] underline transition"
+            className="text-sm font-medium text-[#8F9E4F] hover:text-[#6F7A5A] underline transition-colors"
           >
             Clear all
           </button>
           <button
             onClick={handleApply}
             disabled={!hasChanges}
-            className={`px-6 py-3 rounded-xl font-medium transition ${
+            className={`px-6 py-3 h-11 rounded-xl font-medium transition-all ${
               hasChanges
-                ? "bg-[#6b7d47] text-white hover:bg-[#556036]"
-                : "bg-[#6b7d47]/30 text-white/60 cursor-not-allowed"
+                ? "bg-[#8F9E4F] text-white hover:brightness-110 active:brightness-90"
+                : "bg-[#DADDD0] text-white cursor-not-allowed"
             }`}
           >
             {countLoading

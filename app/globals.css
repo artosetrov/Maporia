@@ -1,28 +1,131 @@
 @import "tailwindcss";
 
+/* MAPORIA BRAND SYSTEM - Design Tokens */
+
 :root {
-  --background: #faf9f7;
-  --foreground: #2d2d2d;
-  --olive-primary: #6b7d47;
+  /* Primary Colors */
+  --olive-primary: #8F9E4F;
+  --soft-sage: #C9D2A3;
+  --warm-white: #FAFAF7;
+  
+  /* Text Colors */
+  --text-primary: #1F2A1F;
+  --text-secondary: #6F7A5A;
+  --text-muted: #A8B096;
+  
+  /* State Colors */
+  --success: #7FA35C;
+  --warning: #D6B25E;
+  --error: #C96A5B;
+  --disabled-bg: #DADDD0;
+  
+  /* Borders & Backgrounds */
+  --border-light: #ECEEE4;
+  --border-input: #E5E8DB;
+  --bg-card: #FFFFFF;
+  
+  /* Legacy support (will be replaced gradually) */
+  --background: var(--warm-white);
+  --foreground: var(--text-primary);
   --olive-dark: #556036;
   --olive-light: #8a9a68;
-  --warm-white: #faf9f7;
   --soft-gray: #f5f4f2;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--warm-white);
+  --color-foreground: var(--text-primary);
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-fraunces);
 }
 
 body {
   background: var(--warm-white);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--text-primary);
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Typography - Fraunces for headings and place titles */
+.font-fraunces {
+  font-family: var(--font-fraunces), Georgia, serif;
+  letter-spacing: -0.01em;
+}
+
+/* Heading styles */
+h1, .h1 {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: 30px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+h2, .h2 {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: 22px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+@media (min-width: 600px) {
+  h1, .h1 {
+    font-size: 32px;
+  }
+  h2, .h2 {
+    font-size: 24px;
+  }
+}
+
+/* Body text - Inter */
+body, p, .body {
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.text-small {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.text-caption {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Badge shadow - единая тень для всех плашек и badge-элементов */
+/* Blur минимум 20px для всех теней */
+.badge-shadow {
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.12), 0 1px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* Переопределение стандартных теней Tailwind с blur минимум 20px */
+.shadow-sm {
+  box-shadow: 0 1px 20px rgba(0, 0, 0, 0.05) !important;
+}
+
+.shadow-md {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
+}
+
+.shadow-lg {
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
+}
+
+.shadow-xl {
+  box-shadow: 0 20px 25px rgba(0, 0, 0, 0.1) !important;
+}
+
+.shadow-2xl {
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25) !important;
 }
 
 @keyframes subtle-pulse {
@@ -99,18 +202,23 @@ button.gm-ui-hover-effect {
 
 /* Home page responsive variables */
 :root {
-  /* Mobile S (< 390px) */
-  --home-page-padding: 16px;
+  /* Mobile S (< 390px) - 2 cards visible + part of 3rd */
+  /* Width: (100vw - 48px padding - 12px gap) / 2.2 ≈ 2.2 cards visible */
+  --home-page-padding: 24px;
   --home-carousel-gap: 12px;
-  --home-card-width: 220px;
+  --home-card-width: calc((100vw - 48px - 12px) / 2.2);
+  /* Recently viewed: 3 cards visible + part of 4th on mobile */
+  --recently-viewed-card-width: calc((100vw - 48px - 12px) / 3.3);
 }
 
 @media (min-width: 390px) {
-  /* Mobile L (390-599px) */
+  /* Mobile L (390-599px) - 2 cards visible + part of 3rd */
   :root {
-    --home-page-padding: 16px;
+    --home-page-padding: 24px;
     --home-carousel-gap: 12px;
-    --home-card-width: 250px;
+    --home-card-width: calc((100vw - 48px - 12px) / 2.2);
+    /* Recently viewed: 3 cards visible + part of 4th on mobile */
+    --recently-viewed-card-width: calc((100vw - 48px - 12px) / 3.3);
   }
 }
 
@@ -132,6 +240,9 @@ button.gm-ui-hover-effect {
     --home-page-padding: 24px;
     --home-carousel-gap: 16px;
     --home-card-width: 200px;
+    /* Recently viewed: 5 cards visible on desktop */
+    /* Container: 960px, padding: 48px, available: 912px, gaps: 64px (4 gaps), cards: 848px / 5 ≈ 170px */
+    --recently-viewed-card-width: calc((960px - 48px - 64px) / 5);
   }
 }
 
@@ -143,6 +254,9 @@ button.gm-ui-hover-effect {
     --home-page-padding: 24px;
     --home-carousel-gap: 16px;
     --home-card-width: 220px;
+    /* Recently viewed: 5 cards visible on desktop */
+    /* Container: 1120px, padding: 48px, available: 1072px, gaps: 64px, cards: 1008px / 5 ≈ 202px */
+    --recently-viewed-card-width: calc((1120px - 48px - 64px) / 5);
   }
 }
 
@@ -154,6 +268,9 @@ button.gm-ui-hover-effect {
     --home-page-padding: 24px;
     --home-carousel-gap: 16px;
     --home-card-width: 185px;
+    /* Recently viewed: 5 cards visible on desktop */
+    /* Container: 1440px, padding: 48px, available: 1392px, gaps: 64px, cards: 1328px / 5 ≈ 266px */
+    --recently-viewed-card-width: calc((1440px - 48px - 64px) / 5);
   }
 }
 
@@ -165,6 +282,9 @@ button.gm-ui-hover-effect {
     --home-page-padding: 32px;
     --home-carousel-gap: 16px;
     --home-card-width: 220px;
+    /* Recently viewed: 5 cards visible on desktop */
+    /* Container: 1920px, padding: 64px, available: 1856px, gaps: 64px, cards: 1792px / 5 ≈ 358px */
+    --recently-viewed-card-width: calc((1920px - 64px - 64px) / 5);
   }
 }
 

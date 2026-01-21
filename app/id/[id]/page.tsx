@@ -6,12 +6,17 @@ import Link from "next/link";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
 import { CATEGORIES, DEFAULT_CITY } from "../../constants";
 import TopBar from "../../components/TopBar";
-import BottomNav from "../../components/BottomNav";
 import DesktopMosaic from "../../components/DesktopMosaic";
 import MobileCarousel from "../../components/MobileCarousel";
+import FiltersModal, { ActiveFilters } from "../../components/FiltersModal";
+import FavoriteIcon from "../../components/FavoriteIcon";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../../config/googleMaps";
 import { supabase } from "../../lib/supabase";
 import { PLACE_LAYOUT_CONFIG } from "../../config/placeLayout";
+import { useUserAccess } from "../../hooks/useUserAccess";
+import { isPlacePremium, canUserViewPlace } from "../../lib/access";
+import LockedPlaceOverlay from "../../components/LockedPlaceOverlay";
+import PremiumBadge from "../../components/PremiumBadge";
 
 type Place = {
   id: string;
@@ -86,8 +91,7 @@ export default function PlacePage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
 
-  const [activeSection, setActiveSection] = useState<"overview" | "photos" | "details" | "map" | "comments">("overview");
-  const [stickyNavVisible, setStickyNavVisible] = useState(false);
+  const [activeSection, setActiveSection] = useState<"overview" | "photos" | "map" | "comments">("overview");
   const [place, setPlace] = useState<Place | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState("");
@@ -107,22 +111,150 @@ export default function PlacePage() {
   const [favoritesCount, setFavoritesCount] = useState<number>(0);
   const [commentsCount, setCommentsCount] = useState<number>(0);
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
+  const [photoGalleryOpen, setPhotoGalleryOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
+    vibes: [],
+    categories: [],
+    sort: null,
+  });
+  const [galleryPhotoIndex, setGalleryPhotoIndex] = useState(0);
+  const [photoZoom, setPhotoZoom] = useState(1);
+  const [photoPosition, setPhotoPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [swipeStart, setSwipeStart] = useState<{ x: number; y: number } | null>(null);
+  const [pinchStartDistance, setPinchStartDistance] = useState<number | null>(null);
+  const galleryImageRef = useRef<HTMLImageElement>(null);
 
-  // Close modal on ESC key
+  // User access for premium checks
+  const { loading: accessLoading, access } = useUserAccess();
+
+  // Close modal on ESC key and prevent body scroll when gallery is open
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && showDescriptionModal) {
-        setShowDescriptionModal(false);
+      if (e.key === "Escape") {
+        if (photoGalleryOpen) {
+          setPhotoGalleryOpen(false);
+          setPhotoZoom(1);
+          setPhotoPosition({ x: 0, y: 0 });
+        } else if (showDescriptionModal) {
+          setShowDescriptionModal(false);
+        }
       }
     };
     window.addEventListener("keydown", handleEsc);
-    return () => window.removeEventListener("keydown", handleEsc);
-  }, [showDescriptionModal]);
+    
+    // Prevent body scroll when gallery is open
+    if (photoGalleryOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    
+    return () => {
+      window.removeEventListener("keydown", handleEsc);
+      document.body.style.overflow = '';
+    };
+  }, [photoGalleryOpen, showDescriptionModal]);
+
+  // Photo gallery handlers
+  const handleNextPhoto = () => {
+    if (allPhotos.length > 0) {
+      setGalleryPhotoIndex((prev) => (prev < allPhotos.length - 1 ? prev + 1 : 0));
+      setPhotoZoom(1);
+      setPhotoPosition({ x: 0, y: 0 });
+    }
+  };
+
+  const handlePrevPhoto = () => {
+    if (allPhotos.length > 0) {
+      setGalleryPhotoIndex((prev) => (prev > 0 ? prev - 1 : allPhotos.length - 1));
+      setPhotoZoom(1);
+      setPhotoPosition({ x: 0, y: 0 });
+    }
+  };
+
+  const handlePhotoDoubleClick = () => {
+    if (photoZoom === 1) {
+      setPhotoZoom(2);
+    } else {
+      setPhotoZoom(1);
+      setPhotoPosition({ x: 0, y: 0 });
+    }
+  };
+
+  const handleGalleryTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      // Pinch zoom start
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const distance = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY
+      );
+      setPinchStartDistance(distance);
+      setIsDragging(false);
+      setSwipeStart(null);
+    } else if (e.touches.length === 1 && photoZoom > 1) {
+      // Drag when zoomed
+      setIsDragging(true);
+      setDragStart({ x: e.touches[0].clientX - photoPosition.x, y: e.touches[0].clientY - photoPosition.y });
+      setSwipeStart(null);
+      setPinchStartDistance(null);
+    } else if (e.touches.length === 1 && photoZoom === 1) {
+      // Swipe navigation
+      setSwipeStart({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+      setIsDragging(false);
+      setPinchStartDistance(null);
+    }
+  };
+
+  const handleGalleryTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && pinchStartDistance !== null) {
+      // Pinch zoom
+      e.preventDefault();
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const distance = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY
+      );
+      const scale = distance / pinchStartDistance;
+      const newZoom = Math.max(1, Math.min(3, photoZoom * scale));
+      setPhotoZoom(newZoom);
+    } else if (isDragging && photoZoom > 1 && e.touches.length === 1) {
+      // Drag when zoomed
+      e.preventDefault();
+      const newX = e.touches[0].clientX - dragStart.x;
+      const newY = e.touches[0].clientY - dragStart.y;
+      setPhotoPosition({ x: newX, y: newY });
+    }
+  };
+
+  const handleGalleryTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length === 0 && swipeStart && photoZoom === 1 && !isDragging) {
+      // Swipe navigation
+      const touch = e.changedTouches[0];
+      const distance = swipeStart.x - touch.clientX;
+      const minSwipeDistance = 50;
+
+      if (Math.abs(distance) > minSwipeDistance) {
+        if (distance > 0) {
+          handleNextPhoto();
+        } else {
+          handlePrevPhoto();
+        }
+      }
+    }
+    setIsDragging(false);
+    setSwipeStart(null);
+    setPinchStartDistance(null);
+  };
 
   // Refs for smooth scrolling
   const overviewRef = useRef<HTMLDivElement>(null);
   const photosRef = useRef<HTMLDivElement>(null);
-  const detailsRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const commentsRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
@@ -174,28 +306,6 @@ export default function PlacePage() {
     return photos;
   }, [loadedPhotos, place?.photo_urls, place?.cover_url]);
 
-  // Sticky nav visibility on scroll
-  useEffect(() => {
-    const checkVisibility = () => {
-      if (heroRef.current) {
-        const heroBottom = heroRef.current.getBoundingClientRect().bottom;
-        setStickyNavVisible(heroBottom <= 0);
-      } else {
-        setStickyNavVisible(false);
-      }
-    };
-
-    // Check initial state
-    checkVisibility();
-
-    // Check on scroll
-    const handleScroll = () => {
-      checkVisibility();
-    };
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [place]); // Re-check when place data loads
 
   // Active section detection on scroll
   useEffect(() => {
@@ -206,8 +316,6 @@ export default function PlacePage() {
         setActiveSection("comments");
       } else if (mapRef.current && scrollPos >= mapRef.current.offsetTop - 200) {
         setActiveSection("map");
-      } else if (detailsRef.current && scrollPos >= detailsRef.current.offsetTop - 200) {
-        setActiveSection("details");
       } else if (photosRef.current && scrollPos >= photosRef.current.offsetTop - 200) {
         setActiveSection("photos");
       } else {
@@ -220,18 +328,17 @@ export default function PlacePage() {
   }, [place]);
 
   // Smooth scroll to section
-  const scrollToSection = (section: "overview" | "photos" | "details" | "map" | "comments") => {
+  const scrollToSection = (section: "overview" | "photos" | "map" | "comments") => {
     setActiveSection(section);
     const refs = {
       overview: overviewRef,
       photos: photosRef,
-      details: detailsRef,
       map: mapRef,
       comments: commentsRef,
     };
     const ref = refs[section];
     if (ref.current) {
-      const offset = stickyNavVisible ? 120 : 80; // Account for sticky nav (single row)
+      const offset = 80; // Account for top bar
       const elementPosition = ref.current.getBoundingClientRect().top;
       const offsetPosition = elementPosition + window.scrollY - offset;
       window.scrollTo({
@@ -267,6 +374,28 @@ export default function PlacePage() {
     })();
   }, []);
 
+  // Helper function to save place to recently viewed
+  function saveToRecentlyViewed(placeId: string) {
+    if (typeof window === 'undefined') return;
+    try {
+      const stored = localStorage.getItem('recentlyViewedPlaces');
+      let placeIds: string[] = stored ? JSON.parse(stored) : [];
+      
+      // Remove if already exists (to avoid duplicates)
+      placeIds = placeIds.filter((id: string) => id !== placeId);
+      
+      // Add to the beginning (most recent first)
+      placeIds.unshift(placeId);
+      
+      // Keep only last 20 places
+      placeIds = placeIds.slice(0, 20);
+      
+      localStorage.setItem('recentlyViewedPlaces', JSON.stringify(placeIds));
+    } catch (error) {
+      console.error('Error saving to recently viewed:', error);
+    }
+  }
+
   useEffect(() => {
     if (!id) return;
 
@@ -283,6 +412,9 @@ export default function PlacePage() {
       }
       const placeItem = placeData as Place;
       setPlace(placeItem);
+      
+      // Save to recently viewed
+      saveToRecentlyViewed(id);
 
       // Load creator profile
       if (placeItem.created_by) {
@@ -600,10 +732,92 @@ export default function PlacePage() {
 
   const creatorName = creatorProfile?.display_name || creatorProfile?.username || "User";
 
+  // Calculate active filters count
+  const activeFiltersCount = useMemo(() => {
+    return (activeFilters.vibes?.length || 0) + 
+           (activeFilters.categories?.length || 0) + 
+           (activeFilters.sort ? 1 : 0);
+  }, [activeFilters]);
+
+  // Handle filters
+  const handleFiltersClick = () => {
+    setFilterOpen(true);
+  };
+
+  const handleFiltersApply = (filters: ActiveFilters) => {
+    setActiveFilters(filters);
+    // Redirect to map page with filters
+    const params = new URLSearchParams();
+    if (filters.categories.length > 0) {
+      params.set("categories", filters.categories.map(c => encodeURIComponent(c)).join(','));
+    }
+    if (filters.vibes.length > 0) {
+      params.set("tags", filters.vibes.map(v => encodeURIComponent(v)).join(','));
+    }
+    if (filters.sort) {
+      params.set("sort", filters.sort);
+    }
+    router.push(`/map?${params.toString()}`);
+  };
+
+  // Premium access check
+  const isPremium = place ? isPlacePremium(place) : false;
+  const canView = place ? canUserViewPlace(access, place) : true;
+  const isLocked = isPremium && !canView && !isOwner; // Owner always sees full content (isOwner defined above)
+
+  // Generate pseudo title for locked places
+  const getPseudoPlaceNumber = (placeId: string): number => {
+    const hash = placeId.replace(/-/g, '').substring(0, 8);
+    const num = parseInt(hash, 16) % 9999;
+    return num + 1; // Ensure it's between 1-9999
+  };
+
   if (!place) {
     return (
       <main className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-sm text-[#6b7d47]/60">Loading…</div>
+        <div className="text-sm text-[#6F7A5A]">Loading…</div>
+      </main>
+    );
+  }
+
+  // Show locked screen if place is premium and user doesn't have access
+  // Wait for access loading to complete to avoid flashing
+  if (accessLoading) {
+    return (
+      <main className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-sm text-[#6F7A5A]">Loading…</div>
+      </main>
+    );
+  }
+
+  if (isLocked) {
+    const pseudoTitle = `Maporia Secret #${getPseudoPlaceNumber(place.id)}`;
+    return (
+      <main className="min-h-screen bg-white">
+        <TopBar
+          showBackButton={true}
+          onBackClick={() => router.back()}
+          userAvatar={userAvatar}
+          userDisplayName={userDisplayName}
+          userEmail={userEmail}
+        />
+        <div className="relative min-h-[60vh] flex items-center justify-center p-6">
+          {/* Blurred cover image in background */}
+          {place.cover_url && (
+            <div 
+              className="absolute inset-0 bg-cover bg-center opacity-20 blur-2xl scale-110"
+              style={{ backgroundImage: `url(${place.cover_url})` }}
+            />
+          )}
+          
+          {/* Locked content */}
+          <div className="relative z-10 max-w-md w-full">
+            <LockedPlaceOverlay
+              placeTitle={pseudoTitle}
+              coverUrl={place.cover_url || undefined}
+            />
+          </div>
+        </div>
       </main>
     );
   }
@@ -614,153 +828,76 @@ export default function PlacePage() {
         showSearchBar={true}
         searchValue={""}
         onSearchChange={(value) => {
+          // Redirect to map page with search
           const params = new URLSearchParams();
-          if (value) params.set("q", value);
+          if (value.trim()) params.set("q", value);
+          if (activeFilters.categories.length > 0) {
+            params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+          }
           router.push(`/map?${params.toString()}`);
         }}
         selectedCity={null}
         onCityChange={(city) => {
+          // Redirect to map page with city
           const params = new URLSearchParams();
           if (city) params.set("city", city);
+          if (activeFilters.categories.length > 0) {
+            params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+          }
           router.push(`/map?${params.toString()}`);
         }}
-        onFiltersClick={() => router.push("/map")}
-        activeFiltersCount={0}
+        onFiltersClick={handleFiltersClick}
+        activeFiltersCount={activeFiltersCount}
         userAvatar={userAvatar}
         userDisplayName={userDisplayName}
         userEmail={userEmail}
+        showBackButton={true}
+        onBackClick={() => router.back()}
+        onShareClick={handleShare}
+        onFavoriteClick={toggleFavorite}
+        isFavorite={isFavorite}
+        favoriteLoading={favoriteLoading}
       />
 
-      {/* Combined Sticky Bar - All in one row */}
-      <div
-        className={cx(
-          "fixed top-[64px] left-0 right-0 z-30 bg-white border-b border-[#6b7d47]/10 transition-all duration-200",
-          stickyNavVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-full pointer-events-none"
-        )}
-      >
-        <div className="px-4 lg:px-8">
-          <div className="flex items-center gap-3 py-3">
-            {/* Left: Back button */}
-            <button
-              onClick={() => router.back()}
-              className="h-10 w-10 rounded-full bg-[#f5f4f2] hover:bg-[#6b7d47]/10 flex items-center justify-center text-[#2d2d2d] transition flex-shrink-0"
-              aria-label="Back"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-
-            {/* Center: Navigation tabs */}
-            {/* Desktop: Full-width tabs */}
-            <div className="hidden lg:flex items-center gap-1 flex-1">
-              {(["overview", "photos", "details", "map", "comments"] as const).map((section) => (
-                <button
-                  key={section}
-                  onClick={() => scrollToSection(section)}
-                  className={cx(
-                    "px-4 py-2 text-sm font-medium transition border-b-2",
-                    activeSection === section
-                      ? "text-[#6b7d47] border-[#6b7d47]"
-                      : "text-[#6b7d47]/60 border-transparent hover:text-[#6b7d47]"
-                  )}
-                >
-                  {section.charAt(0).toUpperCase() + section.slice(1)}
-                </button>
-              ))}
-            </div>
-
-            {/* Mobile: Horizontally scrollable tabs */}
-            <div className="lg:hidden overflow-x-auto scrollbar-hide flex-1 -mx-4 px-4">
-              <div className="flex items-center gap-1 min-w-max">
-                {(["overview", "photos", "details", "map", "comments"] as const).map((section) => (
-                  <button
-                    key={section}
-                    onClick={() => scrollToSection(section)}
-                    className={cx(
-                      "px-4 py-2 text-sm font-medium transition whitespace-nowrap border-b-2",
-                      activeSection === section
-                        ? "text-[#6b7d47] border-[#6b7d47]"
-                        : "text-[#6b7d47]/60 border-transparent"
-                    )}
-                  >
-                    {section.charAt(0).toUpperCase() + section.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Right: Action buttons */}
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {/* Favorite button */}
-              {userId && (
-                <button
-                  onClick={toggleFavorite}
-                  disabled={favoriteLoading}
-                  className={cx(
-                    "h-10 w-10 rounded-full bg-[#f5f4f2] hover:bg-[#6b7d47]/10 flex items-center justify-center transition flex-shrink-0",
-                    isFavorite ? "text-[#6b7d47]" : "text-[#6b7d47]/60",
-                    favoriteLoading && "opacity-50"
-                  )}
-                  aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                >
-                  <svg
-                    className="w-5 h-5"
-                    fill={isFavorite ? "currentColor" : "none"}
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                    />
-                  </svg>
-                </button>
-              )}
-              
-              {/* Edit button (only for owner) */}
-              {isOwner && (
-                <button
-                  onClick={() => router.push(`/id/${id}/edit`)}
-                  className="h-10 w-10 rounded-full bg-[#f5f4f2] hover:bg-[#6b7d47]/10 flex items-center justify-center text-[#2d2d2d] transition flex-shrink-0"
-                  aria-label="Edit"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </button>
-              )}
-              
-              {/* Share button */}
-              <button
-                onClick={handleShare}
-                className="h-10 w-10 rounded-full bg-[#f5f4f2] hover:bg-[#6b7d47]/10 flex items-center justify-center text-[#2d2d2d] transition flex-shrink-0"
-                aria-label="Share"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Title Row - Desktop (>= 1120px): Before gallery */}
       <div className="hidden min-[1120px]:block pt-[80px]">
         <div className="max-w-[1280px] min-[1120px]:max-w-[1120px] min-[1440px]:max-w-[1280px] mx-auto px-6">
           <div className="flex items-center justify-between gap-4 mb-6 pt-12">
-            <h1 className="text-2xl font-semibold text-[#2d2d2d] flex-1 min-w-0">{place.title}</h1>
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <h1 className="font-fraunces text-2xl font-semibold text-[#1F2A1F]">{place.title}</h1>
+              {isPremium && (
+                <div className="flex items-center gap-2">
+                  <PremiumBadge />
+                  {/* Show pseudo title badge for owner to see what others see */}
+                  {isOwner && (
+                    <div className="px-3 py-1.5 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4] text-[#6F7A5A] text-xs font-medium badge-shadow">
+                      {`Maporia Secret #${getPseudoPlaceNumber(place.id)}`}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="flex items-center gap-2 flex-shrink-0">
+              {isOwner && (
+                <button
+                  onClick={() => router.push(`/places/${id}/edit`)}
+                  className="h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-sm font-medium text-[#1F2A1F]"
+                  aria-label="Edit place"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit
+                </button>
+              )}
               <button
                 onClick={handleShare}
-                className="h-10 px-4 rounded-full border border-gray-200 bg-white hover:bg-gray-50 transition flex items-center justify-center gap-2 text-sm font-medium text-[#2d2d2d]"
+                className="h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-sm font-medium text-[#1F2A1F]"
                 aria-label="Share"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                 </svg>
                 Share
               </button>
@@ -769,28 +906,24 @@ export default function PlacePage() {
                   onClick={toggleFavorite}
                   disabled={favoriteLoading}
                   className={cx(
-                    "h-10 px-4 rounded-full border transition flex items-center justify-center gap-2 text-sm font-medium",
+                    "h-11 px-5 rounded-xl border transition-colors flex items-center justify-center gap-2 text-sm font-medium",
                     isFavorite
-                      ? "border-[#6b7d47] bg-[#6b7d47]/10 text-[#6b7d47] hover:bg-[#6b7d47]/20"
-                      : "border-gray-200 bg-white text-[#2d2d2d] hover:bg-gray-50",
+                      ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#8F9E4F] hover:bg-[#ECEEE4]"
+                      : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:bg-[#FAFAF7]",
                     favoriteLoading && "opacity-50"
                   )}
                   aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
                 >
-                  <svg className="w-4 h-4" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                  </svg>
+                  <FavoriteIcon isActive={isFavorite} size={16} />
                   Add to favorites
                 </button>
               ) : (
                 <button
                   onClick={() => router.push("/auth")}
-                  className="h-10 px-4 rounded-full border border-gray-200 bg-white hover:bg-gray-50 transition flex items-center justify-center gap-2 text-sm font-medium text-[#2d2d2d]"
+                  className="h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-sm font-medium text-[#1F2A1F]"
                   aria-label="Add to favorites"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                  </svg>
+                  <FavoriteIcon isActive={false} size={16} />
                   Add to favorites
                 </button>
               )}
@@ -809,6 +942,12 @@ export default function PlacePage() {
             gap={PLACE_LAYOUT_CONFIG.desktopXL.galleryGap}
             radius={PLACE_LAYOUT_CONFIG.desktopXL.galleryRadius}
             onShowAll={() => scrollToSection("photos")}
+            onPhotoClick={(index) => {
+              setGalleryPhotoIndex(index);
+              setPhotoGalleryOpen(true);
+              setPhotoZoom(1);
+              setPhotoPosition({ x: 0, y: 0 });
+            }}
           />
         </div>
       </div>
@@ -820,13 +959,19 @@ export default function PlacePage() {
           title={place.title}
           height={PLACE_LAYOUT_CONFIG.mobile.galleryHeight}
           onShowAll={() => scrollToSection("photos")}
+          onPhotoClick={(index) => {
+            setGalleryPhotoIndex(index);
+            setPhotoGalleryOpen(true);
+            setPhotoZoom(1);
+            setPhotoPosition({ x: 0, y: 0 });
+          }}
         />
         
         {/* Mobile App Bar - Back, Share, Heart */}
         <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-4">
           <button
             onClick={() => router.back()}
-            className="h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#2d2d2d] hover:bg-white transition shadow-sm"
+            className="h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#1F2A1F] hover:bg-white transition-colors"
             aria-label="Back"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -835,39 +980,38 @@ export default function PlacePage() {
           </button>
 
           <div className="flex items-center gap-2">
+            {isOwner && (
+              <button
+                onClick={() => router.push(`/places/${id}/edit`)}
+                className="h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#1F2A1F] hover:bg-white transition-colors"
+                aria-label="Edit place"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+            )}
             {userId && (
               <button
                 onClick={toggleFavorite}
                 disabled={favoriteLoading}
                 className={cx(
-                  "h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center transition shadow-sm",
-                  isFavorite ? "text-[#6b7d47]" : "text-[#6b7d47]/60",
+                  "h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center transition-colors",
+                  isFavorite ? "text-[#8F9E4F]" : "text-[#A8B096]",
                   favoriteLoading && "opacity-50"
                 )}
                 aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
               >
-                <svg
-                  className="w-5 h-5"
-                  fill={isFavorite ? "currentColor" : "none"}
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                  />
-                </svg>
+                <FavoriteIcon isActive={isFavorite} size={20} />
               </button>
             )}
             <button
               onClick={handleShare}
-              className="h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#2d2d2d] hover:bg-white transition shadow-sm"
+              className="h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#1F2A1F] hover:bg-white transition-colors"
               aria-label="Share"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
               </svg>
             </button>
           </div>
@@ -877,8 +1021,21 @@ export default function PlacePage() {
 
       {/* Mobile/Tablet: Bottom sheet with title (mobile only) */}
       <div className="min-[900px]:hidden">
-        <div className="bg-white rounded-t-[24px] -mt-8 relative z-10 px-4 pt-12 pb-4">
-          <h1 className="text-2xl font-semibold text-[#2d2d2d] mb-2 line-clamp-2">{place.title}</h1>
+        <div className="bg-white rounded-t-[24px] -mt-8 relative z-10 px-6 pt-12 pb-0">
+          <div className="flex flex-col items-center gap-2">
+            <h1 className="font-fraunces text-2xl font-semibold text-[#1F2A1F] mb-0 line-clamp-2 text-center">{place.title}</h1>
+            {isPremium && (
+              <div className="flex items-center gap-2 flex-wrap justify-center">
+                <PremiumBadge />
+                {/* Show pseudo title badge for owner to see what others see */}
+                {isOwner && (
+                  <div className="px-3 py-1.5 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4] text-[#6F7A5A] text-xs font-medium">
+                    {`Maporia Secret #${getPseudoPlaceNumber(place.id)}`}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -886,7 +1043,20 @@ export default function PlacePage() {
       <div className="hidden min-[600px]:max-[899px]:block max-w-full mx-auto px-5 pt-6 pb-4">
         <div className="flex items-start justify-between gap-4 mb-3 pt-12">
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-semibold text-[#2d2d2d] mb-2">{place.title}</h1>
+            <div className="flex items-center gap-3 mb-2 flex-wrap">
+              <h1 className="font-fraunces text-2xl font-semibold text-[#1F2A1F]">{place.title}</h1>
+              {isPremium && (
+                <div className="flex items-center gap-2">
+                  <PremiumBadge />
+                  {/* Show pseudo title badge for owner to see what others see */}
+                  {isOwner && (
+                    <div className="px-3 py-1.5 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4] text-[#6F7A5A] text-xs font-medium badge-shadow">
+                      {`Maporia Secret #${getPseudoPlaceNumber(place.id)}`}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -899,7 +1069,7 @@ export default function PlacePage() {
         {/* City and Address */}
         <div className="mb-6">
           {place.city && (
-            <h2 className="text-2xl font-semibold text-[#2d2d2d] mb-2">{place.city}</h2>
+            <h2 className="text-2xl font-semibold text-[#1F2A1F] mb-2">{place.city}</h2>
           )}
           {place.address && (
             <div className="mb-4">
@@ -908,7 +1078,7 @@ export default function PlacePage() {
                   href={`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-base text-[#6b7d47]/70 hover:text-[#6b7d47] hover:underline transition"
+                  className="text-base text-[#8F9E4F]/70 hover:text-[#8F9E4F] hover:underline transition"
                 >
                   {place.address}
                 </a>
@@ -917,7 +1087,7 @@ export default function PlacePage() {
                   href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.address)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-base text-[#6b7d47]/70 hover:text-[#6b7d47] hover:underline transition"
+                  className="text-base text-[#8F9E4F]/70 hover:text-[#8F9E4F] hover:underline transition"
                 >
                   {place.address}
                 </a>
@@ -927,31 +1097,29 @@ export default function PlacePage() {
         </div>
 
         {/* Statistics Block */}
-        <div className="rounded-xl bg-gray-50 border border-gray-200 p-6 mb-6">
+        <div className="rounded-xl bg-[#FAFAF7] border border-gray-200 p-6 mb-6">
           <div className="grid grid-cols-2 gap-6">
             {/* Left: Favorites count */}
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-[#6b7d47]/10 flex items-center justify-center flex-shrink-0">
-                <svg className="w-6 h-6 text-[#6b7d47]" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                </svg>
+              <div className="w-12 h-12 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] flex items-center justify-center flex-shrink-0">
+                <FavoriteIcon isActive={true} size={24} />
               </div>
               <div>
-                <div className="text-2xl font-semibold text-[#2d2d2d]">{favoritesCount}</div>
-                <div className="text-sm text-gray-600">Added to favorites</div>
+                <div className="text-2xl font-semibold text-[#1F2A1F]">{favoritesCount}</div>
+                <div className="text-sm text-[#6F7A5A]">Added to favorites</div>
               </div>
             </div>
 
             {/* Right: Comments count */}
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-[#6b7d47]/10 flex items-center justify-center flex-shrink-0">
-                <svg className="w-6 h-6 text-[#6b7d47]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-12 h-12 rounded-full bg-[#FAFAF7] flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-[#8F9E4F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
               </div>
               <div>
-                <div className="text-2xl font-semibold text-[#2d2d2d]">{commentsCount}</div>
-                <div className="text-sm text-gray-600">Comments</div>
+                <div className="text-2xl font-semibold text-[#1F2A1F]">{commentsCount}</div>
+                <div className="text-sm text-[#6F7A5A]">Comments</div>
               </div>
             </div>
           </div>
@@ -959,7 +1127,7 @@ export default function PlacePage() {
 
         {/* Author Section */}
         {creatorProfile && (
-          <div className="flex items-center gap-4 pb-6 mb-6 border-b border-gray-200">
+          <div className="flex items-center gap-4 pb-6 mb-6 border-b border-[#ECEEE4]">
             {creatorProfile.avatar_url ? (
               <img
                 src={creatorProfile.avatar_url}
@@ -967,15 +1135,32 @@ export default function PlacePage() {
                 className="w-14 h-14 rounded-full object-cover flex-shrink-0"
               />
             ) : (
-              <div className="w-14 h-14 rounded-full bg-[#6b7d47]/20 flex items-center justify-center flex-shrink-0">
-                <span className="text-lg font-semibold text-[#6b7d47]">
+              <div className="w-14 h-14 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] flex items-center justify-center flex-shrink-0">
+                <span className="text-lg font-semibold text-[#8F9E4F]">
                   {initialsFromName(creatorProfile.display_name, creatorProfile.username)}
                 </span>
               </div>
             )}
             <div>
-              <div className="text-base font-semibold text-[#2d2d2d]">Added by {creatorName}</div>
-              <div className="text-sm text-[#6b7d47]/60">{timeAgo(place.created_at)}</div>
+              <div className="text-base font-semibold text-[#1F2A1F]">Added by {creatorName}</div>
+              <div className="text-sm text-[#8F9E4F]/60">{timeAgo(place.created_at)}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Categories */}
+        {categories.length > 0 && (
+          <div className="pb-6 mb-6 border-b border-[#ECEEE4]">
+            <div className="flex flex-wrap gap-2">
+              {categories.map((cat) => (
+                <Link
+                  key={cat}
+                  href={`/?category=${encodeURIComponent(cat)}`}
+                  className="px-3 py-1.5 rounded-full text-sm font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#6b7d47]/20 hover:bg-[#FAFAF7] transition"
+                >
+                  {cat}
+                </Link>
+              ))}
             </div>
           </div>
         )}
@@ -986,18 +1171,18 @@ export default function PlacePage() {
             <div className="mb-6">
               {place.description.length > 300 ? (
                 <>
-                  <p className="text-base text-[#2d2d2d] leading-relaxed whitespace-pre-wrap">
+                  <p className="text-base text-[#1F2A1F] leading-relaxed whitespace-pre-wrap">
                     {place.description.substring(0, 300)}...
                   </p>
                   <button
                     onClick={() => setShowDescriptionModal(true)}
-                    className="mt-4 w-full py-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition text-base font-medium text-[#2d2d2d]"
+                    className="mt-4 w-full max-[599px]:w-full min-[600px]:w-auto min-[600px]:inline-block h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors text-base font-medium text-[#1F2A1F]"
                   >
                     Show more
                   </button>
                 </>
               ) : (
-                <p className="text-base text-[#2d2d2d] leading-relaxed whitespace-pre-wrap">
+                <p className="text-base text-[#1F2A1F] leading-relaxed whitespace-pre-wrap">
                   {place.description}
                 </p>
               )}
@@ -1007,12 +1192,12 @@ export default function PlacePage() {
           {/* Highlights */}
           {tags.length > 0 && (
             <div>
-              <h3 className="text-lg font-semibold text-[#2d2d2d] mb-3">Highlights</h3>
+              <h3 className="text-lg font-semibold text-[#1F2A1F] mb-3">Highlights</h3>
               <div className="flex flex-wrap gap-2">
                 {tags.slice(0, 6).map((tag) => (
                   <span
                     key={tag}
-                    className="px-3 py-1.5 rounded-full text-sm text-[#6b7d47] bg-[#f5f4f2] border border-[#6b7d47]/20"
+                    className="px-3 py-1.5 rounded-full text-sm text-[#8F9E4F] bg-[#FAFAF7] border border-[#6b7d47]/20"
                   >
                     {tag}
                   </span>
@@ -1024,9 +1209,9 @@ export default function PlacePage() {
 
         {/* Photos Section */}
         <section ref={photosRef} id="photos" className="mb-16">
-          <h2 className="text-2xl font-semibold text-[#2d2d2d] mb-6">Photos</h2>
+          <h2 className="text-2xl font-semibold text-[#1F2A1F] mb-6">Photos</h2>
           {allPhotos.length === 0 ? (
-            <div className="text-center py-12 text-[#6b7d47]/60">No photos available</div>
+            <div className="text-center py-12 text-[#8F9E4F]/60">No photos available</div>
           ) : (
             <>
               <div className={cx(
@@ -1039,10 +1224,12 @@ export default function PlacePage() {
                   <button
                     key={index}
                     onClick={() => {
-                      setCurrentPhotoIndex(index);
-                      setPhotosExpanded(true);
+                      setGalleryPhotoIndex(index);
+                      setPhotoGalleryOpen(true);
+                      setPhotoZoom(1);
+                      setPhotoPosition({ x: 0, y: 0 });
                     }}
-                    className="aspect-square rounded-xl overflow-hidden bg-[#f5f4f2] group"
+                    className="aspect-square rounded-xl overflow-hidden bg-[#FAFAF7] group"
                   >
                     <img
                       src={photo}
@@ -1055,7 +1242,7 @@ export default function PlacePage() {
               {allPhotos.length > 4 && !photosExpanded && (
                 <button
                   onClick={() => setPhotosExpanded(true)}
-                  className="mt-4 w-full py-3 rounded-xl border border-[#6b7d47]/20 text-[#6b7d47] font-medium hover:bg-[#f5f4f2] transition"
+                  className="mt-4 w-full py-3 rounded-xl border border-[#6b7d47]/20 text-[#8F9E4F] font-medium hover:bg-[#FAFAF7] transition"
                 >
                   Show all {allPhotos.length} photos
                 </button>
@@ -1064,92 +1251,19 @@ export default function PlacePage() {
           )}
         </section>
 
-        {/* Details Section */}
-        <section ref={detailsRef} id="details" className="mb-16">
-          <h2 className="text-2xl font-semibold text-[#2d2d2d] mb-6">Details</h2>
-          
-          <div className="space-y-6">
-            {/* Address */}
-            {place.address && (
-              <div>
-                <h3 className="text-sm font-semibold text-[#2d2d2d] mb-2">Address</h3>
-                <p className="text-sm text-[#6b7d47]/70">{place.address}</p>
-              </div>
-            )}
-
-            {/* Tags/Vibes */}
-            {tags.length > 0 && (
-              <div>
-                <h3 className="text-sm font-semibold text-[#2d2d2d] mb-2">Vibes</h3>
-                <div className="flex flex-wrap gap-2">
-                  {tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="px-3 py-1.5 rounded-full text-sm text-[#6b7d47] bg-[#f5f4f2] border border-[#6b7d47]/20"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Added by */}
-            <div>
-              <h3 className="text-sm font-semibold text-[#2d2d2d] mb-2">Added by</h3>
-              <div className="flex items-center gap-3">
-                {creatorProfile?.avatar_url ? (
-                  <img
-                    src={creatorProfile.avatar_url}
-                    alt={creatorName}
-                    className="w-10 h-10 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded-full bg-[#6b7d47]/20 flex items-center justify-center">
-                    <span className="text-sm font-semibold text-[#6b7d47]">
-                      {initialsFromName(creatorProfile?.display_name, creatorProfile?.username)}
-                    </span>
-                  </div>
-                )}
-                <div>
-                  <div className="text-sm font-medium text-[#2d2d2d]">{creatorName}</div>
-                  <div className="text-xs text-[#6b7d47]/60">{timeAgo(place.created_at)}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* External Link */}
-            {place.link && (
-              <div>
-                <a
-                  href={place.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#6b7d47] text-white text-sm font-medium hover:bg-[#556036] transition"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                  Visit Website
-                </a>
-              </div>
-            )}
-          </div>
-        </section>
-
         {/* Map Section */}
         <section ref={mapRef} id="map" className="mb-16">
-          <h2 className="text-2xl font-semibold text-[#2d2d2d] mb-6">Location</h2>
+          <h2 className="text-2xl font-semibold text-[#1F2A1F] mb-6">Location</h2>
           {place.lat && place.lng ? (
             <div className="space-y-4">
-              <div className="h-[400px] lg:h-[500px] rounded-xl overflow-hidden bg-[#f5f4f2]">
+              <div className="h-[400px] lg:h-[500px] rounded-xl overflow-hidden bg-[#FAFAF7]">
                 <PlaceMapView place={place} />
               </div>
               <a
                 href={`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-[#6b7d47]/20 text-[#6b7d47] text-sm font-medium hover:bg-[#f5f4f2] transition"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-[#6b7d47]/20 text-[#8F9E4F] text-sm font-medium hover:bg-[#FAFAF7] transition min-[600px]:inline-flex max-[599px]:w-full max-[599px]:py-3 max-[599px]:border-gray-200 max-[599px]:bg-white max-[599px]:text-[#1F2A1F] max-[599px]:text-base max-[599px]:hover:bg-[#FAFAF7]"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -1158,19 +1272,19 @@ export default function PlacePage() {
               </a>
             </div>
           ) : (
-            <div className="text-center py-12 text-[#6b7d47]/60">Location not available</div>
+            <div className="text-center py-12 text-[#8F9E4F]/60">Location not available</div>
           )}
         </section>
 
         {/* Comments Section */}
         <section ref={commentsRef} id="comments" className="mb-16">
-          <h2 className="text-2xl font-semibold text-[#2d2d2d] mb-6">Comments</h2>
+          <h2 className="text-2xl font-semibold text-[#1F2A1F] mb-6">Comments</h2>
 
           {/* Add comment */}
           {userId ? (
-            <div className="mb-6 rounded-xl border border-[#6b7d47]/10 bg-white p-4">
+            <div className="mb-6 rounded-xl border border-[#ECEEE4] bg-white p-4">
               <textarea
-                className="w-full bg-transparent text-sm outline-none text-[#2d2d2d] placeholder:text-[#6b7d47]/40 resize-none mb-3"
+                className="w-full bg-transparent text-sm outline-none text-[#1F2A1F] placeholder:text-[#8F9E4F]/40 resize-none mb-3"
                 placeholder="Share your thoughts..."
                 rows={3}
                 value={commentText}
@@ -1194,15 +1308,15 @@ export default function PlacePage() {
                 <button
                   onClick={addComment}
                   disabled={!commentText.trim() || sending}
-                  className="px-4 py-2 rounded-xl bg-[#6b7d47] text-white text-sm font-medium hover:bg-[#556036] disabled:opacity-50 transition"
+                  className="h-11 px-5 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:brightness-110 active:brightness-90 disabled:opacity-50 disabled:bg-[#DADDD0] transition-all"
                 >
                   {sending ? "Posting…" : "Post"}
                 </button>
               </div>
             </div>
           ) : (
-            <div className="mb-6 rounded-xl border border-[#6b7d47]/10 bg-white p-4 text-center">
-              <div className="text-sm text-[#6b7d47]/60 mb-2">Sign in to post comments</div>
+            <div className="mb-6 rounded-xl border border-[#ECEEE4] bg-white p-4 text-center">
+              <div className="text-sm text-[#8F9E4F]/60 mb-2">Sign in to post comments</div>
               <button
                 onClick={() => router.push("/auth")}
                 className="px-4 py-2 rounded-xl bg-[#6b7d47] text-white text-sm font-medium hover:bg-[#556036] transition"
@@ -1214,9 +1328,9 @@ export default function PlacePage() {
 
           {/* Comments list */}
           {commentsLoading ? (
-            <div className="text-center py-12 text-[#6b7d47]/60">Loading comments…</div>
+            <div className="text-center py-12 text-[#8F9E4F]/60">Loading comments…</div>
           ) : comments.length === 0 ? (
-            <div className="text-center py-12 text-[#6b7d47]/60">
+            <div className="text-center py-12 text-[#8F9E4F]/60">
               <div className="mb-1">No comments yet</div>
               <div className="text-sm">Be the first to share your thoughts</div>
             </div>
@@ -1231,7 +1345,7 @@ export default function PlacePage() {
                 return (
                   <div
                     key={c.id}
-                    className="rounded-xl border border-[#6b7d47]/10 bg-white p-4"
+                    className="rounded-xl border border-[#ECEEE4] bg-white p-4"
                   >
                     <div className="flex items-start gap-3">
                       {userAvatar ? (
@@ -1241,8 +1355,8 @@ export default function PlacePage() {
                           className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                         />
                       ) : (
-                        <div className="w-10 h-10 rounded-full bg-[#6b7d47]/20 flex items-center justify-center flex-shrink-0">
-                          <span className="text-sm font-semibold text-[#6b7d47]">
+                        <div className="w-10 h-10 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] flex items-center justify-center flex-shrink-0">
+                          <span className="text-sm font-semibold text-[#8F9E4F]">
                             {userInitials}
                           </span>
                         </div>
@@ -1251,10 +1365,10 @@ export default function PlacePage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2 mb-1">
                           <div className="flex items-center gap-2">
-                            <div className="text-sm font-semibold text-[#2d2d2d]">
+                            <div className="text-sm font-semibold text-[#1F2A1F]">
                               {userName}
                             </div>
-                            <div className="text-xs text-[#6b7d47]/60">
+                            <div className="text-xs text-[#8F9E4F]/60">
                               {timeAgo(c.created_at)}
                             </div>
                           </div>
@@ -1272,7 +1386,7 @@ export default function PlacePage() {
                             </button>
                           )}
                         </div>
-                        <div className="text-sm text-[#2d2d2d] leading-relaxed">
+                        <div className="text-sm text-[#1F2A1F] leading-relaxed">
                           {c.text}
                         </div>
                       </div>
@@ -1287,12 +1401,12 @@ export default function PlacePage() {
 
         {/* Right: Sticky Actions Card (38-42%) */}
         <div className="w-[38%] min-[1440px]:w-[40%] flex-shrink-0">
-          <div className="sticky top-24 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm" style={{ maxWidth: PLACE_LAYOUT_CONFIG.desktopXL.bookingCardMaxWidth }}>
+          <div className="sticky top-24 rounded-2xl border border-[#ECEEE4] bg-white p-6 shadow-sm" style={{ maxWidth: PLACE_LAYOUT_CONFIG.desktopXL.bookingCardMaxWidth }}>
             <div className="space-y-4">
               {/* Write Comment */}
               <button
                 onClick={() => scrollToSection("comments")}
-                className="w-full py-3 px-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition flex items-center justify-center gap-2 text-[#2d2d2d] font-medium"
+                className="w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-[#1F2A1F] font-medium"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -1308,34 +1422,20 @@ export default function PlacePage() {
                   className={cx(
                     "w-full py-3 px-4 rounded-xl border transition flex items-center justify-center gap-2 font-medium",
                     isFavorite
-                      ? "border-[#6b7d47] bg-[#6b7d47]/10 text-[#6b7d47] hover:bg-[#6b7d47]/20"
-                      : "border-gray-200 bg-white text-[#2d2d2d] hover:bg-gray-50",
+                      ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#8F9E4F] hover:bg-[#ECEEE4]"
+                      : "border-gray-200 bg-white text-[#1F2A1F] hover:bg-[#FAFAF7]",
                     favoriteLoading && "opacity-50"
                   )}
                 >
-                  <svg
-                    className="w-5 h-5"
-                    fill={isFavorite ? "currentColor" : "none"}
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                    />
-                  </svg>
+                  <FavoriteIcon isActive={isFavorite} size={20} />
                   {isFavorite ? "Remove from favorites" : "Add to favorites"}
                 </button>
               ) : (
                 <button
                   onClick={() => router.push("/auth")}
-                  className="w-full py-3 px-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition flex items-center justify-center gap-2 text-[#2d2d2d] font-medium"
+                  className="w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-[#1F2A1F] font-medium"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                  </svg>
+                  <FavoriteIcon isActive={false} size={20} />
                   Add to favorites
                 </button>
               )}
@@ -1346,7 +1446,7 @@ export default function PlacePage() {
                   href={`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full py-3 px-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition flex items-center justify-center gap-2 text-[#2d2d2d] font-medium"
+                  className="w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-[#1F2A1F] font-medium"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -1359,10 +1459,10 @@ export default function PlacePage() {
               {/* Share */}
               <button
                 onClick={handleShare}
-                className="w-full py-3 px-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition flex items-center justify-center gap-2 text-[#2d2d2d] font-medium"
+                className="w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-[#1F2A1F] font-medium"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                 </svg>
                 Share
               </button>
@@ -1373,11 +1473,11 @@ export default function PlacePage() {
 
       {/* Tablet/Mobile: Single column layout (< 1120px) */}
       <div className="min-[1120px]:hidden pb-24 min-[600px]:pb-8">
-        <div className="max-w-full mx-auto px-4 min-[600px]:px-5 min-[900px]:px-6 py-8">
+        <div className="max-w-full mx-auto px-6 min-[600px]:px-5 min-[900px]:px-6 max-[599px]:pt-4 min-[600px]:pt-8 pb-8">
           {/* City and Address */}
-          <div className="mb-6">
+          <div className="mb-6 max-[599px]:text-center min-[600px]:text-left">
             {place.city && (
-              <h2 className="text-2xl font-semibold text-[#2d2d2d] mb-2">{place.city}</h2>
+              <h2 className="text-sm font-medium text-[#1F2A1F] mb-2">{place.city}</h2>
             )}
             {place.address && (
               <div className="mb-4">
@@ -1386,7 +1486,7 @@ export default function PlacePage() {
                     href={`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-base text-[#6b7d47]/70 hover:text-[#6b7d47] hover:underline transition"
+                    className="text-base text-[#8F9E4F]/70 hover:text-[#8F9E4F] hover:underline transition"
                   >
                     {place.address}
                   </a>
@@ -1395,7 +1495,7 @@ export default function PlacePage() {
                     href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.address)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-base text-[#6b7d47]/70 hover:text-[#6b7d47] hover:underline transition"
+                    className="text-base text-[#8F9E4F]/70 hover:text-[#8F9E4F] hover:underline transition"
                   >
                     {place.address}
                   </a>
@@ -1405,28 +1505,26 @@ export default function PlacePage() {
           </div>
 
           {/* Statistics Block */}
-          <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 mb-6">
+          <div className="rounded-xl bg-[#FAFAF7] border border-gray-200 p-4 mb-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#6b7d47]/10 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 text-[#6b7d47]" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                  </svg>
+                <div className="w-10 h-10 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] flex items-center justify-center flex-shrink-0">
+                  <FavoriteIcon isActive={true} size={20} />
                 </div>
                 <div>
-                  <div className="text-xl font-semibold text-[#2d2d2d]">{favoritesCount}</div>
-                  <div className="text-xs text-gray-600">Favorites</div>
+                  <div className="text-xl font-semibold text-[#1F2A1F]">{favoritesCount}</div>
+                  <div className="text-xs text-[#6F7A5A]">Favorites</div>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#6b7d47]/10 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 text-[#6b7d47]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-10 h-10 rounded-full bg-[#FAFAF7] flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-[#8F9E4F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                   </svg>
                 </div>
                 <div>
-                  <div className="text-xl font-semibold text-[#2d2d2d]">{commentsCount}</div>
-                  <div className="text-xs text-gray-600">Comments</div>
+                  <div className="text-xl font-semibold text-[#1F2A1F]">{commentsCount}</div>
+                  <div className="text-xs text-[#6F7A5A]">Comments</div>
                 </div>
               </div>
             </div>
@@ -1442,15 +1540,32 @@ export default function PlacePage() {
                   className="w-12 h-12 rounded-full object-cover flex-shrink-0"
                 />
               ) : (
-                <div className="w-12 h-12 rounded-full bg-[#6b7d47]/20 flex items-center justify-center flex-shrink-0">
-                  <span className="text-base font-semibold text-[#6b7d47]">
+                <div className="w-12 h-12 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] flex items-center justify-center flex-shrink-0">
+                  <span className="text-base font-semibold text-[#8F9E4F]">
                     {initialsFromName(creatorProfile.display_name, creatorProfile.username)}
                   </span>
                 </div>
               )}
               <div>
-                <div className="text-sm font-semibold text-[#2d2d2d]">Added by {creatorName}</div>
-                <div className="text-xs text-[#6b7d47]/60">{timeAgo(place.created_at)}</div>
+                <div className="text-sm font-semibold text-[#1F2A1F]">Added by {creatorName}</div>
+                <div className="text-xs text-[#8F9E4F]/60">{timeAgo(place.created_at)}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Categories */}
+          {categories.length > 0 && (
+            <div className="pb-6 mb-6 border-b border-[#ECEEE4]">
+              <div className="flex flex-wrap gap-2">
+                {categories.map((cat) => (
+                  <Link
+                    key={cat}
+                    href={`/?category=${encodeURIComponent(cat)}`}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#6b7d47]/20 hover:bg-[#FAFAF7] transition"
+                  >
+                    {cat}
+                  </Link>
+                ))}
               </div>
             </div>
           )}
@@ -1461,18 +1576,26 @@ export default function PlacePage() {
               <div className="mb-6">
                 {place.description.length > 300 ? (
                   <>
-                    <p className="text-base text-[#2d2d2d] leading-relaxed whitespace-pre-wrap">
+                    <p className="text-base text-[#1F2A1F] leading-relaxed whitespace-pre-wrap">
                       {place.description.substring(0, 300)}...
                     </p>
+                    {/* Desktop: Show more with underline */}
                     <button
                       onClick={() => setShowDescriptionModal(true)}
-                      className="mt-3 text-base font-medium text-[#2d2d2d] hover:underline"
+                      className="mt-3 text-base font-medium text-[#1F2A1F] hover:underline min-[600px]:block max-[599px]:hidden"
+                    >
+                      Show more
+                    </button>
+                    {/* Mobile: Show more button with border */}
+                    <button
+                      onClick={() => setShowDescriptionModal(true)}
+                      className="mt-4 w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors text-base font-medium text-[#1F2A1F] min-[600px]:hidden"
                     >
                       Show more
                     </button>
                   </>
                 ) : (
-                  <p className="text-base text-[#2d2d2d] leading-relaxed whitespace-pre-wrap">
+                  <p className="text-base text-[#1F2A1F] leading-relaxed whitespace-pre-wrap">
                     {place.description}
                   </p>
                 )}
@@ -1481,12 +1604,12 @@ export default function PlacePage() {
 
             {tags.length > 0 && (
               <div>
-                <h3 className="text-lg font-semibold text-[#2d2d2d] mb-3">Highlights</h3>
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-3">Highlights</h3>
                 <div className="flex flex-wrap gap-2">
                   {tags.slice(0, 6).map((tag) => (
                     <span
                       key={tag}
-                      className="px-3 py-1.5 rounded-full text-sm text-[#6b7d47] bg-[#f5f4f2] border border-[#6b7d47]/20"
+                      className="px-3 py-1.5 rounded-full text-sm text-[#8F9E4F] bg-[#FAFAF7] border border-[#6b7d47]/20"
                     >
                       {tag}
                     </span>
@@ -1498,12 +1621,12 @@ export default function PlacePage() {
 
           {/* Actions Card - Below content on tablet/mobile */}
           <div className="mb-16 max-w-[720px] min-[600px]:max-w-full mx-auto">
-            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-2xl border border-[#ECEEE4] bg-white p-6 shadow-sm">
               <div className="space-y-3">
                 {/* Write Comment */}
                 <button
                   onClick={() => scrollToSection("comments")}
-                  className="w-full py-3 px-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition flex items-center justify-center gap-2 text-[#2d2d2d] font-medium"
+                  className="w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-[#1F2A1F] font-medium"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -1519,34 +1642,20 @@ export default function PlacePage() {
                     className={cx(
                       "w-full py-3 px-4 rounded-xl border transition flex items-center justify-center gap-2 font-medium",
                       isFavorite
-                        ? "border-[#6b7d47] bg-[#6b7d47]/10 text-[#6b7d47] hover:bg-[#6b7d47]/20"
-                        : "border-gray-200 bg-white text-[#2d2d2d] hover:bg-gray-50",
+                        ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#8F9E4F] hover:bg-[#ECEEE4]"
+                        : "border-gray-200 bg-white text-[#1F2A1F] hover:bg-[#FAFAF7]",
                       favoriteLoading && "opacity-50"
                     )}
                   >
-                    <svg
-                      className="w-5 h-5"
-                      fill={isFavorite ? "currentColor" : "none"}
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                      />
-                    </svg>
+                    <FavoriteIcon isActive={isFavorite} size={20} />
                     {isFavorite ? "Remove from favorites" : "Add to favorites"}
                   </button>
                 ) : (
                   <button
                     onClick={() => router.push("/auth")}
-                    className="w-full py-3 px-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition flex items-center justify-center gap-2 text-[#2d2d2d] font-medium"
+                    className="w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-[#1F2A1F] font-medium"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                    </svg>
+                    <FavoriteIcon isActive={false} size={20} />
                     Add to favorites
                   </button>
                 )}
@@ -1557,7 +1666,7 @@ export default function PlacePage() {
                     href={`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full py-3 px-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition flex items-center justify-center gap-2 text-[#2d2d2d] font-medium"
+                    className="w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-[#1F2A1F] font-medium"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -1570,10 +1679,10 @@ export default function PlacePage() {
                 {/* Share */}
                 <button
                   onClick={handleShare}
-                  className="w-full py-3 px-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition flex items-center justify-center gap-2 text-[#2d2d2d] font-medium"
+                  className="w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-[#1F2A1F] font-medium"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                   </svg>
                   Share
                 </button>
@@ -1583,9 +1692,9 @@ export default function PlacePage() {
 
           {/* Other sections (Photos, Details, Map, Comments) - reuse from desktop */}
           <section ref={photosRef} id="photos" className="mb-16">
-            <h2 className="text-2xl font-semibold text-[#2d2d2d] mb-6">Photos</h2>
+            <h2 className="text-2xl font-semibold text-[#1F2A1F] mb-6">Photos</h2>
             {allPhotos.length === 0 ? (
-              <div className="text-center py-12 text-[#6b7d47]/60">No photos available</div>
+              <div className="text-center py-12 text-[#8F9E4F]/60">No photos available</div>
             ) : (
               <div className={cx(
                 "grid gap-2",
@@ -1597,10 +1706,12 @@ export default function PlacePage() {
                   <button
                     key={index}
                     onClick={() => {
-                      setCurrentPhotoIndex(index);
-                      setPhotosExpanded(true);
+                      setGalleryPhotoIndex(index);
+                      setPhotoGalleryOpen(true);
+                      setPhotoZoom(1);
+                      setPhotoPosition({ x: 0, y: 0 });
                     }}
-                    className="aspect-square rounded-xl overflow-hidden bg-[#f5f4f2] group"
+                    className="aspect-square rounded-xl overflow-hidden bg-[#FAFAF7] group"
                   >
                     <img
                       src={photo}
@@ -1613,100 +1724,18 @@ export default function PlacePage() {
             )}
           </section>
 
-          <section ref={detailsRef} id="details" className="mb-16">
-            <h2 className="text-2xl font-semibold text-[#2d2d2d] mb-6">Details</h2>
-            <div className="space-y-6">
-              {place.address && (
-                <div>
-                  <h3 className="text-sm font-semibold text-[#2d2d2d] mb-2">Address</h3>
-                  <p className="text-sm text-[#6b7d47]/70">{place.address}</p>
-                </div>
-              )}
-              {categories.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold text-[#2d2d2d] mb-2">Categories</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {categories.map((cat) => (
-                      <Link
-                        key={cat}
-                        href={`/?category=${encodeURIComponent(cat)}`}
-                        className="px-3 py-1.5 rounded-full text-xs font-medium text-[#6b7d47] bg-[#f5f4f2] border border-[#6b7d47]/20"
-                      >
-                        {cat}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {tags.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold text-[#2d2d2d] mb-2">Tags</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="px-3 py-1.5 rounded-full text-xs text-[#6b7d47] bg-[#f5f4f2] border border-[#6b7d47]/20"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {creatorProfile && (
-                <div>
-                  <h3 className="text-sm font-semibold text-[#2d2d2d] mb-2">Added by</h3>
-                  <div className="flex items-center gap-3">
-                    {creatorProfile.avatar_url ? (
-                      <img
-                        src={creatorProfile.avatar_url}
-                        alt={creatorName}
-                        className="w-10 h-10 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-[#6b7d47]/20 flex items-center justify-center">
-                        <span className="text-sm font-semibold text-[#6b7d47]">
-                          {initialsFromName(creatorProfile.display_name, creatorProfile.username)}
-                        </span>
-                      </div>
-                    )}
-                    <div>
-                      <div className="text-sm font-medium text-[#2d2d2d]">{creatorName}</div>
-                      <div className="text-xs text-[#6b7d47]/60">{timeAgo(place.created_at)}</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              {place.link && (
-                <div>
-                  <a
-                    href={place.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#6b7d47] text-white text-sm font-medium hover:bg-[#556036] transition"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                    Visit Website
-                  </a>
-                </div>
-              )}
-            </div>
-          </section>
-
           <section ref={mapRef} id="map" className="mb-16">
-            <h2 className="text-2xl font-semibold text-[#2d2d2d] mb-6">Location</h2>
+            <h2 className="text-2xl font-semibold text-[#1F2A1F] mb-6">Location</h2>
             {place.lat && place.lng ? (
               <div className="space-y-4">
-                <div className="h-[400px] rounded-xl overflow-hidden bg-[#f5f4f2]">
+                <div className="h-[400px] rounded-xl overflow-hidden bg-[#FAFAF7]">
                   <PlaceMapView place={place} />
                 </div>
                 <a
                   href={`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-[#6b7d47]/20 text-[#6b7d47] text-sm font-medium hover:bg-[#f5f4f2] transition"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-[#6b7d47]/20 text-[#8F9E4F] text-sm font-medium hover:bg-[#FAFAF7] transition min-[600px]:inline-flex max-[599px]:w-full max-[599px]:py-3 max-[599px]:border-gray-200 max-[599px]:bg-white max-[599px]:text-[#1F2A1F] max-[599px]:text-base max-[599px]:hover:bg-[#FAFAF7]"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -1715,16 +1744,16 @@ export default function PlacePage() {
                 </a>
               </div>
             ) : (
-              <div className="text-center py-12 text-[#6b7d47]/60">Location not available</div>
+              <div className="text-center py-12 text-[#8F9E4F]/60">Location not available</div>
             )}
           </section>
 
           <section ref={commentsRef} id="comments" className="mb-16">
-            <h2 className="text-2xl font-semibold text-[#2d2d2d] mb-6">Comments</h2>
+            <h2 className="text-2xl font-semibold text-[#1F2A1F] mb-6">Comments</h2>
             {userId ? (
-              <div className="mb-6 rounded-xl border border-[#6b7d47]/10 bg-white p-4">
+              <div className="mb-6 rounded-xl border border-[#ECEEE4] bg-white p-4">
                 <textarea
-                  className="w-full bg-transparent text-sm outline-none text-[#2d2d2d] placeholder:text-[#6b7d47]/40 resize-none mb-3"
+                  className="w-full bg-transparent text-sm outline-none text-[#1F2A1F] placeholder:text-[#8F9E4F]/40 resize-none mb-3"
                   placeholder="Share your thoughts..."
                   rows={3}
                   value={commentText}
@@ -1742,21 +1771,21 @@ export default function PlacePage() {
                   }}
                 />
                 {commentError && (
-                  <div className="mb-3 text-xs text-red-500">{commentError}</div>
+                  <div className="mb-3 text-xs text-[#C96A5B]">{commentError}</div>
                 )}
                 <div className="flex justify-end">
                   <button
                     onClick={addComment}
                     disabled={!commentText.trim() || sending}
-                    className="px-4 py-2 rounded-xl bg-[#6b7d47] text-white text-sm font-medium hover:bg-[#556036] disabled:opacity-50 transition"
+                    className="h-11 px-5 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:brightness-110 active:brightness-90 disabled:opacity-50 disabled:bg-[#DADDD0] transition-all"
                   >
                     {sending ? "Posting…" : "Post"}
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="mb-6 rounded-xl border border-[#6b7d47]/10 bg-white p-4 text-center">
-                <div className="text-sm text-[#6b7d47]/60 mb-2">Sign in to post comments</div>
+              <div className="mb-6 rounded-xl border border-[#ECEEE4] bg-white p-4 text-center">
+                <div className="text-sm text-[#8F9E4F]/60 mb-2">Sign in to post comments</div>
                 <button
                   onClick={() => router.push("/auth")}
                   className="px-4 py-2 rounded-xl bg-[#6b7d47] text-white text-sm font-medium hover:bg-[#556036] transition"
@@ -1767,9 +1796,9 @@ export default function PlacePage() {
             )}
 
             {commentsLoading ? (
-              <div className="text-center py-12 text-[#6b7d47]/60">Loading comments…</div>
+              <div className="text-center py-12 text-[#8F9E4F]/60">Loading comments…</div>
             ) : comments.length === 0 ? (
-              <div className="text-center py-12 text-[#6b7d47]/60">
+              <div className="text-center py-12 text-[#8F9E4F]/60">
                 <div className="mb-1">No comments yet</div>
                 <div className="text-sm">Be the first to share your thoughts</div>
               </div>
@@ -1784,7 +1813,7 @@ export default function PlacePage() {
                   return (
                     <div
                       key={c.id}
-                      className="rounded-xl border border-[#6b7d47]/10 bg-white p-4"
+                      className="rounded-xl border border-[#ECEEE4] bg-white p-4"
                     >
                       <div className="flex items-start gap-3">
                         {userAvatar ? (
@@ -1795,7 +1824,7 @@ export default function PlacePage() {
                           />
                         ) : (
                           <div className="w-10 h-10 rounded-full bg-[#6b7d47]/20 flex items-center justify-center flex-shrink-0">
-                            <span className="text-sm font-semibold text-[#6b7d47]">
+                            <span className="text-sm font-semibold text-[#8F9E4F]">
                               {userInitials}
                             </span>
                           </div>
@@ -1803,10 +1832,10 @@ export default function PlacePage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 mb-1">
                             <div className="flex items-center gap-2">
-                              <div className="text-sm font-semibold text-[#2d2d2d]">
+                              <div className="text-sm font-semibold text-[#1F2A1F]">
                                 {userName}
                               </div>
-                              <div className="text-xs text-[#6b7d47]/60">
+                              <div className="text-xs text-[#8F9E4F]/60">
                                 {timeAgo(c.created_at)}
                               </div>
                             </div>
@@ -1824,7 +1853,7 @@ export default function PlacePage() {
                               </button>
                             )}
                           </div>
-                          <div className="text-sm text-[#2d2d2d] leading-relaxed">
+                          <div className="text-sm text-[#1F2A1F] leading-relaxed">
                             {c.text}
                           </div>
                         </div>
@@ -1839,94 +1868,147 @@ export default function PlacePage() {
       </div>
 
       {/* Mobile: Fixed Actions Bar (< 600px) */}
-      <div className="min-[600px]:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-lg safe-area-bottom">
-        <div className="px-2 py-2">
-          <div className="grid grid-cols-4 gap-2">
-            {/* Write Comment */}
+      {/* Filters Modal */}
+      <FiltersModal
+        isOpen={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        onApply={handleFiltersApply}
+        appliedFilters={activeFilters}
+        getFilteredCount={async (draftFilters: ActiveFilters) => {
+          // Подсчитываем количество мест с учетом фильтров
+          try {
+            let countQuery = supabase.from("places").select("*", { count: 'exact', head: true });
+
+            // Фильтрация по категориям
+            if (draftFilters.categories.length > 0) {
+              countQuery = countQuery.overlaps("categories", draftFilters.categories);
+            }
+
+            // Фильтрация по тегам (vibes)
+            if (draftFilters.vibes.length > 0) {
+              countQuery = countQuery.overlaps("tags", draftFilters.vibes);
+            }
+
+            const { count, error } = await countQuery;
+            if (error) {
+              console.error("Error counting filtered places:", error);
+              return 0;
+            }
+            return count || 0;
+          } catch (error) {
+            console.error("Error in getFilteredCount:", error);
+            return 0;
+          }
+        }}
+      />
+
+      {/* Photo Gallery Modal */}
+      {photoGalleryOpen && allPhotos.length > 0 && (
+        <div
+          className="fixed inset-0 z-[100] bg-black"
+          onTouchStart={handleGalleryTouchStart}
+          onTouchMove={handleGalleryTouchMove}
+          onTouchEnd={handleGalleryTouchEnd}
+        >
+          {/* Top Bar */}
+          <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-4 pt-safe-top">
+            {/* Back button */}
             <button
-              onClick={() => scrollToSection("comments")}
-              className="py-2.5 px-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition flex flex-col items-center justify-center gap-1 text-[#2d2d2d]"
-              title="Write a comment"
+              onClick={() => {
+                setPhotoGalleryOpen(false);
+                setPhotoZoom(1);
+                setPhotoPosition({ x: 0, y: 0 });
+              }}
+              className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
+              aria-label="Back"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              <span className="text-[10px] font-medium">Comment</span>
             </button>
 
-            {/* Add to Favorites */}
-            {userId ? (
-              <button
-                onClick={toggleFavorite}
-                disabled={favoriteLoading}
-                className={cx(
-                  "py-2.5 px-2 rounded-xl border transition flex flex-col items-center justify-center gap-1",
-                  isFavorite
-                    ? "border-[#6b7d47] bg-[#6b7d47]/10 text-[#6b7d47]"
-                    : "border-gray-200 bg-white text-[#2d2d2d] hover:bg-gray-50",
-                  favoriteLoading && "opacity-50"
-                )}
-                title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-              >
-                <svg className="w-5 h-5" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                </svg>
-                <span className="text-[10px] font-medium">{isFavorite ? "Saved" : "Add to favorites"}</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => router.push("/auth")}
-                className="py-2.5 px-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition flex flex-col items-center justify-center gap-1 text-[#2d2d2d]"
-                title="Add to favorites"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                </svg>
-                <span className="text-[10px] font-medium">Add to favorites</span>
-              </button>
-            )}
+            {/* Photo counter */}
+            <div className="absolute left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-sm rounded-lg px-3 py-1.5 badge-shadow">
+              <span className="text-white text-sm font-medium">
+                {galleryPhotoIndex + 1} / {allPhotos.length}
+              </span>
+            </div>
 
-            {/* Show on Map */}
-            {place.lat && place.lng ? (
-              <a
-                href={`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="py-2.5 px-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition flex flex-col items-center justify-center gap-1 text-[#2d2d2d]"
-                title="Show on map"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <span className="text-[10px] font-medium">Map</span>
-              </a>
-            ) : (
-              <div className="py-2.5 px-2 rounded-xl border border-gray-200 bg-gray-50 flex flex-col items-center justify-center gap-1 text-gray-400 opacity-50">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <span className="text-[10px] font-medium">Map</span>
-              </div>
-            )}
-
-            {/* Share */}
+            {/* Share button */}
             <button
               onClick={handleShare}
-              className="py-2.5 px-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition flex flex-col items-center justify-center gap-1 text-[#2d2d2d]"
-              title="Share"
+              className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
+              aria-label="Share"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
               </svg>
-              <span className="text-[10px] font-medium">Share</span>
             </button>
           </div>
-        </div>
-      </div>
 
-      <BottomNav />
+          {/* Photo container */}
+          <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+            <div
+              className="relative w-full h-full flex items-center justify-center"
+              style={{
+                transform: `translate(${photoPosition.x}px, ${photoPosition.y}px) scale(${photoZoom})`,
+                transition: isDragging ? 'none' : 'transform 0.3s ease-out',
+              }}
+            >
+              <img
+                ref={galleryImageRef}
+                src={allPhotos[galleryPhotoIndex]}
+                alt={`${place.title} - Photo ${galleryPhotoIndex + 1}`}
+                className="max-w-full max-h-full object-contain"
+                onDoubleClick={handlePhotoDoubleClick}
+                draggable={false}
+              />
+            </div>
+          </div>
+
+          {/* Navigation buttons (desktop) */}
+          {allPhotos.length > 1 && (
+            <>
+              <button
+                onClick={handlePrevPhoto}
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center hover:bg-black/70 transition min-[600px]:block max-[599px]:hidden"
+                aria-label="Previous photo"
+              >
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <button
+                onClick={handleNextPhoto}
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center hover:bg-black/70 transition min-[600px]:block max-[599px]:hidden"
+                aria-label="Next photo"
+              >
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </>
+          )}
+
+          {/* Keyboard navigation */}
+          {typeof window !== 'undefined' && (
+            <div
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowLeft') handlePrevPhoto();
+                if (e.key === 'ArrowRight') handleNextPhoto();
+                if (e.key === 'Escape') {
+                  setPhotoGalleryOpen(false);
+                  setPhotoZoom(1);
+                  setPhotoPosition({ x: 0, y: 0 });
+                }
+              }}
+              className="absolute inset-0"
+              style={{ outline: 'none' }}
+            />
+          )}
+        </div>
+      )}
 
       {/* Description Modal */}
       {showDescriptionModal && place.description && (
@@ -1943,14 +2025,14 @@ export default function PlacePage() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-2xl font-semibold text-[#2d2d2d]">About this space</h2>
+            <div className="flex items-center justify-between p-6 border-b border-[#ECEEE4]">
+              <h2 className="text-2xl font-semibold text-[#1F2A1F]">About this space</h2>
               <button
                 onClick={() => setShowDescriptionModal(false)}
-                className="p-2 rounded-full hover:bg-gray-100 transition"
+                className="p-2 rounded-full hover:bg-[#FAFAF7] transition"
                 aria-label="Close"
               >
-                <svg className="w-6 h-6 text-[#2d2d2d]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -1958,7 +2040,7 @@ export default function PlacePage() {
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-6">
-              <div className="text-base text-[#2d2d2d] leading-relaxed whitespace-pre-wrap">
+              <div className="text-base text-[#1F2A1F] leading-relaxed whitespace-pre-wrap">
                 {place.description}
               </div>
             </div>
@@ -1979,7 +2061,7 @@ function PlaceMapView({ place }: { place: Place }) {
 
   if (!place.lat || !place.lng) {
     return (
-      <div className="w-full h-full flex items-center justify-center text-[#6b7d47]/60">
+      <div className="w-full h-full flex items-center justify-center text-[#8F9E4F]/60">
         Location not available
       </div>
     );
@@ -1987,7 +2069,7 @@ function PlaceMapView({ place }: { place: Place }) {
 
   if (!isLoaded) {
     return (
-      <div className="w-full h-full flex items-center justify-center text-[#6b7d47]/60">
+      <div className="w-full h-full flex items-center justify-center text-[#8F9E4F]/60">
         Loading map…
       </div>
     );

@@ -8,6 +8,7 @@ interface DesktopMosaicProps {
   gap?: number; // 8-16px
   radius?: number; // 16-22px
   onShowAll?: () => void;
+  onPhotoClick?: (index: number) => void;
 }
 
 // Airbnb-style photo mosaic constants
@@ -20,6 +21,7 @@ export default function DesktopMosaic({
   gap = GALLERY_GAP,
   radius = GALLERY_RADIUS,
   onShowAll,
+  onPhotoClick,
 }: DesktopMosaicProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
@@ -117,11 +119,12 @@ export default function DesktopMosaic({
       }}
     >
       {/* Left: Hero image (1:1 aspect ratio) */}
-      <div
-        className="relative overflow-hidden aspect-square"
+      <button
+        className="relative overflow-hidden aspect-square cursor-pointer"
         style={{ borderRadius: `${radius}px` }}
         onMouseEnter={() => setHoveredIndex(0)}
         onMouseLeave={() => setHoveredIndex(null)}
+        onClick={() => onPhotoClick?.(0)}
       >
         <img
           src={photos[0]}
@@ -131,7 +134,7 @@ export default function DesktopMosaic({
             transform: hoveredIndex === 0 ? 'scale(1.02)' : 'scale(1)',
           }}
         />
-      </div>
+      </button>
 
       {/* Right: 2x2 grid (each photo 1:1 aspect ratio) */}
       <div
@@ -141,26 +144,35 @@ export default function DesktopMosaic({
         {rightPhotos.map((photo, index) => {
           const isBottomRight = index === 3; // Bottom-right tile (4th photo)
           const shouldShowButton = isBottomRight && photos.length > 5;
+          const photoIndex = index + 1;
           return (
             <div
               key={index}
               className="relative overflow-hidden aspect-square"
               style={{ borderRadius: `${radius}px` }}
-              onMouseEnter={() => setHoveredIndex(index + 1)}
+              onMouseEnter={() => setHoveredIndex(photoIndex)}
               onMouseLeave={() => setHoveredIndex(null)}
             >
-              <img
-                src={photo}
-                alt={`${title} - Photo ${index + 2}`}
-                className="w-full h-full object-cover transition-transform duration-300"
-                style={{
-                  transform: hoveredIndex === index + 1 ? 'scale(1.02)' : 'scale(1)',
-                }}
-              />
+              <button
+                className="w-full h-full"
+                onClick={() => onPhotoClick?.(photoIndex)}
+              >
+                <img
+                  src={photo}
+                  alt={`${title} - Photo ${index + 2}`}
+                  className="w-full h-full object-cover transition-transform duration-300"
+                  style={{
+                    transform: hoveredIndex === photoIndex ? 'scale(1.02)' : 'scale(1)',
+                  }}
+                />
+              </button>
               {shouldShowButton && (
                 <button
-                  onClick={onShowAll}
-                  className="absolute bottom-3 right-3 bg-white hover:bg-gray-50 transition px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-semibold text-[#2d2d2d] shadow-lg z-10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onShowAll?.();
+                  }}
+                  className="absolute bottom-3 right-3 bg-white hover:bg-gray-50 transition px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-semibold text-[#2d2d2d] badge-shadow z-10"
                   style={{ bottom: `${gap}px`, right: `${gap}px` }}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

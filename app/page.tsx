@@ -10,6 +10,7 @@ import FiltersModal, { ActiveFilters } from "./components/FiltersModal";
 import { HOME_SECTIONS } from "./constants/homeSections";
 import { supabase } from "./lib/supabase";
 import { DEFAULT_CITY } from "./constants";
+import { useUserAccess } from "./hooks/useUserAccess";
 
 export default function HomePage() {
   const router = useRouter();
@@ -29,6 +30,9 @@ export default function HomePage() {
   });
   const [filterOpen, setFilterOpen] = useState(false);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
+
+  // User access for premium filtering
+  const { access } = useUserAccess();
 
   async function loadUser() {
     const { data } = await supabase.auth.getUser();
@@ -232,7 +236,7 @@ export default function HomePage() {
   }, [selectedCity, searchValue, activeFilters]);
 
   return (
-    <main className="min-h-screen bg-[#faf9f7] flex flex-col">
+    <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
       <TopBar
         showSearchBar={true}
         searchValue={searchValue}
@@ -300,6 +304,7 @@ export default function HomePage() {
               key={section.title}
               section={section}
               userId={userId}
+              userAccess={access}
               favorites={favorites}
               onToggleFavorite={toggleFavorite}
               onTagClick={handleTagClick}

@@ -80,12 +80,13 @@ export default function AuthPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#faf9f7] flex items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-3xl bg-white border border-[#6b7d47]/10 shadow-lg p-8 relative">
+    <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center p-6">
+      <div className="w-full max-w-md rounded-3xl bg-white border border-[#ECEEE4] p-8 relative"
+           style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
         {/* Close Button */}
         <button
           onClick={() => router.push("/")}
-          className="absolute top-4 right-4 h-8 w-8 rounded-full flex items-center justify-center text-[#6b7d47]/60 hover:bg-[#f5f4f2] hover:text-[#6b7d47] transition"
+          className="absolute top-4 right-4 h-8 w-8 rounded-full flex items-center justify-center text-[#A8B096] hover:bg-[#FAFAF7] hover:text-[#8F9E4F] transition-colors"
           aria-label="Close"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -117,17 +118,17 @@ export default function AuthPage() {
         </div>
 
         {/* Title */}
-        <h2 className="text-xl font-semibold text-[#2d2d2d] mb-2">
+        <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-2">
           Welcome back
         </h2>
-        <p className="text-sm text-[#6b7d47]/70 mb-6">
+        <p className="text-sm text-[#6F7A5A] mb-6">
           Sign in to save hidden places and explore local gems
         </p>
 
         {/* Email Input */}
         <input
           type="email"
-          className="w-full rounded-xl border border-[#6b7d47]/20 bg-white px-4 py-3 text-[#2d2d2d] placeholder:text-[#6b7d47]/40 outline-none focus:border-[#6b7d47]/40 focus:ring-2 focus:ring-[#6b7d47]/10 transition mb-4"
+          className="w-full h-11 rounded-full border border-[#E5E8DB] bg-white px-5 text-[#1F2A1F] placeholder:text-[#A8B096] outline-none focus:border-[#8F9E4F] transition-colors mb-4"
           placeholder="you@email.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -140,20 +141,20 @@ export default function AuthPage() {
         />
 
         {error && (
-          <div className="mb-4 text-sm text-red-500 bg-red-50 border border-red-200 rounded-xl px-4 py-2">
+          <div className="mb-4 text-sm text-[#C96A5B] bg-[#FAFAF7] border border-[#ECEEE4] rounded-xl px-4 py-2">
             {error}
           </div>
         )}
 
         {sent ? (
-          <div className="mb-4 rounded-xl border border-[#6b7d47]/20 bg-[#6b7d47]/5 p-4 text-sm text-[#6b7d47] text-center">
+          <div className="mb-4 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] p-4 text-sm text-[#8F9E4F] text-center">
             ✅ Magic link sent! Check your inbox (and spam folder).
           </div>
         ) : (
           <>
             {/* Continue Button */}
             <button
-              className="w-full rounded-xl bg-[#6b7d47] text-white py-3 font-medium hover:bg-[#556036] transition disabled:opacity-50 disabled:cursor-not-allowed mb-4"
+              className="w-full h-11 rounded-xl bg-[#8F9E4F] text-white py-3 font-medium hover:brightness-110 active:brightness-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-[#DADDD0] mb-4"
               onClick={signInWithEmail}
               disabled={!email || loading || googleLoading}
             >
@@ -162,14 +163,14 @@ export default function AuthPage() {
 
             {/* Divider */}
             <div className="flex items-center mb-4">
-              <div className="flex-1 border-t border-[#6b7d47]/20"></div>
-              <span className="px-3 text-xs text-[#6b7d47]/50">or</span>
-              <div className="flex-1 border-t border-[#6b7d47]/20"></div>
+              <div className="flex-1 border-t border-[#ECEEE4]"></div>
+              <span className="px-3 text-xs text-[#A8B096]">or</span>
+              <div className="flex-1 border-t border-[#ECEEE4]"></div>
             </div>
 
             {/* Google Button */}
             <button
-              className="w-full rounded-xl border border-[#6b7d47]/20 bg-white text-[#2d2d2d] py-3 font-medium hover:bg-[#f5f4f2] transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+              className="w-full h-11 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] py-3 font-medium hover:bg-[#FAFAF7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
               onClick={signInWithGoogle}
               disabled={loading || googleLoading}
             >
