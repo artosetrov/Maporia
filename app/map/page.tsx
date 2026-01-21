@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
 import { CATEGORIES } from "../constants";
@@ -57,7 +57,7 @@ function timeAgo(iso: string) {
   return `${days}d ago`;
 }
 
-export default function MapPage() {
+function MapPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -81,13 +81,45 @@ export default function MapPage() {
 
   // Applied filters (current state, affects data)
   // Инициализируем из URL сразу, чтобы фильтры применялись при первом рендере
-  const cityParam = searchParams.get('city');
-  const qParam = searchParams.get('q');
-  const categoriesParam = searchParams.get('categories');
+  // Безопасная инициализация для SSR
+  const getInitialValues = () => {
+    try {
+      if (!searchParams) {
+        return {
+          initialCity: DEFAULT_CITY,
+          initialQ: "",
+          initialCategories: [] as string[],
+        };
+      }
+      
+      const cityParam = searchParams.get('city');
+      const qParam = searchParams.get('q');
+      const categoriesParam = searchParams.get('categories');
+      
+      const initialCity = cityParam ? decodeURIComponent(cityParam) : DEFAULT_CITY;
+      const initialQ = qParam ? decodeURIComponent(qParam) : "";
+      const initialCategories = categoriesParam && categoriesParam.trim() 
+        ? categoriesParam.split(',').map(c => {
+            try {
+              return decodeURIComponent(c.trim());
+            } catch {
+              return c.trim();
+            }
+          }).filter(Boolean)
+        : [];
+      
+      return { initialCity, initialQ, initialCategories };
+    } catch {
+      // Fallback при ошибке парсинга
+      return {
+        initialCity: DEFAULT_CITY,
+        initialQ: "",
+        initialCategories: [] as string[],
+      };
+    }
+  };
   
-  const initialCity = cityParam ? decodeURIComponent(cityParam) : DEFAULT_CITY;
-  const initialQ = qParam ? decodeURIComponent(qParam) : "";
-  const initialCategories = categoriesParam ? categoriesParam.split(',').map(c => decodeURIComponent(c)) : [];
+  const { initialCity, initialQ, initialCategories } = getInitialValues();
   
   const [appliedCity, setAppliedCity] = useState<string | null>(initialCity);
   const [appliedQ, setAppliedQ] = useState(initialQ);
@@ -112,66 +144,111 @@ export default function MapPage() {
 
   // Читаем query params из URL (реагируем на изменения)
   useEffect(() => {
-    const city = searchParams.get('city');
-    const categoriesParam = searchParams.get('categories');
-    const qParam = searchParams.get('q');
-    const ref = searchParams.get('ref');
+    if (!searchParams) return;
     
-    // Устанавливаем applied filters из URL
-    if (city) {
-      const decodedCity = decodeURIComponent(city);
-      setAppliedCity(decodedCity);
-      setSelectedCity(decodedCity);
-    } else {
-      // Если city нет в URL, используем DEFAULT_CITY
-      setAppliedCity(DEFAULT_CITY);
-      setSelectedCity(DEFAULT_CITY);
-    }
-    
-    if (qParam) {
-      const decodedQ = decodeURIComponent(qParam);
-      setAppliedQ(decodedQ);
-      setSearchDraft(decodedQ);
-    } else {
-      // Если параметр q отсутствует, очищаем поиск
-      setAppliedQ("");
-      setSearchDraft("");
-    }
-    
-    if (categoriesParam) {
-      const categories = categoriesParam.split(',').map(c => decodeURIComponent(c));
-      setActiveFilters(prev => ({ ...prev, categories }));
-    } else {
-      // Если параметр categories отсутствует, очищаем категории
-      setActiveFilters(prev => ({ ...prev, categories: [] }));
-    }
-    
-    // Проверяем, пришли ли с Home
-    if (categoriesParam || ref === 'home') {
-      setCameFromHome(true);
-    } else {
-      setCameFromHome(false);
+    try {
+      const city = searchParams.get('city');
+      const categoriesParam = searchParams.get('categories');
+      const qParam = searchParams.get('q');
+      const ref = searchParams.get('ref');
+      
+      // Устанавливаем applied filters из URL
+      if (city) {
+        try {
+          const decodedCity = decodeURIComponent(city);
+          setAppliedCity(decodedCity);
+          setSelectedCity(decodedCity);
+        } catch {
+          setAppliedCity(city);
+          setSelectedCity(city);
+        }
+      } else {
+        // Если city нет в URL, используем DEFAULT_CITY
+        setAppliedCity(DEFAULT_CITY);
+        setSelectedCity(DEFAULT_CITY);
+      }
+      
+      if (qParam) {
+        try {
+          const decodedQ = decodeURIComponent(qParam);
+          setAppliedQ(decodedQ);
+          setSearchDraft(decodedQ);
+        } catch {
+          setAppliedQ(qParam);
+          setSearchDraft(qParam);
+        }
+      } else {
+        // Если параметр q отсутствует, очищаем поиск
+        setAppliedQ("");
+        setSearchDraft("");
+      }
+      
+      if (categoriesParam && categoriesParam.trim()) {
+        try {
+          const categories = categoriesParam.split(',').map(c => {
+            try {
+              return decodeURIComponent(c.trim());
+            } catch {
+              return c.trim();
+            }
+          }).filter(Boolean);
+          setActiveFilters(prev => ({ ...prev, categories }));
+        } catch {
+          setActiveFilters(prev => ({ ...prev, categories: [] }));
+        }
+      } else {
+        // Если параметр categories отсутствует, очищаем категории
+        setActiveFilters(prev => ({ ...prev, categories: [] }));
+      }
+      
+      // Проверяем, пришли ли с Home
+      if (categoriesParam || ref === 'home') {
+        setCameFromHome(true);
+      } else {
+        setCameFromHome(false);
+      }
+    } catch (error) {
+      console.error("Error parsing search params:", error);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   // Обновляем URL при изменении applied filters (но только если они отличаются от текущих в URL)
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !searchParams) return;
     
-    const currentCity = searchParams.get('city');
-    const currentQ = searchParams.get('q');
-    const currentCategories = searchParams.get('categories');
+    try {
+      const currentCity = searchParams.get('city');
+      const currentQ = searchParams.get('q');
+      const currentCategories = searchParams.get('categories');
     
     // Сравниваем текущие значения в URL с applied filters
     const expectedCity = appliedCity && appliedCity !== DEFAULT_CITY ? appliedCity : null;
     const expectedQ = appliedQ.trim() || null;
     const expectedCategories = appliedCategories.length > 0 ? appliedCategories : null;
     
-    const currentCityDecoded = currentCity ? decodeURIComponent(currentCity) : null;
-    const currentQDecoded = currentQ ? decodeURIComponent(currentQ) : null;
+    const currentCityDecoded = currentCity ? (() => {
+      try {
+        return decodeURIComponent(currentCity);
+      } catch {
+        return currentCity;
+      }
+    })() : null;
+    const currentQDecoded = currentQ ? (() => {
+      try {
+        return decodeURIComponent(currentQ);
+      } catch {
+        return currentQ;
+      }
+    })() : null;
     const currentCategoriesDecoded = currentCategories 
-      ? currentCategories.split(',').map(c => decodeURIComponent(c)).sort()
+      ? currentCategories.split(',').map(c => {
+          try {
+            return decodeURIComponent(c.trim());
+          } catch {
+            return c.trim();
+          }
+        }).filter(Boolean).sort()
       : null;
     const expectedCategoriesSorted = expectedCategories ? [...expectedCategories].sort() : null;
     
@@ -199,11 +276,14 @@ export default function MapPage() {
       params.set('categories', expectedCategories.map(c => encodeURIComponent(c)).join(','));
     }
     
-    const newUrl = params.toString() 
+    const newUrl = params.toString()
       ? `${window.location.pathname}?${params.toString()}`
       : window.location.pathname;
     
     window.history.replaceState({}, '', newUrl);
+    } catch (error) {
+      console.error("Error updating URL:", error);
+    }
   }, [appliedCity, appliedQ, appliedCategories, searchParams]);
 
   // Cities are now fixed from constants, no need to compute from places
@@ -1276,6 +1356,18 @@ export default function MapPage() {
 
       <BottomNav />
     </main>
+  );
+}
+
+export default function MapPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-[#6b7d47]">Loading...</div>
+      </div>
+    }>
+      <MapPageContent />
+    </Suspense>
   );
 }
 
