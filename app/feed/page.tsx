@@ -151,8 +151,6 @@ export default function FeedPage() {
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
     vibes: [],
     categories: [],
-    tags: [],
-    distance: null,
     sort: null,
   });
   const [filterOpen, setFilterOpen] = useState(false);
@@ -396,9 +394,6 @@ export default function FeedPage() {
           }
           if (filters.vibes.length > 0) {
             params.set("vibes", filters.vibes.map(v => encodeURIComponent(v)).join(','));
-          }
-          if (filters.distance) {
-            params.set("distance", filters.distance);
           }
           if (filters.sort) {
             params.set("sort", filters.sort);

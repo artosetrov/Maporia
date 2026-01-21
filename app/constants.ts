@@ -30,7 +30,7 @@ export const CATEGORIES = [
   export const SORT_OPTIONS = [
     { value: "newest", label: "Newest" },
     { value: "most_liked", label: "Most liked" },
-    { value: "closest", label: "Closest" },
+    { value: "most_commented", label: "Most commented" },
   ] as const;
 
   // Distance options

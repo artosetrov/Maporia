@@ -46,8 +46,10 @@ export default function SearchBar({
     }
   }, [cityDropdownOpen]);
 
+  // Показываем "Anywhere" только если город явно не выбран (null)
+  // Если город установлен (даже если это DEFAULT_CITY), показываем его название
   const displayCity = selectedCity || DEFAULT_CITY;
-  const isAnywhere = !selectedCity || selectedCity === DEFAULT_CITY;
+  const isAnywhere = !selectedCity; // Только когда selectedCity === null
 
   // Mobile: compact version
   if (isMobile) {

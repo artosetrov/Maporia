@@ -25,8 +25,6 @@ export default function HomePage() {
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
     vibes: [],
     categories: [],
-    tags: [],
-    distance: null,
     sort: null,
   });
   const [filterOpen, setFilterOpen] = useState(false);
@@ -163,8 +161,13 @@ export default function HomePage() {
     setSelectedCity(city);
     // Always redirect to /map with city filter
     const params = new URLSearchParams();
-    if (city) params.set("city", city);
-    if (searchValue) params.set("q", searchValue);
+    if (city && city.trim()) {
+      // Кодируем город для безопасной передачи в URL
+      params.set("city", encodeURIComponent(city.trim()));
+    }
+    if (searchValue && searchValue.trim()) {
+      params.set("q", encodeURIComponent(searchValue.trim()));
+    }
     if (activeFilters.categories.length > 0) {
       params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
     }
@@ -187,9 +190,6 @@ export default function HomePage() {
     }
     if (filters.vibes.length > 0) {
       params.set("vibes", filters.vibes.map(v => encodeURIComponent(v)).join(','));
-    }
-    if (filters.distance) {
-      params.set("distance", filters.distance);
     }
     if (filters.sort) {
       params.set("sort", filters.sort);
@@ -227,8 +227,6 @@ export default function HomePage() {
     if (searchValue) count++;
     if (activeFilters.vibes.length > 0) count += activeFilters.vibes.length;
     if (activeFilters.categories.length > 0) count += activeFilters.categories.length;
-    if (activeFilters.tags.length > 0) count += activeFilters.tags.length;
-    if (activeFilters.distance) count++;
     if (activeFilters.sort) count++;
     setActiveFiltersCount(count);
   }, [selectedCity, searchValue, activeFilters]);
@@ -255,9 +253,37 @@ export default function HomePage() {
         onClose={() => setFilterOpen(false)}
         onApply={handleFiltersApply}
         appliedFilters={activeFilters}
-        getFilteredCount={() => {
-          // For home page, we can't easily count filtered places without loading all
-          return 0;
+        getFilteredCount={async (draftFilters: ActiveFilters) => {
+          // Подсчитываем количество мест с учетом фильтров
+          try {
+            let countQuery = supabase.from("places").select("*", { count: 'exact', head: true });
+
+            // Фильтрация по городу
+            if (selectedCity && selectedCity !== DEFAULT_CITY) {
+              countQuery = countQuery.eq("city", selectedCity);
+            }
+
+            // Фильтрация по категориям
+            if (draftFilters.categories.length > 0) {
+              countQuery = countQuery.overlaps("categories", draftFilters.categories);
+            }
+
+            // Фильтрация по поисковому запросу
+            if (searchValue && searchValue.trim()) {
+              const s = searchValue.trim();
+              countQuery = countQuery.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
+            }
+
+            const { count, error } = await countQuery;
+            if (error) {
+              console.error("Error counting filtered places:", error);
+              return 0;
+            }
+            return count || 0;
+          } catch (error) {
+            console.error("Error in getFilteredCount:", error);
+            return 0;
+          }
         }}
       />
 

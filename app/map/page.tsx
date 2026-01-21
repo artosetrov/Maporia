@@ -69,6 +69,7 @@ function MapPageContent() {
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [mapZoom, setMapZoom] = useState<number | null>(null);
+  const [isMapFullscreen, setIsMapFullscreen] = useState(false);
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -85,10 +86,12 @@ function MapPageContent() {
   const getInitialValues = () => {
     try {
       if (!searchParams) {
+        console.log('[MapPage] No searchParams available, using defaults');
         return {
-          initialCity: DEFAULT_CITY,
+          initialCity: null, // null для "Anywhere"
           initialQ: "",
           initialCategories: [] as string[],
+          hasCityInUrl: false,
         };
       }
       
@@ -96,8 +99,27 @@ function MapPageContent() {
       const qParam = searchParams.get('q');
       const categoriesParam = searchParams.get('categories');
       
-      const initialCity = cityParam ? decodeURIComponent(cityParam) : DEFAULT_CITY;
-      const initialQ = qParam ? decodeURIComponent(qParam) : "";
+      let initialCity: string | null = null; // По умолчанию null для "Anywhere"
+      let hasCityInUrl = false;
+      if (cityParam && cityParam.trim()) {
+        hasCityInUrl = true;
+        try {
+          initialCity = decodeURIComponent(cityParam.trim());
+          console.log('[MapPage] Initial city from URL:', initialCity);
+        } catch {
+          initialCity = cityParam.trim();
+          console.log('[MapPage] Initial city from URL (no decode):', initialCity);
+        }
+      }
+      
+      const initialQ = qParam ? (() => {
+        try {
+          return decodeURIComponent(qParam);
+        } catch {
+          return qParam;
+        }
+      })() : "";
+      
       const initialCategories = categoriesParam && categoriesParam.trim() 
         ? categoriesParam.split(',').map(c => {
             try {
@@ -108,31 +130,36 @@ function MapPageContent() {
           }).filter(Boolean)
         : [];
       
-      return { initialCity, initialQ, initialCategories };
-    } catch {
+      return { initialCity, initialQ, initialCategories, hasCityInUrl };
+    } catch (e) {
+      console.error('[MapPage] Error in getInitialValues:', e);
       // Fallback при ошибке парсинга
-      return {
-        initialCity: DEFAULT_CITY,
-        initialQ: "",
-        initialCategories: [] as string[],
-      };
+        return {
+          initialCity: null, // null для "Anywhere"
+          initialQ: "",
+          initialCategories: [] as string[],
+          hasCityInUrl: false,
+        };
     }
   };
   
-  const { initialCity, initialQ, initialCategories } = getInitialValues();
+  const { initialCity, initialQ, initialCategories, hasCityInUrl: initialHasCityInUrl } = getInitialValues();
   
-  const [appliedCity, setAppliedCity] = useState<string | null>(initialCity);
+  // appliedCity всегда должен быть строкой (для фильтрации), используем DEFAULT_CITY если нет города
+  const [appliedCity, setAppliedCity] = useState<string | null>(initialCity || DEFAULT_CITY);
   const [appliedQ, setAppliedQ] = useState(initialQ);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
     vibes: [],
     categories: initialCategories,
-    tags: [],
-    distance: null,
     sort: null,
   });
   
+  // Инициализируем флаг наличия города в URL
+  const [hasExplicitCityInUrlState, setHasExplicitCityInUrlState] = useState(initialHasCityInUrl);
+  
   // Draft filters (for search input and modal)
   const [searchDraft, setSearchDraft] = useState(initialQ);
+  // selectedCity может быть null для "Anywhere"
   const [selectedCity, setSelectedCity] = useState<string | null>(initialCity);
   
   const [selectedTag, setSelectedTag] = useState<string>("");
@@ -153,19 +180,34 @@ function MapPageContent() {
       const ref = searchParams.get('ref');
       
       // Устанавливаем applied filters из URL
-      if (city) {
+      if (city && city.trim()) {
         try {
-          const decodedCity = decodeURIComponent(city);
+          const decodedCity = decodeURIComponent(city.trim());
+          console.log('[MapPage] Setting city from URL:', decodedCity);
+          // Всегда устанавливаем город из URL, если он есть
           setAppliedCity(decodedCity);
           setSelectedCity(decodedCity);
-        } catch {
-          setAppliedCity(city);
-          setSelectedCity(city);
+          setHasExplicitCityInUrlState(true); // Город явно указан в URL
+        } catch (e) {
+          const trimmedCity = city.trim();
+          console.log('[MapPage] Setting city from URL (no decode):', trimmedCity);
+          setAppliedCity(trimmedCity);
+          setSelectedCity(trimmedCity);
+          setHasExplicitCityInUrlState(true); // Город явно указан в URL
         }
       } else {
-        // Если city нет в URL, используем DEFAULT_CITY
-        setAppliedCity(DEFAULT_CITY);
-        setSelectedCity(DEFAULT_CITY);
+        // Если city нет в URL, используем DEFAULT_CITY только если appliedCity ещё не установлен
+        // Это позволяет сохранить выбранный город при переходе на страницу без параметра city
+        setHasExplicitCityInUrlState(false); // Город не указан в URL
+        setAppliedCity(prev => {
+          if (!prev) {
+            console.log('[MapPage] No city in URL, using DEFAULT_CITY:', DEFAULT_CITY);
+            return DEFAULT_CITY;
+          }
+          return prev;
+        });
+        // Если city нет в URL, устанавливаем selectedCity в null для "Anywhere"
+        setSelectedCity(null);
       }
       
       if (qParam) {
@@ -223,7 +265,8 @@ function MapPageContent() {
       const currentCategories = searchParams.get('categories');
     
     // Сравниваем текущие значения в URL с applied filters
-    const expectedCity = appliedCity && appliedCity !== DEFAULT_CITY ? appliedCity : null;
+    // Включаем город в URL, если он явно выбран (даже если это DEFAULT_CITY)
+    const expectedCity = appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) ? appliedCity : null;
     const expectedQ = appliedQ.trim() || null;
     const expectedCategories = appliedCategories.length > 0 ? appliedCategories : null;
     
@@ -342,11 +385,18 @@ function MapPageContent() {
   async function loadPlaces() {
     setLoading(true);
 
-    let query = supabase.from("places").select("*").order("created_at", { ascending: false });
+    let query = supabase.from("places").select("*");
 
     // Фильтрация по городу
-    if (appliedCity && appliedCity !== DEFAULT_CITY) {
+    // Применяем фильтр, если:
+    // 1. Город явно указан в URL (hasExplicitCityInUrlState = true), ИЛИ
+    // 2. Город установлен и отличается от DEFAULT_CITY
+    console.log('[MapPage] loadPlaces - appliedCity:', appliedCity, 'DEFAULT_CITY:', DEFAULT_CITY, 'hasExplicitCityInUrl:', hasExplicitCityInUrlState);
+    if (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) {
+      console.log('[MapPage] Filtering by city:', appliedCity);
       query = query.eq("city", appliedCity);
+    } else {
+      console.log('[MapPage] Not filtering by city (using all cities or default)');
     }
 
     // Фильтрация по категориям - если выбраны категории, проверяем что place.categories содержит хотя бы одну из них
@@ -360,8 +410,25 @@ function MapPageContent() {
       query = query.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
     }
 
+    // Фильтрация по тегам - используем selectedTag (для обратной совместимости)
     if (selectedTag) {
       query = query.contains("tags", [selectedTag]);
+    }
+
+    // Применяем сортировку
+    if (activeFilters.sort === "newest") {
+      query = query.order("created_at", { ascending: false });
+    } else if (activeFilters.sort === "most_liked") {
+      // Для сортировки по лайкам нужно будет использовать подзапрос или RPC
+      // Пока используем created_at как fallback
+      query = query.order("created_at", { ascending: false });
+    } else if (activeFilters.sort === "most_commented") {
+      // Для сортировки по комментариям тоже нужен подзапрос
+      // Пока используем created_at как fallback
+      query = query.order("created_at", { ascending: false });
+    } else {
+      // По умолчанию - по дате создания
+      query = query.order("created_at", { ascending: false });
     }
 
     const { data, error } = await query;
@@ -370,33 +437,82 @@ function MapPageContent() {
     if (error) {
       console.error("Error loading places:", error);
       setPlaces([]);
-    } else if (!data || data.length === 0) {
+      setLoading(false);
+      return;
+    }
+    
+    if (!data || data.length === 0) {
       console.log("No places found");
       setPlaces([]);
-    } else {
-      const placesWithCoords = (data ?? []).map((p: any) => ({
-        ...p,
-        lat: p.lat ?? null,
-        lng: p.lng ?? null,
-      }));
-      const placesWithValidCoords = placesWithCoords.filter((p: any) => p.lat !== null && p.lng !== null);
-      console.log("Loaded places:", placesWithCoords.length, "places with coordinates:", placesWithValidCoords.length);
-      
-      // Логируем места без координат для отладки
-      const placesWithoutCoords = placesWithCoords.filter((p: any) => p.lat === null || p.lng === null);
-      if (placesWithoutCoords.length > 0) {
-        console.warn("Places without coordinates:", placesWithoutCoords.map((p: any) => ({
-          id: p.id,
-          title: p.title,
-          address: p.address,
-          lat: p.lat,
-          lng: p.lng,
-        })));
-      }
-      
-      setPlaces(placesWithCoords as Place[]);
+      setLoading(false);
+      return;
     }
 
+    // Если выбрана сортировка по комментариям или лайкам, нужно загрузить счетчики
+    let placesWithCounts = data;
+    if (activeFilters.sort === "most_commented" || activeFilters.sort === "most_liked") {
+      const placeIds = data.map((p: any) => p.id);
+      
+      // Загружаем количество комментариев и лайков для всех мест
+      const [commentsResult, likesResult] = await Promise.all([
+        supabase
+          .from("comments")
+          .select("place_id")
+          .in("place_id", placeIds),
+        supabase
+          .from("reactions")
+          .select("place_id")
+          .eq("reaction", "like")
+          .in("place_id", placeIds),
+      ]);
+
+      // Подсчитываем количество комментариев и лайков для каждого места
+      const commentsCount = new Map<string, number>();
+      const likesCount = new Map<string, number>();
+
+      (commentsResult.data || []).forEach((c: any) => {
+        commentsCount.set(c.place_id, (commentsCount.get(c.place_id) || 0) + 1);
+      });
+
+      (likesResult.data || []).forEach((r: any) => {
+        likesCount.set(r.place_id, (likesCount.get(r.place_id) || 0) + 1);
+      });
+
+      // Добавляем счетчики к местам и сортируем
+      placesWithCounts = data.map((p: any) => ({
+        ...p,
+        commentsCount: commentsCount.get(p.id) || 0,
+        likesCount: likesCount.get(p.id) || 0,
+      }));
+
+      if (activeFilters.sort === "most_commented") {
+        placesWithCounts.sort((a: any, b: any) => b.commentsCount - a.commentsCount);
+      } else if (activeFilters.sort === "most_liked") {
+        placesWithCounts.sort((a: any, b: any) => b.likesCount - a.likesCount);
+      }
+    }
+
+    const placesWithCoords = placesWithCounts.map((p: any) => ({
+      ...p,
+      lat: p.lat ?? null,
+      lng: p.lng ?? null,
+    }));
+    const placesWithValidCoords = placesWithCoords.filter((p: any) => p.lat !== null && p.lng !== null);
+    console.log("Loaded places:", placesWithCoords.length, "places with coordinates:", placesWithValidCoords.length);
+    
+    // Логируем места без координат для отладки
+    const placesWithoutCoords = placesWithCoords.filter((p: any) => p.lat === null || p.lng === null);
+    if (placesWithoutCoords.length > 0) {
+      console.warn("Places without coordinates:", placesWithoutCoords.map((p: any) => ({
+        id: p.id,
+        title: p.title,
+        address: p.address,
+        lat: p.lat,
+        lng: p.lng,
+      })));
+    }
+    
+    setPlaces(placesWithCoords as Place[]);
     setLoading(false);
   }
 
@@ -411,7 +527,7 @@ function MapPageContent() {
   useEffect(() => {
     loadPlaces();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appliedCity, appliedQ, appliedCategories, selectedTag]);
+  }, [appliedCity, appliedQ, appliedCategories, selectedTag, hasExplicitCityInUrlState]);
 
   // Загружаем избранное пользователя
   useEffect(() => {
@@ -445,7 +561,7 @@ function MapPageContent() {
   useEffect(() => {
     loadPlaces();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appliedQ, appliedCity, appliedCategories, selectedTag]);
+  }, [appliedQ, appliedCity, appliedCategories, selectedTag, activeFilters.sort]);
 
   // Live search: автоматически применяем поиск при вводе (с небольшой задержкой)
   useEffect(() => {
@@ -460,10 +576,31 @@ function MapPageContent() {
     setAppliedQ(searchDraft);
   }
 
-  // Handle city change from SearchBar
+  // Handle city change from SearchBar or SearchModal
   const handleCityChange = (city: string | null) => {
     setSelectedCity(city);
-    setAppliedCity(city || DEFAULT_CITY);
+    // Если город явно выбран (не null), устанавливаем его и флаг
+    if (city) {
+      setAppliedCity(city);
+      setHasExplicitCityInUrlState(true); // Город явно выбран пользователем
+      
+      // Обновляем URL с выбранным городом
+      const params = new URLSearchParams(window.location.search);
+      params.set('city', encodeURIComponent(city));
+      window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    } else {
+      // Если выбран "Anywhere" (null), сбрасываем на DEFAULT_CITY и флаг
+      setAppliedCity(DEFAULT_CITY);
+      setHasExplicitCityInUrlState(false);
+      
+      // Удаляем city из URL
+      const params = new URLSearchParams(window.location.search);
+      params.delete('city');
+      const newUrl = params.toString() 
+        ? `${window.location.pathname}?${params.toString()}`
+        : window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
   };
 
   // Handle filters apply from modal
@@ -529,31 +666,72 @@ function MapPageContent() {
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (appliedCategories.length > 0) count += appliedCategories.length;
-    if (appliedCity && appliedCity !== DEFAULT_CITY) count += 1;
+    // Учитываем город как активный фильтр, если он явно выбран (даже если это DEFAULT_CITY)
+    if (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) count += 1;
     if (appliedQ.trim()) count += 1;
     // Note: selectedTag is not shown in badge as it's a separate filter
     return count;
-  }, [appliedCategories, appliedCity, appliedQ]);
+  }, [appliedCategories, appliedCity, appliedQ, hasExplicitCityInUrlState]);
 
   // Quick search chips
   const quickSearchChips = ["Romantic", "Quiet", "Sunset", "Coffee", "Nature"];
 
-  // Формируем title для header списка
+  // Проверяем, есть ли активные фильтры (для показа кнопки "назад")
+  const hasActiveFilters = useMemo(() => {
+    return (
+      (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) ||
+      appliedCategories.length > 0 ||
+      appliedQ.trim().length > 0 ||
+      selectedTag.length > 0
+    );
+  }, [appliedCity, hasExplicitCityInUrlState, appliedCategories, appliedQ, selectedTag]);
+
+  // Функция для очистки всех фильтров
+  const handleClearAllFilters = () => {
+    setAppliedCity(DEFAULT_CITY);
+    setHasExplicitCityInUrlState(false);
+    setAppliedQ("");
+    setSearchDraft("");
+    setSelectedTag("");
+    setActiveFilters({
+      vibes: [],
+      categories: [],
+      sort: null,
+    });
+    // Очищаем URL параметры
+    window.history.replaceState({}, '', window.location.pathname);
+  };
+
+  // Формируем title для header списка с учетом количества результатов
   const listTitle = useMemo(() => {
-    if (appliedCategories.length > 0) {
-      return appliedCategories[0];
+    const count = places.length;
+    const countText = `${count} ${count === 1 ? "place" : "places"}`;
+    
+    // Если выбран город
+    if (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) {
+      return `${countText} in ${appliedCity}`;
     }
-    if (appliedQ.trim()) {
-      return `Search: "${appliedQ}"`;
+    
+    // Если есть другие фильтры (категории, поиск, тег), но нет города
+    if (appliedCategories.length > 0 || appliedQ.trim() || selectedTag) {
+      return countText;
     }
-    if (appliedCity && appliedCity !== DEFAULT_CITY) {
-      return `Places in ${appliedCity}`;
-    }
+    
+    // Нет фильтров - показываем "All places"
     return "All places";
-  }, [appliedCategories, appliedQ, appliedCity]);
+  }, [places.length, appliedCity, hasExplicitCityInUrlState, appliedCategories, appliedQ, selectedTag]);
+
+  // Subtitle для заголовка (показываем только когда нет фильтров)
+  const listSubtitle = useMemo(() => {
+    if (hasActiveFilters) {
+      return null; // Не показываем subtitle когда есть фильтры
+    }
+    const count = places.length;
+    return `${count} ${count === 1 ? "place" : "places"}`;
+  }, [places.length, hasActiveFilters]);
 
   return (
-    <main className="h-screen bg-[#faf9f7] flex flex-col overflow-hidden">
+    <main className={`h-screen bg-[#faf9f7] flex flex-col overflow-hidden ${isMapFullscreen ? 'fixed inset-0 z-50' : ''}`}>
       <TopBar
         showSearchBar={true}
         searchValue={searchDraft}
@@ -573,9 +751,34 @@ function MapPageContent() {
         onClose={() => setFilterOpen(false)}
         onApply={handleFiltersApply}
         appliedFilters={activeFilters}
-        getFilteredCount={() => {
-          // Calculate filtered places count (simplified - would need to actually filter)
-          return places.length;
+        getFilteredCount={(draftFilters: ActiveFilters) => {
+          // Фильтруем уже загруженные места на клиенте с учетом draftFilters
+          let filtered = [...places];
+
+          // Фильтрация по категориям
+          if (draftFilters.categories.length > 0) {
+            filtered = filtered.filter(place => 
+              place.categories && 
+              draftFilters.categories.some(cat => place.categories?.includes(cat))
+            );
+          }
+
+          // Фильтрация по поисковому запросу (если есть)
+          if (appliedQ.trim()) {
+            const searchLower = appliedQ.toLowerCase();
+            filtered = filtered.filter(place => 
+              place.title?.toLowerCase().includes(searchLower) ||
+              place.description?.toLowerCase().includes(searchLower) ||
+              place.country?.toLowerCase().includes(searchLower)
+            );
+          }
+
+          // Фильтрация по городу (уже применена при загрузке, но проверяем для точности)
+          if (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) {
+            filtered = filtered.filter(place => place.city === appliedCity);
+          }
+
+          return filtered.length;
         }}
       />
 
@@ -605,40 +808,30 @@ function MapPageContent() {
         Card image: aspect 4:3, radius 18-22px, carousel dots
         See app/config/layout.ts for detailed configuration
       */}
-      <div className="flex-1 min-h-0 pt-[64px] min-[900px]:pt-[120px] overflow-hidden">
+      <div className={`flex-1 min-h-0 pt-[32px] min-[900px]:pt-[60px] overflow-hidden ${isMapFullscreen ? 'pt-0' : ''}`}>
         {/* Desktop XL & Desktop: Split view (≥1120px) - Airbnb-like responsive rules */}
         {/* On very large screens (>=1920px), container stretches to full width, map takes 100% of right side */}
-        <div className="hidden min-[1120px]:flex h-full max-w-[1920px] min-[1920px]:max-w-none mx-auto px-6">
+        <div className={`hidden min-[1120px]:flex h-full max-w-[1920px] min-[1920px]:max-w-none mx-auto px-6 ${isMapFullscreen ? 'px-0 max-w-none' : ''}`}>
           {/* Left: Scrollable list - 60% on XL (>=1440px), 62.5% on Desktop (1120-1439px) */}
           {/* On very large screens (>=1920px), list has fixed max-width, map stretches to fill remaining space */}
           {/* Фиксированная ширина - НЕ меняется в зависимости от фильтров или количества результатов */}
-          <div className="map-list-container w-[62.5%] min-[1440px]:w-[60%] min-[1920px]:w-[1152px] flex-shrink-0 overflow-y-auto scrollbar-hide pr-6">
+          <div className={`map-list-container w-[62.5%] min-[1440px]:w-[60%] min-[1920px]:w-[1152px] flex-shrink-0 overflow-y-auto scrollbar-hide pr-6 ${isMapFullscreen ? 'hidden' : ''}`}>
             {/* Header in List Column */}
-            <div className="sticky top-0 z-30 bg-[#faf9f7] pt-4 pb-3 border-b border-[#6b7d47]/10 mb-4">
+            <div className="sticky top-0 z-30 bg-[#faf9f7] pt-12 pb-3 border-b border-[#6b7d47]/10 mb-4">
               <div className="flex items-center gap-3 mb-2">
-                {/* Back button - только если пришли с Home */}
-                {cameFromHome && (
-                  <Link
-                    href="/"
-                    className="h-10 w-10 rounded-xl flex items-center justify-center text-[#556036] hover:bg-[#f5f4f2] transition flex-shrink-0"
-                    aria-label="Back to Home"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </Link>
-                )}
                 <div className="flex-1 min-w-0">
                   <h1 className="text-xl font-semibold text-[#2d2d2d] truncate">{listTitle}</h1>
-                  <div className="text-sm text-[#6b7d47]/60 mt-0.5">
-                    {places.length} {places.length === 1 ? "place" : "places"}
-                  </div>
+                  {listSubtitle && (
+                    <div className="text-sm text-[#6b7d47]/60 mt-0.5">
+                      {listSubtitle}
+                    </div>
+                  )}
                 </div>
               </div>
               {/* Active filter chips */}
-              {((appliedCity && appliedCity !== DEFAULT_CITY) || appliedCategories.length > 0) && (
+              {((appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) || appliedCategories.length > 0) && (
                 <div className="mt-2 flex gap-2 overflow-x-auto pb-1 flex-wrap">
-                  {appliedCity && appliedCity !== DEFAULT_CITY && (
+                  {appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && (
                     <button
                       onClick={() => {
                         handleCityChange(null);
@@ -752,6 +945,28 @@ function MapPageContent() {
 
           {/* Right: Sticky map - 37.5% on Desktop (1120-1439px), 40% on XL (1440-1919px), 100% of remaining on >=1920px */}
           {/* Правая часть: карта - занимает оставшееся пространство */}
+          {isMapFullscreen ? (
+            <div className="fixed inset-0 top-[64px] min-[600px]:top-[80px] z-40 w-full h-[calc(100vh-64px)] min-[600px]:h-[calc(100vh-80px)]">
+              <div className="h-full w-full overflow-hidden">
+                <MapView
+                  places={places}
+                  loading={loading}
+                  selectedPlaceId={hoveredPlaceId || selectedPlaceId}
+                  mapCenter={mapCenter}
+                  mapZoom={mapZoom}
+                  onMapStateChange={(center, zoom) => {
+                    setMapCenter(center);
+                    setMapZoom(zoom);
+                  }}
+                  userId={userId}
+                  favorites={favorites}
+                  onToggleFavorite={toggleFavorite}
+                  isFullscreen={isMapFullscreen}
+                  onFullscreenChange={setIsMapFullscreen}
+                />
+              </div>
+            </div>
+          ) : (
           <div className="w-[37.5%] min-[1440px]:w-[40%] min-[1920px]:flex-1 h-full flex-shrink-0 flex-grow max-w-full pb-8">
             <div className="sticky top-20 h-[calc(100vh-96px-32px)] rounded-2xl overflow-hidden w-full max-w-full">
               <MapView
@@ -767,33 +982,27 @@ function MapPageContent() {
                 userId={userId}
                 favorites={favorites}
                 onToggleFavorite={toggleFavorite}
+                isFullscreen={isMapFullscreen}
+                onFullscreenChange={setIsMapFullscreen}
               />
             </div>
           </div>
+          )}
         </div>
 
         {/* Tablet Large: List only with Show Map button (900px - 1119px) */}
         <div className="hidden min-[900px]:max-[1119px]:block h-full">
           <div className="max-w-[1920px] mx-auto px-5">
             {/* Header in List Column */}
-            <div className="sticky top-[120px] z-30 bg-[#faf9f7] pt-4 pb-3 border-b border-[#6b7d47]/10 mb-4">
+            <div className="sticky top-[60px] z-30 bg-[#faf9f7] pt-12 pb-3 border-b border-[#6b7d47]/10 mb-4">
               <div className="flex items-center gap-3 mb-2">
-                {cameFromHome && (
-                  <Link
-                    href="/"
-                    className="h-10 w-10 rounded-xl flex items-center justify-center text-[#556036] hover:bg-[#f5f4f2] transition flex-shrink-0"
-                    aria-label="Back to Home"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </Link>
-                )}
                 <div className="flex-1 min-w-0">
                   <h1 className="text-xl font-semibold text-[#2d2d2d] truncate">{listTitle}</h1>
-                  <div className="text-sm text-[#6b7d47]/60 mt-0.5">
-                    {places.length} {places.length === 1 ? "place" : "places"}
-                  </div>
+                  {listSubtitle && (
+                    <div className="text-sm text-[#6b7d47]/60 mt-0.5">
+                      {listSubtitle}
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => setView("map")}
@@ -803,9 +1012,9 @@ function MapPageContent() {
                 </button>
               </div>
               {/* Active filter chips */}
-              {((appliedCity && appliedCity !== DEFAULT_CITY) || appliedCategories.length > 0) && (
+              {((appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) || appliedCategories.length > 0) && (
                 <div className="mt-2 flex gap-2 overflow-x-auto pb-1 flex-wrap">
-                  {appliedCity && appliedCity !== DEFAULT_CITY && (
+                  {appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && (
                     <button
                       onClick={() => {
                         handleCityChange(null);
@@ -905,24 +1114,15 @@ function MapPageContent() {
         <div className="hidden min-[600px]:max-[899px]:block h-full">
           <div className="max-w-[680px] mx-auto px-4">
             {/* Header in List Column */}
-            <div className="sticky top-[64px] z-30 bg-[#faf9f7] pt-4 pb-3 border-b border-[#6b7d47]/10 mb-4">
+            <div className="sticky top-[64px] z-30 bg-[#faf9f7] pt-12 pb-3 border-b border-[#6b7d47]/10 mb-4">
               <div className="flex items-center gap-3 mb-2">
-                {cameFromHome && (
-                  <Link
-                    href="/"
-                    className="h-10 w-10 rounded-xl flex items-center justify-center text-[#556036] hover:bg-[#f5f4f2] transition flex-shrink-0"
-                    aria-label="Back to Home"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </Link>
-                )}
                 <div className="flex-1 min-w-0">
                   <h1 className="text-xl font-semibold text-[#2d2d2d] truncate">{listTitle}</h1>
-                  <div className="text-sm text-[#6b7d47]/60 mt-0.5">
-                    {places.length} {places.length === 1 ? "place" : "places"}
-                  </div>
+                  {listSubtitle && (
+                    <div className="text-sm text-[#6b7d47]/60 mt-0.5">
+                      {listSubtitle}
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => setView("map")}
@@ -932,9 +1132,9 @@ function MapPageContent() {
                 </button>
               </div>
               {/* Active filter chips */}
-              {((appliedCity && appliedCity !== DEFAULT_CITY) || appliedCategories.length > 0) && (
+              {((appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) || appliedCategories.length > 0) && (
                 <div className="mt-2 flex gap-2 overflow-x-auto pb-1 flex-wrap">
-                  {appliedCity && appliedCity !== DEFAULT_CITY && (
+                  {appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && (
                     <button
                       onClick={() => {
                         handleCityChange(null);
@@ -1032,30 +1232,34 @@ function MapPageContent() {
         {/* Mobile: List or Map view (< 600px) */}
         <div className="min-[600px]:hidden h-full flex flex-col transition-opacity duration-300">
           {/* Header in List Column - Mobile */}
-          <div className="sticky top-[64px] z-30 bg-[#faf9f7] pt-4 pb-3 border-b border-[#6b7d47]/10 px-4 flex-shrink-0">
+          <div className="sticky top-[64px] z-30 bg-[#faf9f7] pt-6 pb-3 border-b border-[#6b7d47]/10 px-4 flex-shrink-0">
             <div className="flex items-center gap-3 mb-2">
-              {cameFromHome && (
-                <Link
-                  href="/"
+              {/* Back button - показываем когда есть активные фильтры */}
+              {hasActiveFilters && (
+                <button
+                  onClick={handleClearAllFilters}
                   className="h-10 w-10 rounded-xl flex items-center justify-center text-[#556036] hover:bg-[#f5f4f2] transition flex-shrink-0"
-                  aria-label="Back to Home"
+                  aria-label="Clear all filters"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
-                </Link>
+                </button>
               )}
+              {!hasActiveFilters && <div className="w-10" />}
               <div className="flex-1 min-w-0">
                 <h1 className="text-lg font-semibold text-[#2d2d2d] truncate">{listTitle}</h1>
-                <div className="text-xs text-[#6b7d47]/60 mt-0.5">
-                  {places.length} {places.length === 1 ? "place" : "places"}
-                </div>
+                {listSubtitle && (
+                  <div className="text-xs text-[#6b7d47]/60 mt-0.5">
+                    {listSubtitle}
+                  </div>
+                )}
               </div>
             </div>
             {/* Active filter chips */}
-            {((appliedCity && appliedCity !== DEFAULT_CITY) || appliedCategories.length > 0) && (
+            {hasActiveFilters && (
               <div className="mt-2 flex gap-2 overflow-x-auto pb-1 flex-wrap">
-                {appliedCity && appliedCity !== DEFAULT_CITY && (
+                {appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && (
                   <button
                     onClick={() => {
                       handleCityChange(null);
@@ -1085,15 +1289,42 @@ function MapPageContent() {
                     </svg>
                   </button>
                 ))}
+                {selectedTag && (
+                  <button
+                    onClick={() => {
+                      setSelectedTag("");
+                    }}
+                    className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
+                  >
+                    {selectedTag}
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+                {appliedQ.trim() && (
+                  <button
+                    onClick={() => {
+                      setAppliedQ("");
+                      setSearchDraft("");
+                    }}
+                    className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
+                  >
+                    {appliedQ}
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
               </div>
             )}
           </div>
           {view === "map" ? (
             <>
               {/* Map View: Top map + Bottom sheet */}
-              <div className="flex-1 min-h-0 flex flex-col">
-                {/* Map takes 50vh */}
-                <div className="h-[50vh] flex-shrink-0">
+              <div className={`flex-1 min-h-0 flex flex-col ${isMapFullscreen ? 'fixed inset-0 top-[64px] min-[600px]:top-[80px] z-40 w-full h-[calc(100vh-64px)] min-[600px]:h-[calc(100vh-80px)]' : ''}`}>
+                {/* Map takes 50vh or fullscreen */}
+                <div className={`${isMapFullscreen ? 'h-full w-full' : 'h-[50vh]'} flex-shrink-0`}>
                   <MapView
                     places={places}
                     loading={loading}
@@ -1107,10 +1338,13 @@ function MapPageContent() {
                     userId={userId}
                     favorites={favorites}
                     onToggleFavorite={toggleFavorite}
+                    isFullscreen={isMapFullscreen}
+                    onFullscreenChange={setIsMapFullscreen}
                   />
                 </div>
                 
                 {/* Bottom Sheet - draggable */}
+                {!isMapFullscreen && (
                 <div 
                   className="flex-1 bg-white rounded-t-3xl shadow-2xl overflow-hidden flex flex-col"
                   style={{ 
@@ -1277,6 +1511,7 @@ function MapPageContent() {
                     )}
                   </div>
                 </div>
+                )}
               </div>
             </>
           ) : (
@@ -1354,7 +1589,7 @@ function MapPageContent() {
         </div>
       </div>
 
-      <BottomNav />
+      {!isMapFullscreen && <BottomNav />}
     </main>
   );
 }
@@ -1430,6 +1665,8 @@ function MapView({
   userId,
   favorites,
   onToggleFavorite,
+  isFullscreen: externalIsFullscreen = false,
+  onFullscreenChange,
 }: {
   places: Place[];
   loading: boolean;
@@ -1440,11 +1677,13 @@ function MapView({
   userId?: string | null;
   favorites?: Set<string>;
   onToggleFavorite?: (placeId: string, e: React.MouseEvent) => void;
+  isFullscreen?: boolean;
+  onFullscreenChange?: (isFullscreen: boolean) => void;
 }) {
   const [internalSelectedPlaceId, setInternalSelectedPlaceId] = useState<string | null>(null);
   const [roundIcons, setRoundIcons] = useState<Map<string, string>>(new Map());
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const isFullscreen = externalIsFullscreen;
   const [placePhotos, setPlacePhotos] = useState<Map<string, string[]>>(new Map());
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState<Map<string, number>>(new Map());
   const isUpdatingFromPropsRef = useRef(false);
@@ -1493,50 +1732,11 @@ function MapView({
   };
 
   const handleFullscreen = () => {
-    // Находим ближайший родительский контейнер карты
-    const mapContainer = document.querySelector('[data-map-container]')?.closest('.rounded-2xl') as HTMLElement;
-    const targetElement = mapContainer || document.querySelector('[data-map-container]') as HTMLElement;
-    if (!targetElement) return;
-
-    if (!isFullscreen) {
-      if (targetElement.requestFullscreen) {
-        targetElement.requestFullscreen();
-      } else if ((targetElement as any).webkitRequestFullscreen) {
-        (targetElement as any).webkitRequestFullscreen();
-      } else if ((targetElement as any).msRequestFullscreen) {
-        (targetElement as any).msRequestFullscreen();
-      }
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      } else if ((document as any).webkitExitFullscreen) {
-        (document as any).webkitExitFullscreen();
-      } else if ((document as any).msExitFullscreen) {
-        (document as any).msExitFullscreen();
-      }
+    // Переключаем состояние fullscreen через callback
+    if (onFullscreenChange) {
+      onFullscreenChange(!isFullscreen);
     }
   };
-
-  // Отслеживаем изменение fullscreen
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(
-        !!(document.fullscreenElement || 
-           (document as any).webkitFullscreenElement || 
-           (document as any).msFullscreenElement)
-      );
-    };
-
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    document.addEventListener('msfullscreenchange', handleFullscreenChange);
-
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
-      document.removeEventListener('msfullscreenchange', handleFullscreenChange);
-    };
-  }, []);
   const { isLoaded } = useJsApiLoader({
     id: "google-maps-loader",
     googleMapsApiKey: getGoogleMapsApiKey(),

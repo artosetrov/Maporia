@@ -35,8 +35,6 @@ export default function SavedPage() {
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
     vibes: [],
     categories: [],
-    tags: [],
-    distance: null,
     sort: null,
   });
   const [filterOpen, setFilterOpen] = useState(false);
@@ -77,8 +75,6 @@ export default function SavedPage() {
     if (searchValue) count++;
     if (activeFilters.vibes.length > 0) count += activeFilters.vibes.length;
     if (activeFilters.categories.length > 0) count += activeFilters.categories.length;
-    if (activeFilters.tags.length > 0) count += activeFilters.tags.length;
-    if (activeFilters.distance) count++;
     if (activeFilters.sort) count++;
     setActiveFiltersCount(count);
   }, [selectedCity, searchValue, activeFilters]);
@@ -159,9 +155,6 @@ export default function SavedPage() {
           }
           if (filters.vibes.length > 0) {
             params.set("vibes", filters.vibes.map(v => encodeURIComponent(v)).join(','));
-          }
-          if (filters.distance) {
-            params.set("distance", filters.distance);
           }
           if (filters.sort) {
             params.set("sort", filters.sort);

@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { CATEGORIES, VIBES, SORT_OPTIONS, DISTANCE_OPTIONS } from "../constants";
+import { useState, useEffect, useRef } from "react";
+import { supabase } from "../lib/supabase";
+import { DEFAULT_CITY } from "../constants";
+import { CATEGORIES, VIBES, SORT_OPTIONS } from "../constants";
 
 export type ActiveFilters = {
   vibes: string[];
   categories: string[];
-  tags: string[];
-  distance: string | null;
   sort: string | null;
 };
 
@@ -20,7 +20,9 @@ type FiltersModalProps = {
   appliedFilters: ActiveFilters;
   
   // Optional: callback to get filtered places count for "Show X places" button
-  getFilteredCount?: () => number;
+  // Takes draft filters as parameter to calculate count based on current selections
+  // Can be async (returns Promise<number>) or sync (returns number)
+  getFilteredCount?: (filters: ActiveFilters) => number | Promise<number>;
 };
 
 export default function FiltersModal({
@@ -34,13 +36,21 @@ export default function FiltersModal({
   const safeAppliedFilters: ActiveFilters = appliedFilters || {
     vibes: [],
     categories: [],
-    tags: [],
-    distance: null,
     sort: null,
   };
   
   // Draft state (changes while modal is open)
   const [draftFilters, setDraftFilters] = useState<ActiveFilters>(safeAppliedFilters);
+  
+  // State for filtered count (can be async)
+  const [filteredCount, setFilteredCount] = useState<number | null>(null);
+  const [countLoading, setCountLoading] = useState(false);
+  
+  // Use ref to store getFilteredCount to avoid dependency issues
+  const getFilteredCountRef = useRef(getFilteredCount);
+  useEffect(() => {
+    getFilteredCountRef.current = getFilteredCount;
+  }, [getFilteredCount]);
 
   // Reset draft to applied when modal opens
   useEffect(() => {
@@ -48,6 +58,42 @@ export default function FiltersModal({
       setDraftFilters(safeAppliedFilters);
     }
   }, [isOpen, safeAppliedFilters]);
+  
+  // Update count when draftFilters change
+  useEffect(() => {
+    // Всегда вызываем useEffect, но проверяем условия внутри
+    if (!isOpen) {
+      setFilteredCount(null);
+      setCountLoading(false);
+      return;
+    }
+    
+    const getCountFn = getFilteredCountRef.current;
+    if (!getCountFn) {
+      setFilteredCount(null);
+      setCountLoading(false);
+      return;
+    }
+    
+    setCountLoading(true);
+    const result = getCountFn(draftFilters);
+    
+    if (result instanceof Promise) {
+      result
+        .then(count => {
+          setFilteredCount(count);
+          setCountLoading(false);
+        })
+        .catch(error => {
+          console.error("Error getting filtered count:", error);
+          setFilteredCount(null);
+          setCountLoading(false);
+        });
+    } else {
+      setFilteredCount(result);
+      setCountLoading(false);
+    }
+  }, [draftFilters, isOpen]);
 
   if (!isOpen) return null;
 
@@ -69,22 +115,6 @@ export default function FiltersModal({
     }));
   };
 
-  const handleToggleTag = (tag: string) => {
-    setDraftFilters((prev) => ({
-      ...prev,
-      tags: prev.tags.includes(tag)
-        ? prev.tags.filter((t) => t !== tag)
-        : [...prev.tags, tag],
-    }));
-  };
-
-  const handleDistanceChange = (distance: string | null) => {
-    setDraftFilters((prev) => ({
-      ...prev,
-      distance: prev.distance === distance ? null : distance,
-    }));
-  };
-
   const handleSortChange = (sort: string | null) => {
     setDraftFilters((prev) => ({
       ...prev,
@@ -96,8 +126,6 @@ export default function FiltersModal({
     setDraftFilters({
       vibes: [],
       categories: [],
-      tags: [],
-      distance: null,
       sort: null,
     });
   };
@@ -115,7 +143,6 @@ export default function FiltersModal({
 
   const hasChanges =
     JSON.stringify(draftFilters) !== JSON.stringify(safeAppliedFilters);
-  const filteredCount = getFilteredCount ? getFilteredCount() : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -189,37 +216,6 @@ export default function FiltersModal({
             </div>
           </div>
 
-          {/* Tags Section (placeholder - можно расширить позже) */}
-          <div>
-            <h3 className="text-sm font-semibold text-[#2d2d2d] mb-4">Tags</h3>
-            <div className="text-sm text-[#6b7d47]/60">
-              Tags filtering coming soon
-            </div>
-          </div>
-
-          {/* Distance Section */}
-          <div>
-            <h3 className="text-sm font-semibold text-[#2d2d2d] mb-4">Distance</h3>
-            <div className="flex flex-wrap gap-2">
-              {DISTANCE_OPTIONS.map((option) => {
-                const isSelected = draftFilters.distance === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    onClick={() => handleDistanceChange(option.value)}
-                    className={`px-4 py-2 rounded-full border-2 transition ${
-                      isSelected
-                        ? "border-[#6b7d47] bg-[#6b7d47]/10 text-[#6b7d47] font-medium"
-                        : "border-[#6b7d47]/20 bg-white text-[#2d2d2d] hover:border-[#6b7d47]/40 hover:bg-[#f5f4f2]"
-                    }`}
-                  >
-                    <span className="text-sm">{option.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           {/* Sort Section */}
           <div>
             <h3 className="text-sm font-semibold text-[#2d2d2d] mb-4">Sort</h3>
@@ -261,10 +257,12 @@ export default function FiltersModal({
                 : "bg-[#6b7d47]/30 text-white/60 cursor-not-allowed"
             }`}
           >
-            {filteredCount !== null && hasChanges
-              ? `Show ${filteredCount} places`
+            {countLoading
+              ? "Loading..."
+              : filteredCount !== null && hasChanges
+              ? `Show ${filteredCount} ${filteredCount === 1 ? "place" : "places"}`
               : filteredCount !== null
-              ? `Show ${filteredCount} places`
+              ? `Show ${filteredCount} ${filteredCount === 1 ? "place" : "places"}`
               : "Apply"}
           </button>
         </div>

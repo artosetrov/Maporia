@@ -155,7 +155,7 @@ export default function TopBar({
                 className="flex-1 min-w-0 bg-white rounded-full shadow-sm border border-[#6b7d47]/10 hover:shadow-md transition-shadow px-4 py-2.5 text-left"
               >
                 <div className="text-sm font-medium text-[#2d2d2d] truncate">
-                  {selectedCity || "Where to?"}
+                  {selectedCity || "Anywhere"}
                 </div>
                 {activeFiltersSummary && (
                   <div className="text-xs text-[#6b7d47]/60 truncate mt-0.5">

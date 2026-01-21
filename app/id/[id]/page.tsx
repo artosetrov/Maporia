@@ -751,7 +751,7 @@ export default function PlacePage() {
       {/* Title Row - Desktop (>= 1120px): Before gallery */}
       <div className="hidden min-[1120px]:block pt-[80px]">
         <div className="max-w-[1280px] min-[1120px]:max-w-[1120px] min-[1440px]:max-w-[1280px] mx-auto px-6">
-          <div className="flex items-center justify-between gap-4 mb-6">
+          <div className="flex items-center justify-between gap-4 mb-6 pt-12">
             <h1 className="text-2xl font-semibold text-[#2d2d2d] flex-1 min-w-0">{place.title}</h1>
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
@@ -778,9 +778,9 @@ export default function PlacePage() {
                   aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
                 >
                   <svg className="w-4 h-4" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                   </svg>
-                  Save
+                  Add to favorites
                 </button>
               ) : (
                 <button
@@ -789,9 +789,9 @@ export default function PlacePage() {
                   aria-label="Add to favorites"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                   </svg>
-                  Save
+                  Add to favorites
                 </button>
               )}
             </div>
@@ -877,14 +877,14 @@ export default function PlacePage() {
 
       {/* Mobile/Tablet: Bottom sheet with title (mobile only) */}
       <div className="min-[900px]:hidden">
-        <div className="bg-white rounded-t-[24px] -mt-8 relative z-10 px-4 pt-6 pb-4">
+        <div className="bg-white rounded-t-[24px] -mt-8 relative z-10 px-4 pt-12 pb-4">
           <h1 className="text-2xl font-semibold text-[#2d2d2d] mb-2 line-clamp-2">{place.title}</h1>
         </div>
       </div>
 
       {/* Tablet: Title section */}
       <div className="hidden min-[600px]:max-[899px]:block max-w-full mx-auto px-5 pt-6 pb-4">
-        <div className="flex items-start justify-between gap-4 mb-3">
+        <div className="flex items-start justify-between gap-4 mb-3 pt-12">
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-semibold text-[#2d2d2d] mb-2">{place.title}</h1>
           </div>
@@ -933,7 +933,7 @@ export default function PlacePage() {
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-full bg-[#6b7d47]/10 flex items-center justify-center flex-shrink-0">
                 <svg className="w-6 h-6 text-[#6b7d47]" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                 </svg>
               </div>
               <div>
@@ -1410,7 +1410,7 @@ export default function PlacePage() {
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-[#6b7d47]/10 flex items-center justify-center flex-shrink-0">
                   <svg className="w-5 h-5 text-[#6b7d47]" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                   </svg>
                 </div>
                 <div>
@@ -1871,7 +1871,7 @@ export default function PlacePage() {
                 <svg className="w-5 h-5" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                 </svg>
-                <span className="text-[10px] font-medium">{isFavorite ? "Saved" : "Save"}</span>
+                <span className="text-[10px] font-medium">{isFavorite ? "Saved" : "Add to favorites"}</span>
               </button>
             ) : (
               <button
@@ -1882,7 +1882,7 @@ export default function PlacePage() {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                 </svg>
-                <span className="text-[10px] font-medium">Save</span>
+                <span className="text-[10px] font-medium">Add to favorites</span>
               </button>
             )}
 
