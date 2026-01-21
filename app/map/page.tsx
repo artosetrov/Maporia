@@ -61,9 +61,14 @@ function MapPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  const [view, setView] = useState<"list" | "map">("list");
+  // На странице /map по умолчанию показываем map view
+  const [view, setView] = useState<"list" | "map">("map");
   const [showMapMobile, setShowMapMobile] = useState(false);
-  const [bottomSheetPosition, setBottomSheetPosition] = useState<number>(0.6); // 0.3, 0.6, or 0.9
+  // bottomSheetPosition: 0 = карта на весь экран, 0.5 = карта 50vh/список 50vh, 1 = список на весь экран
+  // При первом заходе и обновлении страницы устанавливаем 0.5 для разделения 50/50
+  const [bottomSheetPosition, setBottomSheetPosition] = useState<number>(0.5);
+  const [isDragging, setIsDragging] = useState(false);
+  const [listScrollRef, setListScrollRef] = useState<HTMLDivElement | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [hoveredPlaceId, setHoveredPlaceId] = useState<string | null>(null);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
@@ -730,6 +735,143 @@ function MapPageContent() {
     return `${count} ${count === 1 ? "place" : "places"}`;
   }, [places.length, hasActiveFilters]);
 
+  // Обработка скролла списка на мобильных
+  useEffect(() => {
+    if (!listScrollRef || view !== "map" || isDragging) return;
+
+    let scrollTimeout: NodeJS.Timeout;
+    let lastScrollTop = listScrollRef.scrollTop;
+    let currentPosition = bottomSheetPosition;
+    let isScrolling = false;
+
+    const handleScroll = () => {
+      if (isDragging) return;
+      
+      isScrolling = true;
+      const scrollTop = listScrollRef.scrollTop;
+      const scrollDelta = scrollTop - lastScrollTop;
+      
+      // Очищаем предыдущий таймаут
+      clearTimeout(scrollTimeout);
+      
+      // Если скролл вверх (scrollDelta > 0) и список не в самом верху
+      if (scrollDelta > 0 && scrollTop > 10 && currentPosition < 1) {
+        // Плавно увеличиваем bottomSheetPosition при скролле вверх
+        currentPosition = Math.min(1, currentPosition + scrollDelta / 1000);
+        setBottomSheetPosition(currentPosition);
+      }
+      // Если скролл вниз (scrollDelta < 0) и мы в начале списка
+      else if (scrollDelta < 0 && scrollTop < 10 && currentPosition > 0.5) {
+        // Плавно уменьшаем bottomSheetPosition при скролле вниз в начале
+        currentPosition = Math.max(0.5, currentPosition + scrollDelta / 1000);
+        setBottomSheetPosition(currentPosition);
+      }
+      
+      lastScrollTop = scrollTop;
+      
+      // После окончания скролла делаем snap к ближайшей точке
+      scrollTimeout = setTimeout(() => {
+        isScrolling = false;
+        const snapPoints = [0, 0.5, 1];
+        const nearest = snapPoints.reduce((prev, curr) => 
+          Math.abs(curr - currentPosition) < Math.abs(prev - currentPosition) ? curr : prev
+        );
+        if (Math.abs(nearest - currentPosition) > 0.1) {
+          currentPosition = nearest;
+          setBottomSheetPosition(nearest);
+        }
+      }, 150);
+    };
+
+    // Обновляем currentPosition при изменении bottomSheetPosition
+    currentPosition = bottomSheetPosition;
+
+    listScrollRef.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      listScrollRef.removeEventListener('scroll', handleScroll);
+      clearTimeout(scrollTimeout);
+    };
+  }, [listScrollRef, view, isDragging, bottomSheetPosition]);
+
+  // Обработка тапа по карте для открытия полноэкранного режима
+  const handleMapTap = (e?: React.MouseEvent | React.TouchEvent) => {
+    if (e) {
+      // Проверяем, что клик был именно по карте, а не по списку
+      const target = e.target as HTMLElement;
+      if (target.closest('.bottom-sheet-content')) return;
+    }
+    
+    if (view === "map" && !isMapFullscreen && bottomSheetPosition < 0.7) {
+      setBottomSheetPosition(0);
+      setIsMapFullscreen(true);
+    }
+  };
+
+  // Обработка закрытия полноэкранного режима
+  const handleCloseFullscreen = () => {
+    setIsMapFullscreen(false);
+    setBottomSheetPosition(0.5);
+  };
+
+  // Общая функция для обработки drag bottom sheet
+  const handleBottomSheetDrag = (e: React.TouchEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    
+    // Блокируем скролл списка во время перетаскивания
+    if (listScrollRef) {
+      listScrollRef.style.overflow = 'hidden';
+    }
+    
+    const startY = e.touches[0].clientY;
+    const startHeight = bottomSheetPosition;
+    
+    const handleMove = (moveEvent: TouchEvent) => {
+      moveEvent.preventDefault();
+      const deltaY = startY - moveEvent.touches[0].clientY;
+      const screenHeight = window.innerHeight;
+      // Инвертируем deltaY: движение вверх (отрицательный deltaY) увеличивает высоту
+      const newHeight = Math.max(0, Math.min(1, startHeight - deltaY / screenHeight));
+      setBottomSheetPosition(newHeight);
+    };
+    
+    const handleEnd = () => {
+      setIsDragging(false);
+      
+      // Восстанавливаем скролл списка
+      if (listScrollRef) {
+        listScrollRef.style.overflow = 'auto';
+      }
+      
+      // Snap to nearest point
+      const snapPoints = [0, 0.5, 1];
+      const nearest = snapPoints.reduce((prev, curr) => 
+        Math.abs(curr - bottomSheetPosition) < Math.abs(prev - bottomSheetPosition) ? curr : prev
+      );
+      setBottomSheetPosition(nearest);
+      document.removeEventListener('touchmove', handleMove, { passive: false });
+      document.removeEventListener('touchend', handleEnd);
+    };
+    
+    document.addEventListener('touchmove', handleMove, { passive: false });
+    document.addEventListener('touchend', handleEnd);
+  };
+
+  // При первом заходе и обновлении страницы устанавливаем начальное состояние: карта 50%, список 50%
+  useEffect(() => {
+    setIsMapFullscreen(false);
+    setBottomSheetPosition(0.5);
+    // view уже установлен в "map" по умолчанию
+  }, []); // Срабатывает только при монтировании компонента
+
+  // Сброс состояния при переключении на map view
+  useEffect(() => {
+    if (view === "map") {
+      setIsMapFullscreen(false);
+      setBottomSheetPosition(0.5);
+    }
+  }, [view]);
+
   return (
     <main className={`h-screen bg-[#faf9f7] flex flex-col overflow-hidden ${isMapFullscreen ? 'fixed inset-0 z-50' : ''}`}>
       <TopBar
@@ -808,7 +950,13 @@ function MapPageContent() {
         Card image: aspect 4:3, radius 18-22px, carousel dots
         See app/config/layout.ts for detailed configuration
       */}
-      <div className={`flex-1 min-h-0 pt-[32px] min-[900px]:pt-[60px] overflow-hidden ${isMapFullscreen ? 'pt-0' : ''}`}>
+      <div className={`flex-1 min-h-0 overflow-hidden ${
+        isMapFullscreen 
+          ? 'pt-0' 
+          : view === "map" 
+            ? 'pt-0 min-[600px]:pt-[32px] min-[900px]:pt-[60px]' 
+            : 'pt-[32px] min-[900px]:pt-[60px]'
+      }`}>
         {/* Desktop XL & Desktop: Split view (≥1120px) - Airbnb-like responsive rules */}
         {/* On very large screens (>=1920px), container stretches to full width, map takes 100% of right side */}
         <div className={`hidden min-[1120px]:flex h-full max-w-[1920px] min-[1920px]:max-w-none mx-auto px-6 ${isMapFullscreen ? 'px-0 max-w-none' : ''}`}>
@@ -1230,101 +1378,108 @@ function MapPageContent() {
           </div>
 
         {/* Mobile: List or Map view (< 600px) */}
-        <div className="min-[600px]:hidden h-full flex flex-col transition-opacity duration-300">
-          {/* Header in List Column - Mobile */}
-          <div className="sticky top-[64px] z-30 bg-[#faf9f7] pt-6 pb-3 border-b border-[#6b7d47]/10 px-4 flex-shrink-0">
-            <div className="flex items-center gap-3 mb-2">
-              {/* Back button - показываем когда есть активные фильтры */}
+        <div className={`min-[600px]:hidden h-full flex flex-col transition-opacity duration-300 ${view === "map" ? 'pt-0' : ''}`}>
+          {/* Header in List Column - Mobile - показываем только в list view */}
+          {view === "list" && (
+            <div className="sticky top-[64px] z-30 bg-[#faf9f7] pt-6 pb-3 border-b border-[#6b7d47]/10 px-4 flex-shrink-0">
+              <div className="flex items-center gap-3 mb-2">
+                {/* Back button - показываем когда есть активные фильтры */}
+                {hasActiveFilters && (
+                  <button
+                    onClick={handleClearAllFilters}
+                    className="h-10 w-10 rounded-xl flex items-center justify-center text-[#556036] hover:bg-[#f5f4f2] transition flex-shrink-0"
+                    aria-label="Clear all filters"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                )}
+                {!hasActiveFilters && <div className="w-10" />}
+                <div className="flex-1 min-w-0">
+                  <h1 className="text-lg font-semibold text-[#2d2d2d] truncate">{listTitle}</h1>
+                  {listSubtitle && (
+                    <div className="text-xs text-[#6b7d47]/60 mt-0.5">
+                      {listSubtitle}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* Active filter chips */}
               {hasActiveFilters && (
-                <button
-                  onClick={handleClearAllFilters}
-                  className="h-10 w-10 rounded-xl flex items-center justify-center text-[#556036] hover:bg-[#f5f4f2] transition flex-shrink-0"
-                  aria-label="Clear all filters"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
+                <div className="mt-2 flex gap-2 overflow-x-auto pb-1 flex-wrap">
+                  {appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && (
+                    <button
+                      onClick={() => {
+                        handleCityChange(null);
+                      }}
+                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
+                    >
+                      {appliedCity}
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                  {appliedCategories.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => {
+                        setActiveFilters(prev => ({
+                          ...prev,
+                          categories: prev.categories.filter(c => c !== cat)
+                        }));
+                      }}
+                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
+                    >
+                      {cat}
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  ))}
+                  {appliedQ.trim() && (
+                    <button
+                      onClick={() => {
+                        setAppliedQ("");
+                        setSearchDraft("");
+                      }}
+                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
+                    >
+                      {appliedQ}
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               )}
-              {!hasActiveFilters && <div className="w-10" />}
-              <div className="flex-1 min-w-0">
-                <h1 className="text-lg font-semibold text-[#2d2d2d] truncate">{listTitle}</h1>
-                {listSubtitle && (
-                  <div className="text-xs text-[#6b7d47]/60 mt-0.5">
-                    {listSubtitle}
-                  </div>
-                )}
-              </div>
             </div>
-            {/* Active filter chips */}
-            {hasActiveFilters && (
-              <div className="mt-2 flex gap-2 overflow-x-auto pb-1 flex-wrap">
-                {appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && (
-                  <button
-                    onClick={() => {
-                      handleCityChange(null);
-                    }}
-                    className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
-                  >
-                    {appliedCity}
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-                {appliedCategories.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => {
-                      setActiveFilters(prev => ({
-                        ...prev,
-                        categories: prev.categories.filter(c => c !== cat)
-                      }));
-                    }}
-                    className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
-                  >
-                    {cat}
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                ))}
-                {selectedTag && (
-                  <button
-                    onClick={() => {
-                      setSelectedTag("");
-                    }}
-                    className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
-                  >
-                    {selectedTag}
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-                {appliedQ.trim() && (
-                  <button
-                    onClick={() => {
-                      setAppliedQ("");
-                      setSearchDraft("");
-                    }}
-                    className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
-                  >
-                    {appliedQ}
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+          )}
           {view === "map" ? (
             <>
               {/* Map View: Top map + Bottom sheet */}
-              <div className={`flex-1 min-h-0 flex flex-col ${isMapFullscreen ? 'fixed inset-0 top-[64px] min-[600px]:top-[80px] z-40 w-full h-[calc(100vh-64px)] min-[600px]:h-[calc(100vh-80px)]' : ''}`}>
-                {/* Map takes 50vh or fullscreen */}
-                <div className={`${isMapFullscreen ? 'h-full w-full' : 'h-[50vh]'} flex-shrink-0`}>
+              <div className={`flex-1 min-h-0 relative ${isMapFullscreen ? 'fixed inset-0 top-[64px] min-[600px]:top-[80px] z-40 w-full h-[calc(100vh-64px)] min-[600px]:h-[calc(100vh-80px)]' : 'pt-0'}`}>
+                {/* Map - занимает высоту в зависимости от bottomSheetPosition */}
+                <div 
+                  className={`absolute inset-0 w-full transition-all duration-300 ease-out ${
+                    isMapFullscreen ? 'h-full z-10' : bottomSheetPosition === 0 ? 'h-full z-10' : 'z-0'
+                  }`}
+                  style={!isMapFullscreen ? {
+                    height: `${(1 - bottomSheetPosition) * 100}%`,
+                  } : {}}
+                  onClick={handleMapTap}
+                  onTouchStart={(e) => {
+                    // Обрабатываем тап только если список не перекрывает карту
+                    if (!isMapFullscreen && bottomSheetPosition < 0.7) {
+                      const touch = e.touches[0];
+                      const target = document.elementFromPoint(touch.clientX, touch.clientY);
+                      if (target && !target.closest('.bottom-sheet-content')) {
+                        handleMapTap(e);
+                      }
+                    }
+                  }}
+                >
                   <MapView
                     places={places}
                     loading={loading}
@@ -1339,51 +1494,108 @@ function MapPageContent() {
                     favorites={favorites}
                     onToggleFavorite={toggleFavorite}
                     isFullscreen={isMapFullscreen}
-                    onFullscreenChange={setIsMapFullscreen}
+                    onFullscreenChange={handleCloseFullscreen}
                   />
                 </div>
                 
-                {/* Bottom Sheet - draggable */}
-                {!isMapFullscreen && (
+                {/* Bottom Sheet - draggable, перекрывает карту */}
                 <div 
-                  className="flex-1 bg-white rounded-t-3xl shadow-2xl overflow-hidden flex flex-col"
+                  className={`bottom-sheet-content absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl overflow-hidden flex flex-col transition-all duration-300 ease-out ${
+                    isMapFullscreen ? 'h-0 opacity-0 pointer-events-none' : 'opacity-100'
+                  }`}
                   style={{ 
-                    height: `${bottomSheetPosition * 100}%`,
-                    transition: 'height 0.3s ease-out'
+                    height: isMapFullscreen ? '0%' : `${bottomSheetPosition * 100}%`,
+                    zIndex: bottomSheetPosition > 0.5 ? 20 : 10,
                   }}
                 >
                   {/* Drag handle */}
-                  <div className="flex-shrink-0 py-3 flex justify-center cursor-grab active:cursor-grabbing" 
-                    onTouchStart={(e) => {
-                      const startY = e.touches[0].clientY;
-                      const startHeight = bottomSheetPosition;
-                      
-                      const handleMove = (moveEvent: TouchEvent) => {
-                        const deltaY = startY - moveEvent.touches[0].clientY;
-                        const newHeight = Math.max(0.3, Math.min(0.9, startHeight + deltaY / window.innerHeight));
-                        setBottomSheetPosition(newHeight);
-                      };
-                      
-                      const handleEnd = () => {
-                        // Snap to nearest point
-                        const snapPoints = [0.3, 0.6, 0.9];
-                        const nearest = snapPoints.reduce((prev, curr) => 
-                          Math.abs(curr - bottomSheetPosition) < Math.abs(prev - bottomSheetPosition) ? curr : prev
-                        );
-                        setBottomSheetPosition(nearest);
-                        document.removeEventListener('touchmove', handleMove);
-                        document.removeEventListener('touchend', handleEnd);
-                      };
-                      
-                      document.addEventListener('touchmove', handleMove);
-                      document.addEventListener('touchend', handleEnd);
-                    }}
+                  <div 
+                    className="flex-shrink-0 py-3 flex justify-center cursor-grab active:cursor-grabbing touch-none select-none" 
+                    onTouchStart={handleBottomSheetDrag}
                   >
                     <div className="w-12 h-1.5 bg-gray-300 rounded-full"></div>
                   </div>
                   
+                  {/* Header in bottom sheet - также можно перетаскивать */}
+                  {!selectedPlaceId && (
+                    <div 
+                      className="flex-shrink-0 px-4 pt-4 pb-3 border-b border-gray-100 cursor-grab active:cursor-grabbing touch-none select-none"
+                      onTouchStart={(e) => {
+                        // Проверяем, что тап не на кнопке или чипе
+                        const target = e.target as HTMLElement;
+                        if (target.closest('button') || target.closest('a')) {
+                          return; // Не обрабатываем drag если тап на интерактивный элемент
+                        }
+                        handleBottomSheetDrag(e);
+                      }}
+                    >
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="flex-1 min-w-0">
+                          <h1 className="text-lg font-semibold text-[#2d2d2d] truncate">{listTitle}</h1>
+                          {listSubtitle && (
+                            <div className="text-xs text-[#6b7d47]/60 mt-0.5">
+                              {listSubtitle}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {/* Active filter chips */}
+                      {hasActiveFilters && (
+                        <div className="mt-2 flex gap-2 overflow-x-auto pb-1 flex-wrap">
+                          {appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && (
+                            <button
+                              onClick={() => {
+                                handleCityChange(null);
+                              }}
+                              className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
+                            >
+                              {appliedCity}
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
+                          {appliedCategories.map((cat) => (
+                            <button
+                              key={cat}
+                              onClick={() => {
+                                setActiveFilters(prev => ({
+                                  ...prev,
+                                  categories: prev.categories.filter(c => c !== cat)
+                                }));
+                              }}
+                              className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
+                            >
+                              {cat}
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          ))}
+                          {appliedQ.trim() && (
+                            <button
+                              onClick={() => {
+                                setAppliedQ("");
+                                setSearchDraft("");
+                              }}
+                              className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
+                            >
+                              {appliedQ}
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Sheet content */}
-                  <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pb-20">
+                  <div 
+                    ref={(el) => setListScrollRef(el)}
+                    className="flex-1 overflow-y-auto scrollbar-hide px-4 pb-20"
+                  >
                     {selectedPlaceId ? (
                       <div className="py-4">
                         {(() => {
@@ -1511,6 +1723,91 @@ function MapPageContent() {
                     )}
                   </div>
                 </div>
+
+                {/* Кнопка "Map" - показываем когда список перекрывает карту, позиционируем внизу */}
+                {!isMapFullscreen && bottomSheetPosition > 0.7 && (
+                  <button
+                    onClick={() => {
+                      setBottomSheetPosition(0);
+                      setIsMapFullscreen(true);
+                    }}
+                    className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-12 px-6 rounded-full bg-[#6b7d47] text-white text-sm font-medium shadow-lg hover:bg-[#556036] transition active:scale-95 flex items-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                    </svg>
+                    Map
+                  </button>
+                )}
+
+                {/* Заголовок и drag handle в полноэкранном режиме - для открытия списка */}
+                {isMapFullscreen && (
+                  <div 
+                    className="absolute bottom-0 left-0 right-0 z-50 pointer-events-auto"
+                    onClick={() => {
+                      // При клике на заголовок открываем список
+                      setIsMapFullscreen(false);
+                      setBottomSheetPosition(0.5);
+                    }}
+                  >
+                    {/* Drag handle */}
+                    <div 
+                      className="flex justify-center py-2 cursor-grab active:cursor-grabbing"
+                      onTouchStart={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation(); // Предотвращаем срабатывание onClick на родителе
+                        setIsDragging(true);
+                        const startY = e.touches[0].clientY;
+                        
+                        const handleMove = (moveEvent: TouchEvent) => {
+                          moveEvent.preventDefault();
+                          const deltaY = startY - moveEvent.touches[0].clientY;
+                          const screenHeight = window.innerHeight;
+                          // При свайпе вверх открываем список
+                          if (deltaY < -50) {
+                            setIsMapFullscreen(false);
+                            setBottomSheetPosition(0.5);
+                            setIsDragging(false);
+                            document.removeEventListener('touchmove', handleMove, { passive: false });
+                            document.removeEventListener('touchend', handleEnd);
+                          }
+                        };
+                        
+                        const handleEnd = () => {
+                          setIsDragging(false);
+                          document.removeEventListener('touchmove', handleMove, { passive: false });
+                          document.removeEventListener('touchend', handleEnd);
+                        };
+                        
+                        document.addEventListener('touchmove', handleMove, { passive: false });
+                        document.addEventListener('touchend', handleEnd);
+                      }}
+                    >
+                      <div className="w-12 h-1.5 bg-white/80 rounded-full shadow-lg"></div>
+                    </div>
+                    
+                    {/* Заголовок - кликабельный */}
+                    <div className="bg-white/95 backdrop-blur-sm rounded-t-3xl shadow-2xl px-4 py-4 pb-safe-bottom cursor-pointer active:bg-white/90 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h2 className="text-lg font-semibold text-[#2d2d2d] truncate">{listTitle}</h2>
+                          {listSubtitle && (
+                            <div className="text-sm text-[#6b7d47]/60 mt-0.5">
+                              {listSubtitle}
+                            </div>
+                          )}
+                        </div>
+                        <svg 
+                          className="w-5 h-5 text-[#6b7d47] flex-shrink-0 ml-2" 
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             </>
@@ -1911,7 +2208,7 @@ function MapView({
   return (
     <div className="relative h-full w-full transition-all duration-300 overflow-hidden" data-map-container>
       {/* Custom Map Controls - Top Right Corner */}
-      <div className="absolute top-3 right-3 z-10 flex flex-col gap-2">
+      <div className="absolute top-[72px] min-[600px]:top-3 right-3 z-10 flex flex-col gap-2">
         {/* My Location Button */}
         <button
           onClick={handleMyLocation}
