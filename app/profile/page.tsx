@@ -78,7 +78,7 @@ function ProfileInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [tab, setTab] = useState<"added" | "liked" | "activity">("activity");
+  const [tab, setTab] = useState<"added" | "saved" | "activity">("activity");
   const [loading, setLoading] = useState(true);
 
   const [userId, setUserId] = useState<string | null>(null);
@@ -86,20 +86,22 @@ function ProfileInner() {
 
   const [profile, setProfile] = useState<Profile | null>(null);
 
-  const [liked, setLiked] = useState<Place[]>([]);
+  const [saved, setSaved] = useState<Place[]>([]);
   const [added, setAdded] = useState<Place[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [commentsCount, setCommentsCount] = useState<number>(0);
 
   const stats = useMemo(() => ({
     addedCount: added.length,
-    likedCount: liked.length,
-  }), [added, liked]);
+    savedCount: saved.length,
+    commentsCount: commentsCount,
+  }), [added, saved, commentsCount]);
 
   const activeList = useMemo(() => {
     if (tab === "added") return added;
-    if (tab === "liked") return liked;
+    if (tab === "saved") return saved;
     return [];
-  }, [tab, added, liked]);
+  }, [tab, added, saved]);
 
   // settings modal
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -162,7 +164,7 @@ function ProfileInner() {
         setAvatarDraft((prof as any)?.avatar_url ?? null);
       }
 
-      // reactions (likes)
+      // reactions (likes/saved)
       const { data: reactions } = await supabase
         .from("reactions")
         .select("place_id, reaction, created_at")
@@ -171,16 +173,24 @@ function ProfileInner() {
 
       const placeIds = (reactions ?? []).map((r: any) => r.place_id);
 
-      let likedPlaces: Place[] = [];
+      let savedPlaces: Place[] = [];
       if (placeIds.length) {
         const { data } = await supabase
           .from("places")
           .select("id,title,city,country,address,cover_url,created_at")
           .in("id", placeIds)
           .order("created_at", { ascending: false });
-        likedPlaces = (data ?? []) as Place[];
+        savedPlaces = (data ?? []) as Place[];
       }
-      if (mounted) setLiked(likedPlaces);
+      if (mounted) setSaved(savedPlaces);
+
+      // Count comments
+      const { count: commentsCountData } = await supabase
+        .from("comments")
+        .select("*", { count: 'exact', head: true })
+        .eq("user_id", user.id);
+      
+      if (mounted) setCommentsCount(commentsCountData || 0);
 
       // added places
       const { data: addedPlaces } = await supabase
@@ -271,7 +281,7 @@ function ProfileInner() {
       }
 
       // Обновляем список избранного
-      setLiked((prev) => prev.filter((p) => p.id !== placeId));
+      setSaved((prev) => prev.filter((p) => p.id !== placeId));
 
       // Обновляем активность
       setActivity((prev) => prev.filter((a) => !(a.type === "liked" && a.placeId === placeId)));
@@ -424,8 +434,11 @@ function ProfileInner() {
   const displayName =
     profile?.display_name || profile?.username || userEmail || "User";
 
+  // Get location from profile or use default
+  const userLocation = profile?.bio ? null : null; // TODO: Add location field to profile if needed
+
   return (
-    <main className="min-h-screen bg-[#faf9f7]">
+    <main className="min-h-screen bg-white">
       <TopBar
         showSearchBar={true}
         searchValue={""}
@@ -447,74 +460,180 @@ function ProfileInner() {
         userEmail={userEmail}
       />
 
-      <div className="pt-[80px]">
-        {/* Profile block */}
-        <div className="mx-auto max-w-md px-4 pt-6 pb-4 md:max-w-7xl">
-          <div className="flex items-start gap-4">
-            {/* Avatar */}
-            <div className="h-16 w-16 rounded-2xl bg-[#f5f4f2] border border-[#6b7d47]/20 flex items-center justify-center overflow-hidden flex-shrink-0">
-              {profile?.avatar_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={profile.avatar_url} alt="avatar" className="h-full w-full object-cover" />
-              ) : (
-                <span className="text-xl font-semibold text-[#6b7d47]">{initialsFromEmail(userEmail)}</span>
-              )}
-            </div>
+      <div className="pt-[64px] min-[600px]:pt-[80px]">
+        {/* Mobile: Hero Card */}
+        <div className="min-[900px]:hidden">
+          <div className="mx-auto max-w-md px-4 pt-6 pb-4">
+            {/* Hero Card */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-4">
+              <div className="flex flex-col items-center text-center">
+                {/* Avatar */}
+                <div className="h-24 w-24 rounded-full bg-[#f5f4f2] border-2 border-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0 mb-4">
+                  {profile?.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={profile.avatar_url} alt="avatar" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-3xl font-semibold text-[#6b7d47]">{initialsFromName(displayName)}</span>
+                  )}
+                </div>
 
-            <div className="flex-1 min-w-0">
-              <div className="text-xl font-bold leading-tight text-[#2d2d2d] mb-1">{displayName}</div>
-              {profile?.bio ? (
-                <div className="text-sm text-[#6b7d47]/80 line-clamp-2">{profile.bio}</div>
-              ) : (
+                {/* Name */}
+                <h1 className="text-2xl font-semibold text-[#2d2d2d] mb-2">{displayName}</h1>
+
+                {/* Location - пока не реализовано, можно добавить позже */}
+                {/* {userLocation && (
+                  <div className="text-sm text-gray-600 mb-3">{userLocation}</div>
+                )} */}
+
+                {/* Bio */}
+                {profile?.bio ? (
+                  <p className="text-sm text-gray-600 line-clamp-2 mb-4">{profile.bio}</p>
+                ) : (
+                  <p className="text-sm text-gray-400 mb-4">No bio yet</p>
+                )}
+
+                {/* Edit Button */}
                 <button
                   onClick={() => setSettingsOpen(true)}
-                  className="text-sm text-[#6b7d47]/70 hover:text-[#6b7d47] underline underline-offset-2 transition"
+                  className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-[#2d2d2d] hover:bg-gray-50 transition"
                 >
-                  Add bio
+                  Edit profile
                 </button>
-              )}
+              </div>
+            </div>
+
+            {/* Stats Row - Mobile */}
+            <div className="grid grid-cols-3 gap-2 mb-6">
+              <button
+                onClick={() => setTab("added")}
+                className="bg-white rounded-xl border border-gray-200 p-4 text-center hover:bg-gray-50 transition active:scale-[0.98]"
+              >
+                <div className="text-2xl font-semibold text-[#2d2d2d] mb-1">{stats.addedCount}</div>
+                <div className="text-xs text-gray-600">Places added</div>
+              </button>
+              <button
+                onClick={() => setTab("saved")}
+                className="bg-white rounded-xl border border-gray-200 p-4 text-center hover:bg-gray-50 transition active:scale-[0.98]"
+              >
+                <div className="text-2xl font-semibold text-[#2d2d2d] mb-1">{stats.savedCount}</div>
+                <div className="text-xs text-gray-600">Places saved</div>
+              </button>
+              <button
+                onClick={() => setTab("activity")}
+                className="bg-white rounded-xl border border-gray-200 p-4 text-center hover:bg-gray-50 transition active:scale-[0.98]"
+              >
+                <div className="text-2xl font-semibold text-[#2d2d2d] mb-1">{stats.commentsCount}</div>
+                <div className="text-xs text-gray-600">Comments</div>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop: Hero Section */}
+        <div className="hidden min-[900px]:block">
+          <div className="mx-auto max-w-7xl px-8 pt-8 pb-6">
+            <div className="flex items-start gap-6 mb-6">
+              {/* Avatar */}
+              <div className="h-32 w-32 rounded-full bg-[#f5f4f2] border-2 border-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+                {profile?.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={profile.avatar_url} alt="avatar" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-4xl font-semibold text-[#6b7d47]">{initialsFromName(displayName)}</span>
+                )}
+              </div>
+
+              {/* Name, Location, Bio */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h1 className="text-3xl font-semibold text-[#2d2d2d] mb-2">{displayName}</h1>
+                    {/* Stats - Desktop inline */}
+                    <div className="flex items-center gap-6 text-sm text-gray-600">
+                      <button
+                        onClick={() => setTab("added")}
+                        className="hover:text-[#2d2d2d] transition cursor-pointer"
+                      >
+                        <span className="font-semibold">{stats.addedCount}</span> places added
+                      </button>
+                      <button
+                        onClick={() => setTab("saved")}
+                        className="hover:text-[#2d2d2d] transition cursor-pointer"
+                      >
+                        <span className="font-semibold">{stats.savedCount}</span> places saved
+                      </button>
+                      <button
+                        onClick={() => setTab("activity")}
+                        className="hover:text-[#2d2d2d] transition cursor-pointer"
+                      >
+                        <span className="font-semibold">{stats.commentsCount}</span> comments
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSettingsOpen(true)}
+                    className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-[#2d2d2d] hover:bg-gray-50 transition"
+                  >
+                    Edit profile
+                  </button>
+                </div>
+                {profile?.bio && (
+                  <p className="text-base text-gray-600 max-w-2xl">{profile.bio}</p>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Tabs + Content */}
-      <div className="mx-auto max-w-7xl px-4 pb-20 pt-4">
-        {/* Tabs — underline style */}
-        <div className="flex border-b border-[#6b7d47]/20 mb-4">
-          <button
-            onClick={() => setTab("activity")}
-            className={cx(
-              "px-4 py-3 text-sm font-medium transition flex-shrink-0 -mb-px",
-              tab === "activity"
-                ? "text-[#6b7d47] border-b-2 border-[#6b7d47]"
-                : "text-[#6b7d47]/60 hover:text-[#6b7d47]/80"
-            )}
-          >
-            Activity{activity.length > 0 ? ` (${activity.length})` : ""}
-          </button>
-          <button
-            onClick={() => setTab("added")}
-            className={cx(
-              "px-4 py-3 text-sm font-medium transition flex-shrink-0 -mb-px",
-              tab === "added"
-                ? "text-[#6b7d47] border-b-2 border-[#6b7d47]"
-                : "text-[#6b7d47]/60 hover:text-[#6b7d47]/80"
-            )}
-          >
-            Added{stats.addedCount > 0 ? ` (${stats.addedCount})` : ""}
-          </button>
-          <button
-            onClick={() => setTab("liked")}
-            className={cx(
-              "px-4 py-3 text-sm font-medium transition flex-shrink-0 -mb-px",
-              tab === "liked"
-                ? "text-[#6b7d47] border-b-2 border-[#6b7d47]"
-                : "text-[#6b7d47]/60 hover:text-[#6b7d47]/80"
-            )}
-          >
-            Liked{stats.likedCount > 0 ? ` (${stats.likedCount})` : ""}
-          </button>
+      <div className="mx-auto max-w-md min-[900px]:max-w-7xl px-4 min-[900px]:px-8 pb-20">
+        {/* Sticky Tabs */}
+        <div className="sticky top-[64px] min-[600px]:top-[80px] z-30 bg-white border-b border-gray-200 mb-6 -mx-4 min-[900px]:-mx-8 px-4 min-[900px]:px-8">
+          <div className="flex">
+            <button
+              onClick={() => setTab("activity")}
+              className={cx(
+                "px-4 py-4 text-sm font-medium transition flex-shrink-0 relative -mb-px",
+                tab === "activity"
+                  ? "text-[#2d2d2d]"
+                  : "text-gray-600 hover:text-[#2d2d2d]"
+              )}
+            >
+              Activity
+              {tab === "activity" && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2d2d2d] transition-all duration-200" />
+              )}
+            </button>
+            <button
+              onClick={() => setTab("added")}
+              className={cx(
+                "px-4 py-4 text-sm font-medium transition flex-shrink-0 relative -mb-px",
+                tab === "added"
+                  ? "text-[#2d2d2d]"
+                  : "text-gray-600 hover:text-[#2d2d2d]"
+              )}
+            >
+              Added
+              {tab === "added" && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2d2d2d] transition-all duration-200" />
+              )}
+            </button>
+            <button
+              onClick={() => setTab("saved")}
+              className={cx(
+                "px-4 py-4 text-sm font-medium transition flex-shrink-0 relative -mb-px",
+                tab === "saved"
+                  ? "text-[#2d2d2d]"
+                  : "text-gray-600 hover:text-[#2d2d2d]"
+              )}
+            >
+              Saved
+              {tab === "saved" && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2d2d2d] transition-all duration-200" />
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="transition-opacity duration-200">
@@ -524,7 +643,7 @@ function ProfileInner() {
             activity.length === 0 ? (
               <Empty text="No activity yet" />
             ) : (
-              <div>
+              <div className="space-y-0">
                 {activity.slice(0, 50).map((a, idx) => (
                   <ActivityCard
                     key={`${a.type}-${a.placeId}-${idx}`}
@@ -538,19 +657,35 @@ function ProfileInner() {
           ) : activeList.length === 0 ? (
             <Empty
               text={
-                tab === "liked"
+                tab === "saved"
                   ? "Save places to find them later"
                   : "You haven't added places yet"
               }
             />
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 min-[900px]:grid-cols-3 min-[1120px]:grid-cols-4 gap-4 min-[900px]:gap-6">
               {activeList.map((p) => (
-                <PlaceCard
+                <Link
                   key={p.id}
-                  place={p}
-                  favoriteButton={
-                    tab === "liked" ? (
+                  href={`/id/${p.id}`}
+                  className="group"
+                >
+                  <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-gray-100 mb-2">
+                    {p.cover_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={p.cover_url}
+                        alt={p.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                    )}
+                    {tab === "saved" && (
                       <button
                         type="button"
                         onClick={async (e) => {
@@ -558,27 +693,27 @@ function ProfileInner() {
                           e.stopPropagation();
                           await removeFavorite(p.id);
                         }}
-                        className="h-8 w-8 rounded-full bg-white border border-[#6b7d47]/20 hover:bg-[#f5f4f2] hover:border-[#6b7d47]/40 flex items-center justify-center transition shadow-sm bg-[#6b7d47]/10 border-[#6b7d47]/30"
+                        className="absolute top-2 right-2 h-8 w-8 rounded-full bg-white/90 backdrop-blur-sm border border-gray-200 hover:bg-white flex items-center justify-center transition shadow-sm"
                         aria-label="Remove from favorites"
                         title="Remove from favorites"
                       >
                         <svg
                           className="w-4 h-4 text-[#6b7d47]"
                           fill="currentColor"
-                          stroke="currentColor"
                           viewBox="0 0 24 24"
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                          />
+                          <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                         </svg>
                       </button>
-                    ) : undefined
-                  }
-                />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-[#2d2d2d] mb-1 line-clamp-1">{p.title}</h3>
+                    {p.city && (
+                      <p className="text-xs text-gray-600">{p.city}</p>
+                    )}
+                  </div>
+                </Link>
               ))}
             </div>
           )}
@@ -689,81 +824,71 @@ function ProfileInner() {
 
 function ActivityCard({ item, userAvatar, userName }: { item: ActivityItem; userAvatar: string | null; userName: string }) {
   const getIcon = () => {
-    const iconClass = "w-6 h-6";
+    const iconClass = "w-5 h-5";
     if (item.type === "liked") {
       return (
-        <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24" style={{ color: "#ef4444" }}>
-          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-        </svg>
+        <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24" style={{ color: "#ef4444" }}>
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+          </svg>
+        </div>
       );
     }
     if (item.type === "commented") {
       return (
-        <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: "#3b82f6" }}>
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-          />
-        </svg>
+        <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
+          <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: "#3b82f6" }}>
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+            />
+          </svg>
+        </div>
       );
     }
     return (
-      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: "#6b7d47" }}>
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-      </svg>
+      <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+        <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: "#6b7d47" }}>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+      </div>
     );
   };
 
   const getActionText = () => {
-    if (item.type === "liked") return "liked a place";
-    if (item.type === "commented") return "commented";
-    return "added a place";
+    if (item.type === "liked") return "Liked a place";
+    if (item.type === "commented") return "Commented on a place";
+    return "Added a place";
   };
 
   return (
     <Link
       href={`/id/${item.placeId}`}
-      className="block py-4 border-b border-[#6b7d47]/10 last:border-b-0 hover:bg-[#faf9f7] transition"
+      className="block py-4 border-b border-gray-100 last:border-b-0 hover:bg-gray-50/50 transition min-[900px]:py-5"
     >
-      <div className="flex items-start gap-3">
-        {/* Иконка события слева */}
-        <div className="flex-shrink-0 mt-0.5">{getIcon()}</div>
+      <div className="flex items-start gap-4">
+        {/* Action Icon */}
+        {getIcon()}
 
+        {/* Content */}
         <div className="flex-1 min-w-0">
-          {/* Основная строка: аватар + имя → действие + время справа */}
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-6 h-6 rounded-full bg-[#f5f4f2] overflow-hidden flex-shrink-0 border border-[#6b7d47]/10">
-                {userAvatar ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={userAvatar} alt={userName} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-[10px] font-semibold text-[#6b7d47] flex items-center justify-center h-full">
-                    {initialsFromName(userName)}
-                  </span>
-                )}
-              </div>
-              <span className="text-sm font-medium text-[#2d2d2d]">
-                <span className="font-semibold">{userName}</span> {getActionText()}
-              </span>
-            </div>
-            {/* Время справа */}
-            <div className="text-xs text-[#6b7d47]/50 flex-shrink-0">{formatTime(item.created_at)}</div>
+          {/* Action text + timestamp */}
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <span className="text-sm font-medium text-[#2d2d2d]">{getActionText()}</span>
+            <span className="text-xs text-gray-500 flex-shrink-0">{timeAgo(item.created_at)}</span>
           </div>
 
-          {/* Комментарий (если есть) */}
+          {/* Comment text (if commented) */}
           {item.type === "commented" && item.commentText && (
-            <div className="text-sm text-[#2d2d2d] bg-[#f5f4f2] rounded-xl p-3 mb-3 border border-[#6b7d47]/10 line-clamp-2">
-              {item.commentText}
-            </div>
+            <p className="text-sm text-gray-600 mb-3 line-clamp-2">{item.commentText}</p>
           )}
 
-          {/* Блок локации: карточка-превью */}
-          <div className="flex items-center gap-3 rounded-xl bg-white border border-[#6b7d47]/10 p-2.5">
+          {/* Place preview */}
+          <div className="flex items-center gap-3">
             {item.coverUrl ? (
-              <div className="w-14 h-14 rounded-lg bg-[#f5f4f2] overflow-hidden flex-shrink-0">
+              <div className="w-16 h-16 min-[900px]:w-20 min-[900px]:h-20 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={item.coverUrl}
@@ -772,19 +897,18 @@ function ActivityCard({ item, userAvatar, userName }: { item: ActivityItem; user
                 />
               </div>
             ) : (
-              <div className="w-14 h-14 rounded-lg bg-[#f5f4f2] flex items-center justify-center flex-shrink-0">
-                <svg className="w-6 h-6 text-[#6b7d47]/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              <div className="w-16 h-16 min-[900px]:w-20 min-[900px]:h-20 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-[#2d2d2d] mb-0.5 truncate">
+              <h3 className="text-sm font-medium text-[#2d2d2d] mb-1 line-clamp-1">
                 {item.placeTitle ?? "Place"}
-              </div>
+              </h3>
               {item.address && (
-                <div className="text-xs text-[#6b7d47]/60 truncate">{item.address}</div>
+                <p className="text-xs text-gray-500 line-clamp-1">{item.address}</p>
               )}
             </div>
           </div>

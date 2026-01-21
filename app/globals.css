@@ -221,3 +221,18 @@ button.gm-ui-hover-effect {
     max-width: 1152px !important;
   }
 }
+
+/* Предотвращаем скролл страницы и pull-to-refresh при взаимодействии с картой */
+[data-map-container] {
+  touch-action: pan-x pan-y !important;
+  overscroll-behavior: none !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Предотвращаем pull-to-refresh на мобильных устройствах */
+@media (max-width: 599px) {
+  body {
+    overscroll-behavior-y: none;
+    -webkit-overflow-scrolling: touch;
+  }
+}

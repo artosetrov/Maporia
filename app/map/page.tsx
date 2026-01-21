@@ -873,7 +873,14 @@ function MapPageContent() {
   }, [view]);
 
   return (
-    <main className={`h-screen bg-[#faf9f7] flex flex-col overflow-hidden ${isMapFullscreen ? 'fixed inset-0 z-50' : ''}`}>
+    <main 
+      className={`h-screen bg-[#faf9f7] flex flex-col overflow-hidden ${isMapFullscreen ? 'fixed inset-0 z-50' : ''}`}
+      style={{
+        overscrollBehavior: 'none',
+        WebkitOverflowScrolling: 'touch',
+        touchAction: 'pan-y',
+      }}
+    >
       <TopBar
         showSearchBar={true}
         searchValue={searchDraft}
@@ -1465,18 +1472,35 @@ function MapPageContent() {
                   className={`absolute inset-0 w-full transition-all duration-300 ease-out ${
                     isMapFullscreen ? 'h-full z-10' : bottomSheetPosition === 0 ? 'h-full z-10' : 'z-0'
                   }`}
-                  style={!isMapFullscreen ? {
-                    height: `${(1 - bottomSheetPosition) * 100}%`,
-                  } : {}}
+                  style={{
+                    ...(!isMapFullscreen ? {
+                      height: `${(1 - bottomSheetPosition) * 100}%`,
+                    } : {}),
+                    touchAction: 'pan-x pan-y', // Разрешаем панорамирование карты
+                    overscrollBehavior: 'none', // Предотвращаем pull-to-refresh
+                  }}
                   onClick={handleMapTap}
                   onTouchStart={(e) => {
+                    // Предотвращаем скролл страницы при взаимодействии с картой
+                    const target = e.target as HTMLElement;
+                    if (!target.closest('.bottom-sheet-content') && !target.closest('button')) {
+                      e.stopPropagation();
+                    }
+                    
                     // Обрабатываем тап только если список не перекрывает карту
                     if (!isMapFullscreen && bottomSheetPosition < 0.7) {
                       const touch = e.touches[0];
-                      const target = document.elementFromPoint(touch.clientX, touch.clientY);
-                      if (target && !target.closest('.bottom-sheet-content')) {
+                      const element = document.elementFromPoint(touch.clientX, touch.clientY);
+                      if (element && !element.closest('.bottom-sheet-content')) {
                         handleMapTap(e);
                       }
+                    }
+                  }}
+                  onTouchMove={(e) => {
+                    // Предотвращаем скролл страницы при перемещении по карте
+                    const target = e.target as HTMLElement;
+                    if (!target.closest('.bottom-sheet-content') && !target.closest('button')) {
+                      e.stopPropagation();
                     }
                   }}
                 >
@@ -2206,7 +2230,34 @@ function MapView({
   }
 
   return (
-    <div className="relative h-full w-full transition-all duration-300 overflow-hidden" data-map-container>
+    <div 
+      className="relative h-full w-full transition-all duration-300 overflow-hidden" 
+      data-map-container
+      style={{
+        touchAction: 'pan-x pan-y', // Разрешаем только панорамирование карты, блокируем скролл страницы
+        overscrollBehavior: 'none', // Предотвращаем pull-to-refresh
+      }}
+      onTouchStart={(e) => {
+        // Предотвращаем скролл страницы при начале взаимодействия с картой
+        if (e.touches.length === 1) {
+          const target = e.target as HTMLElement;
+          // Проверяем, что тап не на кнопках управления
+          if (!target.closest('button') && !target.closest('[role="button"]')) {
+            // Разрешаем обработку жестов картой
+            e.stopPropagation();
+          }
+        }
+      }}
+      onTouchMove={(e) => {
+        // Предотвращаем скролл страницы при перемещении по карте
+        if (e.touches.length === 1) {
+          const target = e.target as HTMLElement;
+          if (!target.closest('button') && !target.closest('[role="button"]')) {
+            e.stopPropagation();
+          }
+        }
+      }}
+    >
       {/* Custom Map Controls - Top Right Corner */}
       <div className="absolute top-[72px] min-[600px]:top-3 right-3 z-10 flex flex-col gap-2">
         {/* My Location Button */}
