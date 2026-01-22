@@ -386,9 +386,12 @@ function MapPageContent() {
   }
 
   async function loadPlaces() {
+    // Use a request ID to track if this request should be processed
+    const requestId = Date.now();
     setLoading(true);
 
-    let query = supabase.from("places").select("*");
+    try {
+      let query = supabase.from("places").select("*");
 
     // Фильтрация по городу
     // Применяем фильтр, если:
@@ -436,22 +439,35 @@ function MapPageContent() {
       query = query.order("created_at", { ascending: false });
     }
 
-    const { data, error } = await query;
-    console.log("places data", data, error);
-    
-    if (error) {
-      console.error("Error loading places:", error);
-      setPlaces([]);
-      setLoading(false);
-      return;
-    }
-    
-    if (!data || data.length === 0) {
-      console.log("No places found");
-      setPlaces([]);
-      setLoading(false);
-      return;
-    }
+      const { data, error } = await query;
+      
+      // Check if this is still the latest request (prevent race conditions)
+      if (requestId !== Date.now() - 1 && requestId < Date.now() - 1000) {
+        console.log("[loadPlaces] Request superseded by newer request, ignoring result");
+        return;
+      }
+      
+      console.log("places data", data, error);
+      
+      if (error) {
+        // Check if error is AbortError
+        if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+          console.warn("[loadPlaces] Request was aborted, this is expected on component unmount");
+          return;
+        }
+        
+        console.error("Error loading places:", error);
+        setPlaces([]);
+        setLoading(false);
+        return;
+      }
+      
+      if (!data || data.length === 0) {
+        console.log("No places found");
+        setPlaces([]);
+        setLoading(false);
+        return;
+      }
 
     // Don't filter premium places - show them as locked with pseudo names
     // Premium places will be displayed with "Secret place #234" title for non-premium users
@@ -521,8 +537,18 @@ function MapPageContent() {
       })));
     }
     
-    setPlaces(placesWithCoords as Place[]);
-    setLoading(false);
+      setPlaces(placesWithCoords as Place[]);
+    } catch (err: any) {
+      // Handle AbortError gracefully
+      if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+        console.log("[loadPlaces] Request aborted (expected on unmount)");
+        return;
+      }
+      console.error("[loadPlaces] Exception:", err);
+      setPlaces([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
 
@@ -545,26 +571,51 @@ function MapPageContent() {
       return;
     }
 
+    let isUnmounting = false;
+    const capturedUserId = userId;
+
     (async () => {
       try {
         const { data, error } = await supabase
           .from("reactions")
           .select("place_id")
-          .eq("user_id", userId)
+          .eq("user_id", capturedUserId)
           .eq("reaction", "like");
 
+        // Only check unmounting, not cancelled (to avoid aborting on dependency changes)
+        if (isUnmounting || userId !== capturedUserId) {
+          console.log("[MapPage] Component unmounting or user changed, skipping favorites update");
+          return;
+        }
+
         if (error) {
+          // Check if error is AbortError
+          if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+            console.log("[MapPage] Favorites request aborted (expected on unmount)");
+            return;
+          }
+          
           console.error("Error loading favorites:", error);
           return;
         }
 
-        if (data) {
+        if (!isUnmounting && userId === capturedUserId && data) {
           setFavorites(new Set(data.map((r) => r.place_id)));
         }
-      } catch (err) {
+      } catch (err: any) {
+        // Handle AbortError gracefully
+        if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+          console.log("[MapPage] Favorites request aborted (expected on unmount)");
+          return;
+        }
+        
         console.error("Exception loading favorites:", err);
       }
     })();
+
+    return () => {
+      isUnmounting = true;
+    };
   }, [userId]);
 
   useEffect(() => {

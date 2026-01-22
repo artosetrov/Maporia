@@ -208,9 +208,12 @@ export default function ExplorePage() {
   }
 
   async function loadPlaces() {
+    // Use a request ID to track if this request should be processed
+    const requestId = Date.now();
     setLoading(true);
 
-    let query = supabase.from("places").select("*").order("created_at", { ascending: false });
+    try {
+      let query = supabase.from("places").select("*").order("created_at", { ascending: false });
 
     // Фильтрация по городам - если выбраны города, проверяем что place.city_name_cached или place.city входит в список
     if (selectedCities.length > 0) {
@@ -247,50 +250,72 @@ export default function ExplorePage() {
     // }
     // For now, we filter client-side after fetching
 
-    const { data, error } = await query;
-    console.log("places data", data, error);
-    
-    if (error) {
-      console.error("Error loading places:", error);
-      console.error("Error details:", {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-      });
-      // Show error to user in production
-      if (process.env.NODE_ENV === 'production') {
-        console.error("Production error - check RLS policies and Supabase connection");
-      }
-      setPlaces([]);
-    } else if (!data || data.length === 0) {
-      console.log("No places found");
-      setPlaces([]);
-    } else {
-      const placesWithCoords = (data ?? []).map((p: any) => ({
-        ...p,
-        lat: p.lat ?? null,
-        lng: p.lng ?? null,
-      }));
-      const placesWithValidCoords = placesWithCoords.filter((p: any) => p.lat !== null && p.lng !== null);
-      console.log("Loaded places:", placesWithCoords.length, "places with coordinates:", placesWithValidCoords.length);
+      const { data, error } = await query;
       
-      // Логируем места без координат для отладки
-      const placesWithoutCoords = placesWithCoords.filter((p: any) => p.lat === null || p.lng === null);
-      if (placesWithoutCoords.length > 0) {
-        console.warn("Places without coordinates:", placesWithoutCoords.map((p: any) => ({
-          id: p.id,
-          title: p.title,
-          address: p.address,
-          lat: p.lat,
-          lng: p.lng,
-        })));
+      // Check if this is still the latest request (prevent race conditions)
+      if (requestId !== Date.now() - 1 && requestId < Date.now() - 1000) {
+        console.log("[loadPlaces] Request superseded by newer request, ignoring result");
+        return;
       }
       
-      setPlaces(placesWithCoords as Place[]);
+      console.log("places data", data, error);
+      
+      if (error) {
+        // Check if error is AbortError
+        if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+          console.warn("[loadPlaces] Request was aborted, this is expected on component unmount");
+          return;
+        }
+        
+        console.error("Error loading places:", error);
+        console.error("Error details:", {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        });
+        // Show error to user in production
+        if (process.env.NODE_ENV === 'production') {
+          console.error("Production error - check RLS policies and Supabase connection");
+        }
+        setPlaces([]);
+      } else if (!data || data.length === 0) {
+        console.log("No places found");
+        setPlaces([]);
+      } else {
+        const placesWithCoords = (data ?? []).map((p: any) => ({
+          ...p,
+          lat: p.lat ?? null,
+          lng: p.lng ?? null,
+        }));
+        const placesWithValidCoords = placesWithCoords.filter((p: any) => p.lat !== null && p.lng !== null);
+        console.log("Loaded places:", placesWithCoords.length, "places with coordinates:", placesWithValidCoords.length);
+        
+        // Логируем места без координат для отладки
+        const placesWithoutCoords = placesWithCoords.filter((p: any) => p.lat === null || p.lng === null);
+        if (placesWithoutCoords.length > 0) {
+          console.warn("Places without coordinates:", placesWithoutCoords.map((p: any) => ({
+            id: p.id,
+            title: p.title,
+            address: p.address,
+            lat: p.lat,
+            lng: p.lng,
+          })));
+        }
+        
+        setPlaces(placesWithCoords as Place[]);
+      }
+    } catch (err: any) {
+      // Handle AbortError gracefully
+      if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+        console.log("[loadPlaces] Request aborted (expected on unmount)");
+        return;
+      }
+      console.error("[loadPlaces] Exception:", err);
+      setPlaces([]);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
 
@@ -309,26 +334,51 @@ export default function ExplorePage() {
       return;
     }
 
+    let isUnmounting = false;
+    const capturedUserId = userId;
+
     (async () => {
       try {
         const { data, error } = await supabase
           .from("reactions")
           .select("place_id")
-          .eq("user_id", userId)
+          .eq("user_id", capturedUserId)
           .eq("reaction", "like");
 
+        // Only check unmounting, not cancelled (to avoid aborting on dependency changes)
+        if (isUnmounting || userId !== capturedUserId) {
+          console.log("[ExplorePage] Component unmounting or user changed, skipping favorites update");
+          return;
+        }
+
         if (error) {
+          // Check if error is AbortError
+          if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+            console.log("[ExplorePage] Favorites request aborted (expected on unmount)");
+            return;
+          }
+          
           console.error("Error loading favorites:", error);
           return;
         }
 
-        if (data) {
+        if (!isUnmounting && userId === capturedUserId && data) {
           setFavorites(new Set(data.map((r) => r.place_id)));
         }
-      } catch (err) {
+      } catch (err: any) {
+        // Handle AbortError gracefully
+        if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+          console.log("[ExplorePage] Favorites request aborted (expected on unmount)");
+          return;
+        }
+        
         console.error("Exception loading favorites:", err);
       }
     })();
+
+    return () => {
+      isUnmounting = true;
+    };
   }, [userId]);
 
   useEffect(() => {

@@ -77,26 +77,38 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
     }
     
     loadedUserIdRef.current = userId;
-    
-    let cancelled = false;
+    const capturedUserId = userId; // Capture for comparison
+    let isUnmounting = false;
     
     (async () => {
       try {
         const { data, error } = await supabase
           .from("profiles")
           .select("display_name, username, avatar_url")
-          .eq("id", userId)
+          .eq("id", capturedUserId)
           .maybeSingle();
         
+        // Only check unmounting, not cancelled (to avoid aborting on dependency changes)
+        if (isUnmounting || loadedUserIdRef.current !== capturedUserId) {
+          console.log("[PlaceCard] Component unmounting or user changed, skipping profile update");
+          return;
+        }
+        
         if (error) {
-          if (!cancelled) {
+          // Check if error is AbortError
+          if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+            console.log("[PlaceCard] Profile request aborted (expected on unmount)");
+            return;
+          }
+          
+          if (!isUnmounting && loadedUserIdRef.current === capturedUserId) {
             console.error("Error loading creator profile:", error);
             loadedUserIdRef.current = null;
           }
           return;
         }
         
-        if (!cancelled && data && loadedUserIdRef.current === userId) {
+        if (!isUnmounting && data && loadedUserIdRef.current === capturedUserId) {
           setCreatorProfile({
             display_name: data.display_name,
             username: data.username,
@@ -104,7 +116,13 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
           });
         }
       } catch (error) {
-        if (!cancelled) {
+        // Handle AbortError gracefully
+        if (error instanceof Error && (error.name === 'AbortError' || error.message?.includes('abort'))) {
+          console.log("[PlaceCard] Profile request aborted (expected on unmount)");
+          return;
+        }
+        
+        if (!isUnmounting && loadedUserIdRef.current === capturedUserId) {
           console.error("Exception loading creator profile:", error);
           loadedUserIdRef.current = null;
         }
@@ -112,23 +130,40 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
     })();
     
     return () => {
-      cancelled = true;
+      // Only mark as unmounting on actual unmount, not on dependency change
+      isUnmounting = true;
+      if (process.env.NODE_ENV === 'development') {
+        console.log("[PlaceCard] Cleanup: component unmounting for user", capturedUserId);
+      }
     };
   }, [place.created_by]);
 
   // Загружаем все фото места
   useEffect(() => {
-    let cancelled = false;
+    let isUnmounting = false;
+    const placeId = place.id; // Capture place.id to check if it changed
 
     (async () => {
       try {
         const { data: photosData, error } = await supabase
           .from("place_photos")
           .select("url")
-          .eq("place_id", place.id)
+          .eq("place_id", placeId)
           .order("sort", { ascending: true });
 
+        // Only check unmounting, not cancelled (to avoid aborting on dependency changes)
+        if (isUnmounting || place.id !== placeId) {
+          console.log("[PlaceCard] Component unmounting or place changed, skipping state update");
+          return;
+        }
+
         if (error) {
+          // Check if error is AbortError
+          if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+            console.log("[PlaceCard] Request aborted (expected on unmount)");
+            return;
+          }
+          
           // Only log meaningful errors (not empty objects)
           const hasErrorContent = error.message || error.code || error.details || error.hint;
           const hasKeys = typeof error === 'object' && error !== null && Object.keys(error).length > 0;
@@ -137,15 +172,15 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
             console.error("Error loading photos:", error);
           }
           // Fallback на cover_url
-          if (place.cover_url && !cancelled) {
+          if (place.cover_url && !isUnmounting && place.id === placeId) {
             setPhotos([place.cover_url]);
-          } else if (!cancelled) {
+          } else if (!isUnmounting && place.id === placeId) {
             setPhotos([]);
           }
           return;
         }
 
-        if (!cancelled) {
+        if (!isUnmounting && place.id === placeId) {
           if (photosData && photosData.length > 0) {
             const urls = photosData
               .map((p: any) => p.url)
@@ -160,6 +195,12 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
           setCurrentPhotoIndex(0);
         }
       } catch (error) {
+        // Handle AbortError gracefully
+        if (error instanceof Error && (error.name === 'AbortError' || error.message?.includes('abort'))) {
+          console.log("[PlaceCard] Request aborted (expected on unmount)");
+          return;
+        }
+        
         // Only log meaningful errors (not empty objects)
         if (error instanceof Error) {
           console.error("Exception loading photos:", error);
@@ -171,16 +212,20 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
             console.error("Exception loading photos:", error);
           }
         }
-        if (!cancelled && place.cover_url) {
+        if (!isUnmounting && place.id === placeId && place.cover_url) {
           setPhotos([place.cover_url]);
-        } else if (!cancelled) {
+        } else if (!isUnmounting && place.id === placeId) {
           setPhotos([]);
         }
       }
     })();
 
     return () => {
-      cancelled = true;
+      // Only mark as unmounting on actual unmount, not on dependency change
+      isUnmounting = true;
+      if (process.env.NODE_ENV === 'development') {
+        console.log("[PlaceCard] Cleanup: component unmounting for place", placeId);
+      }
     };
   }, [place.id, place.cover_url]);
 

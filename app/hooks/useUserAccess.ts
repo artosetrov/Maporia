@@ -30,6 +30,7 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
 
   useEffect(() => {
     let mounted = true;
+    let isUnmounting = false;
 
     (async () => {
       setLoading(true);
@@ -38,27 +39,35 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       const session = sessionData.session;
 
-      if (!mounted) return;
+      // Only check mounted, don't abort on dependency changes
+      if (isUnmounting) {
+        console.log("[useUserAccess] Component unmounting, skipping state update");
+        return;
+      }
 
       if (sessionError) {
         console.error("Error getting session:", sessionError);
-        setLoading(false);
+        if (!isUnmounting) {
+          setLoading(false);
+        }
         return;
       }
 
       if (!session?.user) {
-        if (requireAuth) {
+        if (requireAuth && !isUnmounting) {
           router.replace("/auth");
           return;
         }
-        setUser(null);
-        setProfile(null);
-        setAccess({ 
-          role: "guest", 
-          hasPremium: false, 
-          isAdmin: false 
-        });
-        setLoading(false);
+        if (!isUnmounting) {
+          setUser(null);
+          setProfile(null);
+          setAccess({ 
+            role: "guest", 
+            hasPremium: false, 
+            isAdmin: false 
+          });
+          setLoading(false);
+        }
         return;
       }
 
@@ -66,7 +75,10 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
         id: session.user.id,
         email: session.user.email ?? null,
       };
-      setUser(currentUser);
+      
+      if (!isUnmounting) {
+        setUser(currentUser);
+      }
 
       // Load profile with role and subscription fields
       const { data: profileData, error: profileError } = await supabase
@@ -75,33 +87,47 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
         .eq("id", currentUser.id)
         .maybeSingle();
 
-      if (!mounted) return;
+      // Only check unmounting, not mounted flag (to avoid aborting on dependency changes)
+      if (isUnmounting) {
+        console.log("[useUserAccess] Component unmounting after profile fetch, skipping state update");
+        return;
+      }
 
       if (profileError) {
         console.error("Error loading profile:", profileError);
       }
 
       const currentProfile = profileData ?? null;
-      setProfile(currentProfile);
+      
+      if (!isUnmounting) {
+        setProfile(currentProfile);
 
-      // Check if profile is required
-      if (requireProfile && !currentProfile) {
-        // TODO: Redirect to profile setup if route exists
-        // router.replace("/profile/setup");
-        console.warn("Profile required but not found");
+        // Check if profile is required
+        if (requireProfile && !currentProfile) {
+          // TODO: Redirect to profile setup if route exists
+          // router.replace("/profile/setup");
+          console.warn("Profile required but not found");
+        }
+
+        // Calculate access based on role system
+        const userAccess = getUserAccess(currentProfile);
+        setAccess(userAccess);
+
+        setLoading(false);
       }
-
-      // Calculate access based on role system
-      const userAccess = getUserAccess(currentProfile);
-      setAccess(userAccess);
-
-      setLoading(false);
     })();
 
     return () => {
+      // Only mark as unmounting on actual unmount, not on dependency change
+      isUnmounting = true;
       mounted = false;
+      if (process.env.NODE_ENV === 'development') {
+        console.log("[useUserAccess] Cleanup: component unmounting");
+      }
     };
-  }, [router, requireAuth, requireProfile]);
+    // Remove router from dependencies to prevent re-runs on navigation
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requireAuth, requireProfile]);
 
   return { loading, user, profile, access };
 }
