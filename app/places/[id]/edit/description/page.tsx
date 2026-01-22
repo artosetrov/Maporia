@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
 import { useUserAccess } from "../../../../hooks/useUserAccess";
+import { isUserAdmin } from "../../../../lib/access";
+import Icon from "../../../../components/Icon";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
@@ -16,7 +18,8 @@ export default function DescriptionEditorPage() {
   const params = useParams<{ id: string }>();
   const placeId = params?.id;
 
-  const { loading: accessLoading, user } = useUserAccess(true, false);
+  const { loading: accessLoading, user, access } = useUserAccess(true, false);
+  const isAdmin = isUserAdmin(access);
   const [loading, setLoading] = useState(true);
   const [description, setDescription] = useState("");
   const [originalDescription, setOriginalDescription] = useState("");
@@ -32,7 +35,7 @@ export default function DescriptionEditorPage() {
 
   // Load place
   useEffect(() => {
-    if (!placeId || !user) return;
+    if (!placeId || !user || accessLoading) return;
 
     (async () => {
       setLoading(true);
@@ -47,8 +50,10 @@ export default function DescriptionEditorPage() {
         return;
       }
 
-      // Check ownership
-      if (data.created_by !== user.id) {
+      // Check ownership or admin status
+      const currentIsAdmin = isUserAdmin(access);
+      const isOwner = data.created_by === user.id;
+      if (!isOwner && !currentIsAdmin) {
         router.push(`/id/${placeId}`);
         return;
       }
@@ -58,7 +63,7 @@ export default function DescriptionEditorPage() {
       setOriginalDescription(currentDescription);
       setLoading(false);
     })();
-  }, [placeId, user, router]);
+  }, [placeId, user, router, access, accessLoading]);
 
   const hasChanges = description.trim() !== originalDescription.trim();
   const isValid = !hasLinks;
@@ -72,12 +77,19 @@ export default function DescriptionEditorPage() {
 
     console.log("Saving description:", { placeId, userId: user.id });
 
-    const { data, error: updateError } = await supabase
+    // Admin can update any place, owner can update their own
+    const currentIsAdmin = isUserAdmin(access);
+    const updateQuery = supabase
       .from("places")
       .update({ description: description.trim() || null })
-      .eq("id", placeId)
-      .eq("created_by", user.id)
-      .select();
+      .eq("id", placeId);
+    
+    // If not admin, add ownership check
+    if (!currentIsAdmin) {
+      updateQuery.eq("created_by", user.id);
+    }
+    
+    const { data, error: updateError } = await updateQuery.select();
 
     console.log("Update result:", { data, error: updateError });
 
@@ -106,8 +118,14 @@ export default function DescriptionEditorPage() {
 
   if (accessLoading || loading) {
     return (
-      <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
-        <div className="text-sm text-[#6F7A5A]">Loading…</div>
+      <main className="min-h-screen bg-[#FAFAF7]">
+        <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+          <div className="h-8 w-48 bg-[#ECEEE4] rounded animate-pulse" />
+          <div className="bg-white rounded-2xl p-6 border border-[#ECEEE4] space-y-4">
+            <div className="h-6 w-32 bg-[#ECEEE4] rounded animate-pulse" />
+            <div className="h-32 w-full bg-[#ECEEE4] rounded animate-pulse" />
+          </div>
+        </div>
       </main>
     );
   }
@@ -123,11 +141,9 @@ export default function DescriptionEditorPage() {
               className="p-2 -ml-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition"
               aria-label="Close"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <Icon name="close" size={20} />
             </button>
-            <h1 className="text-lg font-semibold text-[#1F2A1F]">Description</h1>
+            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Description</h1>
             <div className="w-9" />
           </div>
         </div>

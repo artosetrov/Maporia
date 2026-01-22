@@ -50,7 +50,9 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import { useUserAccess } from "../../../hooks/useUserAccess";
+import { isUserAdmin } from "../../../lib/access";
 import { CATEGORIES } from "../../../constants";
+import Icon from "../../../components/Icon";
 
 type Place = {
   id: string;
@@ -99,6 +101,7 @@ export default function PlaceEditorHub() {
   const placeId = params?.id;
 
   const { loading: accessLoading, user, access } = useUserAccess(true, false);
+  const isAdmin = isUserAdmin(access);
   const [loading, setLoading] = useState(true);
   const [place, setPlace] = useState<Place | null>(null);
   const [photos, setPhotos] = useState<PlacePhoto[]>([]);
@@ -106,7 +109,7 @@ export default function PlaceEditorHub() {
 
   // Load place data
   useEffect(() => {
-    if (!placeId || !user) return;
+    if (!placeId || !user || accessLoading) return;
 
     let mounted = true;
 
@@ -131,8 +134,10 @@ export default function PlaceEditorHub() {
 
       const placeItem = placeData as Place;
 
-      // Check ownership
-      if (placeItem.created_by !== user.id) {
+      // Check ownership or admin status
+      const currentIsAdmin = isUserAdmin(access);
+      const isOwner = placeItem.created_by === user.id;
+      if (!isOwner && !currentIsAdmin) {
         router.push(`/id/${placeId}`);
         return;
       }
@@ -171,7 +176,7 @@ export default function PlaceEditorHub() {
     return () => {
       mounted = false;
     };
-  }, [placeId, user, router]);
+  }, [placeId, user, router, access, accessLoading]);
 
   // Reload data when page becomes visible (returning from editor)
   useEffect(() => {
@@ -254,8 +259,18 @@ export default function PlaceEditorHub() {
 
   if (accessLoading || loading) {
     return (
-      <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
-        <div className="text-sm text-[#6F7A5A]">Loading…</div>
+      <main className="min-h-screen bg-[#FAFAF7]">
+        <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+          <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl p-6 border border-gray-200">
+                <div className="h-6 w-32 bg-gray-200 rounded mb-4 animate-pulse" />
+                <div className="h-10 w-full bg-gray-200 rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </div>
       </main>
     );
   }
@@ -287,20 +302,15 @@ export default function PlaceEditorHub() {
               className="p-2 -ml-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition"
               aria-label="Back"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
+              <Icon name="back" size={20} />
             </button>
-            <h1 className="text-lg font-semibold text-[#1F2A1F]">Place editor</h1>
+            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Place editor</h1>
             <Link
               href={`/places/${placeId}/settings`}
               className="p-2 -mr-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition"
               aria-label="Settings"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
+              <Icon name="settings" size={20} />
             </Link>
           </div>
         </div>
@@ -361,9 +371,7 @@ export default function PlaceEditorHub() {
                     <p className="text-sm text-[#6F7A5A]">No photos yet</p>
                   )}
                 </div>
-                <svg className="w-5 h-5 text-[#6F7A5A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <Icon name="forward" size={20} className="text-[#6F7A5A]" />
               </div>
             </Link>
 
@@ -379,9 +387,7 @@ export default function PlaceEditorHub() {
                     {place.title || "No title yet"}
                   </p>
                 </div>
-                <svg className="w-5 h-5 text-[#6F7A5A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <Icon name="forward" size={20} className="text-[#6F7A5A]" />
               </div>
             </Link>
 
@@ -399,9 +405,7 @@ export default function PlaceEditorHub() {
                       : "No categories selected"}
                   </p>
                 </div>
-                <svg className="w-5 h-5 text-[#6F7A5A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <Icon name="forward" size={20} className="text-[#6F7A5A]" />
               </div>
             </Link>
 
@@ -417,9 +421,7 @@ export default function PlaceEditorHub() {
                     {place.address || place.city || "No location set"}
                   </p>
                 </div>
-                <svg className="w-5 h-5 text-[#6F7A5A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <Icon name="forward" size={20} className="text-[#6F7A5A]" />
               </div>
             </Link>
 
@@ -435,9 +437,7 @@ export default function PlaceEditorHub() {
                     {place.description || "No description yet"}
                   </p>
                 </div>
-                <svg className="w-5 h-5 text-[#6F7A5A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <Icon name="forward" size={20} className="text-[#6F7A5A]" />
               </div>
             </Link>
 
@@ -453,9 +453,7 @@ export default function PlaceEditorHub() {
                     {place.access_level === 'premium' ? "Premium" : "Public"}
                   </p>
                 </div>
-                <svg className="w-5 h-5 text-[#6F7A5A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <Icon name="forward" size={20} className="text-[#6F7A5A]" />
               </div>
             </Link>
           </div>
@@ -487,10 +485,7 @@ export default function PlaceEditorHub() {
           href={`/id/${placeId}`}
           className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#1F2A1F] text-white text-sm font-medium shadow-lg hover:bg-[#2d3a2d] transition"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-          </svg>
+          <Icon name="eye" size={16} />
           View
         </Link>
       </div>

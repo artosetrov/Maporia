@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { getUserAccess, type UserAccess } from "../lib/access";
+import type { Profile } from "../types";
 
 export type UseUserAccessResult = {
   loading: boolean;
   user: { id: string; email: string | null } | null;
-  profile: any | null;
+  profile: Profile | null;
   access: UserAccess;
 };
 
@@ -20,8 +21,12 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<{ id: string; email: string | null } | null>(null);
-  const [profile, setProfile] = useState<any | null>(null);
-  const [access, setAccess] = useState<UserAccess>({ hasPremium: false });
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [access, setAccess] = useState<UserAccess>({ 
+    role: "guest", 
+    hasPremium: false, 
+    isAdmin: false 
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -48,7 +53,11 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
         }
         setUser(null);
         setProfile(null);
-        setAccess({ hasPremium: false });
+        setAccess({ 
+          role: "guest", 
+          hasPremium: false, 
+          isAdmin: false 
+        });
         setLoading(false);
         return;
       }
@@ -59,10 +68,10 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
       };
       setUser(currentUser);
 
-      // Load profile
+      // Load profile with role and subscription fields
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
-        .select("*")
+        .select("*, is_admin, subscription_status, role")
         .eq("id", currentUser.id)
         .maybeSingle();
 
@@ -82,7 +91,7 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
         console.warn("Profile required but not found");
       }
 
-      // Calculate access
+      // Calculate access based on role system
       const userAccess = getUserAccess(currentProfile);
       setAccess(userAccess);
 

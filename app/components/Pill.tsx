@@ -24,8 +24,8 @@ export default function Pill({ active = false, onClick, children, variant = "fil
           baseStyles,
           "px-4 py-2 flex-1 border",
           active
-            ? "bg-[#6b7d47] text-white border-[#6b7d47]"
-            : "bg-[#f5f4f2] text-[#6b7d47]/60 border-[#6b7d47]/20 hover:bg-[#6b7d47]/10"
+            ? "bg-[#8F9E4F] text-white border-[#8F9E4F]"
+            : "bg-[#FAFAF7] text-[#6F7A5A] border-[#ECEEE4] hover:bg-[#ECEEE4]"
         )}
       >
         {children}
@@ -38,7 +38,7 @@ export default function Pill({ active = false, onClick, children, variant = "fil
       <span
         className={cx(
           baseStyles,
-          "px-3 py-1 border border-[#6b7d47]/20 text-[#6b7d47] bg-[#f5f4f2]"
+          "px-3 py-1 border border-[#ECEEE4] text-[#8F9E4F] bg-[#FAFAF7]"
         )}
       >
         {children}
@@ -54,8 +54,8 @@ export default function Pill({ active = false, onClick, children, variant = "fil
         baseStyles,
         "px-3 py-1.5 border",
         active
-          ? "bg-[#6b7d47] text-white border-[#6b7d47]"
-          : "bg-white border-[#6b7d47]/20 text-[#2d2d2d] hover:bg-[#f5f4f2]"
+          ? "bg-[#8F9E4F] text-white border-[#8F9E4F]"
+          : "bg-white border-[#ECEEE4] text-[#1F2A1F] hover:bg-[#FAFAF7]"
       )}
     >
       {children}

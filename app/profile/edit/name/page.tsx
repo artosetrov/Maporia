@@ -3,111 +3,76 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { supabase } from "../../../../lib/supabase";
-import { useUserAccess } from "../../../../hooks/useUserAccess";
-import { isUserAdmin } from "../../../../lib/access";
-import Icon from "../../../../components/Icon";
+import { useRouter } from "next/navigation";
+import { supabase } from "../../../lib/supabase";
+import { useUserAccess } from "../../../hooks/useUserAccess";
+import Icon from "../../../components/Icon";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
 }
 
-export default function TitleEditorPage() {
+export default function NameEditorPage() {
   const router = useRouter();
-  const params = useParams<{ id: string }>();
-  const placeId = params?.id;
-
-  const { loading: accessLoading, user, access } = useUserAccess(true, false);
-  const isAdmin = isUserAdmin(access);
+  const { loading: accessLoading, user } = useUserAccess(true, false);
   const [loading, setLoading] = useState(true);
-  const [title, setTitle] = useState("");
-  const [originalTitle, setOriginalTitle] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [originalDisplayName, setOriginalDisplayName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load place
+  // Load profile
   useEffect(() => {
-    if (!placeId || !user || accessLoading) return;
+    if (!user || accessLoading) return;
 
     (async () => {
       setLoading(true);
-      const { data, error: placeError } = await supabase
-        .from("places")
-        .select("title, created_by")
-        .eq("id", placeId)
+      const { data, error: profileError } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", user.id)
         .single();
 
-      if (placeError || !data) {
-        router.push(`/places/${placeId}/edit`);
+      if (profileError || !data) {
+        router.push(`/profile/edit`);
         return;
       }
 
-      // Check ownership or admin status
-      const currentIsAdmin = isUserAdmin(access);
-      const isOwner = data.created_by === user.id;
-      if (!isOwner && !currentIsAdmin) {
-        router.push(`/id/${placeId}`);
-        return;
-      }
-
-      const currentTitle = data.title || "";
-      setTitle(currentTitle);
-      setOriginalTitle(currentTitle);
+      const currentDisplayName = data.display_name || "";
+      setDisplayName(currentDisplayName);
+      setOriginalDisplayName(currentDisplayName);
       setLoading(false);
     })();
-  }, [placeId, user, router, access, accessLoading]);
+  }, [user, router, accessLoading]);
 
-  const hasChanges = title.trim() !== originalTitle.trim();
-  const isValid = title.trim().length >= 4 && title.trim().length <= 50;
+  const hasChanges = displayName.trim() !== originalDisplayName.trim();
+  const isValid = displayName.trim().length >= 2 && displayName.trim().length <= 50;
   const canSave = hasChanges && isValid && !saving;
 
   async function handleSave() {
-    if (!canSave || !user || !placeId) return;
+    if (!canSave || !user) return;
 
     setSaving(true);
     setError(null);
 
-    console.log("Saving title:", { placeId, userId: user.id, title: title.trim() });
-
-    // Admin can update any place, owner can update their own
-    const currentIsAdmin = isUserAdmin(access);
-    const updateQuery = supabase
-      .from("places")
-      .update({ title: title.trim() })
-      .eq("id", placeId);
-    
-    // If not admin, add ownership check
-    if (!currentIsAdmin) {
-      updateQuery.eq("created_by", user.id);
-    }
-    
-    const { data, error: updateError } = await updateQuery.select();
-
-    console.log("Update result:", { data, error: updateError });
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ display_name: displayName.trim() || null })
+      .eq("id", user.id);
 
     setSaving(false);
 
     if (updateError) {
-      console.error("Update error:", updateError);
-      setError(updateError.message || "Failed to save title");
+      setError(updateError.message || "Failed to save name");
       return;
     }
 
-    // If no data returned but no error, the update likely succeeded
-    // This can happen with RLS policies that allow UPDATE but restrict SELECT
-    if (!data || data.length === 0) {
-      console.warn("No data returned from update, but no error occurred. Update likely succeeded.");
-      // Don't show error - just proceed with navigation
-    }
-
     if (navigator.vibrate) navigator.vibrate(10);
-    // Force reload by using window.location to ensure fresh data
-    window.location.href = `/places/${placeId}/edit`;
+    window.location.href = `/profile/edit`;
   }
 
   function handleCancel() {
-    router.push(`/places/${placeId}/edit`);
+    router.push(`/profile/edit`);
   }
 
   if (accessLoading || loading) {
@@ -137,7 +102,7 @@ export default function TitleEditorPage() {
             >
               <Icon name="close" size={20} />
             </button>
-            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Title</h1>
+            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Display name</h1>
             <div className="w-9" /> {/* Spacer */}
           </div>
         </div>
@@ -154,19 +119,19 @@ export default function TitleEditorPage() {
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-[#1F2A1F] mb-2">
-              Place title
+              Your name
             </label>
             <input
               type="text"
-              value={title}
+              value={displayName}
               onChange={(e) => {
-                setTitle(e.target.value);
+                setDisplayName(e.target.value);
                 setError(null);
               }}
-              placeholder="e.g. Secret rooftop bar"
+              placeholder="e.g. John Doe"
               className={cx(
                 "w-full rounded-xl border px-4 py-4 text-lg font-medium text-[#1F2A1F] placeholder:text-[#A8B096] outline-none transition",
-                isValid || title.length === 0
+                isValid || displayName.length === 0
                   ? "border-[#ECEEE4] bg-[#FAFAF7] focus:bg-white focus:border-[#8F9E4F]"
                   : "border-red-300 bg-red-50/50 focus:bg-white focus:border-red-400"
               )}
@@ -176,14 +141,14 @@ export default function TitleEditorPage() {
             <div className="mt-2 flex items-center justify-between">
               <p className={cx(
                 "text-xs",
-                isValid || title.length === 0 ? "text-[#6F7A5A]" : "text-red-600"
+                isValid || displayName.length === 0 ? "text-[#6F7A5A]" : "text-red-600"
               )}>
-                {title.length < 4 && title.length > 0
-                  ? "Title must be at least 4 characters"
-                  : "Choose a title that captures the essence of your place"}
+                {displayName.length < 2 && displayName.length > 0
+                  ? "Name must be at least 2 characters"
+                  : "This is how your name will appear to others"}
               </p>
               <span className="text-xs text-[#6F7A5A]">
-                {title.length}/50
+                {displayName.length}/50
               </span>
             </div>
           </div>

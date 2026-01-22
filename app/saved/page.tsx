@@ -25,59 +25,40 @@ export default function SavedPage() {
   const router = useRouter();
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [userAvatar, setUserAvatar] = useState<string | null>(null);
-  const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
   
   // Search and filter state
   const [searchValue, setSearchValue] = useState("");
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
-    vibes: [],
     categories: [],
     sort: null,
   });
   const [filterOpen, setFilterOpen] = useState(false);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
-  // User access for premium filtering
-  const { access } = useUserAccess();
+  // User access and profile data
+  const { loading: accessLoading, access, user, profile } = useUserAccess(true);
+  
+  // Derive display values from profile
+  const userId = user?.id ?? null;
+  const userEmail = user?.email ?? null;
+  const userDisplayName = profile?.display_name ?? null;
+  const userAvatar = profile?.avatar_url ?? null;
 
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!data.user) {
-        router.push("/auth");
-        return;
-      }
-      setUserId(data.user.id);
-      setUserEmail(data.user.email ?? null);
-      
-      // Загружаем профиль
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("display_name, avatar_url")
-        .eq("id", data.user.id)
-        .single();
-      
-      if (profile?.display_name) {
-        setUserDisplayName(profile.display_name);
-      }
-      if (profile?.avatar_url) {
-        setUserAvatar(profile.avatar_url);
-      }
-      
-      await loadSavedPlaces(data.user.id);
-    })();
-  }, [router]);
+    if (!accessLoading && userId) {
+      loadSavedPlaces(userId);
+    } else if (!accessLoading && !user) {
+      // useUserAccess with requireAuth=true will handle redirect
+      setLoading(false);
+    }
+  }, [accessLoading, userId, user]);
 
   // Calculate active filters count
   useEffect(() => {
     let count = 0;
     if (selectedCity && selectedCity !== DEFAULT_CITY) count++;
     if (searchValue) count++;
-    if (activeFilters.vibes.length > 0) count += activeFilters.vibes.length;
     if (activeFilters.categories.length > 0) count += activeFilters.categories.length;
     if (activeFilters.sort) count++;
     setActiveFiltersCount(count);
@@ -138,7 +119,7 @@ export default function SavedPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#faf9f7] flex flex-col">
+    <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
       <TopBar
         showSearchBar={true}
         searchValue={searchValue}
@@ -188,9 +169,6 @@ export default function SavedPage() {
           if (filters.categories.length > 0) {
             params.set("categories", filters.categories.map(c => encodeURIComponent(c)).join(','));
           }
-          if (filters.vibes.length > 0) {
-            params.set("vibes", filters.vibes.map(v => encodeURIComponent(v)).join(','));
-          }
           if (filters.sort) {
             params.set("sort", filters.sort);
           }
@@ -203,13 +181,23 @@ export default function SavedPage() {
       <div className="flex-1 pt-[80px] pb-20">
         <div className="px-6 lg:px-8">
           {loading ? (
-            <div className="text-center py-16">
-              <div className="text-sm text-[#6b7d47]/60">Loading…</div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="w-full">
+                  <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
+                    <div className="absolute inset-0 rounded-2xl bg-gray-200 animate-pulse" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="h-5 w-3/4 bg-gray-200 rounded animate-pulse" />
+                    <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : places.length === 0 ? (
             <div className="text-center py-16">
-              <div className="text-sm text-[#6b7d47]/60 mb-1">No saved places</div>
-              <div className="text-xs text-[#6b7d47]/50">Saved places appear here</div>
+              <div className="text-sm text-[#6F7A5A] mb-1">No saved places</div>
+              <div className="text-xs text-[#A8B096]">Saved places appear here</div>
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

@@ -95,9 +95,13 @@ export default function AddPlacePage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
-      <div className="text-center">
-        <div className="text-sm text-[#6F7A5A] mb-2">Loading...</div>
+    <main className="min-h-screen bg-[#FAFAF7]">
+      <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+        <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
+        <div className="bg-white rounded-2xl p-6 border border-gray-200 space-y-4">
+          <div className="h-6 w-32 bg-gray-200 rounded animate-pulse" />
+          <div className="h-10 w-full bg-gray-200 rounded animate-pulse" />
+        </div>
         {error && (
           <div className="text-sm text-red-600 mt-2">{error}</div>
         )}

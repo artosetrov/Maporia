@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { CITIES, DEFAULT_CITY } from "../constants";
+import Icon from "./Icon";
 
 type SearchModalProps = {
   isOpen: boolean;
@@ -60,39 +61,32 @@ export default function SearchModal({
   return (
     <div className="fixed inset-0 z-50 bg-white">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#6b7d47]/10">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[#ECEEE4]">
         <button
           onClick={onClose}
-          className="w-10 h-10 rounded-full hover:bg-[#f5f4f2] transition flex items-center justify-center"
+          className="w-10 h-10 rounded-full hover:bg-[#FAFAF7] transition flex items-center justify-center"
           aria-label="Close"
         >
-          <svg className="w-6 h-6 text-[#2d2d2d]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-6 h-6 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
-        <h2 className="text-lg font-semibold text-[#2d2d2d]">Search destinations</h2>
+        <h2 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Search destinations</h2>
         <div className="w-10" /> {/* Spacer for centering */}
       </div>
 
       {/* Search Input */}
-      <div className="px-4 py-4 border-b border-[#6b7d47]/10">
+      <div className="px-4 py-4 border-b border-[#ECEEE4]">
         <div className="relative">
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search destinations"
-            className="w-full px-4 py-3 pl-12 rounded-xl border-2 border-[#6b7d47]/20 focus:border-[#6b7d47] focus:outline-none text-[#2d2d2d]"
+            className="w-full px-4 py-3 pl-12 rounded-xl border-2 border-[#ECEEE4] focus:border-[#8F9E4F] focus:outline-none text-[#1F2A1F]"
             autoFocus
           />
-          <svg
-            className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#6b7d47]/60"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+          <Icon name="search" size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6F7A5A]" />
         </div>
       </div>
 
@@ -101,17 +95,17 @@ export default function SearchModal({
         {/* Recent Cities */}
         {recentCities.length > 0 && searchQuery === "" && (
           <div className="mb-6">
-            <h3 className="text-sm font-semibold text-[#2d2d2d] mb-3">Recent</h3>
+            <h3 className="text-sm font-semibold font-fraunces text-[#1F2A1F] mb-3">Recent</h3>
             <div className="space-y-2">
               {recentCities.map((city) => (
                 <button
                   key={city}
                   onClick={() => handleCitySelect(city)}
-                  className="w-full text-left px-4 py-3 rounded-xl hover:bg-[#f5f4f2] transition flex items-center justify-between"
+                  className="w-full text-left px-4 py-3 rounded-xl hover:bg-[#FAFAF7] transition flex items-center justify-between"
                 >
-                  <span className="text-[#2d2d2d]">{city}</span>
+                  <span className="text-[#1F2A1F]">{city}</span>
                   {selectedCity === city && (
-                    <svg className="w-5 h-5 text-[#6b7d47]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-[#8F9E4F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   )}
@@ -123,7 +117,7 @@ export default function SearchModal({
 
         {/* Popular Cities / Search Results */}
         <div>
-          <h3 className="text-sm font-semibold text-[#2d2d2d] mb-3">
+          <h3 className="text-sm font-semibold font-fraunces text-[#1F2A1F] mb-3">
             {searchQuery ? "Search results" : "Popular cities"}
           </h3>
           <div className="space-y-2">
@@ -132,18 +126,18 @@ export default function SearchModal({
                 <button
                   key={city}
                   onClick={() => handleCitySelect(city)}
-                  className="w-full text-left px-4 py-3 rounded-xl hover:bg-[#f5f4f2] transition flex items-center justify-between"
+                  className="w-full text-left px-4 py-3 rounded-xl hover:bg-[#FAFAF7] transition flex items-center justify-between"
                 >
-                  <span className="text-[#2d2d2d]">{city}</span>
+                  <span className="text-[#1F2A1F]">{city}</span>
                   {selectedCity === city && (
-                    <svg className="w-5 h-5 text-[#6b7d47]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-[#8F9E4F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   )}
                 </button>
               ))
             ) : (
-              <div className="px-4 py-8 text-center text-[#6b7d47]/60">
+              <div className="px-4 py-8 text-center text-[#6F7A5A]">
                 No cities found
               </div>
             )}
@@ -152,16 +146,14 @@ export default function SearchModal({
 
         {/* Anywhere option */}
         {searchQuery === "" && (
-          <div className="mt-6 pt-6 border-t border-[#6b7d47]/10">
+          <div className="mt-6 pt-6 border-t border-[#ECEEE4]">
             <button
               onClick={() => handleCitySelect(null)}
-              className="w-full text-left px-4 py-3 rounded-xl hover:bg-[#f5f4f2] transition flex items-center justify-between"
+              className="w-full text-left px-4 py-3 rounded-xl hover:bg-[#FAFAF7] transition flex items-center justify-between"
             >
-              <span className="text-[#2d2d2d] font-medium">Anywhere</span>
+              <span className="text-[#1F2A1F] font-medium">Anywhere</span>
               {!selectedCity && (
-                <svg className="w-5 h-5 text-[#6b7d47]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+                <Icon name="check" size={20} className="text-[#8F9E4F]" />
               )}
             </button>
           </div>

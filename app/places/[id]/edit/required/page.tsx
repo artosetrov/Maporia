@@ -7,6 +7,8 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../../lib/supabase";
 import { useUserAccess } from "../../../../hooks/useUserAccess";
+import { isUserAdmin } from "../../../../lib/access";
+import Icon from "../../../../components/Icon";
 
 type RequiredStep = {
   id: string;
@@ -20,14 +22,14 @@ export default function RequiredStepsPage() {
   const params = useParams<{ id: string }>();
   const placeId = params?.id;
 
-  const { loading: accessLoading, user } = useUserAccess(true, false);
+  const { loading: accessLoading, user, access } = useUserAccess(true, false);
   const [loading, setLoading] = useState(true);
   const [place, setPlace] = useState<any>(null);
   const [photos, setPhotos] = useState<any[]>([]);
 
   // Load place data
   useEffect(() => {
-    if (!placeId || !user) return;
+    if (!placeId || !user || accessLoading) return;
 
     (async () => {
       setLoading(true);
@@ -43,7 +45,9 @@ export default function RequiredStepsPage() {
         return;
       }
 
-      if (placeData.created_by !== user.id) {
+      const currentIsAdmin = isUserAdmin(access);
+      const isOwner = placeData.created_by === user.id;
+      if (!isOwner && !currentIsAdmin) {
         router.push(`/id/${placeId}`);
         return;
       }
@@ -68,7 +72,7 @@ export default function RequiredStepsPage() {
 
       setLoading(false);
     })();
-  }, [placeId, user, router]);
+  }, [placeId, user, router, access, accessLoading]);
 
   const requiredSteps = useMemo<RequiredStep[]>(() => {
     if (!place) return [];
@@ -112,8 +116,15 @@ export default function RequiredStepsPage() {
 
   if (accessLoading || loading) {
     return (
-      <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
-        <div className="text-sm text-[#6F7A5A]">Loading…</div>
+      <main className="min-h-screen bg-[#FAFAF7]">
+        <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+          <div className="h-8 w-48 bg-[#ECEEE4] rounded animate-pulse" />
+          <div className="bg-white rounded-2xl p-6 border border-[#ECEEE4] space-y-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-16 w-full bg-[#ECEEE4] rounded-lg animate-pulse" />
+            ))}
+          </div>
+        </div>
       </main>
     );
   }
@@ -129,11 +140,9 @@ export default function RequiredStepsPage() {
               className="p-2 -ml-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition"
               aria-label="Back"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
+              <Icon name="back" size={20} />
             </button>
-            <h1 className="text-lg font-semibold text-[#1F2A1F]">Required steps</h1>
+            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Required steps</h1>
             <div className="w-9" />
           </div>
         </div>
@@ -175,9 +184,7 @@ export default function RequiredStepsPage() {
                     {step.label}
                   </span>
                 </div>
-                <svg className="w-5 h-5 text-[#6F7A5A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <Icon name="forward" size={20} className="text-[#6F7A5A]" />
               </div>
             </Link>
           ))}

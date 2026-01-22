@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabase";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import PremiumBadge from "./PremiumBadge";
 import LockedPlaceOverlay from "./LockedPlaceOverlay";
+import Icon from "./Icon";
 
 type PlaceCardProps = {
   place: {
@@ -216,8 +217,12 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
   const currentPhoto = photos[currentPhotoIndex] || place.cover_url;
   const hasMultiplePhotos = photos.length > 1;
 
-  // Premium access checks
-  const defaultUserAccess: UserAccess = userAccess ?? { hasPremium: false };
+  // Premium access checks using role system
+  const defaultUserAccess: UserAccess = userAccess ?? { 
+    role: "guest", 
+    hasPremium: false, 
+    isAdmin: false 
+  };
   const isPremium = isPlacePremium(place);
   const canView = canUserViewPlace(defaultUserAccess, place);
   const isOwner = userId && place.created_by === userId;
@@ -329,9 +334,7 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
                   style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
                   aria-label="Next photo"
                 >
-                  <svg className="w-4 h-4 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
+                  <Icon name="forward" size={16} className="text-[#1F2A1F]" />
                 </button>
               </>
             )}
@@ -398,9 +401,7 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
             className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/90 backdrop-blur-sm rounded-lg p-2 badge-shadow hover:bg-white z-10"
             aria-label="Remove from favorites"
           >
-            <svg className="w-5 h-5 text-[#C96A5B]" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-            </svg>
+            <Icon name="heart" size={20} className="text-[#C96A5B]" filled active />
           </button>
         )}
       </div>

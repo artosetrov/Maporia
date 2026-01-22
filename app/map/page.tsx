@@ -19,6 +19,7 @@ import { LAYOUT_BREAKPOINTS, LAYOUT_CONFIG } from "../config/layout";
 import { DEFAULT_CITY } from "../constants";
 import { useUserAccess } from "../hooks/useUserAccess";
 import { isPlacePremium } from "../lib/access";
+import Icon from "../components/Icon";
 
 type Place = {
   id: string;
@@ -66,18 +67,10 @@ function MapPageContent() {
   
   // На странице /map по умолчанию показываем map view
   const [view, setView] = useState<"list" | "map">("map");
-  const [showMapMobile, setShowMapMobile] = useState(false);
-  // bottomSheetPosition: 0 = карта на весь экран, 0.5 = карта 50vh/список 50vh, 1 = список на весь экран
-  // При первом заходе и обновлении страницы устанавливаем 0.5 для разделения 50/50
-  const [bottomSheetPosition, setBottomSheetPosition] = useState<number>(0.5);
-  const [isDragging, setIsDragging] = useState(false);
-  const [listScrollRef, setListScrollRef] = useState<HTMLDivElement | null>(null);
-  const [searchFocused, setSearchFocused] = useState(false);
   const [hoveredPlaceId, setHoveredPlaceId] = useState<string | null>(null);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [mapZoom, setMapZoom] = useState<number | null>(null);
-  const [isMapFullscreen, setIsMapFullscreen] = useState(false);
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -160,7 +153,6 @@ function MapPageContent() {
   const [appliedCity, setAppliedCity] = useState<string | null>(initialCity || DEFAULT_CITY);
   const [appliedQ, setAppliedQ] = useState(initialQ);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
-    vibes: [],
     categories: initialCategories,
     sort: null,
   });
@@ -709,7 +701,6 @@ function MapPageContent() {
     setSearchDraft("");
     setSelectedTag("");
     setActiveFilters({
-      vibes: [],
       categories: [],
       sort: null,
     });
@@ -745,152 +736,9 @@ function MapPageContent() {
     return `${count} ${count === 1 ? "place" : "places"}`;
   }, [places.length, hasActiveFilters]);
 
-  // Обработка скролла списка на мобильных
-  useEffect(() => {
-    if (!listScrollRef || view !== "map" || isDragging) return;
-
-    let scrollTimeout: NodeJS.Timeout;
-    let lastScrollTop = listScrollRef.scrollTop;
-    let currentPosition = bottomSheetPosition;
-    let isScrolling = false;
-
-    const handleScroll = () => {
-      if (isDragging) return;
-      
-      isScrolling = true;
-      const scrollTop = listScrollRef.scrollTop;
-      const scrollDelta = scrollTop - lastScrollTop;
-      
-      // Очищаем предыдущий таймаут
-      clearTimeout(scrollTimeout);
-      
-      // Если скролл вверх (scrollDelta > 0) и список не в самом верху
-      if (scrollDelta > 0 && scrollTop > 10 && currentPosition < 1) {
-        // Плавно увеличиваем bottomSheetPosition при скролле вверх
-        currentPosition = Math.min(1, currentPosition + scrollDelta / 1000);
-        setBottomSheetPosition(currentPosition);
-      }
-      // Если скролл вниз (scrollDelta < 0) и мы в начале списка
-      else if (scrollDelta < 0 && scrollTop < 10 && currentPosition > 0.5) {
-        // Плавно уменьшаем bottomSheetPosition при скролле вниз в начале
-        currentPosition = Math.max(0.5, currentPosition + scrollDelta / 1000);
-        setBottomSheetPosition(currentPosition);
-      }
-      
-      lastScrollTop = scrollTop;
-      
-      // После окончания скролла делаем snap к ближайшей точке
-      scrollTimeout = setTimeout(() => {
-        isScrolling = false;
-        const snapPoints = [0, 0.5, 1];
-        const nearest = snapPoints.reduce((prev, curr) => 
-          Math.abs(curr - currentPosition) < Math.abs(prev - currentPosition) ? curr : prev
-        );
-        if (Math.abs(nearest - currentPosition) > 0.1) {
-          currentPosition = nearest;
-          setBottomSheetPosition(nearest);
-        }
-      }, 150);
-    };
-
-    // Обновляем currentPosition при изменении bottomSheetPosition
-    currentPosition = bottomSheetPosition;
-
-    listScrollRef.addEventListener('scroll', handleScroll, { passive: true });
-    return () => {
-      listScrollRef.removeEventListener('scroll', handleScroll);
-      clearTimeout(scrollTimeout);
-    };
-  }, [listScrollRef, view, isDragging, bottomSheetPosition]);
-
-  // Обработка тапа по карте для открытия полноэкранного режима
-  const handleMapTap = (e?: React.MouseEvent | React.TouchEvent) => {
-    if (e) {
-      // Проверяем, что клик был именно по карте, а не по списку
-      const target = e.target as HTMLElement;
-      if (target.closest('.bottom-sheet-content')) return;
-    }
-    
-    if (view === "map" && !isMapFullscreen && bottomSheetPosition < 0.7) {
-      setBottomSheetPosition(0);
-      setIsMapFullscreen(true);
-    }
-  };
-
-  // Обработка закрытия полноэкранного режима
-  const handleCloseFullscreen = () => {
-    setIsMapFullscreen(false);
-    setBottomSheetPosition(0.5);
-  };
-
-  // Общая функция для обработки drag bottom sheet
-  const handleBottomSheetDrag = (e: React.TouchEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-    
-    // Блокируем скролл списка во время перетаскивания
-    if (listScrollRef) {
-      listScrollRef.style.overflow = 'hidden';
-    }
-    
-    const startY = e.touches[0].clientY;
-    const startHeight = bottomSheetPosition;
-    
-    const handleMove = (moveEvent: TouchEvent) => {
-      moveEvent.preventDefault();
-      const deltaY = startY - moveEvent.touches[0].clientY;
-      const screenHeight = window.innerHeight;
-      // Инвертируем deltaY: движение вверх (отрицательный deltaY) увеличивает высоту
-      const newHeight = Math.max(0, Math.min(1, startHeight - deltaY / screenHeight));
-      setBottomSheetPosition(newHeight);
-    };
-    
-    const handleEnd = () => {
-      setIsDragging(false);
-      
-      // Восстанавливаем скролл списка
-      if (listScrollRef) {
-        listScrollRef.style.overflow = 'auto';
-      }
-      
-      // Snap to nearest point
-      const snapPoints = [0, 0.5, 1];
-      const nearest = snapPoints.reduce((prev, curr) => 
-        Math.abs(curr - bottomSheetPosition) < Math.abs(prev - bottomSheetPosition) ? curr : prev
-      );
-      setBottomSheetPosition(nearest);
-      document.removeEventListener('touchmove', handleMove, { passive: false });
-      document.removeEventListener('touchend', handleEnd);
-    };
-    
-    document.addEventListener('touchmove', handleMove, { passive: false });
-    document.addEventListener('touchend', handleEnd);
-  };
-
-  // При первом заходе и обновлении страницы устанавливаем начальное состояние: карта 50%, список 50%
-  useEffect(() => {
-    setIsMapFullscreen(false);
-    setBottomSheetPosition(0.5);
-    // view уже установлен в "map" по умолчанию
-  }, []); // Срабатывает только при монтировании компонента
-
-  // Сброс состояния при переключении на map view
-  useEffect(() => {
-    if (view === "map") {
-      setIsMapFullscreen(false);
-      setBottomSheetPosition(0.5);
-    }
-  }, [view]);
 
   return (
-    <main 
-      className={`h-screen bg-[#faf9f7] flex flex-col overflow-hidden ${isMapFullscreen ? 'fixed inset-0 z-50' : ''}`}
-      style={{
-        overscrollBehavior: 'none',
-        WebkitOverflowScrolling: 'touch',
-        touchAction: 'pan-y',
-      }}
-    >
+    <main className="h-screen bg-[#FAFAF7] flex flex-col overflow-hidden">
       <TopBar
         showSearchBar={true}
         searchValue={searchDraft}
@@ -967,27 +815,47 @@ function MapPageContent() {
         Card image: aspect 4:3, radius 18-22px, carousel dots
         See app/config/layout.ts for detailed configuration
       */}
-      <div className={`flex-1 min-h-0 overflow-hidden ${
-        isMapFullscreen 
-          ? 'pt-0' 
-          : view === "map" 
-            ? 'pt-0 min-[600px]:pt-[32px] min-[900px]:pt-[60px]' 
-            : 'pt-[32px] min-[900px]:pt-[60px]'
-      }`}>
-        {/* Desktop XL & Desktop: Split view (≥1120px) - Airbnb-like responsive rules */}
-        {/* On very large screens (>=1920px), container stretches to full width, map takes 100% of right side */}
-        <div className={`hidden min-[1120px]:flex h-full max-w-[1920px] min-[1920px]:max-w-none mx-auto px-6 ${isMapFullscreen ? 'px-0 max-w-none' : ''}`}>
+      {/* View Toggle - только для мобильных и планшетов (<1120px) */}
+      {/* Обычный блок в flow, не sticky, чтобы не накладывался на карту */}
+      {/* TopBar fixed, поэтому нужен margin-top для компенсации */}
+      <div className="hidden max-[1119px]:block bg-[#FAFAF7] border-b border-[#ECEEE4] mt-[64px] min-[600px]:mt-[80px]">
+        <div className="flex items-center gap-2 px-4 py-2">
+          <button
+            onClick={() => setView("list")}
+            className={`flex-1 px-4 py-2 rounded-xl text-sm font-medium transition ${
+              view === "list"
+                ? "bg-[#8F9E4F] text-white"
+                : "bg-white text-[#8F9E4F] border border-[#ECEEE4] hover:bg-[#FAFAF7]"
+            }`}
+          >
+            List
+          </button>
+          <button
+            onClick={() => setView("map")}
+            className={`flex-1 px-4 py-2 rounded-xl text-sm font-medium transition ${
+              view === "map"
+                ? "bg-[#8F9E4F] text-white"
+                : "bg-white text-[#8F9E4F] border border-[#ECEEE4] hover:bg-[#FAFAF7]"
+            }`}
+          >
+            Map
+          </button>
+        </div>
+      </div>
+
+      {/* Контент: на desktop учитываем только TopBar (fixed), на mobile/tablet контент идет после ToggleBar в flow */}
+      <div className="flex-1 min-h-0 overflow-hidden min-[1120px]:pt-[80px]">
+        {/* Desktop: Split view - список слева, карта справа (≥1120px) */}
+        <div className="hidden min-[1120px]:flex h-full max-w-[1920px] min-[1920px]:max-w-none mx-auto px-6">
           {/* Left: Scrollable list - 60% on XL (>=1440px), 62.5% on Desktop (1120-1439px) */}
-          {/* On very large screens (>=1920px), list has fixed max-width, map stretches to fill remaining space */}
-          {/* Фиксированная ширина - НЕ меняется в зависимости от фильтров или количества результатов */}
-          <div className={`map-list-container w-[62.5%] min-[1440px]:w-[60%] min-[1920px]:w-[1152px] flex-shrink-0 overflow-y-auto scrollbar-hide pr-6 ${isMapFullscreen ? 'hidden' : ''}`}>
+          <div className="w-[62.5%] min-[1440px]:w-[60%] min-[1920px]:w-[1152px] flex-shrink-0 overflow-y-auto scrollbar-hide pr-6">
             {/* Header in List Column */}
-            <div className="sticky top-0 z-30 bg-[#faf9f7] pt-12 pb-3 border-b border-[#6b7d47]/10 mb-4">
+            <div className="sticky top-0 z-30 bg-[#FAFAF7] pt-20 pb-3 border-b border-[#ECEEE4] mb-4">
               <div className="flex items-center gap-3 mb-2">
                 <div className="flex-1 min-w-0">
-                  <h1 className="text-xl font-semibold text-[#2d2d2d] truncate">{listTitle}</h1>
+                  <h1 className="text-xl font-semibold font-fraunces text-[#1F2A1F] truncate">{listTitle}</h1>
                   {listSubtitle && (
-                    <div className="text-sm text-[#6b7d47]/60 mt-0.5">
+                    <div className="text-sm text-[#6F7A5A] mt-0.5">
                       {listSubtitle}
                     </div>
                   )}
@@ -995,18 +863,14 @@ function MapPageContent() {
               </div>
               {/* Active filter chips */}
               {((appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) || appliedCategories.length > 0) && (
-                <div className="mt-2 flex gap-2 overflow-x-auto pb-1 flex-wrap">
+                <div className="mt-2 flex gap-2 overflow-x-auto pb-1 flex-nowrap">
                   {appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && (
                     <button
-                      onClick={() => {
-                        handleCityChange(null);
-                      }}
-                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
+                      onClick={() => handleCityChange(null)}
+                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
                     >
                       {appliedCity}
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                      <Icon name="close" size={12} />
                     </button>
                   )}
                   {appliedCategories.map((cat) => (
@@ -1018,28 +882,33 @@ function MapPageContent() {
                           categories: prev.categories.filter(c => c !== cat)
                         }));
                       }}
-                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
+                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
                     >
                       {cat}
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                      <Icon name="close" size={12} />
                     </button>
                   ))}
                 </div>
               )}
             </div>
             {loading ? (
-              <Empty text="Loading…" />
+              <div className="grid grid-cols-2 min-[1440px]:grid-cols-3 gap-6 min-[1440px]:gap-6 min-[1440px]:gap-y-7">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="w-full">
+                    <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
+                      <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <div className="h-5 w-3/4 bg-[#ECEEE4] rounded animate-pulse" />
+                      <div className="h-4 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : places.length === 0 ? (
               <Empty text="No places with this vibe yet. Try fewer filters." />
             ) : (
-              <div className="grid grid-cols-2 min-[1440px]:grid-cols-3 gap-6 min-[1440px]:gap-6 min-[1440px]:gap-y-7 map-grid-fixed-cards">
-                {/* Airbnb-like responsive grid: 2 cols on desktop, 3 cols on XL */}
-                {/* Cards: фиксированный размер по разрешению, не зависит от фильтров */}
-                {/* Desktop (1120-1439px): 2 колонки, карточка = (container_width - gap) / 2 */}
-                {/* Desktop XL (>=1440px): 3 колонки, карточка = (container_width - gaps) / 3 */}
-                {/* map-grid-fixed-cards предотвращает растягивание карточек */}
+              <div className="grid grid-cols-2 min-[1440px]:grid-cols-3 gap-6 min-[1440px]:gap-6 min-[1440px]:gap-y-7">
                 {places.map((p) => {
                   const isFavorite = favorites.has(p.id);
                   const isHovered = hoveredPlaceId === p.id || selectedPlaceId === p.id;
@@ -1050,7 +919,6 @@ function MapPageContent() {
                       onMouseLeave={() => setHoveredPlaceId(null)}
                       onClick={() => {
                         setSelectedPlaceId(p.id);
-                        // Обновляем карту только если есть координаты
                         if (p.lat != null && p.lng != null) {
                           setMapCenter({ lat: p.lat, lng: p.lng });
                           setMapZoom(15);
@@ -1086,7 +954,6 @@ function MapPageContent() {
                         }
                         onTagClick={(tag) => {
                           setSelectedTag(tag);
-                          // Tag filtering is handled separately, no modal needed
                         }}
                         onPhotoClick={() => {
                           router.push(`/id/${p.id}`);
@@ -1100,29 +967,6 @@ function MapPageContent() {
           </div>
 
           {/* Right: Sticky map - 37.5% on Desktop (1120-1439px), 40% on XL (1440-1919px), 100% of remaining on >=1920px */}
-          {/* Правая часть: карта - занимает оставшееся пространство */}
-          {isMapFullscreen ? (
-            <div className="fixed inset-0 top-[64px] min-[600px]:top-[80px] z-40 w-full h-[calc(100vh-64px)] min-[600px]:h-[calc(100vh-80px)]">
-              <div className="h-full w-full overflow-hidden">
-                <MapView
-                  places={places}
-                  loading={loading}
-                  selectedPlaceId={hoveredPlaceId || selectedPlaceId}
-                  mapCenter={mapCenter}
-                  mapZoom={mapZoom}
-                  onMapStateChange={(center, zoom) => {
-                    setMapCenter(center);
-                    setMapZoom(zoom);
-                  }}
-                  userId={userId}
-                  favorites={favorites}
-                  onToggleFavorite={toggleFavorite}
-                  isFullscreen={isMapFullscreen}
-                  onFullscreenChange={setIsMapFullscreen}
-                />
-              </div>
-            </div>
-          ) : (
           <div className="w-[37.5%] min-[1440px]:w-[40%] min-[1920px]:flex-1 h-full flex-shrink-0 flex-grow max-w-full pb-8">
             <div className="sticky top-20 h-[calc(100vh-96px-32px)] rounded-2xl overflow-hidden w-full max-w-full">
               <MapView
@@ -1138,733 +982,137 @@ function MapPageContent() {
                 userId={userId}
                 favorites={favorites}
                 onToggleFavorite={toggleFavorite}
-                isFullscreen={isMapFullscreen}
-                onFullscreenChange={setIsMapFullscreen}
               />
             </div>
           </div>
-          )}
         </div>
 
-        {/* Tablet Large: List only with Show Map button (900px - 1119px) */}
-        <div className="hidden min-[900px]:max-[1119px]:block h-full">
-          <div className="max-w-[1920px] mx-auto px-5">
-            {/* Header in List Column */}
-            <div className="sticky top-[60px] z-30 bg-[#faf9f7] pt-12 pb-3 border-b border-[#6b7d47]/10 mb-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="flex-1 min-w-0">
-                  <h1 className="text-xl font-semibold text-[#2d2d2d] truncate">{listTitle}</h1>
+        {/* Mobile & Tablet: переключатель между списком и картой (<1120px) */}
+        <div className="min-[1120px]:hidden h-full">
+          {view === "list" ? (
+            <div className="h-full overflow-y-auto">
+              <div className="max-w-[1920px] mx-auto px-4 min-[600px]:px-6 py-4">
+                {/* Header */}
+                <div className="mb-4">
+                  <h1 className="text-xl font-semibold font-fraunces text-[#1F2A1F] mb-2">{listTitle}</h1>
                   {listSubtitle && (
-                    <div className="text-sm text-[#6b7d47]/60 mt-0.5">
-                      {listSubtitle}
-                    </div>
+                    <div className="text-sm text-[#6F7A5A]">{listSubtitle}</div>
                   )}
-                </div>
-                <button
-                  onClick={() => setView("map")}
-                  className="h-10 px-4 rounded-xl bg-[#6b7d47] text-white text-sm font-medium hover:bg-[#556036] transition flex-shrink-0"
-                >
-                  Show map
-                </button>
-              </div>
-              {/* Active filter chips */}
-              {((appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) || appliedCategories.length > 0) && (
-                <div className="mt-2 flex gap-2 overflow-x-auto pb-1 flex-wrap">
-                  {appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && (
-                    <button
-                      onClick={() => {
-                        handleCityChange(null);
-                      }}
-                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
-                    >
-                      {appliedCity}
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                  {appliedCategories.map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => {
-                        setActiveFilters(prev => ({
-                          ...prev,
-                          categories: prev.categories.filter(c => c !== cat)
-                        }));
-                      }}
-                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
-                    >
-                      {cat}
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            {loading ? (
-              <Empty text="Loading…" />
-            ) : places.length === 0 ? (
-              <Empty text="No places with this vibe yet. Try fewer filters." />
-            ) : (
-              <div className="grid grid-cols-2 gap-5 map-grid-fixed-cards">
-                {/* Cards: фиксированный размер по разрешению, не зависит от фильтров */}
-                {/* Tablet Large (900-1119px): 2 колонки, карточка = (container_width - gap) / 2 */}
-                {places.map((p) => {
-                  const isFavorite = favorites.has(p.id);
-                  return (
-                    <div key={p.id} className="transition-all relative z-0 place-card-wrapper">
-                      <PlaceCard
-                        place={p}
-                        userAccess={access}
-                        userId={userId}
-                        isFavorite={isFavorite}
-                        favoriteButton={
-                          userId ? (
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                toggleFavorite(p.id, e);
-                              }}
-                              className={`h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors ${
-                                isFavorite ? "bg-[#FAFAF7] border-[#8F9E4F]" : ""
-                              }`}
-                              title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                            >
-                              <FavoriteIcon 
-                                isActive={isFavorite} 
-                                size={16}
-                                className={isFavorite ? "scale-110" : ""}
-                              />
-                            </button>
-                          ) : undefined
-                        }
-                        onTagClick={(tag) => {
-                          setSelectedTag(tag);
-                          // Tag filtering is handled separately, no modal needed
-                        }}
-                        onPhotoClick={() => {
-                          router.push(`/id/${p.id}`);
-                        }}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Tablet: List only (600px - 899px) */}
-        <div className="hidden min-[600px]:max-[899px]:block h-full">
-          <div className="max-w-[680px] mx-auto px-6">
-            {/* Header in List Column */}
-            <div className="sticky top-[64px] z-30 bg-[#faf9f7] pt-12 pb-3 border-b border-[#6b7d47]/10 mb-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="flex-1 min-w-0">
-                  <h1 className="text-xl font-semibold text-[#2d2d2d] truncate">{listTitle}</h1>
-                  {listSubtitle && (
-                    <div className="text-sm text-[#6b7d47]/60 mt-0.5">
-                      {listSubtitle}
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={() => setView("map")}
-                  className="h-10 px-4 rounded-xl bg-[#6b7d47] text-white text-sm font-medium hover:bg-[#556036] transition flex-shrink-0"
-                >
-                  Map
-                </button>
-              </div>
-              {/* Active filter chips */}
-              {((appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) || appliedCategories.length > 0) && (
-                <div className="mt-2 flex gap-2 overflow-x-auto pb-1 flex-wrap">
-                  {appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && (
-                    <button
-                      onClick={() => {
-                        handleCityChange(null);
-                      }}
-                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
-                    >
-                      {appliedCity}
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                  {appliedCategories.map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => {
-                        setActiveFilters(prev => ({
-                          ...prev,
-                          categories: prev.categories.filter(c => c !== cat)
-                        }));
-                      }}
-                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
-                    >
-                      {cat}
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            {loading ? (
-              <Empty text="Loading…" />
-            ) : places.length === 0 ? (
-              <Empty text="No places with this vibe yet. Try fewer filters." />
-            ) : (
-              <div className="grid grid-cols-1 gap-4 justify-items-start">
-                {/* Cards: фиксированный размер по разрешению, не зависит от фильтров */}
-                {places.map((p) => {
-                  const isFavorite = favorites.has(p.id);
-                  return (
-                    <div key={p.id} className="transition-all relative z-0 place-card-wrapper w-full">
-                      <PlaceCard
-                        place={p}
-                        userAccess={access}
-                        userId={userId}
-                        isFavorite={isFavorite}
-                        favoriteButton={
-                          userId ? (
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                toggleFavorite(p.id, e);
-                              }}
-                              className={`h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors ${
-                                isFavorite ? "bg-[#FAFAF7] border-[#8F9E4F]" : ""
-                              }`}
-                              title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                            >
-                              <FavoriteIcon 
-                                isActive={isFavorite} 
-                                size={16}
-                                className={isFavorite ? "scale-110" : ""}
-                              />
-                            </button>
-                          ) : undefined
-                        }
-                        onTagClick={(tag) => {
-                          setSelectedTag(tag);
-                          // Tag filtering is handled separately, no modal needed
-                        }}
-                        onPhotoClick={() => {
-                          router.push(`/id/${p.id}`);
-                        }}
-                      />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-        {/* Mobile: List or Map view (< 600px) */}
-        <div className={`min-[600px]:hidden h-full flex flex-col transition-opacity duration-300 ${view === "map" ? 'pt-0' : ''}`}>
-          {/* Header in List Column - Mobile - показываем только в list view */}
-          {view === "list" && (
-            <div className="sticky top-[64px] z-30 bg-[#faf9f7] pt-6 pb-3 border-b border-[#6b7d47]/10 px-4 flex-shrink-0">
-              <div className="flex items-center gap-3 mb-2">
-                {/* Back button - показываем когда есть активные фильтры */}
-                {hasActiveFilters && (
-                  <button
-                    onClick={handleClearAllFilters}
-                    className="h-10 w-10 rounded-xl flex items-center justify-center text-[#556036] hover:bg-[#f5f4f2] transition flex-shrink-0"
-                    aria-label="Clear all filters"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                )}
-                {!hasActiveFilters && <div className="w-10" />}
-                <div className="flex-1 min-w-0">
-                  <h1 className="text-lg font-semibold text-[#2d2d2d] truncate">{listTitle}</h1>
-                  {listSubtitle && (
-                    <div className="text-xs text-[#6b7d47]/60 mt-0.5">
-                      {listSubtitle}
-                    </div>
-                  )}
-                </div>
-              </div>
-              {/* Active filter chips */}
-              {hasActiveFilters && (
-                <div className="mt-2 flex gap-2 overflow-x-auto pb-1 flex-wrap">
-                  {appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && (
-                    <button
-                      onClick={() => {
-                        handleCityChange(null);
-                      }}
-                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
-                    >
-                      {appliedCity}
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                  {appliedCategories.map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => {
-                        setActiveFilters(prev => ({
-                          ...prev,
-                          categories: prev.categories.filter(c => c !== cat)
-                        }));
-                      }}
-                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
-                    >
-                      {cat}
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  ))}
-                  {appliedQ.trim() && (
-                    <button
-                      onClick={() => {
-                        setAppliedQ("");
-                        setSearchDraft("");
-                      }}
-                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
-                    >
-                      {appliedQ}
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-          {view === "map" ? (
-            <>
-              {/* Map View: Top map + Bottom sheet */}
-              <div className={`flex-1 min-h-0 relative ${isMapFullscreen ? 'fixed inset-0 top-[64px] min-[600px]:top-[80px] z-40 w-full h-[calc(100vh-64px)] min-[600px]:h-[calc(100vh-80px)]' : 'pt-0'}`}>
-                {/* Map - занимает высоту в зависимости от bottomSheetPosition */}
-                <div 
-                  className={`absolute inset-0 w-full transition-all duration-300 ease-out ${
-                    isMapFullscreen ? 'h-full z-10' : bottomSheetPosition === 0 ? 'h-full z-10' : 'z-0'
-                  }`}
-                  style={{
-                    ...(!isMapFullscreen ? {
-                      height: `${(1 - bottomSheetPosition) * 100}%`,
-                    } : {}),
-                    touchAction: 'pan-x pan-y', // Разрешаем панорамирование карты
-                    overscrollBehavior: 'none', // Предотвращаем pull-to-refresh
-                  }}
-                  onClick={handleMapTap}
-                  onTouchStart={(e) => {
-                    // Предотвращаем скролл страницы при взаимодействии с картой
-                    const target = e.target as HTMLElement;
-                    if (!target.closest('.bottom-sheet-content') && !target.closest('button')) {
-                      e.stopPropagation();
-                    }
-                    
-                    // Обрабатываем тап только если список не перекрывает карту
-                    if (!isMapFullscreen && bottomSheetPosition < 0.7) {
-                      const touch = e.touches[0];
-                      const element = document.elementFromPoint(touch.clientX, touch.clientY);
-                      if (element && !element.closest('.bottom-sheet-content')) {
-                        handleMapTap(e);
-                      }
-                    }
-                  }}
-                  onTouchMove={(e) => {
-                    // Предотвращаем скролл страницы при перемещении по карте
-                    const target = e.target as HTMLElement;
-                    if (!target.closest('.bottom-sheet-content') && !target.closest('button')) {
-                      e.stopPropagation();
-                    }
-                  }}
-                >
-                  <MapView
-                    places={places}
-                    loading={loading}
-                    selectedPlaceId={selectedPlaceId}
-                    mapCenter={mapCenter}
-                    mapZoom={mapZoom}
-                    onMapStateChange={(center, zoom) => {
-                      setMapCenter(center);
-                      setMapZoom(zoom);
-                    }}
-                    userId={userId}
-                    favorites={favorites}
-                    onToggleFavorite={toggleFavorite}
-                    isFullscreen={isMapFullscreen}
-                    onFullscreenChange={handleCloseFullscreen}
-                  />
-                </div>
-                
-                {/* Bottom Sheet - draggable, перекрывает карту */}
-                <div 
-                  className={`bottom-sheet-content absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl overflow-hidden flex flex-col transition-all duration-300 ease-out ${
-                    isMapFullscreen ? 'h-0 opacity-0 pointer-events-none' : 'opacity-100'
-                  }`}
-                  style={{ 
-                    height: isMapFullscreen ? '0%' : `${bottomSheetPosition * 100}%`,
-                    zIndex: bottomSheetPosition > 0.5 ? 20 : 10,
-                  }}
-                >
-                  {/* Drag handle */}
-                  <div 
-                    className="flex-shrink-0 py-3 flex justify-center cursor-grab active:cursor-grabbing touch-none select-none" 
-                    onTouchStart={handleBottomSheetDrag}
-                  >
-                    <div className="w-12 h-1.5 bg-gray-300 rounded-full"></div>
-                  </div>
-                  
-                  {/* Header in bottom sheet - также можно перетаскивать */}
-                  {!selectedPlaceId && (
-                    <div 
-                      className="flex-shrink-0 px-4 pt-4 pb-3 border-b border-gray-100 cursor-grab active:cursor-grabbing touch-none select-none"
-                      onTouchStart={(e) => {
-                        // Проверяем, что тап не на кнопке или чипе
-                        const target = e.target as HTMLElement;
-                        if (target.closest('button') || target.closest('a')) {
-                          return; // Не обрабатываем drag если тап на интерактивный элемент
-                        }
-                        handleBottomSheetDrag(e);
-                      }}
-                    >
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="flex-1 min-w-0">
-                          <h1 className="text-lg font-semibold text-[#2d2d2d] truncate">{listTitle}</h1>
-                          {listSubtitle && (
-                            <div className="text-xs text-[#6b7d47]/60 mt-0.5">
-                              {listSubtitle}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      {/* Active filter chips */}
-                      {hasActiveFilters && (
-                        <div className="mt-2 flex gap-2 overflow-x-auto pb-1 flex-wrap">
-                          {appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && (
-                            <button
-                              onClick={() => {
-                                handleCityChange(null);
-                              }}
-                              className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
-                            >
-                              {appliedCity}
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          )}
-                          {appliedCategories.map((cat) => (
-                            <button
-                              key={cat}
-                              onClick={() => {
-                                setActiveFilters(prev => ({
-                                  ...prev,
-                                  categories: prev.categories.filter(c => c !== cat)
-                                }));
-                              }}
-                              className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
-                            >
-                              {cat}
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          ))}
-                          {appliedQ.trim() && (
-                            <button
-                              onClick={() => {
-                                setAppliedQ("");
-                                setSearchDraft("");
-                              }}
-                              className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
-                            >
-                              {appliedQ}
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Sheet content */}
-                  <div 
-                    ref={(el) => setListScrollRef(el)}
-                    className="flex-1 overflow-y-auto scrollbar-hide px-6 pb-20"
-                  >
-                    {selectedPlaceId ? (
-                      <div className="py-4">
-                        {(() => {
-                          const selectedPlace = places.find(p => p.id === selectedPlaceId);
-                          if (!selectedPlace) return null;
-                          const isFavorite = favorites.has(selectedPlace.id);
-                          return (
-                            <PlaceCard
-                              place={selectedPlace}
-                              userAccess={access}
-                              userId={userId}
-                              favoriteButton={
-                                userId ? (
-                                  <button
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      toggleFavorite(selectedPlace.id, e);
-                                    }}
-                                    className={`h-8 w-8 rounded-full bg-white border border-gray-200 hover:bg-gray-50 flex items-center justify-center transition shadow-sm ${
-                                      isFavorite ? "bg-[#6b7d47]/10 border-[#6b7d47]/30" : ""
-                                    }`}
-                                    title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                                  >
-                                    <FavoriteIcon 
-                                      isActive={isFavorite} 
-                                      size={16}
-                                      className={isFavorite ? "scale-110" : ""}
-                                    />
-                                  </button>
-                                ) : undefined
-                              }
-                              onTagClick={(tag) => {
-                                setSelectedTag(tag);
-                                setFilterOpen(true);
-                              }}
-                              onPhotoClick={() => {
-                                router.push(`/id/${selectedPlace.id}`);
-                              }}
-                            />
-                          );
-                        })()}
-                      </div>
-                    ) : (
-                      <div className="py-4">
-                        {loading ? (
-                          <Empty text="Loading…" />
-                        ) : places.length === 0 ? (
-                          <Empty text="No places with this vibe yet. Try fewer filters." />
-                        ) : (
-                          <div className="grid grid-cols-1 gap-4 justify-items-start">
-                            {/* Cards: фиксированный размер по разрешению, не зависит от фильтров */}
-                            {places.map((p) => {
-                              const isFavorite = favorites.has(p.id);
-                              return (
-                                <div 
-                                  key={p.id}
-                                  onClick={() => {
-                                    setSelectedPlaceId(p.id);
-                                    if (p.lat != null && p.lng != null) {
-                                      setMapCenter({ lat: p.lat, lng: p.lng });
-                                      setMapZoom(15);
-                                    }
-                                  }}
-                                  className="w-full place-card-wrapper"
-                                >
-                                  <PlaceCard
-                                    place={p}
-                                    userAccess={access}
-                                    userId={userId}
-                                    isFavorite={isFavorite}
-                                    favoriteButton={
-                                      userId ? (
-                                        <button
-                                          onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            toggleFavorite(p.id, e);
-                                          }}
-                                          className={`h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors ${
-                                            isFavorite ? "bg-[#FAFAF7] border-[#8F9E4F]" : ""
-                                          }`}
-                                          title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                                        >
-                                          <FavoriteIcon 
-                                            isActive={isFavorite} 
-                                            size={16}
-                                            className={isFavorite ? "scale-110" : ""}
-                                          />
-                                        </button>
-                                      ) : undefined
-                                    }
-                                    onTagClick={(tag) => {
-                                      setSelectedTag(tag);
-                                      setFilterOpen(true);
-                                    }}
-                                    onPhotoClick={() => {
-                                      router.push(`/id/${p.id}`);
-                                    }}
-                                  />
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Кнопка "Map" - показываем когда список перекрывает карту, позиционируем внизу */}
-                {!isMapFullscreen && bottomSheetPosition > 0.7 && (
-                  <button
-                    onClick={() => {
-                      setBottomSheetPosition(0);
-                      setIsMapFullscreen(true);
-                    }}
-                    className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-12 px-6 rounded-full bg-[#6b7d47] text-white text-sm font-medium shadow-lg hover:bg-[#556036] transition active:scale-95 flex items-center gap-2"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                    </svg>
-                    Map
-                  </button>
-                )}
-
-                {/* Заголовок и drag handle в полноэкранном режиме - для открытия списка */}
-                {isMapFullscreen && (
-                  <div 
-                    className="absolute bottom-0 left-0 right-0 z-50 pointer-events-auto"
-                    onClick={() => {
-                      // При клике на заголовок открываем список
-                      setIsMapFullscreen(false);
-                      setBottomSheetPosition(0.5);
-                    }}
-                  >
-                    {/* Drag handle */}
-                    <div 
-                      className="flex justify-center py-2 cursor-grab active:cursor-grabbing"
-                      onTouchStart={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation(); // Предотвращаем срабатывание onClick на родителе
-                        setIsDragging(true);
-                        const startY = e.touches[0].clientY;
-                        
-                        const handleMove = (moveEvent: TouchEvent) => {
-                          moveEvent.preventDefault();
-                          const deltaY = startY - moveEvent.touches[0].clientY;
-                          const screenHeight = window.innerHeight;
-                          // При свайпе вверх открываем список
-                          if (deltaY < -50) {
-                            setIsMapFullscreen(false);
-                            setBottomSheetPosition(0.5);
-                            setIsDragging(false);
-                            document.removeEventListener('touchmove', handleMove, { passive: false });
-                            document.removeEventListener('touchend', handleEnd);
-                          }
-                        };
-                        
-                        const handleEnd = () => {
-                          setIsDragging(false);
-                          document.removeEventListener('touchmove', handleMove, { passive: false });
-                          document.removeEventListener('touchend', handleEnd);
-                        };
-                        
-                        document.addEventListener('touchmove', handleMove, { passive: false });
-                        document.addEventListener('touchend', handleEnd);
-                      }}
-                    >
-                      <div className="w-12 h-1.5 bg-white/80 rounded-full shadow-lg"></div>
-                    </div>
-                    
-                    {/* Заголовок - кликабельный */}
-                    <div className="bg-white/95 backdrop-blur-sm rounded-t-3xl shadow-2xl px-4 py-4 pb-safe-bottom cursor-pointer active:bg-white/90 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <h2 className="text-lg font-semibold text-[#2d2d2d] truncate">{listTitle}</h2>
-                          {listSubtitle && (
-                            <div className="text-sm text-[#6b7d47]/60 mt-0.5">
-                              {listSubtitle}
-                            </div>
-                          )}
-                        </div>
-                        <svg 
-                          className="w-5 h-5 text-[#6b7d47] flex-shrink-0 ml-2" 
-                          fill="none" 
-                          stroke="currentColor" 
-                          viewBox="0 0 24 24"
+                  {/* Active filter chips */}
+                  {((appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) || appliedCategories.length > 0) && (
+                    <div className="mt-2 flex gap-2 overflow-x-auto pb-1 flex-nowrap">
+                      {appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && (
+                        <button
+                          onClick={() => handleCityChange(null)}
+                          className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
                         >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
+                          {appliedCity}
+                          <Icon name="close" size={12} />
+                        </button>
+                      )}
+                      {appliedCategories.map((cat) => (
+                        <button
+                          key={cat}
+                          onClick={() => {
+                            setActiveFilters(prev => ({
+                              ...prev,
+                              categories: prev.categories.filter(c => c !== cat)
+                            }));
+                          }}
+                          className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
+                        >
+                          {cat}
+                          <Icon name="close" size={12} />
+                        </button>
+                      ))}
                     </div>
+                  )}
+                </div>
+                {/* Places grid */}
+                {loading ? (
+                  <div className="grid grid-cols-2 min-[600px]:grid-cols-3 gap-4">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="w-full">
+                        <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
+                          <div className="absolute inset-0 rounded-2xl bg-gray-200 animate-pulse" />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <div className="h-5 w-3/4 bg-gray-200 rounded animate-pulse" />
+                          <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : places.length === 0 ? (
+                  <Empty text="No places with this vibe yet. Try fewer filters." />
+                ) : (
+                  <div className="grid grid-cols-2 min-[600px]:grid-cols-3 gap-4">
+                    {places.map((p) => {
+                      const isFavorite = favorites.has(p.id);
+                      return (
+                        <div key={p.id} className="w-full">
+                          <PlaceCard
+                            place={p}
+                            userAccess={access}
+                            userId={userId}
+                            isFavorite={isFavorite}
+                            favoriteButton={
+                              userId ? (
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    toggleFavorite(p.id, e);
+                                  }}
+                                  className={`h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors ${
+                                    isFavorite ? "bg-[#FAFAF7] border-[#8F9E4F]" : ""
+                                  }`}
+                                  title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                                >
+                                  <FavoriteIcon 
+                                    isActive={isFavorite} 
+                                    size={16}
+                                    className={isFavorite ? "scale-110" : ""}
+                                  />
+                                </button>
+                              ) : undefined
+                            }
+                            onTagClick={(tag) => {
+                              setSelectedTag(tag);
+                            }}
+                            onPhotoClick={() => {
+                              router.push(`/id/${p.id}`);
+                            }}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
-            </>
-          ) : (
-            <div className="flex-1 overflow-y-auto scrollbar-hide px-6 pt-4 pb-24">
-              {loading ? (
-                <Empty text="Loading…" />
-              ) : places.length === 0 ? (
-                <Empty text="No places with this vibe yet. Try fewer filters." />
-              ) : (
-                <div className="grid grid-cols-1 gap-4 justify-items-start">
-                      {/* Cards: фиксированный размер по разрешению, не зависит от фильтров */}
-                      {places.map((p) => {
-                    const isFavorite = favorites.has(p.id);
-                    return (
-                      <div key={p.id} className="w-full place-card-wrapper">
-                        <PlaceCard
-                          place={p}
-                          userAccess={access}
-                          userId={userId}
-                          favoriteButton={
-                          userId ? (
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                toggleFavorite(p.id, e);
-                              }}
-                              className={`h-8 w-8 rounded-full bg-white border border-gray-200 hover:bg-gray-50 flex items-center justify-center transition shadow-sm ${
-                                isFavorite ? "bg-[#6b7d47]/10 border-[#6b7d47]/30" : ""
-                              }`}
-                              title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                            >
-                              <FavoriteIcon 
-                                isActive={isFavorite} 
-                                size={16}
-                                className={isFavorite ? "scale-110" : ""}
-                              />
-                            </button>
-                          ) : undefined
-                        }
-                        onTagClick={(tag) => {
-                          setSelectedTag(tag);
-                          // Tag filtering is handled separately, no modal needed
-                        }}
-                        onPhotoClick={() => {
-                          router.push(`/id/${p.id}`);
-                        }}
-                      />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
-          )}
-          
-          {/* Floating Map Button - показываем только в list view на мобильных */}
-          {view === "list" && (
-            <button
-              onClick={() => setView("map")}
-              className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 h-12 px-6 rounded-full bg-[#6b7d47] text-white text-sm font-medium shadow-lg hover:bg-[#556036] transition active:scale-95"
-            >
-              Map
-            </button>
+          ) : (
+            <div className="h-full w-full">
+              <MapView
+                places={places}
+                loading={loading}
+                selectedPlaceId={hoveredPlaceId || selectedPlaceId}
+                mapCenter={mapCenter}
+                mapZoom={mapZoom}
+                onMapStateChange={(center, zoom) => {
+                  setMapCenter(center);
+                  setMapZoom(zoom);
+                }}
+                userId={userId}
+                favorites={favorites}
+                onToggleFavorite={toggleFavorite}
+              />
+            </div>
           )}
         </div>
       </div>
 
-      {!isMapFullscreen && <BottomNav />}
+      <BottomNav />
     </main>
   );
 }
@@ -1872,9 +1120,14 @@ function MapPageContent() {
 export default function MapPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-[#6b7d47]">Loading...</div>
-      </div>
+      <main className="min-h-screen bg-[#faf9f7] flex items-center justify-center">
+        <div className="w-full max-w-md px-6">
+          <div className="space-y-4">
+            <div className="h-8 w-3/4 bg-gray-200 rounded mx-auto animate-pulse" />
+            <div className="h-4 w-1/2 bg-gray-200 rounded mx-auto animate-pulse" />
+          </div>
+        </div>
+      </main>
     }>
       <MapPageContent />
     </Suspense>
@@ -1940,8 +1193,6 @@ function MapView({
   userId,
   favorites,
   onToggleFavorite,
-  isFullscreen: externalIsFullscreen = false,
-  onFullscreenChange,
 }: {
   places: Place[];
   loading: boolean;
@@ -1952,13 +1203,10 @@ function MapView({
   userId?: string | null;
   favorites?: Set<string>;
   onToggleFavorite?: (placeId: string, e: React.MouseEvent) => void;
-  isFullscreen?: boolean;
-  onFullscreenChange?: (isFullscreen: boolean) => void;
 }) {
   const [internalSelectedPlaceId, setInternalSelectedPlaceId] = useState<string | null>(null);
   const [roundIcons, setRoundIcons] = useState<Map<string, string>>(new Map());
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
-  const isFullscreen = externalIsFullscreen;
   const [placePhotos, setPlacePhotos] = useState<Map<string, string[]>>(new Map());
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState<Map<string, number>>(new Map());
   const isUpdatingFromPropsRef = useRef(false);
@@ -2006,12 +1254,6 @@ function MapView({
     }
   };
 
-  const handleFullscreen = () => {
-    // Переключаем состояние fullscreen через callback
-    if (onFullscreenChange) {
-      onFullscreenChange(!isFullscreen);
-    }
-  };
   const { isLoaded } = useJsApiLoader({
     id: "google-maps-loader",
     googleMapsApiKey: getGoogleMapsApiKey(),
@@ -2156,8 +1398,8 @@ function MapView({
 
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <Empty text="Loading…" />
+      <div className="h-full w-full bg-gray-200 animate-pulse flex items-center justify-center">
+        <div className="text-sm text-gray-500">Loading map…</div>
       </div>
     );
   }
@@ -2177,8 +1419,8 @@ function MapView({
 
   if (!isLoaded) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <Empty text="Loading map…" />
+      <div className="h-full w-full bg-gray-200 animate-pulse flex items-center justify-center">
+        <div className="text-sm text-gray-500">Loading map…</div>
       </div>
     );
   }
@@ -2227,45 +1469,23 @@ function MapView({
           </svg>
         </button>
 
-        {/* Fullscreen Button */}
-        <button
-          onClick={handleFullscreen}
-          className="w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center hover:bg-gray-50 transition-colors"
-          aria-label="Fullscreen"
-          title="Fullscreen"
-        >
-          {isFullscreen ? (
-            <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-            </svg>
-          )}
-        </button>
-
         {/* Zoom Controls */}
         <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
           <button
             onClick={handleZoomIn}
-            className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 transition-colors border-b border-gray-100"
+            className="w-10 h-10 flex items-center justify-center hover:bg-[#FAFAF7] transition-colors border-b border-[#ECEEE4]"
             aria-label="Zoom In"
             title="Zoom In"
           >
-            <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
+            <Icon name="zoom-in" size={20} className="text-[#1F2A1F]" />
           </button>
           <button
             onClick={handleZoomOut}
-            className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 transition-colors"
+            className="w-10 h-10 flex items-center justify-center hover:bg-[#FAFAF7] transition-colors"
             aria-label="Zoom Out"
             title="Zoom Out"
           >
-            <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-            </svg>
+            <Icon name="zoom-out" size={20} className="text-[#1F2A1F]" />
           </button>
         </div>
       </div>
@@ -2487,9 +1707,7 @@ function MapView({
                                   className="w-8 h-8 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-colors"
                                   aria-label="Close"
                                 >
-                                  <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
+                                  <Icon name="close" size={16} className="text-[#1F2A1F]" />
                                 </button>
                               </div>
                               
@@ -2510,9 +1728,7 @@ function MapView({
                                     className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-white/90 hover:bg-white shadow-lg flex items-center justify-center transition-colors z-10"
                                     aria-label="Next photo"
                                   >
-                                    <svg className="w-4 h-4 text-[#2d2d2d]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                    </svg>
+                                    <Icon name="forward" size={16} className="text-[#1F2A1F]" />
                                   </button>
                                 </>
                               )}
@@ -2537,9 +1753,7 @@ function MapView({
                             </div>
                           ) : (
                             <div className="absolute inset-0 bg-[#f5f4f2] rounded-t-xl flex items-center justify-center">
-                              <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
+                              <Icon name="photo" size={48} className="text-[#A8B096]" />
                             </div>
                           )}
                         </div>

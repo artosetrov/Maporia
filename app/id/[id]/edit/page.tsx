@@ -22,8 +22,8 @@ export default function EditPlacePage() {
 
   // Show loading while redirecting
   return (
-    <main className="min-h-screen bg-[#faf9f7] flex items-center justify-center">
-      <div className="text-sm text-[#6b7d47]/60">Redirecting…</div>
+    <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
+      <div className="text-sm text-[#6F7A5A]">Redirecting…</div>
     </main>
   );
 }

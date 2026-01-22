@@ -99,7 +99,7 @@ export default function AddressAutocomplete({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Start typing address…"
-        className="w-full rounded-xl border border-[#6b7d47]/20 bg-[#f5f4f2] px-4 py-3 text-sm text-[#2d2d2d] placeholder:text-[#6b7d47]/40 outline-none focus:bg-white focus:border-[#6b7d47]/40 transition"
+        className="w-full rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] px-4 py-3 text-sm text-[#1F2A1F] placeholder:text-[#A8B096] outline-none focus:bg-white focus:border-[#8F9E4F] transition"
       />
     );
   }
@@ -116,7 +116,7 @@ export default function AddressAutocomplete({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Start typing address…"
-        className="w-full rounded-xl border border-[#6b7d47]/20 bg-[#f5f4f2] px-4 py-3 text-sm text-[#2d2d2d] placeholder:text-[#6b7d47]/40 outline-none focus:bg-white focus:border-[#6b7d47]/40 transition"
+        className="w-full rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] px-4 py-3 text-sm text-[#1F2A1F] placeholder:text-[#A8B096] outline-none focus:bg-white focus:border-[#8F9E4F] transition"
       />
     </Autocomplete>
   );

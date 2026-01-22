@@ -7,8 +7,10 @@ import { useParams, useRouter } from "next/navigation";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
 import { supabase } from "../../../../lib/supabase";
 import { useUserAccess } from "../../../../hooks/useUserAccess";
+import { isUserAdmin } from "../../../../lib/access";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../../../../config/googleMaps";
 import dynamicImport from "next/dynamic";
+import Icon from "../../../../components/Icon";
 
 const AddressAutocomplete = dynamicImport(
   () => import("../../../../components/AddressAutocomplete"),
@@ -30,7 +32,7 @@ export default function LocationEditorPage() {
     libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
-  const { loading: accessLoading, user } = useUserAccess(true, false);
+  const { loading: accessLoading, user, access } = useUserAccess(true, false);
   const [loading, setLoading] = useState(true);
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
@@ -49,7 +51,7 @@ export default function LocationEditorPage() {
 
   // Load place
   useEffect(() => {
-    if (!placeId || !user) return;
+    if (!placeId || !user || accessLoading) return;
 
     (async () => {
       setLoading(true);
@@ -64,7 +66,9 @@ export default function LocationEditorPage() {
         return;
       }
 
-      if (data.created_by !== user.id) {
+      const currentIsAdmin = isUserAdmin(access);
+      const isOwner = data.created_by === user.id;
+      if (!isOwner && !currentIsAdmin) {
         router.push(`/id/${placeId}`);
         return;
       }
@@ -83,7 +87,7 @@ export default function LocationEditorPage() {
 
       setLoading(false);
     })();
-  }, [placeId, user, router]);
+  }, [placeId, user, router, access, accessLoading]);
 
   const hasChanges =
     address.trim() !== originalAddress.trim() ||
@@ -118,18 +122,25 @@ export default function LocationEditorPage() {
 
     console.log("Saving location:", { placeId, userId: user.id, address, city: finalCity, lat, lng });
 
-    const { data, error: updateError } = await supabase
-      .from("places")
-      .update({
-        address: address.trim() || null,
-        city: finalCity || null,
-        google_place_id: googlePlaceId,
-        lat: lat !== null && lat !== undefined ? Number(lat) : null,
-        lng: lng !== null && lng !== undefined ? Number(lng) : null,
-      })
-      .eq("id", placeId)
-      .eq("created_by", user.id)
-      .select();
+      // Admin can update any place, owner can update their own
+      const currentIsAdmin = isUserAdmin(access);
+      const updateQuery = supabase
+        .from("places")
+        .update({
+          address: address.trim() || null,
+          city: finalCity || null,
+          google_place_id: googlePlaceId,
+          lat: lat !== null && lat !== undefined ? Number(lat) : null,
+          lng: lng !== null && lng !== undefined ? Number(lng) : null,
+        })
+        .eq("id", placeId);
+      
+      // If not admin, add ownership check
+      if (!currentIsAdmin) {
+        updateQuery.eq("created_by", user.id);
+      }
+      
+      const { data, error: updateError } = await updateQuery.select();
 
     console.log("Update result:", { data, error: updateError });
 
@@ -161,8 +172,15 @@ export default function LocationEditorPage() {
 
   if (accessLoading || loading) {
     return (
-      <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
-        <div className="text-sm text-[#6F7A5A]">Loading…</div>
+      <main className="min-h-screen bg-[#FAFAF7]">
+        <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+          <div className="h-8 w-48 bg-[#ECEEE4] rounded animate-pulse" />
+          <div className="bg-white rounded-2xl p-6 border border-[#ECEEE4] space-y-4">
+            <div className="h-6 w-32 bg-[#ECEEE4] rounded animate-pulse" />
+            <div className="h-10 w-full bg-[#ECEEE4] rounded animate-pulse" />
+            <div className="h-64 w-full bg-[#ECEEE4] rounded animate-pulse" />
+          </div>
+        </div>
       </main>
     );
   }
@@ -178,11 +196,9 @@ export default function LocationEditorPage() {
               className="p-2 -ml-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition"
               aria-label="Back"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
+              <Icon name="back" size={20} />
             </button>
-            <h1 className="text-lg font-semibold text-[#1F2A1F]">Location</h1>
+            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Location</h1>
             <button
               onClick={() => setIsDragging(!isDragging)}
               className={cx(

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { CITIES, DEFAULT_CITY } from "../constants";
+import Icon from "./Icon";
 
 type SearchBarProps = {
   // City
@@ -143,9 +144,7 @@ export default function SearchBar({
           placeholder="Search by vibe, mood, or place"
           className="w-full h-11 px-6 pr-12 text-sm text-[#1F2A1F] placeholder:text-[#A8B096] outline-none bg-transparent focus:placeholder:text-[#6F7A5A]"
         />
-        <svg className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#A8B096]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
+        <Icon name="search" size={20} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#A8B096]" />
       </div>
 
       {/* Filters Button */}
@@ -153,15 +152,7 @@ export default function SearchBar({
         onClick={onFiltersClick}
         className="h-11 px-6 rounded-r-full hover:bg-[#FAFAF7] transition-colors flex items-center gap-2 border-l border-[#E5E8DB] flex-shrink-0 relative"
       >
-        {/* Filter icon - three horizontal lines of varying lengths */}
-        <svg className="w-5 h-5 text-[#1F2A1F]" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-          {/* Top line - longest */}
-          <line x1="2" y1="6" x2="18" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          {/* Middle line - medium */}
-          <line x1="2" y1="10" x2="14" y2="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          {/* Bottom line - shortest */}
-          <line x1="2" y1="14" x2="10" y2="14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        </svg>
+        <Icon name="filter" size={20} className="text-[#1F2A1F]" />
         <span className="text-sm font-medium text-[#1F2A1F] hidden min-[600px]:inline">Filters</span>
         {activeFiltersCount > 0 && (
           <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-[#8F9E4F] text-white text-[10px] font-medium flex items-center justify-center">

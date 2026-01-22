@@ -14,9 +14,10 @@ import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../../config/googleM
 import { supabase } from "../../lib/supabase";
 import { PLACE_LAYOUT_CONFIG } from "../../config/placeLayout";
 import { useUserAccess } from "../../hooks/useUserAccess";
-import { isPlacePremium, canUserViewPlace } from "../../lib/access";
+import { isPlacePremium, canUserViewPlace, isUserAdmin } from "../../lib/access";
 import LockedPlaceOverlay from "../../components/LockedPlaceOverlay";
 import PremiumBadge from "../../components/PremiumBadge";
+import Icon from "../../components/Icon";
 
 type Place = {
   id: string;
@@ -114,7 +115,6 @@ export default function PlacePage() {
   const [photoGalleryOpen, setPhotoGalleryOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
-    vibes: [],
     categories: [],
     sort: null,
   });
@@ -129,6 +129,7 @@ export default function PlacePage() {
 
   // User access for premium checks
   const { loading: accessLoading, access } = useUserAccess();
+  const isAdmin = isUserAdmin(access);
 
   // Close modal on ESC key and prevent body scroll when gallery is open
   useEffect(() => {
@@ -262,6 +263,8 @@ export default function PlacePage() {
   const tags = useMemo(() => place?.tags ?? [], [place]);
   const categories = useMemo(() => place?.categories ?? [], [place]);
   const isOwner = place?.created_by === userId;
+  // Owner or admin can edit - compute after place and isAdmin are available
+  const canEdit = (place && (isOwner || isAdmin)) || false;
 
   // Get photos from place_photos table
   const [loadedPhotos, setLoadedPhotos] = useState<string[]>([]);
@@ -734,8 +737,7 @@ export default function PlacePage() {
 
   // Calculate active filters count
   const activeFiltersCount = useMemo(() => {
-    return (activeFilters.vibes?.length || 0) + 
-           (activeFilters.categories?.length || 0) + 
+    return (activeFilters.categories?.length || 0) + 
            (activeFilters.sort ? 1 : 0);
   }, [activeFilters]);
 
@@ -750,9 +752,6 @@ export default function PlacePage() {
     const params = new URLSearchParams();
     if (filters.categories.length > 0) {
       params.set("categories", filters.categories.map(c => encodeURIComponent(c)).join(','));
-    }
-    if (filters.vibes.length > 0) {
-      params.set("tags", filters.vibes.map(v => encodeURIComponent(v)).join(','));
     }
     if (filters.sort) {
       params.set("sort", filters.sort);
@@ -772,20 +771,30 @@ export default function PlacePage() {
     return num + 1; // Ensure it's between 1-9999
   };
 
-  if (!place) {
+  if (!place || accessLoading) {
     return (
-      <main className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-sm text-[#6F7A5A]">Loading…</div>
-      </main>
-    );
-  }
-
-  // Show locked screen if place is premium and user doesn't have access
-  // Wait for access loading to complete to avoid flashing
-  if (accessLoading) {
-    return (
-      <main className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-sm text-[#6F7A5A]">Loading…</div>
+      <main className="min-h-screen bg-white">
+        {/* Header skeleton */}
+        <div className="sticky top-0 z-40 bg-white border-b border-gray-200">
+          <div className="h-16 flex items-center justify-between px-4">
+            <div className="h-6 w-6 rounded-full bg-gray-200 animate-pulse" />
+            <div className="h-6 w-24 bg-gray-200 rounded animate-pulse" />
+            <div className="h-6 w-6 rounded-full bg-gray-200 animate-pulse" />
+          </div>
+        </div>
+        
+        {/* Image skeleton */}
+        <div className="relative w-full" style={{ paddingBottom: '66.67%' }}>
+          <div className="absolute inset-0 bg-gray-200 animate-pulse" />
+        </div>
+        
+        {/* Content skeleton */}
+        <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
+          <div className="h-8 w-3/4 bg-gray-200 rounded animate-pulse" />
+          <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+          <div className="h-4 w-full bg-gray-200 rounded animate-pulse" />
+          <div className="h-4 w-5/6 bg-gray-200 rounded animate-pulse" />
+        </div>
       </main>
     );
   }
@@ -879,15 +888,13 @@ export default function PlacePage() {
               )}
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              {isOwner && (
+              {canEdit && (
                 <button
                   onClick={() => router.push(`/places/${id}/edit`)}
                   className="h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-sm font-medium text-[#1F2A1F]"
                   aria-label="Edit place"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
+                  <Icon name="edit" size={16} />
                   Edit
                 </button>
               )}
@@ -896,9 +903,7 @@ export default function PlacePage() {
                 className="h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-sm font-medium text-[#1F2A1F]"
                 aria-label="Share"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                </svg>
+                <Icon name="share" size={16} />
                 Share
               </button>
               {userId ? (
@@ -974,21 +979,17 @@ export default function PlacePage() {
             className="h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#1F2A1F] hover:bg-white transition-colors"
             aria-label="Back"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+            <Icon name="back" size={20} />
           </button>
 
           <div className="flex items-center gap-2">
-            {isOwner && (
+            {canEdit && (
               <button
                 onClick={() => router.push(`/places/${id}/edit`)}
                 className="h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#1F2A1F] hover:bg-white transition-colors"
                 aria-label="Edit place"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
+                <Icon name="edit" size={20} />
               </button>
             )}
             {userId && (
@@ -1010,9 +1011,7 @@ export default function PlacePage() {
               className="h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#1F2A1F] hover:bg-white transition-colors"
               aria-label="Share"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-              </svg>
+              <Icon name="share" size={20} />
             </button>
           </div>
         </div>
@@ -1113,9 +1112,7 @@ export default function PlacePage() {
             {/* Right: Comments count */}
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-full bg-[#FAFAF7] flex items-center justify-center flex-shrink-0">
-                <svg className="w-6 h-6 text-[#8F9E4F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
+                <Icon name="comment" size={24} className="text-[#8F9E4F]" />
               </div>
               <div>
                 <div className="text-2xl font-semibold text-[#1F2A1F]">{commentsCount}</div>
@@ -1156,7 +1153,7 @@ export default function PlacePage() {
                 <Link
                   key={cat}
                   href={`/?category=${encodeURIComponent(cat)}`}
-                  className="px-3 py-1.5 rounded-full text-sm font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#6b7d47]/20 hover:bg-[#FAFAF7] transition"
+                  className="px-3 py-1.5 rounded-full text-sm font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition"
                 >
                   {cat}
                 </Link>
@@ -1242,7 +1239,7 @@ export default function PlacePage() {
               {allPhotos.length > 4 && !photosExpanded && (
                 <button
                   onClick={() => setPhotosExpanded(true)}
-                  className="mt-4 w-full py-3 rounded-xl border border-[#6b7d47]/20 text-[#8F9E4F] font-medium hover:bg-[#FAFAF7] transition"
+                  className="mt-4 w-full py-3 rounded-xl border border-[#ECEEE4] text-[#8F9E4F] font-medium hover:bg-[#FAFAF7] transition"
                 >
                   Show all {allPhotos.length} photos
                 </button>
@@ -1265,9 +1262,7 @@ export default function PlacePage() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-[#6b7d47]/20 text-[#8F9E4F] text-sm font-medium hover:bg-[#FAFAF7] transition min-[600px]:inline-flex max-[599px]:w-full max-[599px]:py-3 max-[599px]:border-gray-200 max-[599px]:bg-white max-[599px]:text-[#1F2A1F] max-[599px]:text-base max-[599px]:hover:bg-[#FAFAF7]"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
+                <Icon name="external-link" size={16} />
                 Open in Maps
               </a>
             </div>
@@ -1328,7 +1323,18 @@ export default function PlacePage() {
 
           {/* Comments list */}
           {commentsLoading ? (
-            <div className="text-center py-12 text-[#8F9E4F]/60">Loading comments…</div>
+            <div className="space-y-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="flex gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0 animate-pulse" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
+                    <div className="h-4 w-full bg-gray-200 rounded animate-pulse" />
+                    <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse" />
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : comments.length === 0 ? (
             <div className="text-center py-12 text-[#8F9E4F]/60">
               <div className="mb-1">No comments yet</div>
@@ -1461,9 +1467,7 @@ export default function PlacePage() {
                 onClick={handleShare}
                 className="w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-[#1F2A1F] font-medium"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                </svg>
+                <Icon name="share" size={20} />
                 Share
               </button>
             </div>
@@ -1796,7 +1800,18 @@ export default function PlacePage() {
             )}
 
             {commentsLoading ? (
-              <div className="text-center py-12 text-[#8F9E4F]/60">Loading comments…</div>
+              <div className="space-y-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0 animate-pulse" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
+                      <div className="h-4 w-full bg-gray-200 rounded animate-pulse" />
+                      <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : comments.length === 0 ? (
               <div className="text-center py-12 text-[#8F9E4F]/60">
                 <div className="mb-1">No comments yet</div>
@@ -1884,10 +1899,6 @@ export default function PlacePage() {
               countQuery = countQuery.overlaps("categories", draftFilters.categories);
             }
 
-            // Фильтрация по тегам (vibes)
-            if (draftFilters.vibes.length > 0) {
-              countQuery = countQuery.overlaps("tags", draftFilters.vibes);
-            }
 
             const { count, error } = await countQuery;
             if (error) {
@@ -1922,9 +1933,7 @@ export default function PlacePage() {
               className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
               aria-label="Back"
             >
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
+              <Icon name="back" size={24} className="text-white" />
             </button>
 
             {/* Photo counter */}
@@ -1940,9 +1949,7 @@ export default function PlacePage() {
               className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
               aria-label="Share"
             >
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-              </svg>
+              <Icon name="share" size={20} className="text-white" />
             </button>
           </div>
 
@@ -2032,9 +2039,7 @@ export default function PlacePage() {
                 className="p-2 rounded-full hover:bg-[#FAFAF7] transition"
                 aria-label="Close"
               >
-                <svg className="w-6 h-6 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <Icon name="close" size={24} className="text-[#1F2A1F]" />
               </button>
             </div>
 

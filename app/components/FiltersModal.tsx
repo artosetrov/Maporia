@@ -3,10 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { DEFAULT_CITY } from "../constants";
-import { CATEGORIES, VIBES, SORT_OPTIONS } from "../constants";
+import { CATEGORIES, SORT_OPTIONS } from "../constants";
+import Icon from "./Icon";
 
 export type ActiveFilters = {
-  vibes: string[];
   categories: string[];
   sort: string | null;
 };
@@ -34,7 +34,6 @@ export default function FiltersModal({
 }: FiltersModalProps) {
   // Ensure appliedFilters is always defined
   const safeAppliedFilters: ActiveFilters = appliedFilters || {
-    vibes: [],
     categories: [],
     sort: null,
   };
@@ -97,15 +96,6 @@ export default function FiltersModal({
 
   if (!isOpen) return null;
 
-  const handleToggleVibe = (vibe: string) => {
-    setDraftFilters((prev) => ({
-      ...prev,
-      vibes: prev.vibes.includes(vibe)
-        ? prev.vibes.filter((v) => v !== vibe)
-        : [...prev.vibes, vibe],
-    }));
-  };
-
   const handleToggleCategory = (category: string) => {
     setDraftFilters((prev) => ({
       ...prev,
@@ -123,11 +113,14 @@ export default function FiltersModal({
   };
 
   const handleClearAll = () => {
-    setDraftFilters({
-      vibes: [],
+    const clearedFilters = {
       categories: [],
       sort: null,
-    });
+    };
+    setDraftFilters(clearedFilters);
+    // Immediately apply cleared filters and close modal
+    onApply(clearedFilters);
+    onClose();
   };
 
   const handleApply = () => {
@@ -163,37 +156,12 @@ export default function FiltersModal({
             className="w-8 h-8 rounded-full hover:bg-[#FAFAF7] transition-colors flex items-center justify-center text-[#A8B096]"
             aria-label="Close"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <Icon name="close" size={20} />
           </button>
         </div>
 
         {/* Content (scrollable) */}
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8">
-          {/* Vibe / Emotions Section */}
-          <div>
-            <h3 className="text-sm font-semibold text-[#1F2A1F] mb-4">Vibe / Emotions</h3>
-            <div className="flex flex-wrap gap-2">
-              {VIBES.map((vibe) => {
-                const isSelected = draftFilters.vibes.includes(vibe);
-                return (
-                  <button
-                    key={vibe}
-                    onClick={() => handleToggleVibe(vibe)}
-                    className={`px-4 py-2 rounded-full border-2 transition-colors ${
-                      isSelected
-                        ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#8F9E4F] font-medium"
-                        : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
-                    }`}
-                  >
-                    <span className="text-sm">{vibe}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           {/* Categories Section */}
           <div>
             <h3 className="text-sm font-semibold text-[#1F2A1F] mb-4">Category</h3>

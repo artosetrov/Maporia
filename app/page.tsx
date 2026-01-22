@@ -14,58 +14,26 @@ import { useUserAccess } from "./hooks/useUserAccess";
 
 export default function HomePage() {
   const router = useRouter();
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
-  const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   
   // Search and filter state
   const [searchValue, setSearchValue] = useState("");
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
-    vibes: [],
     categories: [],
     sort: null,
   });
   const [filterOpen, setFilterOpen] = useState(false);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
-  // User access for premium filtering
-  const { access } = useUserAccess();
-
-  async function loadUser() {
-    const { data } = await supabase.auth.getUser();
-    const u = data.user;
-    if (!u) {
-      setUserEmail(null);
-      setUserId(null);
-      setUserDisplayName(null);
-      return;
-    }
-    setUserEmail(u.email ?? null);
-    setUserId(u.id);
-
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("display_name, avatar_url")
-      .eq("id", u.id)
-      .maybeSingle();
-    
-    if (profileError) {
-      console.error("Error loading user profile:", profileError);
-    }
-    
-    if (profile?.display_name) {
-      setUserDisplayName(profile.display_name);
-    } else {
-      setUserDisplayName(u.email?.split("@")[0] || null);
-    }
-    
-    if (profile?.avatar_url) {
-      setUserAvatar(profile.avatar_url);
-    }
-  }
+  // User access and profile data
+  const { access, user, profile } = useUserAccess();
+  
+  // Derive display values from profile
+  const userId = user?.id ?? null;
+  const userEmail = user?.email ?? null;
+  const userDisplayName = profile?.display_name ?? (userEmail ? userEmail.split("@")[0] : null);
+  const userAvatar = profile?.avatar_url ?? null;
 
   // Загружаем избранное пользователя
   useEffect(() => {
@@ -96,9 +64,7 @@ export default function HomePage() {
     })();
   }, [userId]);
 
-  useEffect(() => {
-    loadUser();
-  }, []);
+  // No need for separate loadUser - useUserAccess handles it
 
   async function toggleFavorite(placeId: string, e: React.MouseEvent) {
     e.preventDefault();
@@ -192,9 +158,6 @@ export default function HomePage() {
     if (filters.categories.length > 0) {
       params.set("categories", filters.categories.map(c => encodeURIComponent(c)).join(','));
     }
-    if (filters.vibes.length > 0) {
-      params.set("vibes", filters.vibes.map(v => encodeURIComponent(v)).join(','));
-    }
     if (filters.sort) {
       params.set("sort", filters.sort);
     }
@@ -215,9 +178,6 @@ export default function HomePage() {
   // Calculate active filters count and summary
   const activeFiltersSummary = useMemo(() => {
     const parts: string[] = [];
-    if (activeFilters.vibes.length > 0) {
-      parts.push(activeFilters.vibes.slice(0, 2).join(" • "));
-    }
     if (activeFilters.categories.length > 0) {
       const cats = activeFilters.categories.slice(0, 2).map(c => c.replace(/^[^\s]+\s/, ""));
       parts.push(cats.join(" • "));
@@ -229,7 +189,6 @@ export default function HomePage() {
     let count = 0;
     if (selectedCity && selectedCity !== DEFAULT_CITY) count++;
     if (searchValue) count++;
-    if (activeFilters.vibes.length > 0) count += activeFilters.vibes.length;
     if (activeFilters.categories.length > 0) count += activeFilters.categories.length;
     if (activeFilters.sort) count++;
     setActiveFiltersCount(count);

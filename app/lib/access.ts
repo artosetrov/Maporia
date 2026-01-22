@@ -1,16 +1,24 @@
 /**
- * Access control utilities for Premium subscription features
+ * Access control utilities for Maporia user roles and permissions
  * 
- * TODO: When subscription schema is added, update getUserAccess to read from:
- * - profiles.plan OR profiles.tier OR profiles.is_premium OR profiles.subscription_status
- * - OR subscriptions table if exists
+ * User Roles:
+ * - guest: Not authenticated
+ * - standard: Authenticated without active subscription
+ * - premium: Authenticated with active subscription
+ * - admin: Platform administrator
  */
 
+import type { Profile, Place } from "../types";
+
+export type UserRole = "guest" | "standard" | "premium" | "admin";
+export type SubscriptionStatus = "active" | "inactive";
 export type AccessLevel = "public" | "premium";
 
 export type UserAccess = {
+  role: UserRole;
   hasPremium: boolean;
-  tier?: string;
+  isAdmin: boolean;
+  subscriptionStatus?: SubscriptionStatus;
 };
 
 export type PlaceAccess = {
@@ -18,27 +26,48 @@ export type PlaceAccess = {
 };
 
 /**
- * Determines user's premium access status
- * Currently returns false as subscription fields don't exist in schema yet
+ * Determines user's role and access level based on profile
  * 
- * @param profile - User profile object (from profiles table)
- * @returns UserAccess with hasPremium status
+ * @param profile - User profile object (from profiles table) or null for guests
+ * @returns UserAccess with role, hasPremium, and isAdmin status
  */
-export function getUserAccess(profile: any): UserAccess {
-  // TODO: Check for subscription fields in profile:
-  // - profile.plan === 'premium' | 'pro'
-  // - profile.tier === 'premium' | 'pro'
-  // - profile.is_premium === true
-  // - profile.subscription_status === 'active'
-  // - profile.pro === true
-  // - profile.premium_until > now()
-  // 
-  // If subscription table exists, check:
-  // - subscriptions table with user_id and status='active'
-  
+export function getUserAccess(profile: Profile | null): UserAccess {
+  // Guest: no profile or no authenticated user
+  if (!profile) {
+    return {
+      role: "guest",
+      hasPremium: false,
+      isAdmin: false,
+    };
+  }
+
+  // Admin: check is_admin field
+  if (profile.is_admin === true) {
+    return {
+      role: "admin",
+      hasPremium: true, // Admin has premium access
+      isAdmin: true,
+      subscriptionStatus: profile.subscription_status || undefined,
+    };
+  }
+
+  // Premium: check subscription_status = 'active'
+  const subscriptionStatus = profile.subscription_status as SubscriptionStatus | undefined;
+  if (subscriptionStatus === "active") {
+    return {
+      role: "premium",
+      hasPremium: true,
+      isAdmin: false,
+      subscriptionStatus: "active",
+    };
+  }
+
+  // Standard: authenticated but no active subscription
   return {
-    hasPremium: false, // TODO: Implement when subscription schema is added
-    tier: undefined,
+    role: "standard",
+    hasPremium: false,
+    isAdmin: false,
+    subscriptionStatus: subscriptionStatus || "inactive",
   };
 }
 
@@ -48,7 +77,7 @@ export function getUserAccess(profile: any): UserAccess {
  * @param place - Place object from database
  * @returns true if place is premium-only
  */
-export function isPlacePremium(place: any): boolean {
+export function isPlacePremium(place: Place | { access_level?: string | null; is_premium?: boolean | null; premium_only?: boolean | null; visibility?: string | null; accessLevel?: AccessLevel }): boolean {
   // Check access_level field (primary)
   if (place.access_level === 'premium') {
     return true;
@@ -80,7 +109,7 @@ export function isPlacePremium(place: any): boolean {
  * @param place - Place object
  * @returns true if user can view the place
  */
-export function canUserViewPlace(userAccess: UserAccess, place: any): boolean {
+export function canUserViewPlace(userAccess: UserAccess, place: Place | { access_level?: string | null; is_premium?: boolean | null; premium_only?: boolean | null; visibility?: string | null; accessLevel?: AccessLevel }): boolean {
   const isPremium = isPlacePremium(place);
   
   // Public places are viewable by everyone
@@ -88,6 +117,60 @@ export function canUserViewPlace(userAccess: UserAccess, place: any): boolean {
     return true;
   }
   
-  // Premium places require premium access
+  // Premium places require premium access (premium role OR admin role)
   return userAccess.hasPremium === true;
+}
+
+/**
+ * Checks if user can add/edit premium places
+ * 
+ * @param userAccess - User's access level
+ * @returns true if user can create/edit premium places
+ */
+export function canUserCreatePremiumPlace(userAccess: UserAccess): boolean {
+  // Only premium users and admins can create premium places
+  return userAccess.role === "premium" || userAccess.role === "admin";
+}
+
+/**
+ * Checks if user can like/comment/save places
+ * 
+ * @param userAccess - User's access level
+ * @returns true if user can interact with places
+ */
+export function canUserInteract(userAccess: UserAccess): boolean {
+  // Guests cannot interact, all authenticated users can
+  return userAccess.role !== "guest";
+}
+
+/**
+ * Checks if user can add places
+ * 
+ * @param userAccess - User's access level
+ * @returns true if user can add places
+ */
+export function canUserAddPlace(userAccess: UserAccess): boolean {
+  // Only authenticated users (standard, premium, admin) can add places
+  return userAccess.role !== "guest";
+}
+
+/**
+ * Checks if user can add premium places
+ * 
+ * @param userAccess - User's access level
+ * @returns true if user can add premium places
+ */
+export function canUserAddPremiumPlace(userAccess: UserAccess): boolean {
+  // Only premium users and admins can add premium places
+  return userAccess.role === "premium" || userAccess.role === "admin";
+}
+
+/**
+ * Checks if user has admin privileges
+ * 
+ * @param userAccess - User's access level
+ * @returns true if user is admin
+ */
+export function isUserAdmin(userAccess: UserAccess): boolean {
+  return userAccess.role === "admin";
 }

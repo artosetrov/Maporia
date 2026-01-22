@@ -6,7 +6,9 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
 import { useUserAccess } from "../../../../hooks/useUserAccess";
-import { isPlacePremium, type AccessLevel } from "../../../../lib/access";
+import { isPlacePremium, type AccessLevel, canUserCreatePremiumPlace, isUserAdmin } from "../../../../lib/access";
+import Icon from "../../../../components/Icon";
+import UpgradeCTA from "../../../../components/UpgradeCTA";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
@@ -17,16 +19,19 @@ export default function AccessEditorPage() {
   const params = useParams<{ id: string }>();
   const placeId = params?.id;
 
-  const { loading: accessLoading, user } = useUserAccess(true, false);
+  const { loading: accessLoading, user, access } = useUserAccess(true, false);
   const [loading, setLoading] = useState(true);
   const [accessLevel, setAccessLevel] = useState<AccessLevel>("public");
   const [originalAccessLevel, setOriginalAccessLevel] = useState<AccessLevel>("public");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Check if user can create premium places
+  const canCreatePremium = canUserCreatePremiumPlace(access);
 
   // Load place
   useEffect(() => {
-    if (!placeId || !user) return;
+    if (!placeId || !user || accessLoading) return;
 
     (async () => {
       setLoading(true);
@@ -41,8 +46,10 @@ export default function AccessEditorPage() {
         return;
       }
 
-      // Check ownership
-      if (data.created_by !== user.id) {
+      // Check ownership or admin status
+      const isAdminUser = isUserAdmin(access);
+      const isOwner = data.created_by === user.id;
+      if (!isOwner && !isAdminUser) {
         router.push(`/id/${placeId}`);
         return;
       }
@@ -58,7 +65,7 @@ export default function AccessEditorPage() {
       setOriginalAccessLevel(currentLevel);
       setLoading(false);
     })();
-  }, [placeId, user, router]);
+  }, [placeId, user, router, access, accessLoading]);
 
   const hasChanges = accessLevel !== originalAccessLevel;
   const canSave = hasChanges && !saving;
@@ -66,22 +73,35 @@ export default function AccessEditorPage() {
   async function handleSave() {
     if (!canSave || !user || !placeId) return;
 
+    // Prevent standard users from creating premium places (admins can always create premium)
+    const isAdminUser = isUserAdmin(access);
+    if (accessLevel === "premium" && !canCreatePremium && !isAdminUser) {
+      setError("You need a Premium subscription to create premium places");
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
     // Build update payload - use access_level field
-    const payload: any = {
+    const payload: { access_level: AccessLevel } = {
       access_level: accessLevel,
     };
 
     console.log("Saving access level:", { placeId, userId: user.id, accessLevel, payload });
 
-    const { data, error: updateError } = await supabase
-      .from("places")
-      .update(payload)
-      .eq("id", placeId)
-      .eq("created_by", user.id)
-      .select();
+      // Admin can update any place, owner can update their own
+      const updateQuery = supabase
+        .from("places")
+        .update(payload)
+        .eq("id", placeId);
+      
+      // If not admin, add ownership check
+      if (!isAdminUser) {
+        updateQuery.eq("created_by", user.id);
+      }
+      
+      const { data, error: updateError } = await updateQuery.select();
 
     console.log("Update result:", { data, error: updateError });
 
@@ -113,8 +133,18 @@ export default function AccessEditorPage() {
 
   if (accessLoading || loading) {
     return (
-      <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
-        <div className="text-sm text-[#6F7A5A]">Loading…</div>
+      <main className="min-h-screen bg-[#FAFAF7]">
+        <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+          <div className="h-8 w-48 bg-[#ECEEE4] rounded animate-pulse" />
+          <div className="bg-white rounded-2xl p-6 border border-[#ECEEE4] space-y-4">
+            <div className="h-6 w-32 bg-[#ECEEE4] rounded animate-pulse" />
+            <div className="space-y-3">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="h-16 w-full bg-[#ECEEE4] rounded-lg animate-pulse" />
+              ))}
+            </div>
+          </div>
+        </div>
       </main>
     );
   }
@@ -130,11 +160,9 @@ export default function AccessEditorPage() {
               className="p-2 -ml-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition"
               aria-label="Close"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <Icon name="close" size={20} />
             </button>
-            <h1 className="text-lg font-semibold text-[#1F2A1F]">Access</h1>
+            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Access</h1>
             <div className="w-9" /> {/* Spacer */}
           </div>
         </div>
@@ -192,44 +220,62 @@ export default function AccessEditorPage() {
             </button>
 
             {/* Premium Option */}
-            <button
-              onClick={() => {
-                setAccessLevel("premium");
-                setError(null);
-              }}
-              className={cx(
-                "w-full rounded-xl border-2 p-4 text-left transition",
-                accessLevel === "premium"
-                  ? "border-[#8F9E4F] bg-[#8F9E4F]/5"
-                  : "border-[#ECEEE4] bg-white hover:border-[#DADDD0]"
-              )}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div
-                      className={cx(
-                        "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0",
-                        accessLevel === "premium"
-                          ? "border-[#8F9E4F] bg-[#8F9E4F]"
-                          : "border-[#DADDD0] bg-white"
-                      )}
-                    >
-                      {accessLevel === "premium" && (
-                        <div className="w-2 h-2 rounded-full bg-white" />
-                      )}
-                    </div>
-                    <h3 className="font-semibold text-[#1F2A1F]">Premium</h3>
-                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-[#8F9E4F]/10 text-[#8F9E4F]">
-                      Premium
-                    </span>
+            <div className="relative">
+              {!canCreatePremium && (
+                <div className="absolute inset-0 z-10 rounded-xl bg-white/80 backdrop-blur-sm flex items-center justify-center">
+                  <div className="text-center p-4">
+                    <p className="text-sm font-medium text-[#1F2A1F] mb-2">
+                      Premium places require a Premium subscription
+                    </p>
+                    <UpgradeCTA variant="button" />
                   </div>
-                  <p className="text-sm text-[#6F7A5A] ml-7">
-                    Only users with premium subscription can view this place
-                  </p>
                 </div>
-              </div>
-            </button>
+              )}
+              <button
+                onClick={() => {
+                  if (!canCreatePremium) {
+                    setError("You need a Premium subscription to create premium places");
+                    return;
+                  }
+                  setAccessLevel("premium");
+                  setError(null);
+                }}
+                disabled={!canCreatePremium && !isUserAdmin(access)}
+                className={cx(
+                  "w-full rounded-xl border-2 p-4 text-left transition",
+                  !canCreatePremium && "opacity-60 cursor-not-allowed",
+                  accessLevel === "premium"
+                    ? "border-[#8F9E4F] bg-[#8F9E4F]/5"
+                    : "border-[#ECEEE4] bg-white hover:border-[#DADDD0]"
+                )}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div
+                        className={cx(
+                          "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0",
+                          accessLevel === "premium"
+                            ? "border-[#8F9E4F] bg-[#8F9E4F]"
+                            : "border-[#DADDD0] bg-white"
+                        )}
+                      >
+                        {accessLevel === "premium" && (
+                          <div className="w-2 h-2 rounded-full bg-white" />
+                        )}
+                      </div>
+                      <h3 className="font-semibold text-[#1F2A1F]">Premium</h3>
+                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-[#8F9E4F]/10 text-[#8F9E4F]">
+                        Premium
+                      </span>
+                    </div>
+                    <p className="text-sm text-[#6F7A5A] ml-7">
+                      Only users with premium subscription can view this place
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </div>
           </div>
 
           {accessLevel === "premium" && (

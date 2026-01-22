@@ -6,6 +6,8 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
 import { useUserAccess } from "../../../../hooks/useUserAccess";
+import { isUserAdmin } from "../../../../lib/access";
+import Icon from "../../../../components/Icon";
 
 type Photo = {
   id: string;
@@ -36,7 +38,8 @@ export default function PhotosEditorPage() {
   const params = useParams<{ id: string }>();
   const placeId = params?.id;
 
-  const { loading: accessLoading, user } = useUserAccess(true, false);
+  const { loading: accessLoading, user, access } = useUserAccess(true, false);
+  const isAdmin = isUserAdmin(access);
   const [loading, setLoading] = useState(true);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [originalPhotos, setOriginalPhotos] = useState<Photo[]>([]);
@@ -58,7 +61,8 @@ export default function PhotosEditorPage() {
         .eq("id", placeId)
         .single();
 
-      if (!placeData || placeData.created_by !== user.id) {
+      const isOwner = placeData?.created_by === user.id;
+      if (!placeData || (!isOwner && !isAdmin)) {
         router.push(`/id/${placeId}`);
         return;
       }
@@ -90,7 +94,7 @@ export default function PhotosEditorPage() {
       setOriginalPhotos(loadedPhotos.map((p) => ({ ...p })));
       setLoading(false);
     })();
-  }, [placeId, user, router]);
+  }, [placeId, user, router, access, accessLoading]);
 
   async function uploadToSupabase(file: File): Promise<{ url: string | null; error: string | null }> {
     try {
@@ -226,12 +230,19 @@ export default function PhotosEditorPage() {
     console.log("Saving photos:", { placeId, userId: user.id, photoCount: photoUrls.length });
 
     // Update cover_url in places table (legacy)
-    const { error: coverError } = await supabase
+    // Admin can update any place, owner can update their own
+    const currentIsAdmin = isUserAdmin(access);
+    const updateQuery = supabase
       .from("places")
       .update({ cover_url: coverUrl })
-      .eq("id", placeId)
-      .eq("created_by", user.id)
-      .select();
+      .eq("id", placeId);
+    
+    // If not admin, add ownership check
+    if (!currentIsAdmin) {
+      updateQuery.eq("created_by", user.id);
+    }
+    
+    const { error: coverError } = await updateQuery.select();
 
     if (coverError) {
       console.error("Cover update error:", coverError);
@@ -296,8 +307,15 @@ export default function PhotosEditorPage() {
 
   if (accessLoading || loading) {
     return (
-      <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
-        <div className="text-sm text-[#6F7A5A]">Loading…</div>
+      <main className="min-h-screen bg-[#FAFAF7]">
+        <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+          <div className="h-8 w-48 bg-[#ECEEE4] rounded animate-pulse" />
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="aspect-square bg-[#ECEEE4] rounded-xl animate-pulse" />
+            ))}
+          </div>
+        </div>
       </main>
     );
   }
@@ -317,7 +335,7 @@ export default function PhotosEditorPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <h1 className="text-lg font-semibold text-[#1F2A1F]">Photos</h1>
+            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Photos</h1>
             <div className="w-9" />
           </div>
         </div>
@@ -342,9 +360,7 @@ export default function PhotosEditorPage() {
               className="hidden"
               onChange={(e) => handleFilePick(e.target.files)}
             />
-            <svg className="w-12 h-12 text-[#A8B096] mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
+            <Icon name="photo" size={48} className="text-[#A8B096] mx-auto mb-3" />
             <p className="text-sm font-medium text-[#1F2A1F] mb-1">Add photos</p>
             <p className="text-xs text-[#6F7A5A]">Drag and drop or click to browse</p>
           </label>

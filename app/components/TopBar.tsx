@@ -8,6 +8,7 @@ import { CATEGORIES, DEFAULT_CITY } from "../constants";
 import SearchBar from "./SearchBar";
 import SearchModal from "./SearchModal";
 import FavoriteIcon from "./FavoriteIcon";
+import Icon from "./Icon";
 
 type TopBarProps = {
   // Search bar props (only for /map page) - Airbnb style
@@ -165,9 +166,7 @@ export default function TopBar({
                   className="w-10 h-10 rounded-full hover:bg-[#FAFAF7] transition-colors flex items-center justify-center flex-shrink-0"
                   aria-label="Back to Home"
                 >
-                  <svg className="w-6 h-6 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
+                  <Icon name="back" size={24} className="text-[#1F2A1F]" />
                 </button>
               ) : null}
 
@@ -217,9 +216,7 @@ export default function TopBar({
                       className={`flex-1 min-w-0 bg-white rounded-full border border-[#E5E8DB] hover:border-[#8F9E4F] transition-colors px-4 py-2.5 flex items-center gap-3 ${pathname === "/" ? "justify-center" : "text-left"}`}
                     >
                       {pathname === "/" && (
-                        <svg className="w-5 h-5 text-[#A8B096] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
+                        <Icon name="search" size={20} className="text-[#A8B096] flex-shrink-0" />
                       )}
                       <div className={`text-sm font-medium text-[#1F2A1F] ${pathname === "/" ? "" : "truncate"}`}>
                         {pathname === "/" ? "Start to your search" : (selectedCity || "Anywhere")}
@@ -239,11 +236,7 @@ export default function TopBar({
                       className="w-10 h-10 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] transition-colors flex items-center justify-center flex-shrink-0 relative"
                       aria-label="Filters"
                     >
-                      <svg className="w-5 h-5 text-[#1F2A1F]" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <line x1="2" y1="6" x2="18" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                        <line x1="2" y1="10" x2="14" y2="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                        <line x1="2" y1="14" x2="10" y2="14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                      </svg>
+                      <Icon name="filter" size={20} className="text-[#1F2A1F]" />
                       {activeFiltersCount > 0 && (
                         <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#8F9E4F] text-white text-xs font-medium flex items-center justify-center">
                           {activeFiltersCount}
@@ -264,9 +257,7 @@ export default function TopBar({
                 className="absolute top-safe-top top-3 right-4 w-10 h-10 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] transition-colors flex items-center justify-center z-10"
                 aria-label="Add new place"
               >
-                <svg className="w-5 h-5 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
+                <Icon name="add" size={20} className="text-[#1F2A1F]" />
             </Link>
           )}
         </div>
@@ -301,7 +292,7 @@ export default function TopBar({
 
           {/* Center: SearchBar (always on desktop and tablet) */}
           <>
-            {/* Desktop SearchBar */}
+            {/* Desktop SearchBar (>= 1120px) */}
             <div className="hidden min-[1120px]:flex items-center justify-center flex-1 px-4">
               <SearchBar
                 selectedCity={selectedCity}
@@ -312,8 +303,8 @@ export default function TopBar({
                 activeFiltersCount={activeFiltersCount}
               />
             </div>
-            {/* Tablet SearchBar */}
-            <div className="flex min-[1120px]:hidden min-[900px]:flex items-center flex-1 px-2">
+            {/* Tablet SearchBar (600px - 1120px) */}
+            <div className="flex min-[1120px]:hidden min-[600px]:flex items-center flex-1 px-2">
               <SearchBar
                 selectedCity={selectedCity}
                 onCityChange={onCityChange}
@@ -378,9 +369,7 @@ export default function TopBar({
                       </span>
                     )}
                   </div>
-                  <svg className="w-4 h-4 text-[#A8B096]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  <Icon name="chevron-down" size={16} className="text-[#A8B096]" />
                 </button>
 
                 {/* Dropdown Menu */}
@@ -424,9 +413,7 @@ export default function TopBar({
                         }}
                         className="w-full px-4 py-3 text-left text-sm text-[#1F2A1F] hover:bg-[#FAFAF7] transition-colors flex items-center gap-3 border-t border-[#ECEEE4]"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
+                        <Icon name="add" size={16} />
                         Feed
                       </Link>
                       <Link
@@ -462,9 +449,7 @@ export default function TopBar({
                         }}
                         className="w-full px-4 py-3 text-left text-sm text-[#C96A5B] hover:bg-[#FAFAF7] transition-colors flex items-center gap-3 border-t border-[#ECEEE4]"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                        </svg>
+                        <Icon name="logout" size={16} />
                         Logout
                       </button>
                     </div>
@@ -473,23 +458,23 @@ export default function TopBar({
               </div>
             )}
           </div>
+          </div>
         </div>
 
-            {/* Mobile Search Bar (only on mobile, not tablet) */}
-            {showSearchBar && (
-              <div className="min-[900px]:hidden mt-3">
-                <SearchBar
-                  selectedCity={selectedCity}
-                  onCityChange={onCityChange}
-                  searchValue={searchValue}
-                  onSearchChange={onSearchChange || (() => {})}
-                  onFiltersClick={onFiltersClick || (() => {})}
-                  activeFiltersCount={activeFiltersCount}
-                  isMobile={true}
-                />
-              </div>
-            )}
+        {/* Mobile Search Bar (only on mobile < 600px, not tablet) - outside main row to avoid overlap */}
+        {showSearchBar && (
+          <div className="max-[600px]:block hidden mt-3 px-4">
+            <SearchBar
+              selectedCity={selectedCity}
+              onCityChange={onCityChange}
+              searchValue={searchValue}
+              onSearchChange={onSearchChange || (() => {})}
+              onFiltersClick={onFiltersClick || (() => {})}
+              activeFiltersCount={activeFiltersCount}
+              isMobile={true}
+            />
           </div>
+        )}
         </div>
       </div>
     </>

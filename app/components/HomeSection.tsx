@@ -7,6 +7,7 @@ import FavoriteIcon from "./FavoriteIcon";
 import { supabase } from "../lib/supabase";
 import { HomeSectionFilter } from "../constants/homeSections";
 import { type UserAccess } from "../lib/access";
+import Icon from "./Icon";
 
 type Place = {
   id: string;
@@ -32,20 +33,7 @@ type HomeSectionProps = {
   onTagClick?: (tag: string) => void;
 };
 
-// Helper function to get recently viewed place IDs from localStorage
-function getRecentlyViewedPlaceIds(): string[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const stored = localStorage.getItem('recentlyViewedPlaces');
-    if (!stored) return [];
-    const data = JSON.parse(stored);
-    // Return array of place IDs, most recent first
-    return Array.isArray(data) ? data : [];
-  } catch (error) {
-    console.error('Error reading recently viewed places:', error);
-    return [];
-  }
-}
+import { getRecentlyViewedPlaceIds } from "../utils";
 
 export default function HomeSection({ section, userId, favorites, userAccess, onToggleFavorite, onTagClick }: HomeSectionProps) {
   const [places, setPlaces] = useState<Place[]>([]);
@@ -56,41 +44,83 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
     async function loadPlaces() {
       setLoading(true);
       
-      // Special handling for "Recently viewed" section
-      if (section.recentlyViewed) {
-        const recentlyViewedIds = getRecentlyViewedPlaceIds();
-        
-        if (recentlyViewedIds.length === 0) {
-          setPlaces([]);
+      try {
+        // Special handling for "Recently viewed" section
+        if (section.recentlyViewed) {
+          const recentlyViewedIds = getRecentlyViewedPlaceIds();
+          
+          if (recentlyViewedIds.length === 0) {
+            setPlaces([]);
+            setLoading(false);
+            return;
+          }
+
+          // Load places by IDs, preserving the order from localStorage
+          // Only select fields needed for PlaceCard display
+          try {
+            const { data, error } = await supabase
+              .from("places")
+              .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility")
+              .in("id", recentlyViewedIds)
+              .limit(10);
+
+            if (error) {
+              // Completely skip logging if error is empty
+              // First check if error object is empty by stringifying
+              let isEmpty = false;
+              try {
+                const errorStr = JSON.stringify(error);
+                isEmpty = errorStr === '{}';
+              } catch {
+                // If stringify fails, check fields
+                const msg = error.message ? String(error.message).trim() : '';
+                const code = error.code ? String(error.code).trim() : '';
+                const details = error.details ? String(error.details).trim() : '';
+                const hint = error.hint ? String(error.hint).trim() : '';
+                isEmpty = !(msg.length > 0 || code.length > 0 || details.length > 0 || hint.length > 0);
+              }
+              
+              if (!isEmpty) {
+                // Check individual fields
+                const msg = error.message ? String(error.message).trim() : '';
+                const code = error.code ? String(error.code).trim() : '';
+                const details = error.details ? String(error.details).trim() : '';
+                const hint = error.hint ? String(error.hint).trim() : '';
+                
+                const hasContent = msg.length > 0 || code.length > 0 || details.length > 0 || hint.length > 0;
+                
+                if (hasContent) {
+                  const errorObj: Record<string, any> = {};
+                  if (msg) errorObj.message = msg;
+                  if (code) errorObj.code = code;
+                  if (details) errorObj.details = details;
+                  if (hint) errorObj.hint = hint;
+                  console.error("Error loading recently viewed places:", errorObj);
+                }
+              }
+              // Silently handle empty errors - don't log at all
+              setPlaces([]);
+            } else {
+              // Sort by the order in recentlyViewedIds (most recent first)
+              const placesMap = new Map((data || []).map((p: any) => [p.id, p]));
+              const orderedPlaces = recentlyViewedIds
+                .map(id => placesMap.get(id))
+                .filter((p): p is Place => p !== undefined)
+                .slice(0, 10);
+              setPlaces(orderedPlaces);
+            }
+          } catch (err) {
+            // Handle unexpected errors
+            console.error("Unexpected error loading recently viewed places:", err instanceof Error ? err.message : String(err));
+            setPlaces([]);
+          }
+          
           setLoading(false);
           return;
         }
-
-        // Load places by IDs, preserving the order from localStorage
-        const { data, error } = await supabase
-          .from("places")
-          .select("*")
-          .in("id", recentlyViewedIds)
-          .limit(10);
-
-        if (error) {
-          console.error("Error loading recently viewed places:", error);
-          setPlaces([]);
-        } else {
-          // Sort by the order in recentlyViewedIds (most recent first)
-          const placesMap = new Map((data || []).map((p: any) => [p.id, p]));
-          const orderedPlaces = recentlyViewedIds
-            .map(id => placesMap.get(id))
-            .filter((p): p is Place => p !== undefined)
-            .slice(0, 10);
-          setPlaces(orderedPlaces);
-        }
-        
-        setLoading(false);
-        return;
-      }
       
-      let query = supabase.from("places").select("*");
+      // Only select fields needed for PlaceCard display
+      let query = supabase.from("places").select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility");
 
       // Фильтр по городу
       if (section.city) {
@@ -128,16 +158,61 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
       // Лимит для секции
       query = query.limit(10);
 
-      const { data, error } = await query;
+      try {
+        const { data, error } = await query;
 
-      if (error) {
-        console.error("Error loading places for section:", section.title, error);
+        if (error) {
+          // Completely skip logging if error is empty
+          // First check if error object is empty by stringifying
+          let isEmpty = false;
+          try {
+            const errorStr = JSON.stringify(error);
+            isEmpty = errorStr === '{}';
+          } catch {
+            // If stringify fails, check fields
+            const msg = error.message ? String(error.message).trim() : '';
+            const code = error.code ? String(error.code).trim() : '';
+            const details = error.details ? String(error.details).trim() : '';
+            const hint = error.hint ? String(error.hint).trim() : '';
+            isEmpty = !(msg.length > 0 || code.length > 0 || details.length > 0 || hint.length > 0);
+          }
+          
+          if (!isEmpty) {
+            // Check individual fields
+            const msg = error.message ? String(error.message).trim() : '';
+            const code = error.code ? String(error.code).trim() : '';
+            const details = error.details ? String(error.details).trim() : '';
+            const hint = error.hint ? String(error.hint).trim() : '';
+            
+            const hasContent = msg.length > 0 || code.length > 0 || details.length > 0 || hint.length > 0;
+            
+            if (hasContent) {
+              const errorObj: Record<string, any> = {};
+              if (msg) errorObj.message = msg;
+              if (code) errorObj.code = code;
+              if (details) errorObj.details = details;
+              if (hint) errorObj.hint = hint;
+              console.error("Error loading places for section:", section.title, errorObj);
+            }
+          }
+          // Silently handle empty errors - don't log at all
+          setPlaces([]);
+        } else {
+          setPlaces((data || []) as Place[]);
+        }
+      } catch (err) {
+        // Handle unexpected errors
+        console.error("Unexpected error loading places for section:", section.title, err instanceof Error ? err.message : String(err));
         setPlaces([]);
-      } else {
-        setPlaces((data || []) as Place[]);
       }
-
+      
       setLoading(false);
+      } catch (err) {
+        // Top-level error handler - ensure loading state is always reset
+        console.error("Critical error in loadPlaces:", err instanceof Error ? err.message : String(err));
+        setPlaces([]);
+        setLoading(false);
+      }
     }
 
     loadPlaces();
@@ -159,26 +234,70 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
       if (document.visibilityState === 'visible') {
         // Reload places when page becomes visible
         async function reloadPlaces() {
-          const recentlyViewedIds = getRecentlyViewedPlaceIds();
-          
-          if (recentlyViewedIds.length === 0) {
-            setPlaces([]);
-            return;
-          }
+          try {
+            const recentlyViewedIds = getRecentlyViewedPlaceIds();
+            
+            if (recentlyViewedIds.length === 0) {
+              setPlaces([]);
+              return;
+            }
 
-          const { data, error } = await supabase
-            .from("places")
-            .select("*")
-            .in("id", recentlyViewedIds)
-            .limit(10);
+            const { data, error } = await supabase
+              .from("places")
+              .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility")
+              .in("id", recentlyViewedIds)
+              .limit(10);
 
-          if (!error && data) {
-            const placesMap = new Map((data || []).map((p: any) => [p.id, p]));
-            const orderedPlaces = recentlyViewedIds
-              .map(id => placesMap.get(id))
-              .filter((p): p is Place => p !== undefined)
-              .slice(0, 10);
-            setPlaces(orderedPlaces);
+            if (error) {
+              // Completely skip logging if error is empty
+              // First check if error object is empty by stringifying
+              let isEmpty = false;
+              try {
+                const errorStr = JSON.stringify(error);
+                isEmpty = errorStr === '{}';
+              } catch {
+                // If stringify fails, check fields
+                const msg = error.message ? String(error.message).trim() : '';
+                const code = error.code ? String(error.code).trim() : '';
+                const details = error.details ? String(error.details).trim() : '';
+                const hint = error.hint ? String(error.hint).trim() : '';
+                isEmpty = !(msg.length > 0 || code.length > 0 || details.length > 0 || hint.length > 0);
+              }
+              
+              if (!isEmpty) {
+                // Check individual fields
+                const msg = error.message ? String(error.message).trim() : '';
+                const code = error.code ? String(error.code).trim() : '';
+                const details = error.details ? String(error.details).trim() : '';
+                const hint = error.hint ? String(error.hint).trim() : '';
+                
+                const hasContent = msg.length > 0 || code.length > 0 || details.length > 0 || hint.length > 0;
+                
+                if (hasContent) {
+                  const errorObj: Record<string, any> = {};
+                  if (msg) errorObj.message = msg;
+                  if (code) errorObj.code = code;
+                  if (details) errorObj.details = details;
+                  if (hint) errorObj.hint = hint;
+                  console.error("Error reloading recently viewed places:", errorObj);
+                }
+              }
+              // Silently handle empty errors - don't log at all
+              // Don't clear places on error, keep existing state
+              return;
+            }
+
+            if (data) {
+              const placesMap = new Map((data || []).map((p: any) => [p.id, p]));
+              const orderedPlaces = recentlyViewedIds
+                .map(id => placesMap.get(id))
+                .filter((p): p is Place => p !== undefined)
+                .slice(0, 10);
+              setPlaces(orderedPlaces);
+            }
+          } catch (err) {
+            // Handle unexpected errors
+            console.error("Unexpected error reloading recently viewed places:", err instanceof Error ? err.message : String(err));
           }
         }
         reloadPlaces();
@@ -235,17 +354,41 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
 
   if (loading) {
     return (
-      <div className="mb-12">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F]">{section.title}</h2>
+      <div className="mb-6 min-[600px]:mb-8 min-[900px]:mb-9">
+        <div className="flex items-center justify-between mb-3 min-[600px]:mb-4 h-10 min-[600px]:h-12">
+          <div className="h-6 w-32 bg-gray-200 rounded animate-pulse" />
+          <div className="h-8 w-8 rounded-full bg-gray-200 animate-pulse" />
         </div>
-        <div className="text-sm text-[#6F7A5A]">Loading...</div>
+        <div className="overflow-x-auto scrollbar-hide">
+          <div className="flex gap-3 pb-2" style={{ width: "max-content" }}>
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} className="flex-shrink-0" style={{ width: 'var(--home-card-width, 220px)' }}>
+                <div className="w-full">
+                  <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
+                    <div className="absolute inset-0 rounded-2xl bg-gray-200 animate-pulse" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="h-5 w-3/4 bg-gray-200 rounded animate-pulse" />
+                    <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
 
-  if (places.length === 0) {
+  // Don't hide section if places are empty - let it show empty state or just return null silently
+  // Only hide if it's not a critical section (like "Recently viewed" can be empty)
+  if (places.length === 0 && !section.recentlyViewed) {
     return null;
+  }
+  
+  // For "Recently viewed", show empty state if no places
+  if (places.length === 0 && section.recentlyViewed) {
+    return null; // Hide "Recently viewed" if empty
   }
 
   return (
@@ -261,9 +404,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
             className="hidden min-[900px]:flex w-8 h-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] items-center justify-center transition-colors"
             aria-label="See all"
           >
-            <svg className="w-4 h-4 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
+            <Icon name="forward" size={16} className="text-[#1F2A1F]" />
           </Link>
         </div>
         {/* Right: See all arrow (mobile) or Scroll arrows (desktop) */}
@@ -297,9 +438,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
             className="min-[900px]:hidden w-8 h-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] flex items-center justify-center transition-colors"
             aria-label="See all"
           >
-            <svg className="w-4 h-4 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
+            <Icon name="forward" size={16} className="text-[#1F2A1F]" />
           </Link>
         </div>
       </div>
@@ -409,9 +548,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
                       ))}
                       {places.length < 3 && (
                         <div className="w-full h-1/2 rounded-lg bg-gray-200 flex items-center justify-center">
-                          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
+                          <Icon name="photo" size={24} className="text-[#A8B096]" />
                         </div>
                       )}
                     </div>

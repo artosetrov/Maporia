@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { useUserAccess } from "../../../hooks/useUserAccess";
+import { isUserAdmin } from "../../../lib/access";
+import Icon from "../../../components/Icon";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
@@ -16,7 +18,8 @@ export default function PlaceSettingsPage() {
   const params = useParams<{ id: string }>();
   const placeId = params?.id;
 
-  const { loading: accessLoading, user } = useUserAccess(true, false);
+  const { loading: accessLoading, user, access } = useUserAccess(true, false);
+  const isAdmin = isUserAdmin(access);
   const [loading, setLoading] = useState(true);
   const [place, setPlace] = useState<{ id: string; title: string | null; created_by: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -26,7 +29,7 @@ export default function PlaceSettingsPage() {
 
   // Load place
   useEffect(() => {
-    if (!placeId || !user) return;
+    if (!placeId || !user || accessLoading) return;
 
     (async () => {
       setLoading(true);
@@ -41,8 +44,10 @@ export default function PlaceSettingsPage() {
         return;
       }
 
-      // Check ownership
-      if (data.created_by !== user.id) {
+      // Check ownership or admin status
+      const currentIsAdmin = isUserAdmin(access);
+      const isOwner = data.created_by === user.id;
+      if (!isOwner && !currentIsAdmin) {
         router.push(`/id/${placeId}`);
         return;
       }
@@ -52,7 +57,7 @@ export default function PlaceSettingsPage() {
       setIsHidden(data.is_hidden === true || data.visibility === 'hidden' || data.visibility === 'private');
       setLoading(false);
     })();
-  }, [placeId, user, router]);
+  }, [placeId, user, router, access, accessLoading]);
 
   async function handleDelete() {
     if (!placeId || !user || !place) return;
@@ -67,17 +72,75 @@ export default function PlaceSettingsPage() {
     setError(null);
 
     try {
-      // Delete related data first
-      await supabase.from("place_photos").delete().eq("place_id", placeId);
-      await supabase.from("comments").delete().eq("place_id", placeId);
-      await supabase.from("reactions").delete().eq("place_id", placeId);
+      // Step 1: Get all photos to delete from storage
+      const { data: photosData } = await supabase
+        .from("place_photos")
+        .select("url")
+        .eq("place_id", placeId);
 
-      // Delete the place
-      const { error: deleteError } = await supabase
+      // Step 2: Delete photos from storage (if they exist in storage bucket)
+      if (photosData && photosData.length > 0) {
+        const photoUrls = photosData.map((p) => p.url).filter(Boolean) as string[];
+        const bucketName = 'place-photos'; // Bucket name from upload code
+        
+        for (const url of photoUrls) {
+          try {
+            // Only delete if it's a Supabase storage URL, not external URL
+            if (url.includes('supabase.co/storage')) {
+              // Extract file path from URL
+              // Format: https://...supabase.co/storage/v1/object/public/place-photos/places/{uuid}.{ext}
+              const storageMatch = url.match(/\/place-photos\/(.+)$/);
+              if (storageMatch && storageMatch[1]) {
+                const filePath = storageMatch[1];
+                const { error: storageError } = await supabase.storage
+                  .from(bucketName)
+                  .remove([filePath]);
+                
+                if (storageError) {
+                  console.warn(`Failed to delete photo from storage: ${filePath}`, storageError);
+                  // Continue even if storage deletion fails
+                }
+              }
+            }
+          } catch (storageErr) {
+            console.warn("Error deleting photo from storage:", storageErr);
+            // Continue even if storage deletion fails
+          }
+        }
+      }
+
+      // Step 3: Delete related data from database
+      // Delete in parallel for better performance
+      const [photosResult, commentsResult, reactionsResult] = await Promise.all([
+        supabase.from("place_photos").delete().eq("place_id", placeId),
+        supabase.from("comments").delete().eq("place_id", placeId),
+        supabase.from("reactions").delete().eq("place_id", placeId),
+      ]);
+
+      // Log any errors but continue (some tables might not have data)
+      if (photosResult.error) {
+        console.warn("Error deleting place_photos:", photosResult.error);
+      }
+      if (commentsResult.error) {
+        console.warn("Error deleting comments:", commentsResult.error);
+      }
+      if (reactionsResult.error) {
+        console.warn("Error deleting reactions:", reactionsResult.error);
+      }
+
+      // Step 4: Delete the place itself (admin can delete any place, owner can delete their own)
+      const currentIsAdmin = isUserAdmin(access);
+      const deleteQuery = supabase
         .from("places")
         .delete()
-        .eq("id", placeId)
-        .eq("created_by", user.id);
+        .eq("id", placeId);
+      
+      // If not admin, add ownership check
+      if (!currentIsAdmin) {
+        deleteQuery.eq("created_by", user.id);
+      }
+      
+      const { error: deleteError } = await deleteQuery;
 
       if (deleteError) {
         console.error("Delete error:", deleteError);
@@ -109,12 +172,19 @@ export default function PlaceSettingsPage() {
       visibility: newHiddenState ? 'hidden' : 'public',
     };
 
-    const { error: updateError } = await supabase
+    // Admin can update any place, owner can update their own
+    const currentIsAdmin = isUserAdmin(access);
+    const updateQuery = supabase
       .from("places")
       .update(payload)
-      .eq("id", placeId)
-      .eq("created_by", user.id)
-      .select();
+      .eq("id", placeId);
+    
+    // If not admin, add ownership check
+    if (!currentIsAdmin) {
+      updateQuery.eq("created_by", user.id);
+    }
+    
+    const { error: updateError } = await updateQuery.select();
 
     setHiding(false);
 
@@ -131,8 +201,16 @@ export default function PlaceSettingsPage() {
 
   if (accessLoading || loading) {
     return (
-      <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
-        <div className="text-sm text-[#6F7A5A]">Loading…</div>
+      <main className="min-h-screen bg-[#FAFAF7]">
+        <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+          <div className="h-8 w-48 bg-[#ECEEE4] rounded animate-pulse" />
+          <div className="bg-white rounded-2xl p-6 border border-[#ECEEE4] space-y-4">
+            <div className="h-6 w-32 bg-[#ECEEE4] rounded animate-pulse" />
+            <div className="h-10 w-full bg-[#ECEEE4] rounded animate-pulse" />
+            <div className="h-6 w-32 bg-[#ECEEE4] rounded animate-pulse" />
+            <div className="h-24 w-full bg-[#ECEEE4] rounded animate-pulse" />
+          </div>
+        </div>
       </main>
     );
   }
@@ -164,11 +242,9 @@ export default function PlaceSettingsPage() {
               className="p-2 -ml-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition"
               aria-label="Back"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
+              <Icon name="back" size={20} />
             </button>
-            <h1 className="text-lg font-semibold text-[#1F2A1F]">Place settings</h1>
+            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Place settings</h1>
             <div className="w-9" /> {/* Spacer */}
           </div>
         </div>
@@ -209,7 +285,7 @@ export default function PlaceSettingsPage() {
 
           {/* Danger Zone */}
           <div className="rounded-2xl border border-red-200 bg-red-50/20 p-5">
-            <h2 className="text-base font-semibold text-red-700 mb-3">Danger zone</h2>
+            <h2 className="text-base font-semibold font-fraunces text-red-700 mb-3">Danger zone</h2>
             <p className="text-sm text-[#6F7A5A] mb-4">
               Once you delete a place, there is no going back. Please be certain.
             </p>

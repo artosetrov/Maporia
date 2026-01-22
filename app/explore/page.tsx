@@ -16,6 +16,7 @@ import { DEFAULT_CITY } from "../constants";
 import { LAYOUT_BREAKPOINTS, LAYOUT_CONFIG } from "../config/layout";
 import { useUserAccess } from "../hooks/useUserAccess";
 import { isPlacePremium } from "../lib/access";
+import Icon from "../components/Icon";
 
 type Place = {
   id: string;
@@ -379,7 +380,7 @@ export default function ExplorePage() {
   const quickSearchChips = ["Romantic", "Quiet", "Sunset", "Coffee", "Nature"];
 
   return (
-    <main className="h-screen bg-[#faf9f7] flex flex-col overflow-hidden">
+    <main className="h-screen bg-[#FAFAF7] flex flex-col overflow-hidden">
       <TopBar
         showSearchBar={true}
         searchValue={""}
@@ -435,7 +436,7 @@ export default function ExplorePage() {
           {/* On very large screens (>=1920px), list has fixed max-width, map stretches to fill remaining space */}
           <div className="w-[62.5%] min-[1440px]:w-[60%] min-[1920px]:w-auto min-[1920px]:max-w-[1152px] overflow-y-auto scrollbar-hide pr-6">
             {/* Search and Filter Bar */}
-            <div className="sticky top-0 z-30 bg-[#faf9f7] pt-4 pb-3 border-b border-[#6b7d47]/10 mb-4">
+            <div className="sticky top-0 z-30 bg-[#FAFAF7] pt-4 pb-3 border-b border-[#ECEEE4] mb-4">
               <div className="flex items-center gap-2 mb-2">
                 <div className="flex-1 relative">
                   <input
@@ -449,22 +450,18 @@ export default function ExplorePage() {
                       }
                     }}
                     placeholder="Search by vibe, mood, or place"
-                    className="w-full h-10 rounded-xl border border-[#6b7d47]/20 bg-white px-4 pl-10 text-sm text-[#2d2d2d] placeholder:text-[#6b7d47]/50 outline-none focus:border-[#6b7d47]/40 focus:bg-white transition"
+                    className="w-full h-10 rounded-xl border border-[#ECEEE4] bg-white px-4 pl-10 text-sm text-[#1F2A1F] placeholder:text-[#A8B096] outline-none focus:border-[#8F9E4F] focus:bg-white transition"
                   />
-                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6b7d47]/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
+                  <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6F7A5A]" />
                 </div>
                 <button
                   onClick={() => setFilterOpen(true)}
-                  className="h-10 w-10 rounded-xl flex items-center justify-center text-[#556036] hover:bg-[#f5f4f2] transition relative border border-[#6b7d47]/20"
+                  className="h-10 w-10 rounded-xl flex items-center justify-center text-[#8F9E4F] hover:bg-[#FAFAF7] transition relative border border-[#ECEEE4]"
                   aria-label="Filters"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                  </svg>
+                  <Icon name="filter" size={20} />
                   {activeFiltersCount > 0 && (
-                    <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-[#6b7d47] text-white text-[10px] font-medium flex items-center justify-center">
+                    <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-[#8F9E4F] text-white text-[10px] font-medium flex items-center justify-center">
                       {activeFiltersCount > 9 ? "9+" : activeFiltersCount}
                     </span>
                   )}
@@ -479,12 +476,10 @@ export default function ExplorePage() {
                       onClick={() => {
                         setSelectedCities(prev => prev.filter(c => c !== city));
                       }}
-                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
+                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition"
                     >
                       {city}
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                      <Icon name="close" size={12} />
                     </button>
                   ))}
                   {selectedCategories.map((cat) => (
@@ -493,12 +488,10 @@ export default function ExplorePage() {
                       onClick={() => {
                         setSelectedCategories(prev => prev.filter(c => c !== cat));
                       }}
-                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6b7d47] bg-[#6b7d47]/10 border border-[#6b7d47]/30 hover:bg-[#6b7d47]/20 transition"
+                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition"
                     >
                       {cat}
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                      <Icon name="close" size={12} />
                     </button>
                   ))}
                 </div>
@@ -512,7 +505,7 @@ export default function ExplorePage() {
                       setSearchDraft(chip);
                       setSearchFocused(false);
                     }}
-                    className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#556036] bg-white border border-[#6b7d47]/20 hover:bg-[#f5f4f2] transition whitespace-nowrap"
+                    className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] transition whitespace-nowrap"
                   >
                     {chip}
                   </button>
@@ -520,7 +513,19 @@ export default function ExplorePage() {
               </div>
             </div>
             {loading ? (
-              <Empty text="Loading…" />
+              <div className="grid grid-cols-2 min-[1440px]:grid-cols-3 gap-6 min-[1440px]:gap-6 min-[1440px]:gap-y-7">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="w-full">
+                    <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
+                      <div className="absolute inset-0 rounded-2xl bg-gray-200 animate-pulse" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <div className="h-5 w-3/4 bg-gray-200 rounded animate-pulse" />
+                      <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : places.length === 0 ? (
               <Empty text="No places with this vibe yet. Try fewer filters." />
             ) : (
@@ -622,18 +627,14 @@ export default function ExplorePage() {
                     placeholder="Search by vibe, mood, or place"
                     className="w-full h-10 rounded-xl border border-gray-200 bg-white px-4 pl-10 text-sm text-[#2d2d2d] placeholder:text-gray-400 outline-none focus:border-gray-300 focus:bg-white transition"
                   />
-                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
+                  <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A8B096]" />
                 </div>
                 <button
                   onClick={() => setFilterOpen(true)}
                   className="h-10 w-10 rounded-xl flex items-center justify-center text-gray-600 hover:bg-gray-100 transition relative border border-gray-200"
                   aria-label="Filters"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                  </svg>
+                  <Icon name="filter" size={20} />
                   {activeFiltersCount > 0 && (
                     <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-[#6b7d47] text-white text-[10px] font-medium flex items-center justify-center">
                       {activeFiltersCount > 9 ? "9+" : activeFiltersCount}
@@ -649,7 +650,19 @@ export default function ExplorePage() {
               </div>
             </div>
             {loading ? (
-              <Empty text="Loading…" />
+              <div className="grid grid-cols-2 gap-5">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="w-full">
+                    <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
+                      <div className="absolute inset-0 rounded-2xl bg-gray-200 animate-pulse" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <div className="h-5 w-3/4 bg-gray-200 rounded animate-pulse" />
+                      <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : places.length === 0 ? (
               <Empty text="No places with this vibe yet. Try fewer filters." />
             ) : (
@@ -713,18 +726,14 @@ export default function ExplorePage() {
                     placeholder="Search by vibe, mood, or place"
                     className="w-full h-10 rounded-xl border border-gray-200 bg-white px-4 pl-10 text-sm text-[#2d2d2d] placeholder:text-gray-400 outline-none focus:border-gray-300 transition"
                   />
-                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
+                  <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A8B096]" />
                 </div>
                 <button
                   onClick={() => setFilterOpen(true)}
                   className="h-10 w-10 rounded-xl flex items-center justify-center text-gray-600 hover:bg-gray-100 transition relative border border-gray-200"
                   aria-label="Filters"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                  </svg>
+                  <Icon name="filter" size={20} />
                   {activeFiltersCount > 0 && (
                     <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-[#6b7d47] text-white text-[10px] font-medium flex items-center justify-center">
                       {activeFiltersCount > 9 ? "9+" : activeFiltersCount}
@@ -740,7 +749,19 @@ export default function ExplorePage() {
               </div>
             </div>
             {loading ? (
-              <Empty text="Loading…" />
+              <div className="grid grid-cols-1 gap-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="w-full">
+                    <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
+                      <div className="absolute inset-0 rounded-2xl bg-gray-200 animate-pulse" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <div className="h-5 w-3/4 bg-gray-200 rounded animate-pulse" />
+                      <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : places.length === 0 ? (
               <Empty text="No places with this vibe yet. Try fewer filters." />
             ) : (
@@ -817,9 +838,7 @@ export default function ExplorePage() {
                 className="h-10 w-10 rounded-xl flex items-center justify-center text-[#556036] hover:bg-[#f5f4f2] transition relative border border-[#6b7d47]/20"
                 aria-label="Filters"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                </svg>
+                <Icon name="filter" size={20} className="text-[#556036]" />
                 {activeFiltersCount > 0 && (
                   <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-[#6b7d47] text-white text-[10px] font-medium flex items-center justify-center">
                     {activeFiltersCount > 9 ? "9+" : activeFiltersCount}
@@ -950,7 +969,19 @@ export default function ExplorePage() {
                     ) : (
                       <div className="py-4">
                         {loading ? (
-                          <Empty text="Loading…" />
+                          <div className="grid grid-cols-1 gap-4">
+                            {Array.from({ length: 3 }).map((_, i) => (
+                              <div key={i} className="w-full">
+                                <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
+                                  <div className="absolute inset-0 rounded-2xl bg-gray-200 animate-pulse" />
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                  <div className="h-5 w-3/4 bg-gray-200 rounded animate-pulse" />
+                                  <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         ) : places.length === 0 ? (
                           <Empty text="No places with this vibe yet. Try fewer filters." />
                         ) : (
@@ -1014,7 +1045,19 @@ export default function ExplorePage() {
           ) : (
             <div className="flex-1 overflow-y-auto scrollbar-hide px-6 pt-4 pb-24">
               {loading ? (
-                <Empty text="Loading…" />
+                <div className="grid grid-cols-1 gap-4">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="w-full">
+                      <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
+                        <div className="absolute inset-0 rounded-2xl bg-gray-200 animate-pulse" />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <div className="h-5 w-3/4 bg-gray-200 rounded animate-pulse" />
+                        <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : places.length === 0 ? (
                 <Empty text="No places with this vibe yet. Try fewer filters." />
               ) : (
@@ -1528,8 +1571,8 @@ function MapView({
 
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <Empty text="Loading…" />
+      <div className="h-full w-full bg-gray-200 animate-pulse flex items-center justify-center">
+        <div className="text-sm text-gray-500">Loading map…</div>
       </div>
     );
   }
@@ -1549,8 +1592,8 @@ function MapView({
 
   if (!isLoaded) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <Empty text="Loading map…" />
+      <div className="h-full w-full bg-gray-200 animate-pulse flex items-center justify-center">
+        <div className="text-sm text-gray-500">Loading map…</div>
       </div>
     );
   }
@@ -1566,10 +1609,7 @@ function MapView({
           aria-label="My Location"
           title="My Location"
         >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="4" fill="#22c55e" />
-            <circle cx="12" cy="12" r="8" stroke="#22c55e" strokeWidth="1.5" fill="none" opacity="0.3" />
-          </svg>
+          <Icon name="my-location" size={20} className="text-green-500" />
         </button>
 
         {/* Fullscreen Button */}
@@ -1580,13 +1620,9 @@ function MapView({
           title="Fullscreen"
         >
           {isFullscreen ? (
-            <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <Icon name="minimize" size={20} className="text-[#1F2A1F]" />
           ) : (
-            <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-            </svg>
+            <Icon name="maximize" size={20} className="text-[#1F2A1F]" />
           )}
         </button>
 
@@ -1846,9 +1882,7 @@ function MapView({
                                     className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-white/90 hover:bg-white shadow-lg flex items-center justify-center transition-colors z-10"
                                     aria-label="Previous photo"
                                   >
-                                    <svg className="w-4 h-4 text-[#2d2d2d]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                                    </svg>
+                                    <Icon name="back" size={16} className="text-[#1F2A1F]" />
                                   </button>
                                   <button
                                     onClick={handleNextPhoto}
@@ -1882,9 +1916,7 @@ function MapView({
                             </div>
                           ) : (
                             <div className="absolute inset-0 bg-[#f5f4f2] rounded-t-xl flex items-center justify-center">
-                              <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
+                              <Icon name="photo" size={48} className="text-[#A8B096]" />
                             </div>
                           )}
                         </div>
