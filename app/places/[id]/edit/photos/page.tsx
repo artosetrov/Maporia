@@ -68,15 +68,13 @@ export default function PhotosEditorPage() {
       // Load photos from place_photos table
       const { data: photosData } = await supabase
         .from("place_photos")
-        .select("url, sort, is_cover")
-        .eq("place_id", placeId)
         .select("id, url, sort, is_cover")
+        .eq("place_id", placeId)
+        .order("sort", { ascending: true });
 
       let loadedPhotos: Photo[] = [];
 
       if (photosData && photosData.length > 0) {
-        loadedPhotos = photosData
-          .map((p, idx) => ({
         // Find if any photo is marked as cover
         const hasCover = photosData.some(photo => photo.is_cover === true);
         
@@ -94,6 +92,8 @@ export default function PhotosEditorPage() {
         if (loadedPhotos.length > 0 && !loadedPhotos.some(p => p.is_cover)) {
           loadedPhotos[0].is_cover = true;
         }
+      } else if (placeData.cover_url) {
+        // Fallback to legacy cover_url
         loadedPhotos = [{ id: "photo-0", url: placeData.cover_url, sort: 0, is_cover: true }];
       }
 
@@ -103,7 +103,7 @@ export default function PhotosEditorPage() {
     })();
   }, [placeId, user, router]);
 
-  }, [placeId, user, router, access, accessLoading]);
+  async function uploadToSupabase(file: File): Promise<{ url: string | null; error: string | null }> {
     try {
       const ext = file.name.split(".").pop() || "jpg";
       const path = `places/${generateUUID()}.${ext}`;
@@ -232,15 +232,11 @@ export default function PhotosEditorPage() {
       return;
     }
 
-    const coverUrl = photoUrls[0];
-
     // Find the cover photo (photo with is_cover: true)
     const coverPhoto = photos.find((p) => p.is_cover);
     const coverUrl = coverPhoto?.url || photoUrls[0]; // Fallback to first photo if no cover set
 
     // Update cover_url in places table (legacy)
-    const { error: coverError } = await supabase
-      .from("places")
     // Admin can update any place, owner can update their own
     const currentIsAdmin = isUserAdmin(access);
     const updateQuery = supabase
@@ -254,6 +250,8 @@ export default function PhotosEditorPage() {
     }
     
     const { error: coverError } = await updateQuery.select();
+    
+    if (coverError) {
       console.error("Cover update error:", coverError);
       setSaving(false);
       setError(coverError.message || "Failed to update cover photo");
@@ -273,8 +271,6 @@ export default function PhotosEditorPage() {
       return;
     }
 
-    // Insert new photos
-    const rows = photoUrls.map((url, i) => ({
     // Insert new photos - preserve cover selection from state
     // First, ensure only one photo is marked as cover
     const photosWithSingleCover = photos.map((p, idx) => ({
@@ -303,7 +299,9 @@ export default function PhotosEditorPage() {
       place_id: placeId,
       user_id: user.id,
       url: photo.url,
+      sort: i,
       is_cover: photo.is_cover, // Use the cover flag from state
+    }));
 
     const { data: insertData, error: photosError } = await supabase
       .from("place_photos")
@@ -363,9 +361,9 @@ export default function PhotosEditorPage() {
               className="p-2 -ml-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition"
               aria-label="Back"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               <Icon name="back" size={20} />
+            </button>
+            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Photos</h1>
             <div className="w-9" />
           </div>
         </div>
