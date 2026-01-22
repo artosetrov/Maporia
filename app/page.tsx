@@ -27,13 +27,24 @@ export default function HomePage() {
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
   // User access and profile data
-  const { access, user, profile } = useUserAccess();
+  const { loading: accessLoading, access, user, profile } = useUserAccess();
+  
+  // Bootstrap ready state - wait for auth/profile before rendering sections
+  const [bootReady, setBootReady] = useState(false);
   
   // Derive display values from profile
   const userId = user?.id ?? null;
   const userEmail = user?.email ?? null;
   const userDisplayName = profile?.display_name ?? (userEmail ? userEmail.split("@")[0] : null);
   const userAvatar = profile?.avatar_url ?? null;
+
+  // Wait for bootstrap to complete before rendering sections
+  useEffect(() => {
+    if (!accessLoading) {
+      // Auth and profile are ready, allow sections to render
+      setBootReady(true);
+    }
+  }, [accessLoading]);
 
   // Загружаем избранное пользователя
   useEffect(() => {
@@ -282,17 +293,49 @@ export default function HomePage() {
             paddingRight: 'var(--home-page-padding, 16px)',
           }}
         >
-          {HOME_SECTIONS.map((section) => (
-            <HomeSection
-              key={section.title}
-              section={section}
-              userId={userId}
-              userAccess={access}
-              favorites={favorites}
-              onToggleFavorite={toggleFavorite}
-              onTagClick={handleTagClick}
-            />
-          ))}
+          {!bootReady ? (
+            // Show skeleton while bootstrapping
+            <div className="space-y-6">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="mb-6 min-[600px]:mb-8 min-[900px]:mb-9">
+                  <div className="flex items-center justify-between mb-3 min-[600px]:mb-4 h-10 min-[600px]:h-12">
+                    <div className="h-6 w-32 bg-gray-200 rounded animate-pulse" />
+                    <div className="h-8 w-8 rounded-full bg-gray-200 animate-pulse" />
+                  </div>
+                  <div className="overflow-x-auto scrollbar-hide">
+                    <div className="flex gap-3 pb-2" style={{ width: "max-content" }}>
+                      {Array.from({ length: 7 }).map((_, j) => (
+                        <div key={j} className="flex-shrink-0" style={{ width: 'var(--home-card-width, 220px)' }}>
+                          <div className="w-full">
+                            <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
+                              <div className="absolute inset-0 rounded-2xl bg-gray-200 animate-pulse" />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <div className="h-5 w-3/4 bg-gray-200 rounded animate-pulse" />
+                              <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            // Render sections only after bootstrap is ready
+            HOME_SECTIONS.map((section) => (
+              <HomeSection
+                key={section.title}
+                section={section}
+                userId={userId}
+                userAccess={access}
+                favorites={favorites}
+                onToggleFavorite={toggleFavorite}
+                onTagClick={handleTagClick}
+              />
+            ))
+          )}
         </div>
       </div>
 

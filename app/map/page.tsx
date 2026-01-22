@@ -82,7 +82,16 @@ function MapPageContent() {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
   // User access for premium filtering
-  const { access } = useUserAccess();
+  const { loading: accessLoading, access } = useUserAccess();
+  
+  // Bootstrap ready state - wait for auth/profile before loading places
+  const [bootReady, setBootReady] = useState(false);
+  
+  useEffect(() => {
+    if (!accessLoading) {
+      setBootReady(true);
+    }
+  }, [accessLoading]);
 
   // Applied filters (current state, affects data)
   // Инициализируем из URL сразу, чтобы фильтры применялись при первом рендере
@@ -385,9 +394,36 @@ function MapPageContent() {
     }
   }
 
+  // Create stable request key for deduplication
+  const requestKey = useMemo(() => {
+    return JSON.stringify({
+      city: appliedCity,
+      q: appliedQ,
+      categories: appliedCategories.join(','),
+      tag: selectedTag,
+      sort: activeFilters.sort,
+      hasExplicitCity: hasExplicitCityInUrlState,
+    });
+  }, [appliedCity, appliedQ, appliedCategories.join(','), selectedTag, activeFilters.sort, hasExplicitCityInUrlState]);
+
+  const loadPlacesRef = useRef<{ requestId: number; key: string } | null>(null);
+
   async function loadPlaces() {
+    // Don't load if bootstrap not ready
+    if (!bootReady) {
+      console.log("[MapPage] Bootstrap not ready, skipping loadPlaces");
+      return;
+    }
+
+    // Check if request key changed - if not, don't refetch
+    if (loadPlacesRef.current?.key === requestKey) {
+      console.log("[MapPage] Request key unchanged, skipping duplicate loadPlaces");
+      return;
+    }
+
     // Use a request ID to track if this request should be processed
     const requestId = Date.now();
+    loadPlacesRef.current = { requestId, key: requestKey };
     setLoading(true);
 
     try {
@@ -441,8 +477,8 @@ function MapPageContent() {
 
       const { data, error } = await query;
       
-      // Check if this is still the latest request (prevent race conditions)
-      if (requestId !== Date.now() - 1 && requestId < Date.now() - 1000) {
+      // Check if this is still the current request (latest only pattern)
+      if (!loadPlacesRef.current || loadPlacesRef.current.requestId !== requestId) {
         console.log("[loadPlaces] Request superseded by newer request, ignoring result");
         return;
       }
@@ -452,20 +488,24 @@ function MapPageContent() {
       if (error) {
         // Check if error is AbortError
         if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
-          console.warn("[loadPlaces] Request was aborted, this is expected on component unmount");
+          console.log("[loadPlaces] Request was aborted");
           return;
         }
         
         console.error("Error loading places:", error);
-        setPlaces([]);
-        setLoading(false);
+        if (loadPlacesRef.current && loadPlacesRef.current.requestId === requestId) {
+          setPlaces([]);
+          setLoading(false);
+        }
         return;
       }
       
       if (!data || data.length === 0) {
         console.log("No places found");
-        setPlaces([]);
-        setLoading(false);
+        if (loadPlacesRef.current && loadPlacesRef.current.requestId === requestId) {
+          setPlaces([]);
+          setLoading(false);
+        }
         return;
       }
 
@@ -537,17 +577,22 @@ function MapPageContent() {
       })));
     }
     
-      setPlaces(placesWithCoords as Place[]);
+      // Only update state if this is still the current request
+      if (loadPlacesRef.current && loadPlacesRef.current.requestId === requestId) {
+        setPlaces(placesWithCoords as Place[]);
+        setLoading(false);
+      }
     } catch (err: any) {
       // Handle AbortError gracefully
       if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-        console.log("[loadPlaces] Request aborted (expected on unmount)");
+        console.log("[loadPlaces] Request aborted");
         return;
       }
       console.error("[loadPlaces] Exception:", err);
-      setPlaces([]);
-    } finally {
-      setLoading(false);
+      if (loadPlacesRef.current && loadPlacesRef.current.requestId === requestId) {
+        setPlaces([]);
+        setLoading(false);
+      }
     }
   }
 
@@ -558,11 +603,13 @@ function MapPageContent() {
     })();
   }, []);
 
-  // Load places when filters change
+  // Load places when filters change - use stable request key
   useEffect(() => {
-    loadPlaces();
+    if (bootReady) {
+      loadPlaces();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appliedCity, appliedQ, appliedCategories, selectedTag, hasExplicitCityInUrlState]);
+  }, [requestKey, bootReady]);
 
   // Загружаем избранное пользователя
   useEffect(() => {
