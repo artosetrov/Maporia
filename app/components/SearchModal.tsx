@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CITIES, DEFAULT_CITY } from "../constants";
+import { DEFAULT_CITY } from "../constants";
+import { getCitiesWithPlaces } from "../lib/cities";
 import Icon from "./Icon";
 
 type SearchModalProps = {
@@ -19,6 +20,18 @@ export default function SearchModal({
 }: SearchModalProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [recentCities, setRecentCities] = useState<string[]>([]);
+  const [cities, setCities] = useState<Array<{ id: string; name: string }>>([]);
+  const [citiesLoading, setCitiesLoading] = useState(true);
+
+  // Load cities from database
+  useEffect(() => {
+    (async () => {
+      setCitiesLoading(true);
+      const citiesData = await getCitiesWithPlaces();
+      setCities(citiesData.map(c => ({ id: c.id, name: c.name })));
+      setCitiesLoading(false);
+    })();
+  }, []);
 
   // Load recent cities from localStorage
   useEffect(() => {
@@ -52,8 +65,8 @@ export default function SearchModal({
   };
 
   // Filter cities based on search query
-  const filteredCities = CITIES.filter((city) =>
-    city.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredCities = cities.filter((city) =>
+    city.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   if (!isOpen) return null;
@@ -121,15 +134,19 @@ export default function SearchModal({
             {searchQuery ? "Search results" : "Popular cities"}
           </h3>
           <div className="space-y-2">
-            {filteredCities.length > 0 ? (
+            {citiesLoading ? (
+              <div className="px-4 py-8 text-center text-[#6F7A5A]">
+                Loading cities...
+              </div>
+            ) : filteredCities.length > 0 ? (
               filteredCities.map((city) => (
                 <button
-                  key={city}
-                  onClick={() => handleCitySelect(city)}
+                  key={city.id}
+                  onClick={() => handleCitySelect(city.name)}
                   className="w-full text-left px-4 py-3 rounded-xl hover:bg-[#FAFAF7] transition flex items-center justify-between"
                 >
-                  <span className="text-[#1F2A1F]">{city}</span>
-                  {selectedCity === city && (
+                  <span className="text-[#1F2A1F]">{city.name}</span>
+                  {selectedCity === city.name && (
                     <svg className="w-5 h-5 text-[#8F9E4F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>

@@ -8,6 +8,8 @@ import { supabase } from "../../../../lib/supabase";
 import { useUserAccess } from "../../../../hooks/useUserAccess";
 import { isUserAdmin } from "../../../../lib/access";
 import Icon from "../../../../components/Icon";
+import UnifiedGoogleImportField from "../../../../components/UnifiedGoogleImportField";
+import { resolveCity } from "../../../../lib/cityResolver";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
@@ -25,6 +27,64 @@ export default function TitleEditorPage() {
   const [originalTitle, setOriginalTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleGoogleImport(data: any) {
+    if (data.name || data.business_name) {
+      setTitle(data.name || data.business_name);
+    }
+    // Also save other fields to place
+    if (user && placeId) {
+      // Resolve city to city_id
+      let cityId: string | null = null;
+      const cityName = data.city || null;
+      if (cityName) {
+        const cityData = await resolveCity(
+          cityName,
+          data.city_state || null,
+          data.city_country || null,
+          data.lat || null,
+          data.lng || null
+        );
+        if (cityData) {
+          cityId = cityData.city_id;
+        }
+      }
+
+      const updates: any = {
+        title: data.name || data.business_name || null,
+        address: data.formatted_address || data.address || null,
+        link: data.website || null,
+        google_place_id: data.place_id || data.google_place_id || null,
+        lat: data.lat || data.latitude || null,
+        lng: data.lng || data.longitude || null,
+        city: cityName || null, // Keep for backward compatibility
+        city_id: cityId,
+        city_name_cached: cityName || null,
+      };
+      // Update categories if types are available
+      if (data.types && data.types.length > 0) {
+        // Map Google types to our categories (simplified mapping)
+        const categoryMap: Record<string, string> = {
+          restaurant: "restaurant",
+          cafe: "cafe",
+          bar: "bar",
+          hotel: "hotel",
+          museum: "museum",
+          park: "park",
+          beach: "beach",
+          shopping_mall: "shopping",
+          store: "shopping",
+        };
+        const mappedCategories = data.types
+          .map((type: string) => categoryMap[type])
+          .filter(Boolean);
+        if (mappedCategories.length > 0) {
+          updates.categories = mappedCategories.slice(0, 3); // Limit to 3 categories
+        }
+      }
+      await supabase.from("places").update(updates).eq("id", placeId);
+    }
+  }
 
   // Load place
   useEffect(() => {
@@ -152,6 +212,14 @@ export default function TitleEditorPage() {
         )}
 
         <div className="space-y-4">
+          {user && placeId && (
+            <UnifiedGoogleImportField
+              userId={user.id}
+              context="place"
+              onImportSuccess={handleGoogleImport}
+              compact={true}
+            />
+          )}
           <div>
             <label className="block text-sm font-medium text-[#1F2A1F] mb-2">
               Place title

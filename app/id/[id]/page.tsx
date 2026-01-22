@@ -522,13 +522,26 @@ export default function PlacePage() {
           .maybeSingle();
 
         if (error) {
-          console.error("Error checking favorite status:", error);
+          // Only log meaningful errors (not empty objects or expected cases)
+          if (error.message || error.code || Object.keys(error).length > 0) {
+            console.error("Error checking favorite status:", error);
+          }
           return;
         }
 
         setIsFavorite(!!data);
       } catch (err) {
-        console.error("Exception checking favorite status:", err);
+        // Only log meaningful errors
+        if (err instanceof Error) {
+          console.error("Exception checking favorite status:", err);
+        } else if (typeof err === 'object' && err !== null) {
+          const errorObj = err as Record<string, unknown>;
+          const hasErrorContent = errorObj.message || errorObj.code || errorObj.details;
+          const hasKeys = Object.keys(errorObj).length > 0;
+          if (hasErrorContent || (hasKeys && !(errorObj.message === undefined && errorObj.code === undefined))) {
+            console.error("Exception checking favorite status:", err);
+          }
+        }
       }
     })();
   }, [id, userId]);
@@ -2080,30 +2093,61 @@ function PlaceMapView({ place }: { place: Place }) {
     );
   }
 
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Prevent page scroll when interacting with map on mobile
+  useEffect(() => {
+    const container = mapContainerRef.current;
+    if (!container) return;
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        e.preventDefault();
+      }
+    };
+
+    container.addEventListener('touchmove', handleTouchMove, { passive: false });
+    return () => {
+      container.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, []);
+
   return (
-    <GoogleMap
-      mapContainerStyle={{ width: "100%", height: "100%" }}
-      center={{ lat: place.lat, lng: place.lng }}
-      zoom={15}
-      options={{
-        disableDefaultUI: false,
-        zoomControl: true,
-        streetViewControl: false,
-        mapTypeControl: false,
-        fullscreenControl: false,
-        styles: [
-          {
-            featureType: "poi",
-            elementType: "labels",
-            stylers: [{ visibility: "off" }],
-          },
-        ],
+    <div
+      ref={mapContainerRef}
+      style={{
+        touchAction: 'none',
+        overscrollBehavior: 'contain',
+        WebkitOverflowScrolling: 'touch',
+        width: '100%',
+        height: '100%',
       }}
     >
-      <Marker
-        position={{ lat: place.lat, lng: place.lng }}
-        title={place.title}
-      />
-    </GoogleMap>
+      <GoogleMap
+        mapContainerStyle={{ width: "100%", height: "100%" }}
+        center={{ lat: place.lat, lng: place.lng }}
+        zoom={15}
+        options={{
+          gestureHandling: "greedy",
+          disableDefaultUI: false,
+          zoomControl: true,
+          streetViewControl: false,
+          mapTypeControl: false,
+          fullscreenControl: false,
+          styles: [
+            {
+              featureType: "poi",
+              elementType: "labels",
+              stylers: [{ visibility: "off" }],
+            },
+          ],
+        }}
+      >
+        <Marker
+          position={{ lat: place.lat, lng: place.lng }}
+          title={place.title}
+        />
+      </GoogleMap>
+    </div>
   );
 }

@@ -253,7 +253,7 @@ export default function PlaceSettingsPage() {
       {/* Body */}
       <div className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-8">
         {error && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50/50 p-3 text-sm text-red-700">
+          <div className="mb-4 rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 p-3 text-sm text-[#C96A5B]">
             {error}
           </div>
         )}
@@ -261,7 +261,7 @@ export default function PlaceSettingsPage() {
         <div className="space-y-6">
           {/* Visibility Section */}
           <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5">
-            <h2 className="text-base font-semibold text-[#1F2A1F] mb-3">Visibility</h2>
+            <h2 className="text-base font-semibold font-fraunces text-[#1F2A1F] mb-3">Visibility</h2>
             <p className="text-sm text-[#6F7A5A] mb-4">
               {isHidden 
                 ? "This place is hidden from other users. Only you can see it."
@@ -271,11 +271,11 @@ export default function PlaceSettingsPage() {
               onClick={handleToggleVisibility}
               disabled={hiding}
               className={cx(
-                "w-full rounded-xl border px-4 py-3 text-sm font-medium transition",
+                "w-full h-11 rounded-xl border px-5 text-sm font-medium transition",
                 hiding
                   ? "border-[#ECEEE4] bg-[#FAFAF7] text-[#6F7A5A] cursor-not-allowed"
                   : isHidden
-                  ? "border-[#8F9E4F] bg-[#8F9E4F] text-white hover:bg-[#556036]"
+                  ? "border-[#8F9E4F] bg-[#8F9E4F] text-white hover:bg-[#7A8A42]"
                   : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:bg-[#FAFAF7]"
               )}
             >
@@ -284,8 +284,8 @@ export default function PlaceSettingsPage() {
           </div>
 
           {/* Danger Zone */}
-          <div className="rounded-2xl border border-red-200 bg-red-50/20 p-5">
-            <h2 className="text-base font-semibold font-fraunces text-red-700 mb-3">Danger zone</h2>
+          <div className="rounded-2xl border border-[#C96A5B]/30 bg-[#C96A5B]/5 p-5">
+            <h2 className="text-base font-semibold font-fraunces text-[#C96A5B] mb-3">Danger zone</h2>
             <p className="text-sm text-[#6F7A5A] mb-4">
               Once you delete a place, there is no going back. Please be certain.
             </p>
@@ -293,7 +293,7 @@ export default function PlaceSettingsPage() {
               onClick={handleDelete}
               disabled={deleting}
               className={cx(
-                "w-full rounded-xl border border-red-300 bg-red-500 px-4 py-3 text-sm font-medium text-white hover:bg-red-600 transition",
+                "w-full h-11 rounded-xl border border-[#C96A5B] bg-[#C96A5B] px-5 text-sm font-medium text-white hover:bg-[#B85A4B] transition",
                 deleting && "opacity-50 cursor-not-allowed"
               )}
             >

@@ -11,9 +11,18 @@ import { isUserAdmin } from "../../../../lib/access";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../../../../config/googleMaps";
 import dynamicImport from "next/dynamic";
 import Icon from "../../../../components/Icon";
+import UnifiedGoogleImportField from "../../../../components/UnifiedGoogleImportField";
+import { resolveCity, extractCityFromAddressComponents } from "../../../../lib/cityResolver";
+import { getCitiesWithPlaces, type City } from "../../../../lib/cities";
+import Pill from "../../../../components/Pill";
 
 const AddressAutocomplete = dynamicImport(
   () => import("../../../../components/AddressAutocomplete"),
+  { ssr: false }
+);
+
+const CityAutocomplete = dynamicImport(
+  () => import("../../../../components/CityAutocomplete"),
   { ssr: false }
 );
 
@@ -36,6 +45,8 @@ export default function LocationEditorPage() {
   const [loading, setLoading] = useState(true);
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
+  const [selectedCity, setSelectedCity] = useState<City | null>(null);
+  const [availableCities, setAvailableCities] = useState<City[]>([]);
   const [googlePlaceId, setGooglePlaceId] = useState<string | null>(null);
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
@@ -48,6 +59,72 @@ export default function LocationEditorPage() {
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const autocompleteRef = useRef<any>(null);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+
+  async function handleGoogleImport(data: any) {
+    if (data.formatted_address || data.address) {
+      setAddress(data.formatted_address || data.address);
+    }
+    if (data.city) {
+      setCity(data.city);
+    }
+    if (data.lat || data.latitude) {
+      setLat(data.lat || data.latitude);
+    }
+    if (data.lng || data.longitude) {
+      setLng(data.lng || data.longitude);
+    }
+    if (data.place_id || data.google_place_id) {
+      setGooglePlaceId(data.place_id || data.google_place_id);
+    }
+    // Also save other fields to place
+    if (user && placeId) {
+      // Resolve city to city_id (use state and country if available)
+      let cityId: string | null = null;
+      const cityName = data.city || null;
+      if (cityName) {
+        const cityData = await resolveCity(
+          cityName,
+          data.city_state || null,
+          data.city_country || null,
+          data.lat || data.latitude || null,
+          data.lng || data.longitude || null
+        );
+        if (cityData) {
+          cityId = cityData.city_id;
+          // Update selected city if resolved
+          const { data: cityRecord } = await supabase
+            .from("cities")
+            .select("*")
+            .eq("id", cityData.city_id)
+            .single();
+          if (cityRecord) {
+            setSelectedCity(cityRecord as City);
+          }
+        }
+      }
+
+      const updates: any = {
+        address: data.formatted_address || data.address || null,
+        city: cityName || null, // Keep for backward compatibility
+        city_id: cityId,
+        city_name_cached: cityName || null,
+        google_place_id: data.place_id || data.google_place_id || null,
+        lat: data.lat || data.latitude || null,
+        lng: data.lng || data.longitude || null,
+        link: data.website || null,
+      };
+      await supabase.from("places").update(updates).eq("id", placeId);
+    }
+  }
+
+  // Load available cities
+  useEffect(() => {
+    (async () => {
+      const cities = await getCitiesWithPlaces();
+      setAvailableCities(cities);
+    })();
+  }, []);
 
   // Load place
   useEffect(() => {
@@ -57,7 +134,7 @@ export default function LocationEditorPage() {
       setLoading(true);
       const { data, error: placeError } = await supabase
         .from("places")
-        .select("address, city, google_place_id, lat, lng, created_by")
+        .select("address, city, city_id, city_name_cached, google_place_id, lat, lng, created_by")
         .eq("id", placeId)
         .single();
 
@@ -74,13 +151,16 @@ export default function LocationEditorPage() {
       }
 
       setAddress(data.address || "");
-      setCity(data.city || "");
+      // Use city_name_cached if available, fallback to city
+      const cityName = data.city_name_cached || data.city || "";
+      setCity(cityName);
+      
       setGooglePlaceId(data.google_place_id);
       setLat(data.lat);
       setLng(data.lng);
 
       setOriginalAddress(data.address || "");
-      setOriginalCity(data.city || "");
+      setOriginalCity(cityName);
       setOriginalGooglePlaceId(data.google_place_id);
       setOriginalLat(data.lat);
       setOriginalLng(data.lng);
@@ -88,6 +168,50 @@ export default function LocationEditorPage() {
       setLoading(false);
     })();
   }, [placeId, user, router, access, accessLoading]);
+
+  // Prevent page scroll when interacting with map on mobile
+  useEffect(() => {
+    const container = mapContainerRef.current;
+    if (!container) return;
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        e.preventDefault();
+      }
+    };
+
+    container.addEventListener('touchmove', handleTouchMove, { passive: false });
+    return () => {
+      container.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, []);
+
+  // Set selected city when place data and available cities are loaded
+  useEffect(() => {
+    if (!placeId || availableCities.length === 0) return;
+
+    (async () => {
+      const { data } = await supabase
+        .from("places")
+        .select("city_id, city_name_cached, city")
+        .eq("id", placeId)
+        .single();
+
+      if (data?.city_id) {
+        const foundCity = availableCities.find(c => c.id === data.city_id);
+        if (foundCity) {
+          setSelectedCity(foundCity);
+        }
+      } else if (data?.city_name_cached || data?.city) {
+        // Try to find by name
+        const cityName = data.city_name_cached || data.city;
+        const foundCity = availableCities.find(c => c.name === cityName);
+        if (foundCity) {
+          setSelectedCity(foundCity);
+        }
+      }
+    })();
+  }, [placeId, availableCities]);
 
   const hasChanges =
     address.trim() !== originalAddress.trim() ||
@@ -105,42 +229,70 @@ export default function LocationEditorPage() {
     setError(null);
 
     let finalCity = city.trim();
+    let cityState: string | null = null;
+    let cityCountry: string | null = null;
+
+    // Try to extract city from Google Autocomplete if city is empty
     if (!finalCity && address && autocompleteRef.current) {
       try {
         const place = autocompleteRef.current.getPlace();
         if (place?.address_components) {
-          const cityComponent = place.address_components.find(
-            (comp: any) =>
-              comp.types.includes("locality") || comp.types.includes("administrative_area_level_1")
-          );
-          if (cityComponent) finalCity = cityComponent.long_name;
+          const cityData = extractCityFromAddressComponents(place.address_components);
+          if (cityData.city) {
+            finalCity = cityData.city;
+            cityState = cityData.state;
+            cityCountry = cityData.country;
+          }
         }
       } catch {
         // Ignore
       }
     }
 
-    console.log("Saving location:", { placeId, userId: user.id, address, city: finalCity, lat, lng });
-
-      // Admin can update any place, owner can update their own
-      const currentIsAdmin = isUserAdmin(access);
-      const updateQuery = supabase
-        .from("places")
-        .update({
-          address: address.trim() || null,
-          city: finalCity || null,
-          google_place_id: googlePlaceId,
-          lat: lat !== null && lat !== undefined ? Number(lat) : null,
-          lng: lng !== null && lng !== undefined ? Number(lng) : null,
-        })
-        .eq("id", placeId);
-      
-      // If not admin, add ownership check
-      if (!currentIsAdmin) {
-        updateQuery.eq("created_by", user.id);
+    // Resolve city to city_id
+    let cityId: string | null = null;
+    if (finalCity) {
+      const cityData = await resolveCity(finalCity, cityState, cityCountry, lat, lng);
+      if (cityData) {
+        cityId = cityData.city_id;
+        // Update city name if it was normalized
+        if (cityData.name && cityData.name !== finalCity) {
+          finalCity = cityData.name;
+        }
       }
-      
-      const { data, error: updateError } = await updateQuery.select();
+    }
+
+    console.log("Saving location:", { 
+      placeId, 
+      userId: user.id, 
+      address, 
+      city: finalCity, 
+      city_id: cityId,
+      lat, 
+      lng 
+    });
+
+    // Admin can update any place, owner can update their own
+    const currentIsAdmin = isUserAdmin(access);
+    const updateQuery = supabase
+      .from("places")
+      .update({
+        address: address.trim() || null,
+        city: finalCity || null, // Keep for backward compatibility
+        city_id: cityId,
+        city_name_cached: finalCity || null,
+        google_place_id: googlePlaceId,
+        lat: lat !== null && lat !== undefined ? Number(lat) : null,
+        lng: lng !== null && lng !== undefined ? Number(lng) : null,
+      })
+      .eq("id", placeId);
+    
+    // If not admin, add ownership check
+    if (!currentIsAdmin) {
+      updateQuery.eq("created_by", user.id);
+    }
+    
+    const { data, error: updateError } = await updateQuery.select();
 
     console.log("Update result:", { data, error: updateError });
 
@@ -223,13 +375,22 @@ export default function LocationEditorPage() {
         )}
 
         {/* Map */}
-        <div className="h-[40vh] min-h-[300px] bg-[#ECEEE4] relative">
+        <div 
+          ref={mapContainerRef}
+          className="h-[40vh] min-h-[300px] bg-[#ECEEE4] relative"
+          style={{
+            touchAction: 'none',
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
           {isLoaded && (
             <GoogleMap
               mapContainerStyle={{ width: "100%", height: "100%" }}
               center={mapCenter}
               zoom={mapZoom}
               options={{
+                gestureHandling: "greedy",
                 disableDefaultUI: false,
                 zoomControl: true,
                 zoomControlOptions: {
@@ -264,6 +425,14 @@ export default function LocationEditorPage() {
 
         {/* Address Fields */}
         <div className="px-4 sm:px-6 py-6 space-y-4">
+          {user && placeId && (
+            <UnifiedGoogleImportField
+              userId={user.id}
+              context="place"
+              onImportSuccess={handleGoogleImport}
+              compact={true}
+            />
+          )}
           <div>
             <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Address</label>
             {isLoaded ? (
@@ -275,13 +444,33 @@ export default function LocationEditorPage() {
                   setLat(null);
                   setLng(null);
                 }}
-                onPlaceSelect={(place) => {
+                onPlaceSelect={async (place) => {
                   setAddress(place.address);
                   setGooglePlaceId(place.googlePlaceId);
                   setLat(place.lat);
                   setLng(place.lng);
-                  if (place.city && !city) {
+                  // Auto-fill city from address
+                  if (place.city) {
                     setCity(place.city);
+                    // Try to resolve city to get full city data
+                    const cityData = await resolveCity(
+                      place.city,
+                      null,
+                      null,
+                      place.lat,
+                      place.lng
+                    );
+                    if (cityData) {
+                      // Find matching city from database
+                      const { data: cityRecord } = await supabase
+                        .from("cities")
+                        .select("*")
+                        .eq("id", cityData.city_id)
+                        .single();
+                      if (cityRecord) {
+                        setSelectedCity(cityRecord as City);
+                      }
+                    }
                   }
                 }}
                 onAutocompleteRef={(ref) => {
@@ -300,14 +489,77 @@ export default function LocationEditorPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-[#1F2A1F] mb-2">City</label>
-            <input
-              type="text"
+            <label className="block text-sm font-medium text-[#1F2A1F] mb-2">
+              City
+              <span className="ml-2 text-xs font-normal text-[#6F7A5A]">
+                (select from list or type new)
+              </span>
+            </label>
+            <CityAutocomplete
               value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="City"
-              className="w-full rounded-xl border border-[#ECEEE4] bg-white px-4 py-3 text-sm text-[#1F2A1F] placeholder:text-[#A8B096] outline-none focus:border-[#8F9E4F] transition"
+              onChange={(newCity) => {
+                setCity(newCity);
+                // Clear selected city if user types something different
+                if (selectedCity && newCity !== selectedCity.name) {
+                  setSelectedCity(null);
+                }
+              }}
+              onCitySelect={(city) => {
+                setSelectedCity(city);
+                if (city) {
+                  setCity(city.name);
+                }
+              }}
+              placeholder="Select city or type new"
             />
+            
+            {/* City tags for quick selection */}
+            {availableCities.length > 0 && (
+              <div className="mt-3">
+                <div className="text-xs text-[#6F7A5A] mb-2">Quick select:</div>
+                <div className="flex flex-wrap gap-2">
+                  {availableCities.slice(0, 10).map((cityOption) => (
+                    <Pill
+                      key={cityOption.id}
+                      active={selectedCity?.id === cityOption.id || city === cityOption.name}
+                      onClick={async () => {
+                        setCity(cityOption.name);
+                        setSelectedCity(cityOption);
+                        // Optionally resolve city to ensure it's linked
+                        const cityData = await resolveCity(
+                          cityOption.name,
+                          cityOption.state,
+                          cityOption.country,
+                          cityOption.lat,
+                          cityOption.lng
+                        );
+                        if (cityData) {
+                          const { data: cityRecord } = await supabase
+                            .from("cities")
+                            .select("*")
+                            .eq("id", cityData.city_id)
+                            .single();
+                          if (cityRecord) {
+                            setSelectedCity(cityRecord as City);
+                          }
+                        }
+                      }}
+                      variant="filter"
+                    >
+                      {cityOption.name}
+                      {cityOption.state && (
+                        <span className="ml-1 text-[#A8B096]">({cityOption.state})</span>
+                      )}
+                    </Pill>
+                  ))}
+                  {availableCities.length > 10 && (
+                    <span className="text-xs text-[#6F7A5A] self-center">
+                      +{availableCities.length - 10} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {lat && lng && (

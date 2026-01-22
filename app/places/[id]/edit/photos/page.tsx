@@ -38,8 +38,7 @@ export default function PhotosEditorPage() {
   const params = useParams<{ id: string }>();
   const placeId = params?.id;
 
-  const { loading: accessLoading, user, access } = useUserAccess(true, false);
-  const isAdmin = isUserAdmin(access);
+  const { loading: accessLoading, user } = useUserAccess(true, false);
   const [loading, setLoading] = useState(true);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [originalPhotos, setOriginalPhotos] = useState<Photo[]>([]);
@@ -61,8 +60,7 @@ export default function PhotosEditorPage() {
         .eq("id", placeId)
         .single();
 
-      const isOwner = placeData?.created_by === user.id;
-      if (!placeData || (!isOwner && !isAdmin)) {
+      if (!placeData || placeData.created_by !== user.id) {
         router.push(`/id/${placeId}`);
         return;
       }
@@ -72,21 +70,30 @@ export default function PhotosEditorPage() {
         .from("place_photos")
         .select("url, sort, is_cover")
         .eq("place_id", placeId)
-        .order("sort", { ascending: true });
+        .select("id, url, sort, is_cover")
 
       let loadedPhotos: Photo[] = [];
 
       if (photosData && photosData.length > 0) {
         loadedPhotos = photosData
           .map((p, idx) => ({
-            id: `photo-${idx}`,
+        // Find if any photo is marked as cover
+        const hasCover = photosData.some(photo => photo.is_cover === true);
+        
+        loadedPhotos = photosData
+          .map((p, idx) => ({
+            id: p.id || `photo-${idx}`,
             url: p.url || "",
             sort: p.sort ?? idx,
-            is_cover: p.is_cover ?? idx === 0,
+            // If no cover is set in DB, make first photo the cover
+            is_cover: p.is_cover ?? (!hasCover && idx === 0),
           }))
           .filter((p) => p.url);
-      } else if (placeData.cover_url) {
-        // Fallback to legacy cover_url
+        
+        // Ensure at least one photo is marked as cover
+        if (loadedPhotos.length > 0 && !loadedPhotos.some(p => p.is_cover)) {
+          loadedPhotos[0].is_cover = true;
+        }
         loadedPhotos = [{ id: "photo-0", url: placeData.cover_url, sort: 0, is_cover: true }];
       }
 
@@ -94,9 +101,9 @@ export default function PhotosEditorPage() {
       setOriginalPhotos(loadedPhotos.map((p) => ({ ...p })));
       setLoading(false);
     })();
-  }, [placeId, user, router, access, accessLoading]);
+  }, [placeId, user, router]);
 
-  async function uploadToSupabase(file: File): Promise<{ url: string | null; error: string | null }> {
+  }, [placeId, user, router, access, accessLoading]);
     try {
       const ext = file.name.split(".").pop() || "jpg";
       const path = `places/${generateUUID()}.${ext}`;
@@ -227,9 +234,13 @@ export default function PhotosEditorPage() {
 
     const coverUrl = photoUrls[0];
 
-    console.log("Saving photos:", { placeId, userId: user.id, photoCount: photoUrls.length });
+    // Find the cover photo (photo with is_cover: true)
+    const coverPhoto = photos.find((p) => p.is_cover);
+    const coverUrl = coverPhoto?.url || photoUrls[0]; // Fallback to first photo if no cover set
 
     // Update cover_url in places table (legacy)
+    const { error: coverError } = await supabase
+      .from("places")
     // Admin can update any place, owner can update their own
     const currentIsAdmin = isUserAdmin(access);
     const updateQuery = supabase
@@ -243,8 +254,6 @@ export default function PhotosEditorPage() {
     }
     
     const { error: coverError } = await updateQuery.select();
-
-    if (coverError) {
       console.error("Cover update error:", coverError);
       setSaving(false);
       setError(coverError.message || "Failed to update cover photo");
@@ -266,12 +275,35 @@ export default function PhotosEditorPage() {
 
     // Insert new photos
     const rows = photoUrls.map((url, i) => ({
+    // Insert new photos - preserve cover selection from state
+    // First, ensure only one photo is marked as cover
+    const photosWithSingleCover = photos.map((p, idx) => ({
+      ...p,
+      is_cover: p.is_cover && idx === photos.findIndex(photo => photo.is_cover),
+    }));
+
+    // If no cover is set, make the first one the cover
+    const hasCover = photosWithSingleCover.some(p => p.is_cover);
+    if (!hasCover && photosWithSingleCover.length > 0) {
+      photosWithSingleCover[0].is_cover = true;
+    }
+
+    // Sort photos to put cover first, then by sort order
+    const sortedPhotos = photosWithSingleCover
+      .filter((p) => p.url)
+      .sort((a, b) => {
+        // Cover photo first
+        if (a.is_cover && !b.is_cover) return -1;
+        if (!a.is_cover && b.is_cover) return 1;
+        // Then by sort order
+        return a.sort - b.sort;
+      });
+
+    const rows = sortedPhotos.map((photo, i) => ({
       place_id: placeId,
       user_id: user.id,
-      url,
-      is_cover: i === 0,
-      sort: i,
-    }));
+      url: photo.url,
+      is_cover: photo.is_cover, // Use the cover flag from state
 
     const { data: insertData, error: photosError } = await supabase
       .from("place_photos")
@@ -333,9 +365,7 @@ export default function PhotosEditorPage() {
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Photos</h1>
+              <Icon name="back" size={20} />
             <div className="w-9" />
           </div>
         </div>

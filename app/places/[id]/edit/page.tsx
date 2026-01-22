@@ -53,6 +53,8 @@ import { useUserAccess } from "../../../hooks/useUserAccess";
 import { isUserAdmin } from "../../../lib/access";
 import { CATEGORIES } from "../../../constants";
 import Icon from "../../../components/Icon";
+import UnifiedGoogleImportField from "../../../components/UnifiedGoogleImportField";
+import { resolveCity } from "../../../lib/cityResolver";
 
 type Place = {
   id: string;
@@ -257,16 +259,19 @@ export default function PlaceEditorHub() {
     ? Math.round((requiredSteps.filter((s) => s.completed).length / requiredSteps.length) * 100)
     : 100;
 
+  // Determine if this is a new place (no title or empty title)
+  const isNewPlace = !place || !place.title || place.title.trim().length === 0;
+
   if (accessLoading || loading) {
     return (
       <main className="min-h-screen bg-[#FAFAF7]">
         <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
-          <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
+          <div className="h-8 w-48 bg-[#ECEEE4] rounded animate-pulse" />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-white rounded-2xl p-6 border border-gray-200">
-                <div className="h-6 w-32 bg-gray-200 rounded mb-4 animate-pulse" />
-                <div className="h-10 w-full bg-gray-200 rounded animate-pulse" />
+              <div key={i} className="bg-white rounded-2xl p-6 border border-[#ECEEE4]">
+                <div className="h-6 w-32 bg-[#ECEEE4] rounded mb-4 animate-pulse" />
+                <div className="h-10 w-full bg-[#ECEEE4] rounded animate-pulse" />
               </div>
             ))}
           </div>
@@ -304,13 +309,15 @@ export default function PlaceEditorHub() {
             >
               <Icon name="back" size={20} />
             </button>
-            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Place editor</h1>
+            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">
+              {isNewPlace ? "Create new place" : "Place editor"}
+            </h1>
             <Link
               href={`/places/${placeId}/settings`}
-              className="p-2 -mr-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition"
+              className="px-4 py-2 text-sm font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition"
               aria-label="Settings"
             >
-              <Icon name="settings" size={20} />
+              Settings
             </Link>
           </div>
         </div>
@@ -319,6 +326,76 @@ export default function PlaceEditorHub() {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <div className="space-y-4">
+            {/* Google Import Card */}
+            {user && placeId && (
+              <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
+                <UnifiedGoogleImportField
+                  userId={user.id}
+                  context="place"
+                  onImportSuccess={async (data) => {
+                    // Resolve city to city_id
+                    let cityId: string | null = null;
+                    const cityName = data.city || null;
+                    if (cityName) {
+                      const cityData = await resolveCity(
+                        cityName,
+                        data.city_state || null,
+                        data.city_country || null,
+                        data.lat || null,
+                        data.lng || null
+                      );
+                      if (cityData) {
+                        cityId = cityData.city_id;
+                      }
+                    }
+
+                    // Update place with imported data
+                    const updates: any = {
+                      title: data.name || data.business_name || place?.title || null,
+                      address: data.formatted_address || data.address || place?.address || null,
+                      city: cityName || place?.city || null, // Keep for backward compatibility
+                      city_id: cityId,
+                      city_name_cached: cityName || null,
+                      link: data.website || place?.link || null,
+                      google_place_id: data.place_id || data.google_place_id || place?.google_place_id || null,
+                      lat: data.lat || data.latitude || place?.lat || null,
+                      lng: data.lng || data.longitude || place?.lng || null,
+                    };
+                    // Update categories if types are available
+                    if (data.types && data.types.length > 0) {
+                      const categoryMap: Record<string, string> = {
+                        restaurant: "restaurant",
+                        cafe: "cafe",
+                        bar: "bar",
+                        hotel: "hotel",
+                        museum: "museum",
+                        park: "park",
+                        beach: "beach",
+                        shopping_mall: "shopping",
+                        store: "shopping",
+                      };
+                      const mappedCategories = data.types
+                        .map((type: string) => categoryMap[type])
+                        .filter(Boolean);
+                      if (mappedCategories.length > 0) {
+                        updates.categories = mappedCategories.slice(0, 3);
+                      }
+                    }
+                    await supabase.from("places").update(updates).eq("id", placeId);
+                    // Reload place data
+                    const { data: placeData } = await supabase
+                      .from("places")
+                      .select("*")
+                      .eq("id", placeId)
+                      .single();
+                    if (placeData) {
+                      setPlace(placeData as Place);
+                    }
+                  }}
+                />
+              </div>
+            )}
+
             {/* Required Steps Card */}
             {incompleteSteps.length > 0 && (
               <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition">
@@ -465,13 +542,13 @@ export default function PlaceEditorHub() {
           <div className="flex gap-3">
             <button
               onClick={() => router.back()}
-              className="flex-1 rounded-xl border border-[#ECEEE4] bg-white px-4 py-3 text-sm font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] transition"
+              className="flex-1 h-11 rounded-xl border border-[#ECEEE4] bg-white px-5 text-sm font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] transition"
             >
               Cancel
             </button>
             <Link
               href={`/id/${placeId}`}
-              className="flex-1 rounded-xl bg-[#8F9E4F] text-white px-4 py-3 text-sm font-medium text-center hover:bg-[#556036] transition"
+              className="flex-1 h-11 rounded-xl bg-[#8F9E4F] text-white px-5 text-sm font-medium text-center hover:bg-[#7A8A42] transition flex items-center justify-center"
             >
               Done
             </Link>

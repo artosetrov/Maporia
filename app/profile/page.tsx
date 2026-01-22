@@ -5,12 +5,14 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
+import FiltersModal, { ActiveFilters } from "../components/FiltersModal";
 import { supabase } from "../lib/supabase";
 import Icon from "../components/Icon";
 import PlaceCard from "../components/PlaceCard";
 import FavoriteIcon from "../components/FavoriteIcon";
 import { useUserAccess } from "../hooks/useUserAccess";
 import { isUserAdmin, isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
+import { DEFAULT_CITY } from "../constants";
 
 type Place = {
   id: string;
@@ -25,6 +27,7 @@ type Place = {
   is_premium?: boolean | null;
   premium_only?: boolean | null;
   visibility?: string | null;
+  categories?: string[] | null;
 };
 
 type Review = {
@@ -135,6 +138,125 @@ function ProfileInner() {
   const [reviewsReceived, setReviewsReceived] = useState<Review[]>([]);
   const [reviewsWritten, setReviewsWritten] = useState<Review[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
+
+  // Search and filter state
+  const [searchValue, setSearchValue] = useState("");
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
+    categories: [],
+    sort: null,
+  });
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  // Calculate active filters count
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (activeFilters.categories.length > 0) count += activeFilters.categories.length;
+    if (activeFilters.sort) count += 1;
+    return count;
+  }, [activeFilters]);
+
+  // Filter places based on search and filters
+  const filteredAdded = useMemo(() => {
+    let filtered = [...added];
+
+    // Filter by search
+    if (searchValue.trim()) {
+      const search = searchValue.trim().toLowerCase();
+      filtered = filtered.filter((place) => {
+        const titleMatch = place.title?.toLowerCase().includes(search);
+        const addressMatch = place.address?.toLowerCase().includes(search);
+        const cityMatch = place.city?.toLowerCase().includes(search);
+        return titleMatch || addressMatch || cityMatch;
+      });
+    }
+
+    // Filter by city
+    if (selectedCity && selectedCity !== DEFAULT_CITY) {
+      filtered = filtered.filter((place) => place.city === selectedCity);
+    }
+
+    // Filter by categories
+    if (activeFilters.categories.length > 0) {
+      filtered = filtered.filter((place) => {
+        if (!place.categories || place.categories.length === 0) return false;
+        return activeFilters.categories.some((cat) => place.categories?.includes(cat));
+      });
+    }
+
+    // Sort
+    if (activeFilters.sort) {
+      if (activeFilters.sort === "newest") {
+        filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      } else if (activeFilters.sort === "oldest") {
+        filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      } else if (activeFilters.sort === "title") {
+        filtered.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+      }
+    }
+
+    return filtered;
+  }, [added, searchValue, selectedCity, activeFilters]);
+
+  const filteredSaved = useMemo(() => {
+    let filtered = [...saved];
+
+    // Filter by search
+    if (searchValue.trim()) {
+      const search = searchValue.trim().toLowerCase();
+      filtered = filtered.filter((place) => {
+        const titleMatch = place.title?.toLowerCase().includes(search);
+        const addressMatch = place.address?.toLowerCase().includes(search);
+        const cityMatch = place.city?.toLowerCase().includes(search);
+        return titleMatch || addressMatch || cityMatch;
+      });
+    }
+
+    // Filter by city
+    if (selectedCity && selectedCity !== DEFAULT_CITY) {
+      filtered = filtered.filter((place) => place.city === selectedCity);
+    }
+
+    // Filter by categories
+    if (activeFilters.categories.length > 0) {
+      filtered = filtered.filter((place) => {
+        if (!place.categories || place.categories.length === 0) return false;
+        return activeFilters.categories.some((cat) => place.categories?.includes(cat));
+      });
+    }
+
+    // Sort
+    if (activeFilters.sort) {
+      if (activeFilters.sort === "newest") {
+        filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      } else if (activeFilters.sort === "oldest") {
+        filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      } else if (activeFilters.sort === "title") {
+        filtered.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+      }
+    }
+
+    return filtered;
+  }, [saved, searchValue, selectedCity, activeFilters]);
+
+  // Handle search change - filter locally on profile page
+  function handleSearchChange(value: string) {
+    setSearchValue(value);
+    // Filter is applied via useMemo filteredAdded/filteredSaved
+  }
+
+  // Handle city change - filter locally on profile page
+  function handleCityChange(city: string | null) {
+    setSelectedCity(city);
+    // Filter is applied via useMemo filteredAdded/filteredSaved
+  }
+
+  // Handle filters apply - filter locally on profile page
+  function handleFiltersApply(filters: ActiveFilters) {
+    setActiveFilters(filters);
+    setFilterOpen(false);
+    // Filter is applied via useMemo filteredAdded/filteredSaved
+  }
   
   // Admin access check - use profile data from useEffect
   const isAdmin = userIsAdmin || userRole === 'admin';
@@ -541,13 +663,17 @@ function ProfileInner() {
   return (
     <main className="min-h-screen bg-white">
       <TopBar
-        showSearchBar={false}
-        searchValue={""}
-        onSearchChange={() => {}}
-        selectedCity={null}
-        onCityChange={() => {}}
-        onFiltersClick={() => {}}
-        activeFiltersCount={0}
+        showSearchBar={section === "trips" || section === "added"}
+        searchValue={searchValue}
+        onSearchChange={handleSearchChange}
+        selectedCity={selectedCity}
+        onCityChange={handleCityChange}
+        onFiltersClick={() => {
+          if (section === "trips" || section === "added") {
+            setFilterOpen(true);
+          }
+        }}
+        activeFiltersCount={activeFiltersCount}
         userAvatar={profile?.avatar_url ?? null}
         userDisplayName={displayName}
         userEmail={userEmail}
@@ -558,6 +684,51 @@ function ProfileInner() {
           router.replace("/profile", { scroll: false });
         }}
       />
+
+      {/* Filters Modal */}
+      {(section === "trips" || section === "added") && (
+        <FiltersModal
+          isOpen={filterOpen}
+          onClose={() => setFilterOpen(false)}
+          onApply={handleFiltersApply}
+          appliedFilters={activeFilters}
+          getFilteredCount={async (draftFilters: ActiveFilters) => {
+            try {
+              const placesToFilter = section === "trips" ? saved : added;
+              let filtered = [...placesToFilter];
+
+              // Filter by search
+              if (searchValue.trim()) {
+                const search = searchValue.trim().toLowerCase();
+                filtered = filtered.filter((place) => {
+                  const titleMatch = place.title?.toLowerCase().includes(search);
+                  const addressMatch = place.address?.toLowerCase().includes(search);
+                  const cityMatch = place.city?.toLowerCase().includes(search);
+                  return titleMatch || addressMatch || cityMatch;
+                });
+              }
+
+              // Filter by city
+              if (selectedCity && selectedCity !== DEFAULT_CITY) {
+                filtered = filtered.filter((place) => place.city === selectedCity);
+              }
+
+              // Filter by categories
+              if (draftFilters.categories.length > 0) {
+                filtered = filtered.filter((place) => {
+                  if (!place.categories || place.categories.length === 0) return false;
+                  return draftFilters.categories.some((cat) => place.categories?.includes(cat));
+                });
+              }
+
+              return filtered.length;
+            } catch (error) {
+              console.error("Error in getFilteredCount:", error);
+              return 0;
+            }
+          }}
+        />
+      )}
 
       <div className="pt-[64px] min-[900px]:pt-[80px]">
         {/* Desktop Layout */}
@@ -840,7 +1011,7 @@ function ProfileInner() {
                           </div>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
-                            <Icon name="photo" size={48} className="text-[#A8B096]" />
+                            <Icon name="photo" size={24} className="text-[#A8B096]" />
                           </div>
                         )}
                       </div>
@@ -897,7 +1068,7 @@ function ProfileInner() {
                           </div>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
-                            <Icon name="add" size={48} className="text-[#A8B096]" />
+                            <Icon name="add" size={24} className="text-[#A8B096]" />
                           </div>
                         )}
                       </div>
@@ -1110,6 +1281,30 @@ function AboutSection({
           </div>
         </div>
       )}
+
+      {/* Admin Section */}
+      {isAdmin && (
+        <div className="mt-8 pt-8 border-t border-[#ECEEE4]">
+          <h3 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-4">Admin Tools</h3>
+          <Link
+            href="/brand-guide"
+            className="block rounded-xl border border-[#ECEEE4] bg-white p-5 hover:shadow-md transition group"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4] flex items-center justify-center">
+                  <Icon name="package" size={20} className="text-[#8F9E4F]" />
+                </div>
+                <div>
+                  <div className="font-semibold text-[#1F2A1F]">Brand Guide</div>
+                  <div className="text-sm text-[#6F7A5A]">Complete design system and brand guidelines</div>
+                </div>
+              </div>
+              <Icon name="forward" size={20} className="text-[#A8B096] group-hover:text-[#6F7A5A] transition" />
+            </div>
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
@@ -1153,12 +1348,18 @@ function TripsSection({
   places, 
   loading, 
   userId,
-  onRemoveFavorite 
+  onRemoveFavorite,
+  searchValue,
+  selectedCity,
+  activeFilters
 }: { 
   places: Place[]; 
   loading: boolean;
   userId: string | null;
   onRemoveFavorite: (placeId: string) => void;
+  searchValue?: string;
+  selectedCity?: string | null;
+  activeFilters?: ActiveFilters;
 }) {
   const { access } = useUserAccess();
 
@@ -1205,7 +1406,12 @@ function TripsSection({
   }
 
   if (places.length === 0) {
-    return <div className="text-center py-16 text-[#6F7A5A]">No saved places yet</div>;
+    const hasFilters = searchValue || (selectedCity && selectedCity !== DEFAULT_CITY) || (activeFilters?.categories && activeFilters.categories.length > 0);
+    return (
+      <div className="text-center py-16 text-[#6F7A5A]">
+        {hasFilters ? "No places match your filters" : "No saved places yet"}
+      </div>
+    );
   }
 
   // Calculate locked premium places for Haunted Gem indexing
@@ -1275,7 +1481,19 @@ function TripsSection({
   );
 }
 
-function AddedPlacesSection({ places, loading }: { places: Place[]; loading: boolean }) {
+function AddedPlacesSection({ 
+  places, 
+  loading,
+  searchValue,
+  selectedCity,
+  activeFilters
+}: { 
+  places: Place[]; 
+  loading: boolean;
+  searchValue?: string;
+  selectedCity?: string | null;
+  activeFilters?: ActiveFilters;
+}) {
   if (loading) {
     return (
       <div className="space-y-6">
@@ -1294,10 +1512,13 @@ function AddedPlacesSection({ places, loading }: { places: Place[]; loading: boo
   }
 
   if (places.length === 0) {
+    const hasFilters = searchValue || (selectedCity && selectedCity !== DEFAULT_CITY) || (activeFilters?.categories && activeFilters.categories.length > 0);
     return (
       <div>
         <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Added places</h1>
-        <div className="text-center py-16 text-[#6F7A5A]">You haven't added any places yet</div>
+        <div className="text-center py-16 text-[#6F7A5A]">
+          {hasFilters ? "No places match your filters" : "You haven't added any places yet"}
+        </div>
       </div>
     );
   }
@@ -1694,7 +1915,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
                           </>
                         ) : (
                           <>
-                            <Icon name="check" size={14} />
+                            <Icon name="check" size={16} />
                             <span>Save</span>
                           </>
                         )}
@@ -1705,7 +1926,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
                         className="px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-[#6F7A5A] text-sm font-medium hover:bg-[#FAFAF7] transition disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Cancel changes"
                       >
-                        <Icon name="close" size={14} />
+                        <Icon name="close" size={16} />
                       </button>
                     </>
                   )}

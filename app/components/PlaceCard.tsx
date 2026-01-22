@@ -129,10 +129,18 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
           .order("sort", { ascending: true });
 
         if (error) {
-          console.error("Error loading photos:", error);
+          // Only log meaningful errors (not empty objects)
+          const hasErrorContent = error.message || error.code || error.details || error.hint;
+          const hasKeys = typeof error === 'object' && error !== null && Object.keys(error).length > 0;
+          
+          if (hasErrorContent || (hasKeys && !(error.message === undefined && error.code === undefined))) {
+            console.error("Error loading photos:", error);
+          }
           // Fallback на cover_url
           if (place.cover_url && !cancelled) {
             setPhotos([place.cover_url]);
+          } else if (!cancelled) {
+            setPhotos([]);
           }
           return;
         }
@@ -152,9 +160,21 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
           setCurrentPhotoIndex(0);
         }
       } catch (error) {
-        console.error("Exception loading photos:", error);
+        // Only log meaningful errors (not empty objects)
+        if (error instanceof Error) {
+          console.error("Exception loading photos:", error);
+        } else if (typeof error === 'object' && error !== null) {
+          const err = error as Record<string, unknown>;
+          const hasErrorContent = err.message || err.code || err.details;
+          const hasKeys = Object.keys(err).length > 0;
+          if (hasErrorContent || (hasKeys && !(err.message === undefined && err.code === undefined))) {
+            console.error("Exception loading photos:", error);
+          }
+        }
         if (!cancelled && place.cover_url) {
           setPhotos([place.cover_url]);
+        } else if (!cancelled) {
+          setPhotos([]);
         }
       }
     })();

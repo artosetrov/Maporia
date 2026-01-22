@@ -127,9 +127,9 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
       // Only select fields needed for PlaceCard display
       let query = supabase.from("places").select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility");
 
-      // Фильтр по городу
+      // Фильтр по городу (use city_name_cached if available, fallback to city)
       if (section.city) {
-        query = query.eq("city", section.city);
+        query = query.or(`city_name_cached.eq.${section.city},city.eq.${section.city}`);
       }
 
       // Фильтр по категориям

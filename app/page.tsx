@@ -221,9 +221,9 @@ export default function HomePage() {
           try {
             let countQuery = supabase.from("places").select("*", { count: 'exact', head: true });
 
-            // Фильтрация по городу
+            // Фильтрация по городу (use city_name_cached if available, fallback to city)
             if (selectedCity && selectedCity !== DEFAULT_CITY) {
-              countQuery = countQuery.eq("city", selectedCity);
+              countQuery = countQuery.or(`city_name_cached.eq.${selectedCity},city.eq.${selectedCity}`);
             }
 
             // Фильтрация по категориям

@@ -8,6 +8,7 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import { useUserAccess } from "../../hooks/useUserAccess";
 import Icon from "../../components/Icon";
+import UnifiedGoogleImportField from "../../components/UnifiedGoogleImportField";
 
 type Profile = {
   id: string;
@@ -22,6 +23,44 @@ type Profile = {
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
+}
+
+async function handleGoogleImport(data: any, profile: Profile | null, setProfile: (p: Profile) => void, user: any) {
+  // Update profile with imported data
+  const updates: any = {
+    display_name: data.name || data.business_name || profile?.display_name || null,
+    address: data.formatted_address || data.address || profile?.address || null,
+    website: data.website || profile?.website || null,
+    phone: data.phone || profile?.phone || null,
+    google_place_id: data.place_id || data.google_place_id || null,
+    google_maps_url: data.google_maps_url || null,
+    google_rating: data.rating || null,
+    google_reviews_count: data.reviews_count || data.user_ratings_total || null,
+    google_opening_hours: data.opening_hours || null,
+  };
+
+  // Only update bio if it's currently empty
+  if (!profile?.bio && data.types && data.types.length > 0) {
+    const city = data.city || data.formatted_address?.split(",").pop()?.trim() || "";
+    const category = data.category || data.types[0] || "";
+    updates.bio = `${category}${city ? ` in ${city}` : ""}`;
+  }
+
+  // Save to database
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update(updates)
+    .eq("id", user.id);
+
+  if (updateError) {
+    throw new Error(updateError.message || "Failed to save imported data");
+  }
+
+  // Update local state
+  setProfile({
+    ...profile!,
+    ...updates,
+  });
 }
 
 export default function ProfileEditorHub() {
@@ -146,6 +185,17 @@ export default function ProfileEditorHub() {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <div className="space-y-4">
+            {/* Google Import Card */}
+            {user && (
+              <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
+                <UnifiedGoogleImportField
+                  userId={user.id}
+                  context="profile"
+                  onImportSuccess={(data) => handleGoogleImport(data, profile, setProfile, user)}
+                />
+              </div>
+            )}
+
           {/* Avatar Card */}
           <Link
             href={`/profile/edit/avatar`}

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { useUserAccess } from "../../../hooks/useUserAccess";
 import Icon from "../../../components/Icon";
+import UnifiedGoogleImportField from "../../../components/UnifiedGoogleImportField";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
@@ -20,6 +21,27 @@ export default function NameEditorPage() {
   const [originalDisplayName, setOriginalDisplayName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleGoogleImport(data: any) {
+    if (data.name || data.business_name) {
+      setDisplayName(data.name || data.business_name);
+    }
+    // Also save other fields to profile
+    if (user) {
+      const updates: any = {
+        display_name: data.name || data.business_name || null,
+        address: data.formatted_address || data.address || null,
+        website: data.website || null,
+        phone: data.phone || null,
+        google_place_id: data.place_id || data.google_place_id || null,
+        google_maps_url: data.google_maps_url || null,
+        google_rating: data.rating || null,
+        google_reviews_count: data.reviews_count || data.user_ratings_total || null,
+        google_opening_hours: data.opening_hours || null,
+      };
+      await supabase.from("profiles").update(updates).eq("id", user.id);
+    }
+  }
 
   // Load profile
   useEffect(() => {
@@ -117,6 +139,14 @@ export default function NameEditorPage() {
         )}
 
         <div className="space-y-4">
+          {user && (
+            <UnifiedGoogleImportField
+              userId={user.id}
+              context="profile"
+              onImportSuccess={handleGoogleImport}
+              compact={true}
+            />
+          )}
           <div>
             <label className="block text-sm font-medium text-[#1F2A1F] mb-2">
               Your name

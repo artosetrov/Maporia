@@ -18,6 +18,15 @@ export type Profile = {
   is_admin?: boolean | null;
   created_at?: string;
   updated_at?: string;
+  // Google Maps integration fields
+  google_place_id?: string | null;
+  google_maps_url?: string | null;
+  google_rating?: number | null;
+  google_reviews_count?: number | null;
+  google_opening_hours?: any | null; // JSONB
+  website?: string | null;
+  phone?: string | null;
+  address?: string | null;
 };
 
 /**
@@ -28,7 +37,9 @@ export type Place = {
   title: string;
   description?: string | null;
   address?: string | null;
-  city?: string | null;
+  city?: string | null; // Legacy field, kept for backward compatibility
+  city_id?: string | null; // Foreign key to cities table
+  city_name_cached?: string | null; // Cached city name for display
   country?: string | null;
   cover_url?: string | null;
   photo_urls?: string[] | null;

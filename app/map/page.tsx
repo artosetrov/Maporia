@@ -397,7 +397,9 @@ function MapPageContent() {
     console.log('[MapPage] loadPlaces - appliedCity:', appliedCity, 'DEFAULT_CITY:', DEFAULT_CITY, 'hasExplicitCityInUrl:', hasExplicitCityInUrlState);
     if (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) {
       console.log('[MapPage] Filtering by city:', appliedCity);
-      query = query.eq("city", appliedCity);
+      // Filter by city_name_cached (preferred) or city (backward compatibility)
+      // Use OR filter: city_name_cached matches OR city matches
+      query = query.or(`city_name_cached.eq.${appliedCity},city.eq.${appliedCity}`);
     } else {
       console.log('[MapPage] Not filtering by city (using all cities or default)');
     }
@@ -1248,6 +1250,7 @@ function MapView({
   const isUpdatingFromPropsRef = useRef(false);
   const lastReportedStateRef = useRef<{ center: { lat: number; lng: number }; zoom: number } | null>(null);
   const onMapStateChangeRef = useRef(onMapStateChange);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
   
   // Обновляем ref при изменении callback
   useEffect(() => {
@@ -1295,6 +1298,23 @@ function MapView({
     googleMapsApiKey: getGoogleMapsApiKey(),
     libraries: GOOGLE_MAPS_LIBRARIES,
   });
+
+  // Prevent page scroll when interacting with map on mobile
+  useEffect(() => {
+    const container = mapContainerRef.current;
+    if (!container) return;
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        e.preventDefault();
+      }
+    };
+
+    container.addEventListener('touchmove', handleTouchMove, { passive: false });
+    return () => {
+      container.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, []);
 
   const selectedPlaceId = externalSelectedPlaceId ?? internalSelectedPlaceId;
 
@@ -1526,7 +1546,15 @@ function MapView({
         </div>
       </div>
 
-      <div className="absolute inset-0 w-full h-full">
+      <div 
+        ref={mapContainerRef}
+        className="absolute inset-0 w-full h-full"
+        style={{
+          touchAction: 'none',
+          overscrollBehavior: 'contain',
+          WebkitOverflowScrolling: 'touch',
+        }}
+      >
         <GoogleMap
           mapContainerStyle={{ width: "100%", height: "100%", maxWidth: "100%" }}
           center={center}
@@ -1537,6 +1565,17 @@ function MapView({
             if (!externalSelectedPlaceId) {
               setInternalSelectedPlaceId(null);
             }
+          }}
+          options={{
+            gestureHandling: "greedy",
+            disableDefaultUI: false,
+            zoomControl: true,
+            zoomControlOptions: {
+              position: google.maps.ControlPosition.RIGHT_CENTER,
+            },
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: false,
           }}
           onDragEnd={() => {
             if (isUpdatingFromPropsRef.current) return;
@@ -1577,6 +1616,7 @@ function MapView({
             }
           }}
           options={{
+            gestureHandling: "greedy",
             disableDefaultUI: true,
             zoomControl: false,
             streetViewControl: false,

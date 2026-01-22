@@ -3,6 +3,7 @@
 import { useRef, useEffect } from "react";
 import { Autocomplete, useJsApiLoader } from "@react-google-maps/api";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../config/googleMaps";
+import { extractCityFromAddressComponents } from "../lib/cityResolver";
 
 type AddressAutocompleteProps = {
   value: string;
@@ -78,15 +79,19 @@ export default function AddressAutocomplete({
       console.warn("AddressAutocomplete: No geometry.location in place");
     }
 
+    // Extract city, state, country from address components
+    let city: string | null = null;
+    if (place.address_components) {
+      const cityData = extractCityFromAddressComponents(place.address_components);
+      city = cityData.city;
+    }
+
     const placeData = {
       address: place.formatted_address ?? "",
       googlePlaceId: place.place_id ?? null,
       lat,
       lng,
-      city: place.address_components?.find(
-        (comp: any) =>
-          comp.types.includes("locality") || comp.types.includes("administrative_area_level_1")
-      )?.long_name,
+      city,
     };
     
     console.log("AddressAutocomplete: Calling onPlaceSelect with:", placeData);

@@ -147,7 +147,11 @@ export default function ExplorePage() {
   const [filterOpen, setFilterOpen] = useState(false);
 
   const cities = useMemo(() => {
-    const list = Array.from(new Set(places.map((p) => p.city).filter(Boolean))) as string[];
+    // Get unique cities from places (use city_name_cached if available, fallback to city)
+    const cityNames = places
+      .map((p) => (p as any).city_name_cached || p.city)
+      .filter(Boolean) as string[];
+    const list = Array.from(new Set(cityNames));
     list.sort((a, b) => a.localeCompare(b));
     return list;
   }, [places]);
@@ -208,9 +212,15 @@ export default function ExplorePage() {
 
     let query = supabase.from("places").select("*").order("created_at", { ascending: false });
 
-    // Фильтрация по городам - если выбраны города, проверяем что place.city входит в список
+    // Фильтрация по городам - если выбраны города, проверяем что place.city_name_cached или place.city входит в список
     if (selectedCities.length > 0) {
-      query = query.in("city", selectedCities);
+      // Filter by city_name_cached (preferred) or city (backward compatibility)
+      // Build OR condition for multiple cities
+      const cityFilters = selectedCities.flatMap(city => [
+        `city_name_cached.eq.${city}`,
+        `city.eq.${city}`
+      ]);
+      query = query.or(cityFilters.join(','));
     }
 
     // Фильтрация по категориям - если выбраны категории, проверяем что place.categories содержит хотя бы одну из них
@@ -1384,6 +1394,7 @@ function MapView({
   const isUpdatingFromPropsRef = useRef(false);
   const lastReportedStateRef = useRef<{ center: { lat: number; lng: number }; zoom: number } | null>(null);
   const onMapStateChangeRef = useRef(onMapStateChange);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
   
   // Обновляем ref при изменении callback
   useEffect(() => {
@@ -1476,6 +1487,23 @@ function MapView({
     googleMapsApiKey: getGoogleMapsApiKey(),
     libraries: GOOGLE_MAPS_LIBRARIES,
   });
+
+  // Prevent page scroll when interacting with map on mobile
+  useEffect(() => {
+    const container = mapContainerRef.current;
+    if (!container) return;
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        e.preventDefault();
+      }
+    };
+
+    container.addEventListener('touchmove', handleTouchMove, { passive: false });
+    return () => {
+      container.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, []);
 
   const selectedPlaceId = externalSelectedPlaceId ?? internalSelectedPlaceId;
 
@@ -1695,7 +1723,15 @@ function MapView({
         </div>
       </div>
 
-      <div className="absolute inset-0 w-full h-full">
+      <div 
+        ref={mapContainerRef}
+        className="absolute inset-0 w-full h-full"
+        style={{
+          touchAction: 'none',
+          overscrollBehavior: 'contain',
+          WebkitOverflowScrolling: 'touch',
+        }}
+      >
         <GoogleMap
           mapContainerStyle={{ width: "100%", height: "100%", maxWidth: "100%" }}
           center={center}
@@ -1706,6 +1742,21 @@ function MapView({
             if (!externalSelectedPlaceId) {
               setInternalSelectedPlaceId(null);
             }
+          }}
+          options={{
+            gestureHandling: "greedy",
+            disableDefaultUI: true,
+            zoomControl: false,
+            streetViewControl: false,
+            mapTypeControl: false,
+            fullscreenControl: false,
+            styles: [
+              {
+                featureType: "poi",
+                elementType: "labels",
+                stylers: [{ visibility: "off" }],
+              },
+            ],
           }}
           onDragEnd={() => {
             if (isUpdatingFromPropsRef.current) return;
@@ -1744,20 +1795,6 @@ function MapView({
                 }
               }
             }
-          }}
-          options={{
-            disableDefaultUI: true,
-            zoomControl: false,
-            streetViewControl: false,
-            mapTypeControl: false,
-            fullscreenControl: false,
-            styles: [
-              {
-                featureType: "poi",
-                elementType: "labels",
-                stylers: [{ visibility: "off" }],
-              },
-            ],
           }}
         >
           {placesWithCoords.map((place) => {

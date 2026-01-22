@@ -183,8 +183,10 @@ function ProfileAvatarIcon({
           className="w-full h-full object-cover"
         />
       ) : (
-        <div className={`w-full h-full flex items-center justify-center text-[10px] font-semibold ${
-          active ? "bg-[#8F9E4F] text-white" : "bg-[#DADDD0] text-[#6F7A5A]"
+        <div className={`w-full h-full flex items-center justify-center text-[10px] font-semibold border ${
+          active 
+            ? "bg-[#8F9E4F] text-white border-[#8F9E4F]" 
+            : "bg-[#FAFAF7] text-[#8F9E4F] border-[#ECEEE4]"
         }`}>
           {initials}
         </div>
