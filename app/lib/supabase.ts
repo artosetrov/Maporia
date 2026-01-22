@@ -5,11 +5,21 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl) {
-  throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL environment variable");
+  const error = "Missing NEXT_PUBLIC_SUPABASE_URL environment variable";
+  console.error("❌", error);
+  if (typeof window !== 'undefined') {
+    console.error("This error will prevent the app from working. Please set NEXT_PUBLIC_SUPABASE_URL in your environment variables.");
+  }
+  throw new Error(error);
 }
 
 if (!supabaseAnonKey) {
-  throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable");
+  const error = "Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable";
+  console.error("❌", error);
+  if (typeof window !== 'undefined') {
+    console.error("This error will prevent the app from working. Please set NEXT_PUBLIC_SUPABASE_ANON_KEY in your environment variables.");
+  }
+  throw new Error(error);
 }
 
 // Единый экземпляр Supabase клиента для всего приложения

@@ -252,6 +252,16 @@ export default function ExplorePage() {
     
     if (error) {
       console.error("Error loading places:", error);
+      console.error("Error details:", {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      // Show error to user in production
+      if (process.env.NODE_ENV === 'production') {
+        console.error("Production error - check RLS policies and Supabase connection");
+      }
       setPlaces([]);
     } else if (!data || data.length === 0) {
       console.log("No places found");
@@ -1482,11 +1492,21 @@ function MapView({
       document.removeEventListener('msfullscreenchange', handleFullscreenChange);
     };
   }, []);
-  const { isLoaded } = useJsApiLoader({
+  const { isLoaded, loadError } = useJsApiLoader({
     id: "google-maps-loader",
     googleMapsApiKey: getGoogleMapsApiKey(),
     libraries: GOOGLE_MAPS_LIBRARIES,
   });
+
+  // Log Google Maps loading errors
+  useEffect(() => {
+    if (loadError) {
+      console.error("Google Maps load error:", loadError);
+      if (process.env.NODE_ENV === 'production') {
+        console.error("Production error - check NEXT_PUBLIC_GOOGLE_MAPS_API_KEY and API restrictions");
+      }
+    }
+  }, [loadError]);
 
   // Prevent page scroll when interacting with map on mobile
   useEffect(() => {
@@ -1732,6 +1752,19 @@ function MapView({
           WebkitOverflowScrolling: 'touch',
         }}
       >
+        {!isLoaded && (
+          <div className="absolute inset-0 flex items-center justify-center bg-[#ECEEE4] text-[#6F7A5A]">
+            {loadError ? (
+              <div className="text-center">
+                <div className="text-sm font-medium mb-1">Error loading map</div>
+                <div className="text-xs">Check console for details</div>
+              </div>
+            ) : (
+              <div className="text-sm">Loading map...</div>
+            )}
+          </div>
+        )}
+        {isLoaded && (
         <GoogleMap
           mapContainerStyle={{ width: "100%", height: "100%", maxWidth: "100%" }}
           center={center}
@@ -2054,6 +2087,7 @@ function MapView({
             );
           })}
         </GoogleMap>
+        )}
       </div>
     </div>
   );
