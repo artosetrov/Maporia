@@ -217,6 +217,14 @@ button.gm-ui-hover-effect {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Fix for mobile Chrome viewport changes */
+@supports (bottom: env(safe-area-inset-bottom)) {
+  .bottom-nav-fixed {
+    bottom: env(safe-area-inset-bottom, 0px);
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+  }
+}
+
 /* Home page responsive variables */
 :root {
   /* Mobile S (< 390px) - 2 cards visible + part of 3rd */

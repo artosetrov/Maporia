@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Fraunces, Manrope } from "next/font/google";
 import "./globals.css";
 import GoogleMapsProvider from "./providers/GoogleMapsProvider";
@@ -22,13 +22,20 @@ const fraunces = Fraunces({
 const manrope = Manrope({
   variable: "--font-manrope",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700", "800"],
   display: "swap",
 });
 
 export const metadata: Metadata = {
   title: "Maporia",
   description: "Places locals love",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover", // Enables safe-area-inset support
 };
 
 export default function RootLayout({

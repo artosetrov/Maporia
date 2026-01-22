@@ -29,6 +29,7 @@ export default function SearchBar({
   onFiltersClick,
   activeFiltersCount,
   isMobile = false,
+  onSearchBarClick,
 }: SearchBarProps) {
   const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
   const cityDropdownRef = useRef<HTMLDivElement>(null);
@@ -52,25 +53,29 @@ export default function SearchBar({
   const displayCity = selectedCity || DEFAULT_CITY;
   const isAnywhere = !selectedCity; // Только когда selectedCity === null
 
-  // Mobile: compact version
+  // Mobile: clickable trigger that opens SearchModal
+  // The actual input is inside the modal, not in the topbar
   if (isMobile) {
+    const displayText = searchValue || (selectedCity ? `${selectedCity} · Search by vibe, mood, or place` : "Search by vibe, mood, or place");
+    
     return (
       <button
         onClick={() => {
-          // On mobile, clicking search bar could open full-screen search
-          // For now, just focus the search input
-          onSearchChange("");
+          // On mobile, clicking search bar opens SearchModal
+          if (onSearchBarClick) {
+            onSearchBarClick();
+          }
         }}
         className="w-full h-11 rounded-full border border-[#E5E8DB] bg-white hover:border-[#8F9E4F] transition-colors flex items-center gap-3 px-4 text-left"
       >
         <svg className="w-5 h-5 text-[#A8B096] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
-        <span className="flex-1 text-sm text-[#A8B096]">
-          {searchValue || "Search by vibe, mood, or place"}
+        <span className="flex-1 text-sm text-[#A8B096] truncate">
+          {displayText}
         </span>
         {activeFiltersCount > 0 && (
-          <span className="h-5 w-5 rounded-full bg-[#8F9E4F] text-white text-[10px] font-medium flex items-center justify-center">
+          <span className="h-5 w-5 rounded-full bg-[#8F9E4F] text-white text-[10px] font-medium flex items-center justify-center flex-shrink-0">
             {activeFiltersCount > 9 ? "9+" : activeFiltersCount}
           </span>
         )}

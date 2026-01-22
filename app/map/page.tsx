@@ -63,8 +63,19 @@ function MapPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // На странице /map по умолчанию показываем map view
-  const [view, setView] = useState<"list" | "map">("map");
+  // На странице /map по умолчанию показываем list view (включая мобильные)
+  // Всегда начинаем с "list", независимо от устройства
+  // Это гарантирует, что на мобильных устройствах по умолчанию открывается список, а не карта
+  const [view, setView] = useState<"list" | "map">("list");
+  
+  // Убеждаемся, что view всегда начинается с "list" при первой загрузке
+  useEffect(() => {
+    // При первой загрузке страницы всегда показываем список
+    // Это предотвращает случайное переключение на карту
+    if (view !== "list" && !searchParams?.get('view')) {
+      setView("list");
+    }
+  }, []); // Пустой массив зависимостей - выполняется только при монтировании
   const [hoveredPlaceId, setHoveredPlaceId] = useState<string | null>(null);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);

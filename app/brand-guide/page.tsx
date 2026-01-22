@@ -1131,6 +1131,262 @@ export default function BrandGuidePage() {
             </div>
           </section>
 
+          {/* Search Modal Section */}
+          <section>
+            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Search Modal</h2>
+            
+            <div className="space-y-6">
+              {/* Overview */}
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Overview</h3>
+                <p className="text-sm text-[#6F7A5A] mb-4 leading-relaxed">
+                  The Search Modal is a full-screen, multi-step search experience inspired by Airbnb's search pattern. 
+                  It provides a seamless way for users to find places by location and vibe/category. The modal uses 
+                  a two-step flow: "Where?" (city selection) and "What's your vibe?" (tag/category selection).
+                </p>
+                <div className="space-y-2 text-sm text-[#6F7A5A]">
+                  <p><strong className="text-[#1F2A1F]">Used in:</strong> Home page (triggered by search bar click)</p>
+                  <p><strong className="text-[#1F2A1F]">Mobile:</strong> Full-screen bottom sheet (100dvh with safe-area insets)</p>
+                  <p><strong className="text-[#1F2A1F]">Desktop:</strong> Centered modal (max-width: 2xl, rounded-2xl)</p>
+                </div>
+              </div>
+
+              {/* Design Specifications */}
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Design Specifications</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Container</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Mobile:</strong> Full-screen overlay (fixed inset-0), white background, z-50</li>
+                      <li><strong>Desktop:</strong> Centered modal, max-width: 2xl (672px), rounded-2xl, shadow-xl</li>
+                      <li><strong>Height:</strong> Mobile uses 100dvh with dynamic viewport height for Chrome compatibility</li>
+                      <li><strong>Background:</strong> Mobile: white, Desktop: black/50 overlay</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Header</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Height:</strong> Auto (py-3, px-4)</li>
+                      <li><strong>Border:</strong> Bottom border (#ECEEE4)</li>
+                      <li><strong>Title:</strong> Fraunces, text-2xl, font-semibold, text-[#1F2A1F]</li>
+                      <li><strong>Buttons:</strong> Circular (w-10 h-10), rounded-full, hover:bg-[#FAFAF7]</li>
+                      <li><strong>Back button:</strong> Only visible on Step 2, left side</li>
+                      <li><strong>Close button:</strong> Always visible, right side (X icon)</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Search Input (Step 1)</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Container:</strong> px-6 py-4, border-b (#ECEEE4)</li>
+                      <li><strong>Input field:</strong> Full width, px-4 py-3.5, pl-12 (for icon), rounded-xl</li>
+                      <li><strong>Border:</strong> border (#E5E8DB), focus: border-[#8F9E4F] + ring-2 ring-[#8F9E4F] ring-opacity-20</li>
+                      <li><strong>Background:</strong> White (bg-white)</li>
+                      <li><strong>Placeholder:</strong> text-[#A8B096]</li>
+                      <li><strong>Icon:</strong> Search icon, 20px, absolute left-4, text-[#6F7A5A]</li>
+                      <li><strong>Text:</strong> text-base, text-[#1F2A1F]</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Suggested Destinations (Step 1, Empty Query)</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Layout:</strong> Vertical list, space-y-0, px-6 py-4</li>
+                      <li><strong>Section title:</strong> "Suggested destinations", text-sm font-medium, mb-4</li>
+                      <li><strong>List items:</strong> Full-width buttons, px-0 py-4, border-b (#ECEEE4) between items</li>
+                      <li><strong>Icon container:</strong> 12x12 (48px), rounded-xl, colored backgrounds with themed icons</li>
+                      <li><strong>Text:</strong> Primary text (base, font-medium), secondary text (sm, text-[#6F7A5A])</li>
+                      <li><strong>Hover:</strong> bg-[#FAFAF7] on entire row</li>
+                      <li><strong>Icon colors:</strong> Rotating palette (green, pink, purple, teal, goldenrod, indigo)</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Search Results (Step 1, Typing)</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Layout:</strong> Vertical list, space-y-0, px-6 py-2</li>
+                      <li><strong>Place results:</strong> Show cover images (12x12, rounded-xl) when available, fallback to colored icon</li>
+                      <li><strong>City results:</strong> Colored location icons</li>
+                      <li><strong>Image handling:</strong> object-cover, error fallback to icon</li>
+                      <li><strong>Click behavior:</strong> Places navigate to place page, cities select city</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">City Info Block (Step 2)</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Container:</strong> px-6 pt-6 pb-4, border-b (#ECEEE4)</li>
+                      <li><strong>Icon:</strong> 10x10 (40px), rounded-xl, bg-[#E8F0E8], location icon (#8F9E4F)</li>
+                      <li><strong>City name:</strong> text-base, font-semibold, text-[#1F2A1F]</li>
+                      <li><strong>Count:</strong> text-sm, text-[#6F7A5A], shows "N locations available"</li>
+                      <li><strong>Change button:</strong> text-sm, font-medium, text-[#8F9E4F], underline, hover: text-[#7A8A42]</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Tag Selection (Step 2)</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Layout:</strong> Vertical list, space-y-0, px-6</li>
+                      <li><strong>Section title:</strong> "What's your vibe?", Fraunces, text-lg, font-semibold</li>
+                      <li><strong>Subtitle:</strong> "Pick one or a few — we'll handle the rest.", text-sm, text-[#6F7A5A]</li>
+                      <li><strong>Tag rows:</strong> Full-width buttons, px-0 py-4, border-b (#ECEEE4) between items</li>
+                      <li><strong>Emoji:</strong> 2xl (24px), left side</li>
+                      <li><strong>Label:</strong> text-base, font-medium, text-[#1F2A1F]</li>
+                      <li><strong>Count:</strong> text-sm, text-[#6F7A5A], shows "(N)" next to label when city selected</li>
+                      <li><strong>Selection indicator:</strong> 6x6 (24px) circle, selected: bg-[#8F9E4F] with white checkmark, unselected: border-2 (#ECEEE4)</li>
+                      <li><strong>Hover:</strong> bg-[#FAFAF7] on entire row</li>
+                      <li><strong>Selected state:</strong> bg-[#FAFAF7] on row</li>
+                      <li><strong>Soft limit warning:</strong> Shows when {'>'}3 tags selected, text-xs, text-center, text-[#6F7A5A]</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Sticky Footer</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Container:</strong> border-t (#ECEEE4), px-6 py-4, flex justify-between</li>
+                      <li><strong>Safe area:</strong> paddingBottom: max(16px, env(safe-area-inset-bottom))</li>
+                      <li><strong>Clear button:</strong> Text button, underline, text-sm, font-medium, disabled: text-[#A8B096], no-underline</li>
+                      <li><strong>Primary CTA:</strong> h-11, rounded-xl, bg-[#8F9E4F], text-white, px-5, text-sm, font-medium</li>
+                      <li><strong>CTA states:</strong> Step 1: "Next" (if city selected) or "Search" (if query typed), Step 2: "Search"</li>
+                      <li><strong>Disabled state:</strong> bg-[#DADDD0], cursor-not-allowed</li>
+                      <li><strong>Icons:</strong> 20px, white, flex-shrink-0</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* User Flow */}
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">User Flow & Interactions</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Step 1: "Where?" (City Selection)</h4>
+                    <ol className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-decimal">
+                      <li>User clicks search bar → Modal opens, autofocus on input</li>
+                      <li>Empty state: Shows "Suggested destinations" (Nearby, Current city, Popular cities, Recent searches)</li>
+                      <li>Typing: Shows live search results (cities and places with cover images)</li>
+                      <li>City selection: Clicking a city auto-advances to Step 2</li>
+                      <li>Place selection: Clicking a place navigates to place page and closes modal</li>
+                      <li>Button behavior: "Next" (if city selected) or "Search" (if query typed)</li>
+                    </ol>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Step 2: "What's your vibe?" (Tag Selection)</h4>
+                    <ol className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-decimal">
+                      <li>Shows selected city info block with location count</li>
+                      <li>Displays all categories as selectable rows with emoji, label, and count</li>
+                      <li>User can select multiple tags (soft limit: 3, but not enforced)</li>
+                      <li>Tag counts update dynamically based on selected city</li>
+                      <li>Back button returns to Step 1</li>
+                      <li>"Clear tags" button resets tag selection</li>
+                      <li>"Search" button applies filters and closes modal</li>
+                    </ol>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">State Management</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Recent searches:</strong> Stored in localStorage, includes city, query, and tags</li>
+                      <li><strong>Persistence:</strong> Selections persist when modal closes and reopens</li>
+                      <li><strong>Live counts:</strong> Tag counts and place counts update in real-time as filters change</li>
+                      <li><strong>Debouncing:</strong> Search queries debounced (200ms) to reduce API calls</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Technical Details */}
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Technical Implementation</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Viewport Handling</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Mobile Chrome fix:</strong> Uses window.visualViewport.height for accurate 100dvh</li>
+                      <li><strong>Safe area:</strong> paddingBottom uses env(safe-area-inset-bottom) for notched devices</li>
+                      <li><strong>Dynamic height:</strong> Updates on viewport resize events</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Data Fetching</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>City search:</strong> Filters cities client-side from loaded list</li>
+                      <li><strong>Place search:</strong> Supabase query with ilike for title, description, country</li>
+                      <li><strong>Tag counts:</strong> Separate queries for each category in selected city</li>
+                      <li><strong>Filtered count:</strong> Combines city, tags, and query filters using Supabase overlaps</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Accessibility</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Keyboard:</strong> ESC closes modal, Tab navigation, Enter submits</li>
+                      <li><strong>Focus trap:</strong> Desktop modal traps focus within</li>
+                      <li><strong>ARIA labels:</strong> All buttons have aria-label attributes</li>
+                      <li><strong>Screen readers:</strong> Semantic HTML, proper heading hierarchy</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Brand Colors Used */}
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Brand Colors Used</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#8F9E4F]" />
+                    <div>
+                      <div className="text-sm font-medium text-[#1F2A1F]">Primary Green</div>
+                      <div className="text-xs text-[#6F7A5A]">#8F9E4F</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#1F2A1F]" />
+                    <div>
+                      <div className="text-sm font-medium text-[#1F2A1F]">Primary Text</div>
+                      <div className="text-xs text-[#6F7A5A]">#1F2A1F</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#6F7A5A]" />
+                    <div>
+                      <div className="text-sm font-medium text-[#1F2A1F]">Secondary Text</div>
+                      <div className="text-xs text-[#6F7A5A]">#6F7A5A</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#ECEEE4]" />
+                    <div>
+                      <div className="text-sm font-medium text-[#1F2A1F]">Border Light</div>
+                      <div className="text-xs text-[#6F7A5A]">#ECEEE4</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#FAFAF7]" />
+                    <div>
+                      <div className="text-sm font-medium text-[#1F2A1F]">Warm White</div>
+                      <div className="text-xs text-[#6F7A5A]">#FAFAF7</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#DADDD0]" />
+                    <div>
+                      <div className="text-sm font-medium text-[#1F2A1F]">Disabled</div>
+                      <div className="text-xs text-[#6F7A5A]">#DADDD0</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* Responsive Design Section */}
           <section>
             <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Responsive Design & Breakpoints</h2>

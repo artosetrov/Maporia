@@ -90,7 +90,13 @@ export default function BottomNav() {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 bg-white pb-safe-bottom lg:hidden">
+    <div 
+      className="fixed left-0 right-0 z-40 bg-white lg:hidden"
+      style={{
+        bottom: 'env(safe-area-inset-bottom, 0px)',
+        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
+      }}
+    >
       <div className="mx-auto max-w-md">
         <div className="flex items-center justify-around px-4 pt-2 pb-2">
           {navItems.map((item) => {

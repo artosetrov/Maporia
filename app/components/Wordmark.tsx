@@ -66,9 +66,13 @@ export default function Wordmark({
     </span>
   ) : null;
 
+  // If className contains a text-* class, don't apply sizeClasses
+  const hasTextSizeInClassName = className.match(/\btext-(xs|sm|base|lg|xl|2xl|3xl|4xl|5xl|6xl|7xl|8xl|9xl)\b/);
+  const sizeClass = hasTextSizeInClassName ? "" : sizeClasses[size];
+  
   const wordmarkContent = (
     <span
-      className={`font-manrope font-semibold ${textColor} ${sizeClasses[size]} ${className}`}
+      className={`font-manrope font-extrabold ${textColor} ${sizeClass} ${className}`}
       style={{ letterSpacing: "-0.02em" }}
     >
       Maporia{registeredSymbol}

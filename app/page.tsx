@@ -7,6 +7,7 @@ import TopBar from "./components/TopBar";
 import BottomNav from "./components/BottomNav";
 import HomeSection from "./components/HomeSection";
 import FiltersModal, { ActiveFilters } from "./components/FiltersModal";
+import SearchModal from "./components/SearchModal";
 import { HOME_SECTIONS } from "./constants/homeSections";
 import { supabase } from "./lib/supabase";
 import { DEFAULT_CITY } from "./constants";
@@ -19,11 +20,13 @@ export default function HomePage() {
   // Search and filter state
   const [searchValue, setSearchValue] = useState("");
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
     categories: [],
     sort: null,
   });
   const [filterOpen, setFilterOpen] = useState(false);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
   // User access and profile data
@@ -176,6 +179,33 @@ export default function HomePage() {
     router.push(`/map?${params.toString()}`);
   }
 
+  // Handle search modal submit
+  function handleSearchSubmit(city: string | null, query: string, tags?: string[]) {
+    setSelectedCity(city);
+    setSearchValue(query);
+    if (tags) {
+      setSelectedTags(tags);
+      // Also update activeFilters.categories to match tags
+      setActiveFilters(prev => ({
+        ...prev,
+        categories: tags,
+      }));
+    }
+    const params = new URLSearchParams();
+    if (city && city.trim()) {
+      params.set("city", encodeURIComponent(city.trim()));
+    }
+    if (query.trim()) {
+      params.set("q", encodeURIComponent(query.trim()));
+    }
+    // Use tags if provided, otherwise use activeFilters.categories
+    const categoriesToUse = tags || activeFilters.categories;
+    if (categoriesToUse.length > 0) {
+      params.set("categories", categoriesToUse.map(c => encodeURIComponent(c)).join(','));
+    }
+    router.push(`/map?${params.toString()}`);
+  }
+
   function handleFiltersClick() {
     // Open filters modal
     setFilterOpen(true);
@@ -240,6 +270,18 @@ export default function HomePage() {
         userAvatar={userAvatar}
         userDisplayName={userDisplayName}
         userEmail={userEmail}
+        onSearchBarClick={() => setSearchModalOpen(true)}
+      />
+
+      {/* Search Modal */}
+      <SearchModal
+        isOpen={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+        onCitySelect={handleCityChange}
+        onSearchSubmit={handleSearchSubmit}
+        selectedCity={selectedCity}
+        searchQuery={searchValue}
+        selectedTags={selectedTags}
       />
 
       {/* Filters Modal */}
