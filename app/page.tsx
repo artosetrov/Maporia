@@ -42,26 +42,50 @@ export default function HomePage() {
       return;
     }
 
+    let isUnmounting = false;
+    const capturedUserId = userId;
+
     (async () => {
       try {
         const { data, error } = await supabase
           .from("reactions")
           .select("place_id")
-          .eq("user_id", userId)
+          .eq("user_id", capturedUserId)
           .eq("reaction", "like");
 
+        if (isUnmounting || userId !== capturedUserId) {
+          console.log("[HomePage] Component unmounting or user changed, skipping favorites update");
+          return;
+        }
+
         if (error) {
+          // Check if error is AbortError
+          if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+            console.log("[HomePage] Favorites request aborted (expected on unmount)");
+            return;
+          }
+          
           console.error("Error loading favorites:", error);
           return;
         }
 
-        if (data) {
+        if (!isUnmounting && userId === capturedUserId && data) {
           setFavorites(new Set(data.map((r) => r.place_id)));
         }
-      } catch (err) {
+      } catch (err: any) {
+        // Handle AbortError gracefully
+        if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+          console.log("[HomePage] Favorites request aborted (expected on unmount)");
+          return;
+        }
+        
         console.error("Exception loading favorites:", err);
       }
     })();
+
+    return () => {
+      isUnmounting = true;
+    };
   }, [userId]);
 
   // No need for separate loadUser - useUserAccess handles it

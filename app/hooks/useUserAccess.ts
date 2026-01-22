@@ -29,98 +29,128 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
   });
 
   useEffect(() => {
-    let mounted = true;
     let isUnmounting = false;
+    let requestId = Date.now();
 
     (async () => {
-      setLoading(true);
-
-      // Get session
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      const session = sessionData.session;
-
-      // Only check mounted, don't abort on dependency changes
-      if (isUnmounting) {
-        console.log("[useUserAccess] Component unmounting, skipping state update");
-        return;
+      const currentRequestId = requestId;
+      
+      // Don't set loading if this is not the latest request
+      if (currentRequestId === requestId) {
+        setLoading(true);
       }
 
-      if (sessionError) {
-        console.error("Error getting session:", sessionError);
-        if (!isUnmounting) {
-          setLoading(false);
-        }
-        return;
-      }
+      try {
+        // Get session
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        const session = sessionData.session;
 
-      if (!session?.user) {
-        if (requireAuth && !isUnmounting) {
-          router.replace("/auth");
+        // Check if this request is still valid
+        if (isUnmounting || currentRequestId !== requestId) {
+          console.log("[useUserAccess] Request superseded or component unmounting, skipping state update");
           return;
         }
-        if (!isUnmounting) {
-          setUser(null);
-          setProfile(null);
-          setAccess({ 
-            role: "guest", 
-            hasPremium: false, 
-            isAdmin: false 
-          });
+
+        if (sessionError) {
+          // Check if error is AbortError
+          if (sessionError.message?.includes('abort') || sessionError.name === 'AbortError') {
+            console.log("[useUserAccess] Session request aborted (expected on unmount)");
+            return;
+          }
+          
+          console.error("Error getting session:", sessionError);
+          if (!isUnmounting && currentRequestId === requestId) {
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (!session?.user) {
+          if (requireAuth && !isUnmounting && currentRequestId === requestId) {
+            router.replace("/auth");
+            return;
+          }
+          if (!isUnmounting && currentRequestId === requestId) {
+            setUser(null);
+            setProfile(null);
+            setAccess({ 
+              role: "guest", 
+              hasPremium: false, 
+              isAdmin: false 
+            });
+            setLoading(false);
+          }
+          return;
+        }
+
+        const currentUser = {
+          id: session.user.id,
+          email: session.user.email ?? null,
+        };
+        
+        if (!isUnmounting && currentRequestId === requestId) {
+          setUser(currentUser);
+        }
+
+        // Load profile with role and subscription fields
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("*, is_admin, subscription_status, role")
+          .eq("id", currentUser.id)
+          .maybeSingle();
+
+        // Check if this request is still valid
+        if (isUnmounting || currentRequestId !== requestId) {
+          console.log("[useUserAccess] Request superseded or component unmounting after profile fetch, skipping state update");
+          return;
+        }
+
+        if (profileError) {
+          // Check if error is AbortError
+          if (profileError.message?.includes('abort') || profileError.name === 'AbortError') {
+            console.log("[useUserAccess] Profile request aborted (expected on unmount)");
+            return;
+          }
+          
+          console.error("Error loading profile:", profileError);
+        }
+
+        const currentProfile = profileData ?? null;
+        
+        if (!isUnmounting && currentRequestId === requestId) {
+          setProfile(currentProfile);
+
+          // Check if profile is required
+          if (requireProfile && !currentProfile) {
+            // TODO: Redirect to profile setup if route exists
+            // router.replace("/profile/setup");
+            console.warn("Profile required but not found");
+          }
+
+          // Calculate access based on role system
+          const userAccess = getUserAccess(currentProfile);
+          setAccess(userAccess);
+
           setLoading(false);
         }
-        return;
-      }
-
-      const currentUser = {
-        id: session.user.id,
-        email: session.user.email ?? null,
-      };
-      
-      if (!isUnmounting) {
-        setUser(currentUser);
-      }
-
-      // Load profile with role and subscription fields
-      const { data: profileData, error: profileError } = await supabase
-        .from("profiles")
-        .select("*, is_admin, subscription_status, role")
-        .eq("id", currentUser.id)
-        .maybeSingle();
-
-      // Only check unmounting, not mounted flag (to avoid aborting on dependency changes)
-      if (isUnmounting) {
-        console.log("[useUserAccess] Component unmounting after profile fetch, skipping state update");
-        return;
-      }
-
-      if (profileError) {
-        console.error("Error loading profile:", profileError);
-      }
-
-      const currentProfile = profileData ?? null;
-      
-      if (!isUnmounting) {
-        setProfile(currentProfile);
-
-        // Check if profile is required
-        if (requireProfile && !currentProfile) {
-          // TODO: Redirect to profile setup if route exists
-          // router.replace("/profile/setup");
-          console.warn("Profile required but not found");
+      } catch (err: any) {
+        // Handle AbortError gracefully
+        if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+          console.log("[useUserAccess] Request aborted (expected on unmount)");
+          return;
         }
-
-        // Calculate access based on role system
-        const userAccess = getUserAccess(currentProfile);
-        setAccess(userAccess);
-
-        setLoading(false);
+        
+        console.error("[useUserAccess] Exception:", err);
+        if (!isUnmounting && currentRequestId === requestId) {
+          setLoading(false);
+        }
       }
     })();
 
     return () => {
       // Only mark as unmounting on actual unmount, not on dependency change
       isUnmounting = true;
-      mounted = false;
+      requestId = Date.now(); // Invalidate current request
       if (process.env.NODE_ENV === 'development') {
         console.log("[useUserAccess] Cleanup: component unmounting");
       }
