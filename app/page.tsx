@@ -65,14 +65,12 @@ export default function HomePage() {
           .eq("reaction", "like");
 
         if (isUnmounting || userId !== capturedUserId) {
-          console.log("[HomePage] Component unmounting or user changed, skipping favorites update");
           return;
         }
 
         if (error) {
-          // Check if error is AbortError
+          // Silently ignore AbortError
           if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
-            console.log("[HomePage] Favorites request aborted (expected on unmount)");
             return;
           }
           
@@ -84,9 +82,8 @@ export default function HomePage() {
           setFavorites(new Set(data.map((r) => r.place_id)));
         }
       } catch (err: any) {
-        // Handle AbortError gracefully
+        // Silently ignore AbortError
         if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-          console.log("[HomePage] Favorites request aborted (expected on unmount)");
           return;
         }
         

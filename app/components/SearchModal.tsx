@@ -36,15 +36,13 @@ export default function SearchModal({
         const citiesData = await getCitiesWithPlaces();
         
         if (isUnmounting) {
-          console.log("[SearchModal] Component unmounting, skipping cities update");
           return;
         }
         
         setCities(citiesData.map(c => ({ id: c.id, name: c.name })));
       } catch (err: any) {
-        // Handle AbortError gracefully
+        // Silently ignore AbortError
         if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-          console.log("[SearchModal] Cities request aborted (expected on unmount)");
           return;
         }
         console.error("Error loading cities:", err);

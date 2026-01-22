@@ -479,16 +479,14 @@ function MapPageContent() {
       
       // Check if this is still the current request (latest only pattern)
       if (!loadPlacesRef.current || loadPlacesRef.current.requestId !== requestId) {
-        console.log("[loadPlaces] Request superseded by newer request, ignoring result");
         return;
       }
       
       console.log("places data", data, error);
       
       if (error) {
-        // Check if error is AbortError
+        // Silently ignore AbortError
         if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
-          console.log("[loadPlaces] Request was aborted");
           return;
         }
         
@@ -583,9 +581,8 @@ function MapPageContent() {
         setLoading(false);
       }
     } catch (err: any) {
-      // Handle AbortError gracefully
+      // Silently ignore AbortError
       if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-        console.log("[loadPlaces] Request aborted");
         return;
       }
       console.error("[loadPlaces] Exception:", err);
@@ -599,7 +596,15 @@ function MapPageContent() {
 
   useEffect(() => {
     (async () => {
-      await loadUser();
+      try {
+        await loadUser();
+      } catch (err: any) {
+        // Silently ignore AbortError
+        if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+          return;
+        }
+        console.error("[MapPage] Error loading user:", err);
+      }
     })();
   }, []);
 
@@ -631,14 +636,12 @@ function MapPageContent() {
 
         // Only check unmounting, not cancelled (to avoid aborting on dependency changes)
         if (isUnmounting || userId !== capturedUserId) {
-          console.log("[MapPage] Component unmounting or user changed, skipping favorites update");
           return;
         }
 
         if (error) {
-          // Check if error is AbortError
+          // Silently ignore AbortError
           if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
-            console.log("[MapPage] Favorites request aborted (expected on unmount)");
             return;
           }
           
@@ -650,9 +653,8 @@ function MapPageContent() {
           setFavorites(new Set(data.map((r) => r.place_id)));
         }
       } catch (err: any) {
-        // Handle AbortError gracefully
+        // Silently ignore AbortError
         if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-          console.log("[MapPage] Favorites request aborted (expected on unmount)");
           return;
         }
         

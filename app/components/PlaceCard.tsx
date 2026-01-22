@@ -90,14 +90,12 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
         
         // Only check unmounting, not cancelled (to avoid aborting on dependency changes)
         if (isUnmounting || loadedUserIdRef.current !== capturedUserId) {
-          console.log("[PlaceCard] Component unmounting or user changed, skipping profile update");
           return;
         }
         
         if (error) {
-          // Check if error is AbortError
+          // Silently ignore AbortError
           if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
-            console.log("[PlaceCard] Profile request aborted (expected on unmount)");
             return;
           }
           
@@ -116,9 +114,8 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
           });
         }
       } catch (error) {
-        // Handle AbortError gracefully
+        // Silently ignore AbortError
         if (error instanceof Error && (error.name === 'AbortError' || error.message?.includes('abort'))) {
-          console.log("[PlaceCard] Profile request aborted (expected on unmount)");
           return;
         }
         
@@ -132,9 +129,6 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
     return () => {
       // Only mark as unmounting on actual unmount, not on dependency change
       isUnmounting = true;
-      if (process.env.NODE_ENV === 'development') {
-        console.log("[PlaceCard] Cleanup: component unmounting for user", capturedUserId);
-      }
     };
   }, [place.created_by]);
 
@@ -153,14 +147,12 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
 
         // Only check unmounting, not cancelled (to avoid aborting on dependency changes)
         if (isUnmounting || place.id !== placeId) {
-          console.log("[PlaceCard] Component unmounting or place changed, skipping state update");
           return;
         }
 
         if (error) {
-          // Check if error is AbortError
+          // Silently ignore AbortError
           if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
-            console.log("[PlaceCard] Request aborted (expected on unmount)");
             return;
           }
           
@@ -195,9 +187,8 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
           setCurrentPhotoIndex(0);
         }
       } catch (error) {
-        // Handle AbortError gracefully
+        // Silently ignore AbortError
         if (error instanceof Error && (error.name === 'AbortError' || error.message?.includes('abort'))) {
-          console.log("[PlaceCard] Request aborted (expected on unmount)");
           return;
         }
         
@@ -223,9 +214,6 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
     return () => {
       // Only mark as unmounting on actual unmount, not on dependency change
       isUnmounting = true;
-      if (process.env.NODE_ENV === 'development') {
-        console.log("[PlaceCard] Cleanup: component unmounting for place", placeId);
-      }
     };
   }, [place.id, place.cover_url]);
 

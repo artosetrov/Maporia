@@ -47,14 +47,12 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
 
         // Check if this request is still valid
         if (isUnmounting || currentRequestId !== requestId) {
-          console.log("[useUserAccess] Request superseded or component unmounting, skipping state update");
           return;
         }
 
         if (sessionError) {
-          // Check if error is AbortError
+          // Silently ignore AbortError
           if (sessionError.message?.includes('abort') || sessionError.name === 'AbortError') {
-            console.log("[useUserAccess] Session request aborted (expected on unmount)");
             return;
           }
           
@@ -101,14 +99,12 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
 
         // Check if this request is still valid
         if (isUnmounting || currentRequestId !== requestId) {
-          console.log("[useUserAccess] Request superseded or component unmounting after profile fetch, skipping state update");
           return;
         }
 
         if (profileError) {
-          // Check if error is AbortError
+          // Silently ignore AbortError
           if (profileError.message?.includes('abort') || profileError.name === 'AbortError') {
-            console.log("[useUserAccess] Profile request aborted (expected on unmount)");
             return;
           }
           
@@ -134,9 +130,8 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
           setLoading(false);
         }
       } catch (err: any) {
-        // Handle AbortError gracefully
+        // Silently ignore AbortError
         if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-          console.log("[useUserAccess] Request aborted (expected on unmount)");
           return;
         }
         
@@ -151,9 +146,6 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
       // Only mark as unmounting on actual unmount, not on dependency change
       isUnmounting = true;
       requestId = Date.now(); // Invalidate current request
-      if (process.env.NODE_ENV === 'development') {
-        console.log("[useUserAccess] Cleanup: component unmounting");
-      }
     };
     // Remove router from dependencies to prevent re-runs on navigation
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -253,17 +253,14 @@ export default function ExplorePage() {
       const { data, error } = await query;
       
       // Check if this is still the latest request (prevent race conditions)
-      if (requestId !== Date.now() - 1 && requestId < Date.now() - 1000) {
-        console.log("[loadPlaces] Request superseded by newer request, ignoring result");
-        return;
-      }
+      // Note: This check is simplified - we rely on requestId comparison in the ref pattern
+      // The Date.now() check was unreliable, so we remove it
       
       console.log("places data", data, error);
       
       if (error) {
-        // Check if error is AbortError
+        // Silently ignore AbortError
         if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
-          console.warn("[loadPlaces] Request was aborted, this is expected on component unmount");
           return;
         }
         
@@ -306,9 +303,8 @@ export default function ExplorePage() {
         setPlaces(placesWithCoords as Place[]);
       }
     } catch (err: any) {
-      // Handle AbortError gracefully
+      // Silently ignore AbortError
       if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-        console.log("[loadPlaces] Request aborted (expected on unmount)");
         return;
       }
       console.error("[loadPlaces] Exception:", err);
@@ -321,8 +317,16 @@ export default function ExplorePage() {
 
   useEffect(() => {
     (async () => {
-      await loadUser();
-      await loadPlaces();
+      try {
+        await loadUser();
+        await loadPlaces();
+      } catch (err: any) {
+        // Silently ignore AbortError
+        if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+          return;
+        }
+        console.error("[ExplorePage] Error in initial load:", err);
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -347,14 +351,12 @@ export default function ExplorePage() {
 
         // Only check unmounting, not cancelled (to avoid aborting on dependency changes)
         if (isUnmounting || userId !== capturedUserId) {
-          console.log("[ExplorePage] Component unmounting or user changed, skipping favorites update");
           return;
         }
 
         if (error) {
-          // Check if error is AbortError
+          // Silently ignore AbortError
           if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
-            console.log("[ExplorePage] Favorites request aborted (expected on unmount)");
             return;
           }
           
@@ -366,9 +368,8 @@ export default function ExplorePage() {
           setFavorites(new Set(data.map((r) => r.place_id)));
         }
       } catch (err: any) {
-        // Handle AbortError gracefully
+        // Silently ignore AbortError
         if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-          console.log("[ExplorePage] Favorites request aborted (expected on unmount)");
           return;
         }
         

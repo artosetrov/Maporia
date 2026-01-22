@@ -64,7 +64,6 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
 
     async function loadPlaces() {
       if (!alive) {
-        console.log("[HomeSection] Component unmounting, skipping loadPlaces");
         return;
       }
 
@@ -95,14 +94,12 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
 
             // Check if this request is still current
             if (!alive || currentRequestId !== requestId) {
-              console.log("[HomeSection] Request superseded or component unmounting");
               return;
             }
 
             if (error) {
-              // Check if error is AbortError
+              // Silently ignore AbortError
               if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
-                console.log("[HomeSection] Recently viewed request aborted");
                 return;
               }
 
@@ -155,9 +152,8 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
               }
             }
           } catch (err: any) {
-            // Handle AbortError gracefully
+            // Silently ignore AbortError
             if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-              console.log("[HomeSection] Recently viewed request aborted");
               return;
             }
             // Handle unexpected errors
@@ -217,14 +213,12 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
 
         // Check if this request is still current
         if (!alive || currentRequestId !== requestId) {
-          console.log("[HomeSection] Request superseded or component unmounting");
           return;
         }
 
         if (error) {
-          // Check if error is AbortError
+          // Silently ignore AbortError
           if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
-            console.log("[HomeSection] Section request aborted:", section.title);
             return;
           }
 
@@ -271,9 +265,8 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
           }
         }
       } catch (err: any) {
-        // Handle AbortError gracefully
+        // Silently ignore AbortError
         if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-          console.log("[HomeSection] Section request aborted:", section.title);
           return;
         }
         // Handle unexpected errors
@@ -287,9 +280,8 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
         setLoading(false);
       }
       } catch (err: any) {
-        // Handle AbortError gracefully
+        // Silently ignore AbortError
         if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-          console.log("[HomeSection] Critical request aborted:", section.title);
           return;
         }
         // Top-level error handler - ensure loading state is always reset
@@ -306,9 +298,6 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
     return () => {
       alive = false;
       currentRequestId = Date.now(); // Invalidate current request
-      if (process.env.NODE_ENV === 'development') {
-        console.log("[HomeSection] Cleanup: component unmounting for section", section.title);
-      }
     };
   }, [requestKey]); // Use stable request key instead of individual dependencies
 
@@ -345,14 +334,12 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
               .limit(10);
 
             if (!alive || currentRequestId !== requestId) {
-              console.log("[HomeSection] Request superseded or component unmounting");
               return;
             }
 
             if (error) {
-              // Check if error is AbortError
+              // Silently ignore AbortError
               if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
-                console.log("[HomeSection] Visibility reload request aborted (expected on unmount)");
                 return;
               }
 
@@ -403,9 +390,8 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
               setPlaces(orderedPlaces);
             }
           } catch (err: any) {
-            // Handle AbortError gracefully
+            // Silently ignore AbortError
             if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-              console.log("[HomeSection] Visibility reload request aborted");
               return;
             }
             // Handle unexpected errors

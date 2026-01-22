@@ -50,9 +50,8 @@ export async function getCitiesWithPlaces(): Promise<City[]> {
       .not("city_id", "is", null);
 
     if (placesError) {
-      // Check if error is AbortError
+      // Silently ignore AbortError
       if (placesError.message?.includes('abort') || placesError.name === 'AbortError' || (placesError as any).code === 'ECONNABORTED') {
-        console.log("[getCitiesWithPlaces] Places request aborted (expected on unmount)");
         return [];
       }
       console.error("Error loading places for cities:", placesError);
@@ -75,9 +74,8 @@ export async function getCitiesWithPlaces(): Promise<City[]> {
       .order("name", { ascending: true });
 
     if (citiesError) {
-      // Check if error is AbortError
+      // Silently ignore AbortError
       if (citiesError.message?.includes('abort') || citiesError.name === 'AbortError' || (citiesError as any).code === 'ECONNABORTED') {
-        console.log("[getCitiesWithPlaces] Cities request aborted (expected on unmount)");
         return [];
       }
       console.error("Error loading cities:", citiesError);
@@ -86,9 +84,8 @@ export async function getCitiesWithPlaces(): Promise<City[]> {
 
     return (citiesData || []) as City[];
   } catch (error: any) {
-    // Handle AbortError gracefully
+    // Silently ignore AbortError
     if (error?.name === 'AbortError' || error?.message?.includes('abort')) {
-      console.log("[getCitiesWithPlaces] Request aborted (expected on unmount)");
       return [];
     }
     console.error("Exception loading cities with places:", error);
