@@ -25,12 +25,39 @@ export default function SearchModal({
 
   // Load cities from database
   useEffect(() => {
+    let isUnmounting = false;
+
     (async () => {
+      if (isUnmounting) return;
+      
       setCitiesLoading(true);
-      const citiesData = await getCitiesWithPlaces();
-      setCities(citiesData.map(c => ({ id: c.id, name: c.name })));
-      setCitiesLoading(false);
+      
+      try {
+        const citiesData = await getCitiesWithPlaces();
+        
+        if (isUnmounting) {
+          console.log("[SearchModal] Component unmounting, skipping cities update");
+          return;
+        }
+        
+        setCities(citiesData.map(c => ({ id: c.id, name: c.name })));
+      } catch (err: any) {
+        // Handle AbortError gracefully
+        if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+          console.log("[SearchModal] Cities request aborted (expected on unmount)");
+          return;
+        }
+        console.error("Error loading cities:", err);
+      } finally {
+        if (!isUnmounting) {
+          setCitiesLoading(false);
+        }
+      }
     })();
+
+    return () => {
+      isUnmounting = true;
+    };
   }, []);
 
   // Load recent cities from localStorage

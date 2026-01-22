@@ -46,7 +46,15 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let isUnmounting = false;
+    const sectionId = `${section.title}-${section.city || ''}-${section.tag || ''}`; // Unique ID for this section load
+
     async function loadPlaces() {
+      if (isUnmounting) {
+        console.log("[HomeSection] Component unmounting, skipping loadPlaces");
+        return;
+      }
+
       setLoading(true);
       
       try {
@@ -55,8 +63,10 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
           const recentlyViewedIds = getRecentlyViewedPlaceIds();
           
           if (recentlyViewedIds.length === 0) {
-            setPlaces([]);
-            setLoading(false);
+            if (!isUnmounting) {
+              setPlaces([]);
+              setLoading(false);
+            }
             return;
           }
 
@@ -69,7 +79,18 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
               .in("id", recentlyViewedIds)
               .limit(10);
 
+            if (isUnmounting) {
+              console.log("[HomeSection] Component unmounting after recently viewed fetch");
+              return;
+            }
+
             if (error) {
+              // Check if error is AbortError
+              if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+                console.log("[HomeSection] Recently viewed request aborted (expected on unmount)");
+                return;
+              }
+
               // Completely skip logging if error is empty
               // First check if error object is empty by stringifying
               let isEmpty = false;
@@ -104,23 +125,36 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
                 }
               }
               // Silently handle empty errors - don't log at all
-              setPlaces([]);
+              if (!isUnmounting) {
+                setPlaces([]);
+              }
             } else {
-              // Sort by the order in recentlyViewedIds (most recent first)
-              const placesMap = new Map((data || []).map((p: any) => [p.id, p]));
-              const orderedPlaces = recentlyViewedIds
-                .map(id => placesMap.get(id))
-                .filter((p): p is Place => p !== undefined)
-                .slice(0, 10);
-              setPlaces(orderedPlaces);
+              if (!isUnmounting) {
+                // Sort by the order in recentlyViewedIds (most recent first)
+                const placesMap = new Map((data || []).map((p: any) => [p.id, p]));
+                const orderedPlaces = recentlyViewedIds
+                  .map(id => placesMap.get(id))
+                  .filter((p): p is Place => p !== undefined)
+                  .slice(0, 10);
+                setPlaces(orderedPlaces);
+              }
             }
-          } catch (err) {
+          } catch (err: any) {
+            // Handle AbortError gracefully
+            if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+              console.log("[HomeSection] Recently viewed request aborted (expected on unmount)");
+              return;
+            }
             // Handle unexpected errors
             console.error("Unexpected error loading recently viewed places:", err instanceof Error ? err.message : String(err));
-            setPlaces([]);
+            if (!isUnmounting) {
+              setPlaces([]);
+            }
           }
           
-          setLoading(false);
+          if (!isUnmounting) {
+            setLoading(false);
+          }
           return;
         }
       
@@ -166,7 +200,18 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
       try {
         const { data, error } = await query;
 
+        if (isUnmounting) {
+          console.log("[HomeSection] Component unmounting after section fetch");
+          return;
+        }
+
         if (error) {
+          // Check if error is AbortError
+          if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+            console.log("[HomeSection] Section request aborted (expected on unmount):", section.title);
+            return;
+          }
+
           // Completely skip logging if error is empty
           // First check if error object is empty by stringifying
           let isEmpty = false;
@@ -201,26 +246,53 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
             }
           }
           // Silently handle empty errors - don't log at all
-          setPlaces([]);
+          if (!isUnmounting) {
+            setPlaces([]);
+          }
         } else {
-          setPlaces((data || []) as Place[]);
+          if (!isUnmounting) {
+            setPlaces((data || []) as Place[]);
+          }
         }
-      } catch (err) {
+      } catch (err: any) {
+        // Handle AbortError gracefully
+        if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+          console.log("[HomeSection] Section request aborted (expected on unmount):", section.title);
+          return;
+        }
         // Handle unexpected errors
         console.error("Unexpected error loading places for section:", section.title, err instanceof Error ? err.message : String(err));
-        setPlaces([]);
+        if (!isUnmounting) {
+          setPlaces([]);
+        }
       }
       
-      setLoading(false);
-      } catch (err) {
+      if (!isUnmounting) {
+        setLoading(false);
+      }
+      } catch (err: any) {
+        // Handle AbortError gracefully
+        if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+          console.log("[HomeSection] Critical request aborted (expected on unmount):", section.title);
+          return;
+        }
         // Top-level error handler - ensure loading state is always reset
         console.error("Critical error in loadPlaces:", err instanceof Error ? err.message : String(err));
-        setPlaces([]);
-        setLoading(false);
+        if (!isUnmounting) {
+          setPlaces([]);
+          setLoading(false);
+        }
       }
     }
 
     loadPlaces();
+
+    return () => {
+      isUnmounting = true;
+      if (process.env.NODE_ENV === 'development') {
+        console.log("[HomeSection] Cleanup: component unmounting for section", section.title);
+      }
+    };
   }, [
     section.title,
     section.city || '',
@@ -235,15 +307,21 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
   useEffect(() => {
     if (!section.recentlyViewed) return;
 
+    let isUnmounting = false;
+
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && !isUnmounting) {
         // Reload places when page becomes visible
         async function reloadPlaces() {
+          if (isUnmounting) return;
+          
           try {
             const recentlyViewedIds = getRecentlyViewedPlaceIds();
             
             if (recentlyViewedIds.length === 0) {
-              setPlaces([]);
+              if (!isUnmounting) {
+                setPlaces([]);
+              }
               return;
             }
 
@@ -253,7 +331,18 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
               .in("id", recentlyViewedIds)
               .limit(10);
 
+            if (isUnmounting) {
+              console.log("[HomeSection] Component unmounting after visibility reload");
+              return;
+            }
+
             if (error) {
+              // Check if error is AbortError
+              if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+                console.log("[HomeSection] Visibility reload request aborted (expected on unmount)");
+                return;
+              }
+
               // Completely skip logging if error is empty
               // First check if error object is empty by stringifying
               let isEmpty = false;
@@ -292,7 +381,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
               return;
             }
 
-            if (data) {
+            if (!isUnmounting && data) {
               const placesMap = new Map((data || []).map((p: any) => [p.id, p]));
               const orderedPlaces = recentlyViewedIds
                 .map(id => placesMap.get(id))
@@ -300,7 +389,12 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
                 .slice(0, 10);
               setPlaces(orderedPlaces);
             }
-          } catch (err) {
+          } catch (err: any) {
+            // Handle AbortError gracefully
+            if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+              console.log("[HomeSection] Visibility reload request aborted (expected on unmount)");
+              return;
+            }
             // Handle unexpected errors
             console.error("Unexpected error reloading recently viewed places:", err instanceof Error ? err.message : String(err));
           }
@@ -310,7 +404,10 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      isUnmounting = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [section.recentlyViewed]);
 
   // Calculate locked premium places for Haunted Gem indexing

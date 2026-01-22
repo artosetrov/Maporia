@@ -121,6 +121,9 @@ After these changes:
 - `app/explore/page.tsx` - Added AbortError handling in loadPlaces and favorites
 - `app/map/page.tsx` - Added AbortError handling in loadPlaces and favorites
 - `app/components/PlaceCard.tsx` - Changed cancelled → isUnmounting pattern
+- `app/components/HomeSection.tsx` - Added isUnmounting flag and AbortError handling for all section loading
+- `app/components/SearchModal.tsx` - Added isUnmounting flag and AbortError handling for cities loading
+- `app/lib/cities.ts` - Added AbortError handling in getCitiesWithPlaces function
 
 ## Prevention
 
