@@ -18,7 +18,7 @@ import { supabase } from "../lib/supabase";
 import { LAYOUT_BREAKPOINTS, LAYOUT_CONFIG } from "../config/layout";
 import { DEFAULT_CITY } from "../constants";
 import { useUserAccess } from "../hooks/useUserAccess";
-import { isPlacePremium } from "../lib/access";
+import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import Icon from "../components/Icon";
 
 type Place = {
@@ -708,6 +708,38 @@ function MapPageContent() {
     window.history.replaceState({}, '', window.location.pathname);
   };
 
+  // Calculate locked premium places for Haunted Gem indexing
+  const defaultUserAccess: UserAccess = access ?? { 
+    role: "guest", 
+    hasPremium: false, 
+    isAdmin: false 
+  };
+  
+  const lockedPlacesMap = useMemo(() => {
+    const lockedPlaces = places
+      .filter(p => {
+        const pIsPremium = isPlacePremium(p);
+        const pCanView = canUserViewPlace(defaultUserAccess, p);
+        const pIsOwner = userId && p.created_by === userId;
+        return pIsPremium && !pCanView && !pIsOwner;
+      })
+      .sort((a, b) => {
+        // Sort by created_at for consistent ordering
+        if (a.created_at && b.created_at) {
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        }
+        // Fallback to id for consistent ordering
+        return a.id.localeCompare(b.id);
+      });
+    
+    // Create a map of place id -> index (1-based)
+    const map = new Map<string, number>();
+    lockedPlaces.forEach((p, idx) => {
+      map.set(p.id, idx + 1);
+    });
+    return map;
+  }, [places, defaultUserAccess, userId]);
+
   // Формируем title для header списка с учетом количества результатов
   const listTitle = useMemo(() => {
     const count = places.length;
@@ -912,6 +944,7 @@ function MapPageContent() {
                 {places.map((p) => {
                   const isFavorite = favorites.has(p.id);
                   const isHovered = hoveredPlaceId === p.id || selectedPlaceId === p.id;
+                  const hauntedGemIndex = lockedPlacesMap.get(p.id);
                   return (
                     <div
                       key={p.id}
@@ -931,6 +964,7 @@ function MapPageContent() {
                         userAccess={access}
                         userId={userId}
                         isFavorite={isFavorite}
+                        hauntedGemIndex={hauntedGemIndex}
                         favoriteButton={
                           userId ? (
                             <button
@@ -1049,6 +1083,7 @@ function MapPageContent() {
                   <div className="grid grid-cols-2 min-[600px]:grid-cols-3 gap-4">
                     {places.map((p) => {
                       const isFavorite = favorites.has(p.id);
+                      const hauntedGemIndex = lockedPlacesMap.get(p.id);
                       return (
                         <div key={p.id} className="w-full">
                           <PlaceCard
@@ -1056,6 +1091,7 @@ function MapPageContent() {
                             userAccess={access}
                             userId={userId}
                             isFavorite={isFavorite}
+                            hauntedGemIndex={hauntedGemIndex}
                             favoriteButton={
                               userId ? (
                                 <button

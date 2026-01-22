@@ -21,14 +21,15 @@ type PlaceCardProps = {
     tags?: string[] | null;
     created_by?: string | null;
     accessLevel?: "public" | "premium"; // For draft places in wizard
-    is_premium?: boolean; // TODO: Use when schema has this field
-    premium_only?: boolean; // TODO: Use when schema has this field
-    access_level?: string; // TODO: Use when schema has this field
+    is_premium?: boolean | null; // TODO: Use when schema has this field
+    premium_only?: boolean | null; // TODO: Use when schema has this field
+    access_level?: string | null; // TODO: Use when schema has this field
   };
   userAccess?: UserAccess; // User's access level
   userId?: string | null; // Current user ID to check ownership
   favoriteButton?: ReactNode;
   isFavorite?: boolean; // Whether the place is in favorites (to show button always vs only on hover)
+  hauntedGemIndex?: number; // Order index for Haunted Gem (1-based), if not provided, will use UUID-based method
   onClick?: () => void;
   onTagClick?: (tag: string) => void;
   onPhotoClick?: () => void;
@@ -47,7 +48,7 @@ function initialsFromName(name?: string | null) {
   return (a + b).slice(0, 2);
 }
 
-export default function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite = false, onClick, onTagClick, onPhotoClick, onRemoveFavorite }: PlaceCardProps) {
+export default function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite = false, hauntedGemIndex, onClick, onTagClick, onPhotoClick, onRemoveFavorite }: PlaceCardProps) {
   const [creatorProfile, setCreatorProfile] = useState<{ display_name: string | null; username: string | null; avatar_url: string | null } | null>(null);
   const loadedUserIdRef = useRef<string | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
@@ -228,17 +229,22 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
   const isOwner = userId && place.created_by === userId;
   const isLocked = isPremium && !canView && !isOwner; // Owner always sees full content
 
-  // Generate pseudo title for locked places (e.g., "Maporia Secret #1")
+  // Generate pseudo title for locked places (e.g., "Haunted Gem #1")
   const getPseudoPlaceNumber = (placeId: string): number => {
-    // Convert UUID to a number by taking characters and converting to number
+    // If hauntedGemIndex is provided, use it (1-based)
+    if (hauntedGemIndex !== undefined && hauntedGemIndex !== null) {
+      return hauntedGemIndex;
+    }
+    // Fallback: Convert UUID to a number by taking characters and converting to number
     // Use a consistent method to get a number between 1-9999
     const hash = placeId.replace(/-/g, '').substring(0, 8);
     const num = parseInt(hash, 16) % 9999;
     return num + 1; // Ensure it's between 1-9999
   };
 
-  const displayTitle = isLocked ? `Maporia Secret #${getPseudoPlaceNumber(place.id)}` : place.title;
-  const pseudoTitle = isPremium ? `Maporia Secret #${getPseudoPlaceNumber(place.id)}` : null;
+  // For locked places, show "Haunted Gem #..." instead of real title
+  const displayTitle = isLocked ? `Haunted Gem #${getPseudoPlaceNumber(place.id)}` : place.title;
+  const pseudoTitle = isPremium ? `Haunted Gem #${getPseudoPlaceNumber(place.id)}` : null;
 
   const handlePhotoClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -408,10 +414,10 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
 
       {/* Text content - directly under photo, no container */}
       <div className="flex flex-col gap-1">
-        {/* Title - Fraunces font */}
-        <div className="font-fraunces text-base font-semibold text-[#1F2A1F] line-clamp-1">{place.title}</div>
+        {/* Title - Fraunces font - show "Haunted Gem #..." for locked places */}
+        <div className="font-fraunces text-base font-semibold text-[#1F2A1F] line-clamp-1">{displayTitle}</div>
 
-        {/* City */}
+        {/* City - always show (even for locked places) */}
         {place.city && (
           <div className="text-sm text-[#6F7A5A] line-clamp-1">{place.city}</div>
         )}

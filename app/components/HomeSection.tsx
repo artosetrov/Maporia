@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import Link from "next/link";
 import PlaceCard from "./PlaceCard";
 import FavoriteIcon from "./FavoriteIcon";
 import { supabase } from "../lib/supabase";
 import { HomeSectionFilter } from "../constants/homeSections";
-import { type UserAccess } from "../lib/access";
+import { type UserAccess, isPlacePremium, canUserViewPlace } from "../lib/access";
 import Icon from "./Icon";
 
 type Place = {
@@ -22,6 +22,11 @@ type Place = {
   lat: number | null;
   lng: number | null;
   created_at: string;
+  created_by?: string | null;
+  access_level?: string | null;
+  is_premium?: boolean | null;
+  premium_only?: boolean | null;
+  visibility?: string | null;
 };
 
 type HomeSectionProps = {
@@ -308,6 +313,37 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [section.recentlyViewed]);
 
+  // Calculate locked premium places for Haunted Gem indexing
+  const defaultUserAccess: UserAccess = userAccess ?? { 
+    role: "guest", 
+    hasPremium: false, 
+    isAdmin: false 
+  };
+  
+  const lockedPlacesMap = useMemo(() => {
+    const lockedPlaces = places
+      .filter(p => {
+        const pIsPremium = isPlacePremium(p);
+        const pCanView = canUserViewPlace(defaultUserAccess, p);
+        const pIsOwner = userId && p.created_by === userId;
+        return pIsPremium && !pCanView && !pIsOwner;
+      })
+      .sort((a, b) => {
+        // Sort by created_at for consistent ordering
+        if (a.created_at && b.created_at) {
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        }
+        // Fallback to id for consistent ordering
+        return a.id.localeCompare(b.id);
+      });
+    
+    // Create a map of place id -> index (1-based)
+    const map = new Map<string, number>();
+    lockedPlaces.forEach((p, idx) => {
+      map.set(p.id, idx + 1);
+    });
+    return map;
+  }, [places, defaultUserAccess, userId]);
 
   // Формируем URL для "See all"
   const getSeeAllUrl = () => {
@@ -466,8 +502,12 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
               gap: 'var(--home-carousel-gap, 12px)'
             }}
           >
-            {places.map((place) => {
+            {places.map((place, index) => {
               const isFavorite = favorites?.has(place.id);
+              
+              // Get Haunted Gem index for locked premium places
+              const hauntedGemIndex = lockedPlacesMap.get(place.id);
+              
               // Вычисляем ширину карточки для "Recently viewed"
               const cardWidth = section.recentlyViewed 
                 ? 'var(--recently-viewed-card-width, var(--home-card-width))'
@@ -489,6 +529,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
                       userAccess={userAccess}
                       userId={userId}
                       isFavorite={isFavorite}
+                      hauntedGemIndex={hauntedGemIndex}
                       favoriteButton={
                       userId && onToggleFavorite ? (
                         <button

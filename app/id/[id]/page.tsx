@@ -800,7 +800,7 @@ export default function PlacePage() {
   }
 
   if (isLocked) {
-    const pseudoTitle = `Maporia Secret #${getPseudoPlaceNumber(place.id)}`;
+    const pseudoTitle = `Haunted Gem #${getPseudoPlaceNumber(place.id)}`;
     return (
       <main className="min-h-screen bg-white">
         <TopBar
@@ -881,7 +881,7 @@ export default function PlacePage() {
                   {/* Show pseudo title badge for owner to see what others see */}
                   {isOwner && (
                     <div className="px-3 py-1.5 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4] text-[#6F7A5A] text-xs font-medium badge-shadow">
-                      {`Maporia Secret #${getPseudoPlaceNumber(place.id)}`}
+                      {`Haunted Gem #${getPseudoPlaceNumber(place.id)}`}
                     </div>
                   )}
                 </div>
@@ -1029,7 +1029,7 @@ export default function PlacePage() {
                 {/* Show pseudo title badge for owner to see what others see */}
                 {isOwner && (
                   <div className="px-3 py-1.5 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4] text-[#6F7A5A] text-xs font-medium">
-                    {`Maporia Secret #${getPseudoPlaceNumber(place.id)}`}
+                    {`Haunted Gem #${getPseudoPlaceNumber(place.id)}`}
                   </div>
                 )}
               </div>
@@ -1050,7 +1050,7 @@ export default function PlacePage() {
                   {/* Show pseudo title badge for owner to see what others see */}
                   {isOwner && (
                     <div className="px-3 py-1.5 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4] text-[#6F7A5A] text-xs font-medium badge-shadow">
-                      {`Maporia Secret #${getPseudoPlaceNumber(place.id)}`}
+                      {`Haunted Gem #${getPseudoPlaceNumber(place.id)}`}
                     </div>
                   )}
                 </div>

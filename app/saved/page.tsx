@@ -10,6 +10,8 @@ import FiltersModal, { ActiveFilters } from "../components/FiltersModal";
 import { supabase } from "../lib/supabase";
 import { DEFAULT_CITY } from "../constants";
 import { useUserAccess } from "../hooks/useUserAccess";
+import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
+import { useMemo } from "react";
 
 type Place = {
   id: string;
@@ -19,6 +21,12 @@ type Place = {
   address: string | null;
   cover_url: string | null;
   categories: string[] | null;
+  created_at?: string;
+  created_by?: string | null;
+  access_level?: string | null;
+  is_premium?: boolean | null;
+  premium_only?: boolean | null;
+  visibility?: string | null;
 };
 
 export default function SavedPage() {
@@ -201,16 +209,50 @@ export default function SavedPage() {
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {places.map((place) => (
-                <div key={place.id} className="h-full">
-                  <PlaceCard 
-                    place={place}
-                    userAccess={access}
-                    userId={userId}
-                    onRemoveFavorite={handleRemoveFavorite}
-                  />
-                </div>
-              ))}
+              {(() => {
+                // Calculate locked premium places for Haunted Gem indexing
+                const defaultUserAccess: UserAccess = access ?? { 
+                  role: "guest", 
+                  hasPremium: false, 
+                  isAdmin: false 
+                };
+                
+                const lockedPlaces = places
+                  .filter(p => {
+                    const pIsPremium = isPlacePremium(p);
+                    const pCanView = canUserViewPlace(defaultUserAccess, p);
+                    const pIsOwner = userId && p.created_by === userId;
+                    return pIsPremium && !pCanView && !pIsOwner;
+                  })
+                  .sort((a, b) => {
+                    // Sort by created_at for consistent ordering
+                    if (a.created_at && b.created_at) {
+                      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+                    }
+                    // Fallback to id for consistent ordering
+                    return a.id.localeCompare(b.id);
+                  });
+                
+                const lockedPlacesMap = new Map<string, number>();
+                lockedPlaces.forEach((p, idx) => {
+                  lockedPlacesMap.set(p.id, idx + 1);
+                });
+                
+                return places.map((place) => {
+                  const hauntedGemIndex = lockedPlacesMap.get(place.id);
+                  return (
+                    <div key={place.id} className="h-full">
+                      <PlaceCard 
+                        place={place}
+                        userAccess={access}
+                        userId={userId}
+                        hauntedGemIndex={hauntedGemIndex}
+                        onRemoveFavorite={handleRemoveFavorite}
+                      />
+                    </div>
+                  );
+                });
+              })()}
             </div>
           )}
         </div>

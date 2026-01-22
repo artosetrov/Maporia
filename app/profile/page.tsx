@@ -10,7 +10,7 @@ import Icon from "../components/Icon";
 import PlaceCard from "../components/PlaceCard";
 import FavoriteIcon from "../components/FavoriteIcon";
 import { useUserAccess } from "../hooks/useUserAccess";
-import { isUserAdmin } from "../lib/access";
+import { isUserAdmin, isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 
 type Place = {
   id: string;
@@ -20,6 +20,11 @@ type Place = {
   address: string | null;
   cover_url: string | null;
   created_at: string;
+  created_by?: string | null;
+  access_level?: string | null;
+  is_premium?: boolean | null;
+  premium_only?: boolean | null;
+  visibility?: string | null;
 };
 
 type Review = {
@@ -1203,32 +1208,68 @@ function TripsSection({
     return <div className="text-center py-16 text-[#6F7A5A]">No saved places yet</div>;
   }
 
+  // Calculate locked premium places for Haunted Gem indexing
+  const defaultUserAccess: UserAccess = access ?? { 
+    role: "guest", 
+    hasPremium: false, 
+    isAdmin: false 
+  };
+  
+  const lockedPlacesMap = useMemo(() => {
+    const lockedPlaces = places
+      .filter(p => {
+        const pIsPremium = isPlacePremium(p);
+        const pCanView = canUserViewPlace(defaultUserAccess, p);
+        const pIsOwner = userId && p.created_by === userId;
+        return pIsPremium && !pCanView && !pIsOwner;
+      })
+      .sort((a, b) => {
+        // Sort by created_at for consistent ordering
+        if (a.created_at && b.created_at) {
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        }
+        // Fallback to id for consistent ordering
+        return a.id.localeCompare(b.id);
+      });
+    
+    // Create a map of place id -> index (1-based)
+    const map = new Map<string, number>();
+    lockedPlaces.forEach((p, idx) => {
+      map.set(p.id, idx + 1);
+    });
+    return map;
+  }, [places, defaultUserAccess, userId]);
+
   return (
     <div>
       <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">My favorites</h1>
       <div className="grid grid-cols-1 min-[900px]:grid-cols-4 gap-6">
-        {places.map((place) => (
-          <PlaceCard
-            key={place.id}
-            place={place}
-            userAccess={access}
-            userId={userId}
-            isFavorite={true}
-            favoriteButton={
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleRemoveFavorite(place.id, e);
-                }}
-                className="bg-white/90 backdrop-blur-sm rounded-lg p-2 badge-shadow hover:bg-white transition-colors"
-                aria-label="Remove from favorites"
-              >
-                <FavoriteIcon isActive={true} size={20} />
-              </button>
-            }
-          />
-        ))}
+        {places.map((place) => {
+          const hauntedGemIndex = lockedPlacesMap.get(place.id);
+          return (
+            <PlaceCard
+              key={place.id}
+              place={place}
+              userAccess={access}
+              userId={userId}
+              isFavorite={true}
+              hauntedGemIndex={hauntedGemIndex}
+              favoriteButton={
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleRemoveFavorite(place.id, e);
+                  }}
+                  className="bg-white/90 backdrop-blur-sm rounded-lg p-2 badge-shadow hover:bg-white transition-colors"
+                  aria-label="Remove from favorites"
+                >
+                  <FavoriteIcon isActive={true} size={20} />
+                </button>
+              }
+            />
+          );
+        })}
       </div>
     </div>
   );

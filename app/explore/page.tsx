@@ -15,7 +15,7 @@ import { supabase } from "../lib/supabase";
 import { DEFAULT_CITY } from "../constants";
 import { LAYOUT_BREAKPOINTS, LAYOUT_CONFIG } from "../config/layout";
 import { useUserAccess } from "../hooks/useUserAccess";
-import { isPlacePremium } from "../lib/access";
+import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import Icon from "../components/Icon";
 
 type Place = {
@@ -31,6 +31,11 @@ type Place = {
   lat: number | null;
   lng: number | null;
   created_at: string;
+  created_by?: string | null;
+  access_level?: string | null;
+  is_premium?: boolean | null;
+  premium_only?: boolean | null;
+  visibility?: string | null;
 };
 
 function cx(...a: Array<string | false | undefined | null>) {
@@ -82,6 +87,38 @@ export default function ExplorePage() {
 
   // User access for premium filtering
   const { loading: accessLoading, access } = useUserAccess();
+
+  // Calculate locked premium places for Haunted Gem indexing
+  const defaultUserAccess: UserAccess = access ?? { 
+    role: "guest", 
+    hasPremium: false, 
+    isAdmin: false 
+  };
+  
+  const lockedPlacesMap = useMemo(() => {
+    const lockedPlaces = places
+      .filter(p => {
+        const pIsPremium = isPlacePremium(p);
+        const pCanView = canUserViewPlace(defaultUserAccess, p);
+        const pIsOwner = userId && p.created_by === userId;
+        return pIsPremium && !pCanView && !pIsOwner;
+      })
+      .sort((a, b) => {
+        // Sort by created_at for consistent ordering
+        if (a.created_at && b.created_at) {
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        }
+        // Fallback to id for consistent ordering
+        return a.id.localeCompare(b.id);
+      });
+    
+    // Create a map of place id -> index (1-based)
+    const map = new Map<string, number>();
+    lockedPlaces.forEach((p, idx) => {
+      map.set(p.id, idx + 1);
+    });
+    return map;
+  }, [places, defaultUserAccess, userId]);
 
   // search + filters - инициализируем из query params
   const [searchDraft, setSearchDraft] = useState("");
@@ -535,6 +572,7 @@ export default function ExplorePage() {
                 {places.map((p) => {
                   const isFavorite = favorites.has(p.id);
                   const isHovered = hoveredPlaceId === p.id || selectedPlaceId === p.id;
+                  const hauntedGemIndex = lockedPlacesMap.get(p.id);
                   return (
                     <div
                       key={p.id}
@@ -555,6 +593,7 @@ export default function ExplorePage() {
                         userAccess={access}
                         userId={userId}
                         isFavorite={isFavorite}
+                        hauntedGemIndex={hauntedGemIndex}
                         favoriteButton={
                           userId ? (
                             <button
@@ -676,6 +715,7 @@ export default function ExplorePage() {
                         userAccess={access}
                         userId={userId}
                         isFavorite={isFavorite}
+                        hauntedGemIndex={lockedPlacesMap.get(p.id)}
                         favoriteButton={
                           userId ? (
                             <button
@@ -775,6 +815,7 @@ export default function ExplorePage() {
                         userAccess={access}
                         userId={userId}
                         isFavorite={isFavorite}
+                        hauntedGemIndex={lockedPlacesMap.get(p.id)}
                         favoriteButton={
                           userId ? (
                             <button
@@ -935,6 +976,7 @@ export default function ExplorePage() {
                               place={selectedPlace}
                               userAccess={access}
                               userId={userId}
+                              hauntedGemIndex={lockedPlacesMap.get(selectedPlace.id)}
                               favoriteButton={
                                 userId ? (
                                   <button
@@ -1002,6 +1044,7 @@ export default function ExplorePage() {
                                   <PlaceCard
                                     place={p}
                                     isFavorite={isFavorite}
+                                    hauntedGemIndex={lockedPlacesMap.get(p.id)}
                                     favoriteButton={
                                       userId ? (
                                         <button
@@ -1071,6 +1114,7 @@ export default function ExplorePage() {
                         userAccess={access}
                         userId={userId}
                         isFavorite={isFavorite}
+                        hauntedGemIndex={lockedPlacesMap.get(p.id)}
                         favoriteButton={
                           userId ? (
                             <button
