@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
+import { ActiveFilters } from "../components/FiltersModal";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -12,6 +13,25 @@ export default function SettingsPage() {
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  
+  // Search and filter state (for SearchBar)
+  const [searchValue, setSearchValue] = useState("");
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
+    categories: [],
+    sort: null,
+  });
+  const [activeFiltersCount, setActiveFiltersCount] = useState(0);
+  
+  // Calculate active filters count
+  useEffect(() => {
+    let count = 0;
+    if (selectedCity) count++;
+    if (searchValue) count++;
+    if (activeFilters.categories.length > 0) count += activeFilters.categories.length;
+    if (activeFilters.sort) count++;
+    setActiveFiltersCount(count);
+  }, [selectedCity, searchValue, activeFilters]);
 
   useEffect(() => {
     (async () => {
@@ -51,20 +71,34 @@ export default function SettingsPage() {
     <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
       <TopBar
         showSearchBar={true}
-        searchValue={""}
+        searchValue={searchValue}
         onSearchChange={(value) => {
+          setSearchValue(value);
           const params = new URLSearchParams();
-          if (value) params.set("q", value);
+          if (selectedCity) params.set("city", encodeURIComponent(selectedCity));
+          if (value.trim()) params.set("q", encodeURIComponent(value.trim()));
+          if (activeFilters.categories.length > 0) {
+            params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+          }
           router.push(`/map?${params.toString()}`);
         }}
-        selectedCity={null}
+        selectedCity={selectedCity}
         onCityChange={(city) => {
+          setSelectedCity(city);
           const params = new URLSearchParams();
-          if (city) params.set("city", city);
+          if (city && city.trim()) {
+            params.set("city", encodeURIComponent(city.trim()));
+          }
+          if (searchValue && searchValue.trim()) {
+            params.set("q", encodeURIComponent(searchValue.trim()));
+          }
+          if (activeFilters.categories.length > 0) {
+            params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+          }
           router.push(`/map?${params.toString()}`);
         }}
         onFiltersClick={() => router.push("/map")}
-        activeFiltersCount={0}
+        activeFiltersCount={activeFiltersCount}
         userAvatar={userAvatar}
         userDisplayName={userDisplayName}
         userEmail={userEmail}

@@ -462,20 +462,40 @@ export default function ExplorePage() {
     <main className="h-screen bg-[#FAFAF7] flex flex-col overflow-hidden">
       <TopBar
         showSearchBar={true}
-        searchValue={""}
+        searchValue={q}
         onSearchChange={(value) => {
+          setQ(value);
           const params = new URLSearchParams();
-          if (value) params.set("q", value);
+          // Use first selected city if any
+          const firstCity = selectedCities.length > 0 ? selectedCities[0] : null;
+          if (firstCity) params.set("city", encodeURIComponent(firstCity));
+          if (value.trim()) params.set("q", encodeURIComponent(value.trim()));
+          if (selectedCategories.length > 0) {
+            params.set("categories", selectedCategories.map(c => encodeURIComponent(c)).join(','));
+          }
           router.push(`/map?${params.toString()}`);
         }}
-        selectedCity={null}
+        selectedCity={selectedCities.length > 0 ? selectedCities[0] : null}
         onCityChange={(city) => {
+          if (city) {
+            setSelectedCities([city]);
+          } else {
+            setSelectedCities([]);
+          }
           const params = new URLSearchParams();
-          if (city) params.set("city", city);
+          if (city && city.trim()) {
+            params.set("city", encodeURIComponent(city.trim()));
+          }
+          if (q && q.trim()) {
+            params.set("q", encodeURIComponent(q.trim()));
+          }
+          if (selectedCategories.length > 0) {
+            params.set("categories", selectedCategories.map(c => encodeURIComponent(c)).join(','));
+          }
           router.push(`/map?${params.toString()}`);
         }}
         onFiltersClick={() => router.push("/map")}
-        activeFiltersCount={0}
+        activeFiltersCount={activeFiltersCount}
         userAvatar={userAvatar}
         userDisplayName={userDisplayName}
         userEmail={userEmail}
@@ -558,7 +578,7 @@ export default function ExplorePage() {
                       className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition"
                     >
                       {city}
-                      <Icon name="close" size={12} />
+                      <Icon name="close" size={16} />
                     </button>
                   ))}
                   {selectedCategories.map((cat) => (
@@ -570,7 +590,7 @@ export default function ExplorePage() {
                       className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition"
                     >
                       {cat}
-                      <Icon name="close" size={12} />
+                      <Icon name="close" size={16} />
                     </button>
                   ))}
                 </div>
@@ -2053,11 +2073,10 @@ function MapView({
                             </div>
                           ) : (
                             <div className="absolute inset-0 bg-[#f5f4f2] rounded-t-xl flex items-center justify-center">
-                              <Icon name="photo" size={48} className="text-[#A8B096]" />
+                              <Icon name="photo" size={24} className="text-[#A8B096]" aria-label="No photo available" />
                             </div>
                           )}
                         </div>
-                        
                         {/* Text Content Section */}
                         <Link
                           href={`/id/${place.id}`}

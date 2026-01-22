@@ -7,6 +7,8 @@ import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access
 import PremiumBadge from "./PremiumBadge";
 import LockedPlaceOverlay from "./LockedPlaceOverlay";
 import Icon from "./Icon";
+import { usePremiumGate } from "../hooks/usePremiumGate";
+import PremiumUpsellModal from "./PremiumUpsellModal";
 
 type PlaceCardProps = {
   place: {
@@ -30,6 +32,7 @@ type PlaceCardProps = {
   favoriteButton?: ReactNode;
   isFavorite?: boolean; // Whether the place is in favorites (to show button always vs only on hover)
   hauntedGemIndex?: number; // Order index for Haunted Gem (1-based), if not provided, will use UUID-based method
+  showPhotoSlider?: boolean; // Whether to show photo slider (default: true, set to false for home page cards)
   onClick?: () => void;
   onTagClick?: (tag: string) => void;
   onPhotoClick?: () => void;
@@ -48,7 +51,13 @@ function initialsFromName(name?: string | null) {
   return (a + b).slice(0, 2);
 }
 
-export default function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite = false, hauntedGemIndex, onClick, onTagClick, onPhotoClick, onRemoveFavorite }: PlaceCardProps) {
+// Check if a string is a valid UUID format
+function isValidUUID(str: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
+
+export default function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite = false, hauntedGemIndex, showPhotoSlider = true, onClick, onTagClick, onPhotoClick, onRemoveFavorite }: PlaceCardProps) {
   const [creatorProfile, setCreatorProfile] = useState<{ display_name: string | null; username: string | null; avatar_url: string | null } | null>(null);
   const loadedUserIdRef = useRef<string | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
@@ -56,6 +65,9 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
   const [isHovered, setIsHovered] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
+  
+  // Premium gate hook
+  const { canAccessPlace, openPremiumModal, closePremiumModal, modalOpen } = usePremiumGate();
 
   useEffect(() => {
     const userId = place.created_by;
@@ -137,6 +149,20 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
     let isUnmounting = false;
     const placeId = place.id; // Capture place.id to check if it changed
 
+    // Skip database query if placeId is not a valid UUID (e.g., test/demo IDs)
+    if (!isValidUUID(placeId)) {
+      // For non-UUID IDs (like "example-4"), just use cover_url if available
+      if (place.cover_url) {
+        setPhotos([place.cover_url]);
+      } else {
+        setPhotos([]);
+      }
+      setCurrentPhotoIndex(0);
+      return () => {
+        isUnmounting = true;
+      };
+    }
+
     (async () => {
       try {
         const { data: photosData, error } = await supabase
@@ -156,13 +182,21 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
             return;
           }
           
-          // Only log meaningful errors (not empty objects)
-          const hasErrorContent = error.message || error.code || error.details || error.hint;
-          const hasKeys = typeof error === 'object' && error !== null && Object.keys(error).length > 0;
+          // Check if error has meaningful content before logging
+          const errorMessage = error.message;
+          const errorCode = error.code;
+          const errorDetails = error.details;
+          const errorHint = error.hint;
           
-          if (hasErrorContent || (hasKeys && !(error.message === undefined && error.code === undefined))) {
-            console.error("Error loading photos:", error);
+          // Only log if there's actual error content (not empty object)
+          if (errorMessage || errorCode || errorDetails || errorHint) {
+            // Log only meaningful errors
+            if (errorMessage || errorCode) {
+              console.error("Error loading photos:", errorMessage || errorCode);
+            }
           }
+          // If error is empty object, silently handle it
+          
           // Fallback на cover_url
           if (place.cover_url && !isUnmounting && place.id === placeId) {
             setPhotos([place.cover_url]);
@@ -177,7 +211,13 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
             const urls = photosData
               .map((p: any) => p.url)
               .filter((u: string | null): u is string => typeof u === "string" && u.length > 0);
-            setPhotos(urls);
+            
+            // Если есть cover_url и его нет в списке фотографий, добавляем его в начало
+            if (place.cover_url && !urls.includes(place.cover_url)) {
+              setPhotos([place.cover_url, ...urls]);
+            } else {
+              setPhotos(urls);
+            }
           } else if (place.cover_url) {
             // Fallback на cover_url если нет фото в place_photos
             setPhotos([place.cover_url]);
@@ -194,13 +234,15 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
         
         // Only log meaningful errors (not empty objects)
         if (error instanceof Error) {
-          console.error("Exception loading photos:", error);
+          if (error.message) {
+            console.error("Exception loading photos:", error.message);
+          }
         } else if (typeof error === 'object' && error !== null) {
           const err = error as Record<string, unknown>;
-          const hasErrorContent = err.message || err.code || err.details;
-          const hasKeys = Object.keys(err).length > 0;
-          if (hasErrorContent || (hasKeys && !(err.message === undefined && err.code === undefined))) {
-            console.error("Exception loading photos:", error);
+          const errorMessage = err.message;
+          const errorCode = err.code;
+          if (errorMessage || errorCode) {
+            console.error("Exception loading photos:", errorMessage || errorCode);
           }
         }
         if (!isUnmounting && place.id === placeId && place.cover_url) {
@@ -269,7 +311,7 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
   };
 
   const currentPhoto = photos[currentPhotoIndex] || place.cover_url;
-  const hasMultiplePhotos = photos.length > 1;
+  const hasMultiplePhotos = showPhotoSlider && photos.length > 1;
 
   // Premium access checks using role system
   const defaultUserAccess: UserAccess = userAccess ?? { 
@@ -278,9 +320,10 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
     isAdmin: false 
   };
   const isPremium = isPlacePremium(place);
-  const canView = canUserViewPlace(defaultUserAccess, place);
   const isOwner = userId && place.created_by === userId;
-  const isLocked = isPremium && !canView && !isOwner; // Owner always sees full content
+  // Use premium gate hook to check access
+  const canAccess = canAccessPlace(place, userId);
+  const isLocked = isPremium && !canAccess && !isOwner; // Owner always sees full content
 
   // Generate pseudo title for locked places (e.g., "Haunted Gem #1")
   const getPseudoPlaceNumber = (placeId: string): number => {
@@ -303,8 +346,9 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
     e.preventDefault();
     e.stopPropagation();
     
-    // Don't allow navigation if place is locked
+    // If locked, open premium modal instead of navigating
     if (isLocked) {
+      openPremiumModal("place", place.title);
       return;
     }
     
@@ -317,10 +361,11 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
   };
 
   const handleCardClick = (e: React.MouseEvent) => {
-    // Prevent navigation if place is locked
+    // If locked, open premium modal instead of navigating
     if (isLocked) {
       e.preventDefault();
       e.stopPropagation();
+      openPremiumModal("place", place.title);
       return;
     }
     if (onClick) {
@@ -337,11 +382,12 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
   };
 
   return (
-    <Link
-      href={isLocked ? "#" : `/id/${place.id}`}
-      onClick={handleCardClick}
-      className={`block group relative w-full ${isLocked ? "cursor-not-allowed" : "cursor-pointer"}`}
-    >
+    <>
+      <Link
+        href={isLocked ? "#" : `/id/${place.id}`}
+        onClick={handleCardClick}
+        className={`block group relative w-full ${isLocked ? "cursor-pointer" : "cursor-pointer"}`}
+      >
       {/* Photo with rounded corners */}
       <div 
         className="relative w-full flex-shrink-0 place-card-image mb-2" 
@@ -494,5 +540,14 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
         )}
       </div>
     </Link>
+
+    {/* Premium Upsell Modal - rendered outside Link */}
+    <PremiumUpsellModal
+      open={modalOpen}
+      onClose={closePremiumModal}
+      context="place"
+      placeTitle={place.title}
+    />
+    </>
   );
 }

@@ -530,7 +530,12 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
       <div className="flex items-center justify-between mb-3 min-[600px]:mb-4 h-10 min-[600px]:h-12">
         {/* Left: Title + See all arrow (desktop) or just Title (mobile) */}
         <div className="flex items-center gap-2">
-          <h2 className="font-fraunces text-lg min-[600px]:text-xl font-semibold text-[#1F2A1F]">{section.title}</h2>
+          <Link
+            href={getSeeAllUrl()}
+            className="font-fraunces text-lg min-[600px]:text-xl font-semibold text-[#1F2A1F] hover:text-[#8F9E4F] transition-colors cursor-pointer"
+          >
+            <h2>{section.title}</h2>
+          </Link>
           {/* See all arrow - only on desktop, next to title */}
           <Link
             href={getSeeAllUrl()}
@@ -627,6 +632,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
                       userId={userId}
                       isFavorite={isFavorite}
                       hauntedGemIndex={hauntedGemIndex}
+                      showPhotoSlider={false}
                       favoriteButton={
                       userId && onToggleFavorite ? (
                         <button

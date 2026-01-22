@@ -13,6 +13,7 @@ import FavoriteIcon from "../components/FavoriteIcon";
 import { useUserAccess } from "../hooks/useUserAccess";
 import { isUserAdmin, isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import { DEFAULT_CITY } from "../constants";
+import PremiumUpsellModal from "../components/PremiumUpsellModal";
 
 type Place = {
   id: string;
@@ -121,7 +122,7 @@ function ProfileInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [section, setSection] = useState<"about" | "trips" | "added" | "activity" | "users">("about");
+  const [section, setSection] = useState<"about" | "trips" | "added" | "activity" | "users" | "elements">("about");
   const [loading, setLoading] = useState(true);
 
   const [userId, setUserId] = useState<string | null>(null);
@@ -239,23 +240,49 @@ function ProfileInner() {
     return filtered;
   }, [saved, searchValue, selectedCity, activeFilters]);
 
-  // Handle search change - filter locally on profile page
+  // Handle search change - redirect to /map like on home page
   function handleSearchChange(value: string) {
     setSearchValue(value);
-    // Filter is applied via useMemo filteredAdded/filteredSaved
+    const params = new URLSearchParams();
+    if (selectedCity) params.set("city", selectedCity);
+    if (value.trim()) params.set("q", value);
+    if (activeFilters.categories.length > 0) {
+      params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+    }
+    router.push(`/map?${params.toString()}`);
   }
 
-  // Handle city change - filter locally on profile page
+  // Handle city change - redirect to /map like on home page
   function handleCityChange(city: string | null) {
     setSelectedCity(city);
-    // Filter is applied via useMemo filteredAdded/filteredSaved
+    const params = new URLSearchParams();
+    if (city && city.trim()) {
+      params.set("city", encodeURIComponent(city.trim()));
+    }
+    if (searchValue && searchValue.trim()) {
+      params.set("q", encodeURIComponent(searchValue.trim()));
+    }
+    if (activeFilters.categories.length > 0) {
+      params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+    }
+    const url = `/map?${params.toString()}`;
+    router.push(url);
   }
 
-  // Handle filters apply - filter locally on profile page
+  // Handle filters apply - redirect to /map like on home page
   function handleFiltersApply(filters: ActiveFilters) {
     setActiveFilters(filters);
     setFilterOpen(false);
-    // Filter is applied via useMemo filteredAdded/filteredSaved
+    const params = new URLSearchParams();
+    if (selectedCity) params.set("city", selectedCity);
+    if (searchValue) params.set("q", searchValue);
+    if (filters.categories.length > 0) {
+      params.set("categories", filters.categories.map(c => encodeURIComponent(c)).join(','));
+    }
+    if (filters.sort) {
+      params.set("sort", filters.sort);
+    }
+    router.push(`/map?${params.toString()}`);
   }
   
   // Admin access check - use profile data from useEffect
@@ -663,15 +690,13 @@ function ProfileInner() {
   return (
     <main className="min-h-screen bg-white">
       <TopBar
-        showSearchBar={section === "trips" || section === "added"}
+        showSearchBar={true}
         searchValue={searchValue}
         onSearchChange={handleSearchChange}
         selectedCity={selectedCity}
         onCityChange={handleCityChange}
         onFiltersClick={() => {
-          if (section === "trips" || section === "added") {
-            setFilterOpen(true);
-          }
+          setFilterOpen(true);
         }}
         activeFiltersCount={activeFiltersCount}
         userAvatar={profile?.avatar_url ?? null}
@@ -686,14 +711,17 @@ function ProfileInner() {
       />
 
       {/* Filters Modal */}
-      {(section === "trips" || section === "added") && (
-        <FiltersModal
-          isOpen={filterOpen}
-          onClose={() => setFilterOpen(false)}
-          onApply={handleFiltersApply}
-          appliedFilters={activeFilters}
-          getFilteredCount={async (draftFilters: ActiveFilters) => {
-            try {
+      <FiltersModal
+        isOpen={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        onApply={handleFiltersApply}
+        appliedFilters={activeFilters}
+        getFilteredCount={async (draftFilters: ActiveFilters) => {
+          // Since we redirect to /map, we don't need to count filtered places here
+          // But we can still provide a count for better UX
+          try {
+            // For trips/added sections, count local places
+            if (section === "trips" || section === "added") {
               const placesToFilter = section === "trips" ? saved : added;
               let filtered = [...placesToFilter];
 
@@ -722,13 +750,15 @@ function ProfileInner() {
               }
 
               return filtered.length;
-            } catch (error) {
-              console.error("Error in getFilteredCount:", error);
-              return 0;
             }
-          }}
-        />
-      )}
+            // For other sections, return 0 as we redirect to /map
+            return 0;
+          } catch (error) {
+            console.error("Error in getFilteredCount:", error);
+            return 0;
+          }
+        }}
+      />
 
       <div className="pt-[64px] min-[900px]:pt-[80px]">
         {/* Desktop Layout */}
@@ -794,18 +824,32 @@ function ProfileInner() {
                   <span>Activity</span>
                 </button>
                 {isAdmin && (
-                  <button
-                    onClick={() => setSection("users")}
-                    className={cx(
-                      "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition",
-                      section === "users"
-                        ? "bg-[#FAFAF7] text-[#1F2A1F] font-medium"
-                        : "text-[#6F7A5A] hover:bg-[#FAFAF7]"
-                    )}
-                  >
-                    <Icon name="users" size={24} className="flex-shrink-0" />
-                    <span>Users</span>
-                  </button>
+                  <>
+                    <button
+                      onClick={() => setSection("users")}
+                      className={cx(
+                        "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition",
+                        section === "users"
+                          ? "bg-[#FAFAF7] text-[#1F2A1F] font-medium"
+                          : "text-[#6F7A5A] hover:bg-[#FAFAF7]"
+                      )}
+                    >
+                      <Icon name="users" size={24} className="flex-shrink-0" />
+                      <span>Users</span>
+                    </button>
+                    <button
+                      onClick={() => setSection("elements")}
+                      className={cx(
+                        "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition",
+                        section === "elements"
+                          ? "bg-[#FAFAF7] text-[#1F2A1F] font-medium"
+                          : "text-[#6F7A5A] hover:bg-[#FAFAF7]"
+                      )}
+                    >
+                      <Icon name="package" size={24} className="flex-shrink-0" />
+                      <span>Elements</span>
+                    </button>
+                  </>
                 )}
               </nav>
             </div>
@@ -831,12 +875,26 @@ function ProfileInner() {
                 />
               )}
               {section === "trips" && (
-                <TripsSection places={saved} loading={loading} userId={userId} onRemoveFavorite={(placeId) => {
-                  setSaved((prev) => prev.filter((p) => p.id !== placeId));
-                }} />
+                <TripsSection 
+                  places={filteredSaved} 
+                  loading={loading} 
+                  userId={userId} 
+                  onRemoveFavorite={(placeId) => {
+                    setSaved((prev) => prev.filter((p) => p.id !== placeId));
+                  }}
+                  searchValue={searchValue}
+                  selectedCity={selectedCity}
+                  activeFilters={activeFilters}
+                />
               )}
               {section === "added" && (
-                <AddedPlacesSection places={added} loading={loading} />
+                <AddedPlacesSection 
+                  places={filteredAdded} 
+                  loading={loading}
+                  searchValue={searchValue}
+                  selectedCity={selectedCity}
+                  activeFilters={activeFilters}
+                />
               )}
               {section === "activity" && (
                 <ActivitySection activity={activity} loading={loading} profile={profile} displayName={displayName} />
@@ -844,22 +902,39 @@ function ProfileInner() {
               {section === "users" && isAdmin && (
                 <UsersSection loading={loading} currentUserId={userId} />
               )}
+              {section === "elements" && isAdmin && (
+                <ElementsSection />
+              )}
             </div>
           </div>
         </div>
 
         {/* Mobile Layout */}
         <div className="min-[900px]:hidden">
-          {section === "trips" || section === "added" || section === "activity" || (section === "users" && isAdmin) ? (
+          {section === "trips" || section === "added" || section === "activity" || (section === "users" && isAdmin) || (section === "elements" && isAdmin) ? (
             // Show section content on mobile
             <div className="px-6 py-6">
               {section === "trips" && (
-                <TripsSection places={saved} loading={loading} userId={userId} onRemoveFavorite={(placeId) => {
-                  setSaved((prev) => prev.filter((p) => p.id !== placeId));
-                }} />
+                <TripsSection 
+                  places={filteredSaved} 
+                  loading={loading} 
+                  userId={userId} 
+                  onRemoveFavorite={(placeId) => {
+                    setSaved((prev) => prev.filter((p) => p.id !== placeId));
+                  }}
+                  searchValue={searchValue}
+                  selectedCity={selectedCity}
+                  activeFilters={activeFilters}
+                />
               )}
               {section === "added" && (
-                <AddedPlacesSection places={added} loading={loading} />
+                <AddedPlacesSection 
+                  places={filteredAdded} 
+                  loading={loading}
+                  searchValue={searchValue}
+                  selectedCity={selectedCity}
+                  activeFilters={activeFilters}
+                />
               )}
               {section === "activity" && (
                 <div>
@@ -889,6 +964,21 @@ function ProfileInner() {
                     <span className="text-sm font-medium">Back</span>
                   </button>
                   <UsersSection loading={loading} currentUserId={userId} />
+                </div>
+              )}
+              {section === "elements" && isAdmin && (
+                <div>
+                  <button
+                    onClick={() => {
+                      setSection("about");
+                      router.replace("/profile", { scroll: false });
+                    }}
+                    className="mb-4 flex items-center gap-2 text-[#6F7A5A] hover:text-[#1F2A1F] transition"
+                  >
+                    <Icon name="back" size={20} />
+                    <span className="text-sm font-medium">Back</span>
+                  </button>
+                  <ElementsSection />
                 </div>
               )}
             </div>
@@ -1639,6 +1729,456 @@ type User = {
   subscription_status: string | null;
   created_at: string;
 };
+
+function ElementsSection() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  
+  // Default values
+  const defaultContent = {
+    title: "Unlock Maporia Premium",
+    titleHighlight: "Maporia",
+    subtitle: "Get full access to our hidden local gems — no crowds, no tourist traps. Just authentic experiences.",
+    benefit1Title: "Premium-only places",
+    benefit1Desc: "Exclusive access to local secrets and hidden spots.",
+    benefit2Title: "Curated Collections",
+    benefit2Desc: "Secret Spots, Romantic Sunsets, Hidden Cafés & more.",
+    benefit3Title: "Custom Routes",
+    benefit3Desc: "Save favorites and build your personal itinerary.",
+    socialProof: "Discover places you'd never find on Google.",
+    price: "$20",
+    pricePeriod: "/ year",
+    priceSubtext: "Less than $2 a month",
+    priceRightTitle: "Full Access",
+    priceRightDesc: "All premium places + collections",
+    primaryButtonText: "Coming Soon",
+    primaryButtonLink: "",
+    secondaryButtonText: "Not now, thanks",
+    footerText: "Cancel anytime. Premium features will unlock instantly when available.",
+    footerLinkText: "Terms of Service apply.",
+    footerLinkUrl: "#",
+  };
+
+  const [modalContent, setModalContent] = useState(defaultContent);
+
+  // Load settings from API
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        setIsLoading(true);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          setIsLoading(false);
+          return;
+        }
+
+        const response = await fetch("/api/admin/premium-modal-settings", {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        if (response.ok) {
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const data = await response.json();
+            if (data.settings) {
+              setModalContent({ ...defaultContent, ...data.settings });
+            }
+          } else {
+            console.error("API returned non-JSON response");
+          }
+        } else {
+          // If not OK, try to get error message
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const error = await response.json();
+            console.error("Error loading settings:", error.error || "Unknown error");
+          }
+        }
+      } catch (error) {
+        console.error("Error loading premium modal settings:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadSettings();
+  }, []);
+
+  // Save settings to API
+  async function handleSave() {
+    try {
+      setIsSaving(true);
+      setSaveSuccess(false);
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        alert("You must be logged in to save settings");
+        return;
+      }
+
+      const response = await fetch("/api/admin/premium-modal-settings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ settings: modalContent }),
+      });
+
+      if (response.ok) {
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          const data = await response.json();
+          if (data.success) {
+            setSaveSuccess(true);
+            setIsEditing(false);
+            setTimeout(() => setSaveSuccess(false), 3000);
+          } else {
+            throw new Error(data.error || "Failed to save settings");
+          }
+        } else {
+          throw new Error("Received unexpected response format");
+        }
+      } else {
+        const contentType = response.headers.get("content-type");
+        let errorMessage = `Error ${response.status}: ${response.statusText}`;
+        
+        if (contentType && contentType.includes("application/json")) {
+          try {
+            const error = await response.json();
+            // Use details if available, otherwise error, otherwise fallback
+            errorMessage = error.details || error.error || errorMessage;
+            
+            // Special handling for table not found
+            if (error.code === "TABLE_NOT_FOUND") {
+              errorMessage = "Database table not found. Please run create-premium-modal-settings-table.sql in Supabase SQL Editor.";
+            }
+          } catch (e) {
+            // If JSON parsing fails, use status text
+            console.error("Failed to parse error response:", e);
+          }
+        } else {
+          const text = await response.text();
+          console.error("Non-JSON error response:", text.substring(0, 200));
+        }
+        
+        alert(errorMessage);
+      }
+    } catch (error) {
+      console.error("Error saving premium modal settings:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to save settings. Please try again.";
+      alert(errorMessage);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F]">Elements</h1>
+      </div>
+
+      <div className="space-y-6">
+        {/* Premium Upsell Modal Editor */}
+        <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-[#1F2A1F] mb-2">Premium Upsell Modal</h3>
+              <p className="text-sm text-[#6F7A5A]">Used when non-premium users try to access premium content</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setIsEditing(!isEditing)}
+                className="px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] font-medium text-sm hover:bg-[#FAFAF7] transition-colors flex items-center gap-2"
+              >
+                <Icon name="edit" size={16} />
+                {isEditing ? "Cancel" : "Edit"}
+              </button>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="px-4 py-2 rounded-xl bg-[#8F9E4F] text-white font-medium text-sm hover:brightness-110 transition-colors"
+              >
+                Preview
+              </button>
+            </div>
+          </div>
+
+          {/* Editor Form */}
+          {isEditing && (
+            <div className="mt-6 p-6 bg-[#FAFAF7] rounded-xl border border-[#ECEEE4] space-y-6">
+              {saveSuccess && (
+                <div className="mb-4 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm">
+                  Settings saved successfully! Changes will apply to all premium modal windows.
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Title */}
+                <div>
+                  <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Title</label>
+                  <input
+                    type="text"
+                    value={modalContent.title}
+                    onChange={(e) => setModalContent({ ...modalContent, title: e.target.value })}
+                    className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                  />
+                </div>
+                
+                {/* Title Highlight */}
+                <div>
+                  <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Title Highlight (word to emphasize)</label>
+                  <input
+                    type="text"
+                    value={modalContent.titleHighlight}
+                    onChange={(e) => setModalContent({ ...modalContent, titleHighlight: e.target.value })}
+                    className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                  />
+                </div>
+
+                {/* Subtitle */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Subtitle</label>
+                  <textarea
+                    value={modalContent.subtitle}
+                    onChange={(e) => setModalContent({ ...modalContent, subtitle: e.target.value })}
+                    rows={2}
+                    className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] resize-none"
+                  />
+                </div>
+
+                {/* Benefits */}
+                <div className="md:col-span-2">
+                  <h4 className="text-sm font-semibold text-[#1F2A1F] mb-3">Benefits</h4>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 1 - Title</label>
+                        <input
+                          type="text"
+                          value={modalContent.benefit1Title}
+                          onChange={(e) => setModalContent({ ...modalContent, benefit1Title: e.target.value })}
+                          className="w-full px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 1 - Description</label>
+                        <input
+                          type="text"
+                          value={modalContent.benefit1Desc}
+                          onChange={(e) => setModalContent({ ...modalContent, benefit1Desc: e.target.value })}
+                          className="w-full px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 2 - Title</label>
+                        <input
+                          type="text"
+                          value={modalContent.benefit2Title}
+                          onChange={(e) => setModalContent({ ...modalContent, benefit2Title: e.target.value })}
+                          className="w-full px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 2 - Description</label>
+                        <input
+                          type="text"
+                          value={modalContent.benefit2Desc}
+                          onChange={(e) => setModalContent({ ...modalContent, benefit2Desc: e.target.value })}
+                          className="w-full px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 3 - Title</label>
+                        <input
+                          type="text"
+                          value={modalContent.benefit3Title}
+                          onChange={(e) => setModalContent({ ...modalContent, benefit3Title: e.target.value })}
+                          className="w-full px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 3 - Description</label>
+                        <input
+                          type="text"
+                          value={modalContent.benefit3Desc}
+                          onChange={(e) => setModalContent({ ...modalContent, benefit3Desc: e.target.value })}
+                          className="w-full px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Social Proof */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Social Proof</label>
+                  <input
+                    type="text"
+                    value={modalContent.socialProof}
+                    onChange={(e) => setModalContent({ ...modalContent, socialProof: e.target.value })}
+                    className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                  />
+                </div>
+
+                {/* Price */}
+                <div>
+                  <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Price</label>
+                  <input
+                    type="text"
+                    value={modalContent.price}
+                    onChange={(e) => setModalContent({ ...modalContent, price: e.target.value })}
+                    className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Price Period</label>
+                  <input
+                    type="text"
+                    value={modalContent.pricePeriod}
+                    onChange={(e) => setModalContent({ ...modalContent, pricePeriod: e.target.value })}
+                    className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Price Subtext</label>
+                  <input
+                    type="text"
+                    value={modalContent.priceSubtext}
+                    onChange={(e) => setModalContent({ ...modalContent, priceSubtext: e.target.value })}
+                    className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Price Right Title</label>
+                  <input
+                    type="text"
+                    value={modalContent.priceRightTitle}
+                    onChange={(e) => setModalContent({ ...modalContent, priceRightTitle: e.target.value })}
+                    className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Price Right Description</label>
+                  <input
+                    type="text"
+                    value={modalContent.priceRightDesc}
+                    onChange={(e) => setModalContent({ ...modalContent, priceRightDesc: e.target.value })}
+                    className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                  />
+                </div>
+
+                {/* Buttons */}
+                <div>
+                  <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Primary Button Text</label>
+                  <input
+                    type="text"
+                    value={modalContent.primaryButtonText}
+                    onChange={(e) => setModalContent({ ...modalContent, primaryButtonText: e.target.value })}
+                    className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Primary Button Link (URL)</label>
+                  <input
+                    type="text"
+                    value={modalContent.primaryButtonLink}
+                    onChange={(e) => setModalContent({ ...modalContent, primaryButtonLink: e.target.value })}
+                    placeholder="https://..."
+                    className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Secondary Button Text</label>
+                  <input
+                    type="text"
+                    value={modalContent.secondaryButtonText}
+                    onChange={(e) => setModalContent({ ...modalContent, secondaryButtonText: e.target.value })}
+                    className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                  />
+                </div>
+
+                {/* Footer */}
+                <div>
+                  <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Footer Text</label>
+                  <textarea
+                    value={modalContent.footerText}
+                    onChange={(e) => setModalContent({ ...modalContent, footerText: e.target.value })}
+                    rows={2}
+                    className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] resize-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Footer Link Text</label>
+                  <input
+                    type="text"
+                    value={modalContent.footerLinkText}
+                    onChange={(e) => setModalContent({ ...modalContent, footerLinkText: e.target.value })}
+                    className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Footer Link URL</label>
+                  <input
+                    type="text"
+                    value={modalContent.footerLinkUrl}
+                    onChange={(e) => setModalContent({ ...modalContent, footerLinkUrl: e.target.value })}
+                    placeholder="https://..."
+                    className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                  />
+                </div>
+              </div>
+              
+              {/* Save Button */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-[#ECEEE4]">
+                <button
+                  onClick={() => setIsEditing(false)}
+                  className="px-6 py-2.5 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] font-medium text-sm hover:bg-[#FAFAF7] transition-colors"
+                  disabled={isSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="px-6 py-2.5 rounded-xl bg-[#8F9E4F] text-white font-medium text-sm hover:brightness-110 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isSaving ? (
+                    <>
+                      <span className="animate-spin">⏳</span>
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Icon name="check" size={16} />
+                      Save
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modal Preview with Custom Content */}
+      <PremiumUpsellModal
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        customContent={modalContent}
+      />
+    </div>
+  );
+}
 
 function UsersSection({ loading, currentUserId }: { loading: boolean; currentUserId: string | null }) {
   const [users, setUsers] = useState<User[]>([]);

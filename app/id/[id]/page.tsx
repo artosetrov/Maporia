@@ -118,6 +118,8 @@ export default function PlacePage() {
     categories: [],
     sort: null,
   });
+  const [searchValue, setSearchValue] = useState("");
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [galleryPhotoIndex, setGalleryPhotoIndex] = useState(0);
   const [photoZoom, setPhotoZoom] = useState(1);
   const [photoPosition, setPhotoPosition] = useState({ x: 0, y: 0 });
@@ -750,9 +752,13 @@ export default function PlacePage() {
 
   // Calculate active filters count
   const activeFiltersCount = useMemo(() => {
-    return (activeFilters.categories?.length || 0) + 
-           (activeFilters.sort ? 1 : 0);
-  }, [activeFilters]);
+    let count = 0;
+    if (selectedCity) count++;
+    if (searchValue) count++;
+    if (activeFilters.categories?.length) count += activeFilters.categories.length;
+    if (activeFilters.sort) count++;
+    return count;
+  }, [activeFilters, searchValue, selectedCity]);
 
   // Handle filters
   const handleFiltersClick = () => {
@@ -848,21 +854,27 @@ export default function PlacePage() {
     <main className="min-h-screen bg-white">
       <TopBar
         showSearchBar={true}
-        searchValue={""}
+        searchValue={searchValue}
         onSearchChange={(value) => {
-          // Redirect to map page with search
+          setSearchValue(value);
           const params = new URLSearchParams();
-          if (value.trim()) params.set("q", value);
+          if (selectedCity) params.set("city", encodeURIComponent(selectedCity));
+          if (value.trim()) params.set("q", encodeURIComponent(value.trim()));
           if (activeFilters.categories.length > 0) {
             params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
           }
           router.push(`/map?${params.toString()}`);
         }}
-        selectedCity={null}
+        selectedCity={selectedCity}
         onCityChange={(city) => {
-          // Redirect to map page with city
+          setSelectedCity(city);
           const params = new URLSearchParams();
-          if (city) params.set("city", city);
+          if (city && city.trim()) {
+            params.set("city", encodeURIComponent(city.trim()));
+          }
+          if (searchValue && searchValue.trim()) {
+            params.set("q", encodeURIComponent(searchValue.trim()));
+          }
           if (activeFilters.categories.length > 0) {
             params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
           }
@@ -2077,22 +2089,7 @@ function PlaceMapView({ place }: { place: Place }) {
     libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
-  if (!place.lat || !place.lng) {
-    return (
-      <div className="w-full h-full flex items-center justify-center text-[#8F9E4F]/60">
-        Location not available
-      </div>
-    );
-  }
-
-  if (!isLoaded) {
-    return (
-      <div className="w-full h-full flex items-center justify-center text-[#8F9E4F]/60">
-        Loading map…
-      </div>
-    );
-  }
-
+  // All hooks must be called before any early returns
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Prevent page scroll when interacting with map on mobile
@@ -2111,6 +2108,22 @@ function PlaceMapView({ place }: { place: Place }) {
       container.removeEventListener('touchmove', handleTouchMove);
     };
   }, []);
+
+  if (!place.lat || !place.lng) {
+    return (
+      <div className="w-full h-full flex items-center justify-center text-[#8F9E4F]/60">
+        Location not available
+      </div>
+    );
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="w-full h-full flex items-center justify-center text-[#8F9E4F]/60">
+        Loading map…
+      </div>
+    );
+  }
 
   return (
     <div

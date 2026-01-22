@@ -3,10 +3,12 @@
 export const dynamic = "force-dynamic";
 
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import Icon from "../components/Icon";
 import PlaceCard from "../components/PlaceCard";
 import PremiumBadge from "../components/PremiumBadge";
 import FavoriteIcon from "../components/FavoriteIcon";
+import PremiumUpsellModal from "../components/PremiumUpsellModal";
 
 function ColorSwatch({ name, color, hex, description }: { name: string; color: string; hex: string; description?: string }) {
   return (
@@ -38,6 +40,327 @@ function ButtonSample({ label, className, description }: { label: string; classN
       <button className={className}>{label}</button>
       {description && <div className="text-xs text-[#6F7A5A] mt-2">{description}</div>}
     </div>
+  );
+}
+
+function PremiumUpsellModalEditor() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  
+  // Default values
+  const [modalContent, setModalContent] = useState({
+    title: "Unlock Maporia Premium",
+    titleHighlight: "Maporia",
+    subtitle: "Get full access to our hidden local gems — no crowds, no tourist traps. Just authentic experiences.",
+    benefit1Title: "Premium-only places",
+    benefit1Desc: "Exclusive access to local secrets and hidden spots.",
+    benefit2Title: "Curated Collections",
+    benefit2Desc: "Secret Spots, Romantic Sunsets, Hidden Cafés & more.",
+    benefit3Title: "Custom Routes",
+    benefit3Desc: "Save favorites and build your personal itinerary.",
+    socialProof: "Discover places you'd never find on Google.",
+    price: "$20",
+    pricePeriod: "/ year",
+    priceSubtext: "Less than $2 a month",
+    priceRightTitle: "Full Access",
+    priceRightDesc: "All premium places + collections",
+    primaryButtonText: "Coming Soon",
+    primaryButtonLink: "",
+    secondaryButtonText: "Not now, thanks",
+    footerText: "Cancel anytime. Premium features will unlock instantly when available.",
+    footerLinkText: "Terms of Service apply.",
+    footerLinkUrl: "#",
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Preview Section */}
+      <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-[#1F2A1F] mb-2">Premium Upsell Modal</h3>
+            <p className="text-sm text-[#6F7A5A]">Used when non-premium users try to access premium content</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setIsEditing(!isEditing)}
+              className="px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] font-medium text-sm hover:bg-[#FAFAF7] transition-colors flex items-center gap-2"
+            >
+              <Icon name="edit" size={16} />
+              {isEditing ? "Cancel" : "Edit"}
+            </button>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="px-4 py-2 rounded-xl bg-[#8F9E4F] text-white font-medium text-sm hover:brightness-110 transition-colors"
+            >
+              Preview
+            </button>
+          </div>
+        </div>
+
+        {/* Editor Form */}
+        {isEditing && (
+          <div className="mt-6 p-6 bg-[#FAFAF7] rounded-xl border border-[#ECEEE4] space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Title */}
+              <div>
+                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Title</label>
+                <input
+                  type="text"
+                  value={modalContent.title}
+                  onChange={(e) => setModalContent({ ...modalContent, title: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                />
+              </div>
+              
+              {/* Title Highlight */}
+              <div>
+                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Title Highlight (word to emphasize)</label>
+                <input
+                  type="text"
+                  value={modalContent.titleHighlight}
+                  onChange={(e) => setModalContent({ ...modalContent, titleHighlight: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                />
+              </div>
+
+              {/* Subtitle */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Subtitle</label>
+                <textarea
+                  value={modalContent.subtitle}
+                  onChange={(e) => setModalContent({ ...modalContent, subtitle: e.target.value })}
+                  rows={2}
+                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] resize-none"
+                />
+              </div>
+
+              {/* Benefits */}
+              <div className="md:col-span-2">
+                <h4 className="text-sm font-semibold text-[#1F2A1F] mb-3">Benefits</h4>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 1 - Title</label>
+                      <input
+                        type="text"
+                        value={modalContent.benefit1Title}
+                        onChange={(e) => setModalContent({ ...modalContent, benefit1Title: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 1 - Description</label>
+                      <input
+                        type="text"
+                        value={modalContent.benefit1Desc}
+                        onChange={(e) => setModalContent({ ...modalContent, benefit1Desc: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 2 - Title</label>
+                      <input
+                        type="text"
+                        value={modalContent.benefit2Title}
+                        onChange={(e) => setModalContent({ ...modalContent, benefit2Title: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 2 - Description</label>
+                      <input
+                        type="text"
+                        value={modalContent.benefit2Desc}
+                        onChange={(e) => setModalContent({ ...modalContent, benefit2Desc: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 3 - Title</label>
+                      <input
+                        type="text"
+                        value={modalContent.benefit3Title}
+                        onChange={(e) => setModalContent({ ...modalContent, benefit3Title: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 3 - Description</label>
+                      <input
+                        type="text"
+                        value={modalContent.benefit3Desc}
+                        onChange={(e) => setModalContent({ ...modalContent, benefit3Desc: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Social Proof */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Social Proof</label>
+                <input
+                  type="text"
+                  value={modalContent.socialProof}
+                  onChange={(e) => setModalContent({ ...modalContent, socialProof: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                />
+              </div>
+
+              {/* Price */}
+              <div>
+                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Price</label>
+                <input
+                  type="text"
+                  value={modalContent.price}
+                  onChange={(e) => setModalContent({ ...modalContent, price: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Price Period</label>
+                <input
+                  type="text"
+                  value={modalContent.pricePeriod}
+                  onChange={(e) => setModalContent({ ...modalContent, pricePeriod: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Price Subtext</label>
+                <input
+                  type="text"
+                  value={modalContent.priceSubtext}
+                  onChange={(e) => setModalContent({ ...modalContent, priceSubtext: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Price Right Title</label>
+                <input
+                  type="text"
+                  value={modalContent.priceRightTitle}
+                  onChange={(e) => setModalContent({ ...modalContent, priceRightTitle: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Price Right Description</label>
+                <input
+                  type="text"
+                  value={modalContent.priceRightDesc}
+                  onChange={(e) => setModalContent({ ...modalContent, priceRightDesc: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                />
+              </div>
+
+              {/* Buttons */}
+              <div>
+                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Primary Button Text</label>
+                <input
+                  type="text"
+                  value={modalContent.primaryButtonText}
+                  onChange={(e) => setModalContent({ ...modalContent, primaryButtonText: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Primary Button Link (URL)</label>
+                <input
+                  type="text"
+                  value={modalContent.primaryButtonLink}
+                  onChange={(e) => setModalContent({ ...modalContent, primaryButtonLink: e.target.value })}
+                  placeholder="https://..."
+                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Secondary Button Text</label>
+                <input
+                  type="text"
+                  value={modalContent.secondaryButtonText}
+                  onChange={(e) => setModalContent({ ...modalContent, secondaryButtonText: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                />
+              </div>
+
+              {/* Footer */}
+              <div>
+                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Footer Text</label>
+                <textarea
+                  value={modalContent.footerText}
+                  onChange={(e) => setModalContent({ ...modalContent, footerText: e.target.value })}
+                  rows={2}
+                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Footer Link Text</label>
+                <input
+                  type="text"
+                  value={modalContent.footerLinkText}
+                  onChange={(e) => setModalContent({ ...modalContent, footerLinkText: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Footer Link URL</label>
+                <input
+                  type="text"
+                  value={modalContent.footerLinkUrl}
+                  onChange={(e) => setModalContent({ ...modalContent, footerLinkUrl: e.target.value })}
+                  placeholder="https://..."
+                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Preview Button */}
+        {!isEditing && (
+          <div className="mt-4">
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="px-4 py-2 rounded-xl bg-[#8F9E4F] text-white font-medium text-sm hover:brightness-110 transition-colors"
+            >
+              Open Modal Preview
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Modal Preview with Custom Content */}
+      <PremiumUpsellModalPreview
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        content={modalContent}
+      />
+    </div>
+  );
+}
+
+function PremiumUpsellModalPreview({ 
+  open, 
+  onClose, 
+  content 
+}: { 
+  open: boolean; 
+  onClose: () => void; 
+  content: any;
+}) {
+  return (
+    <PremiumUpsellModal 
+      open={open} 
+      onClose={onClose}
+      customContent={content}
+    />
   );
 }
 
@@ -184,6 +507,173 @@ export default function BrandGuidePage() {
                 <ColorSwatch name="Border Light" color="bg-[#ECEEE4]" hex="#ECEEE4" description="Light borders" />
                 <ColorSwatch name="Border Input" color="bg-[#E5E8DB]" hex="#E5E8DB" description="Input borders" />
                 <ColorSwatch name="Card Background" color="bg-white" hex="#FFFFFF" description="Card backgrounds" />
+              </div>
+            </div>
+          </section>
+
+          {/* Logo Guidelines Section */}
+          <section>
+            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Maporia Logo Guidelines</h2>
+            
+            {/* Logo System */}
+            <div className="space-y-4 mb-6">
+              <h3 className="text-lg font-semibold text-[#1F2A1F]">Logo System</h3>
+              <p className="text-sm text-[#6F7A5A] mb-4">
+                Maporia uses a simple, scalable system:
+              </p>
+              <div className="space-y-2 text-sm text-[#1F2A1F]">
+                <div className="flex items-start gap-2">
+                  <span className="font-semibold">• Product mark:</span>
+                  <span>the <strong>"M-pin" icon</strong> (symbol only)</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="font-semibold">• Brand lockup:</span>
+                  <span><strong>M-pin + "Maporia" wordmark</strong> (desktop / marketing)</span>
+                </div>
+              </div>
+              <div className="mt-4 p-4 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7]">
+                <p className="text-sm text-[#1F2A1F] font-medium mb-2">Rule of thumb:</p>
+                <div className="space-y-1 text-sm text-[#6F7A5A]">
+                  <div>• <strong className="text-[#1F2A1F]">Icon = product UI</strong> (mobile-first)</div>
+                  <div>• <strong className="text-[#1F2A1F]">Icon + wordmark = brand presence</strong> (desktop + marketing)</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Primary Logo */}
+            <div className="space-y-4 mb-6">
+              <h3 className="text-lg font-semibold text-[#1F2A1F]">Primary Logo (White Background)</h3>
+              <p className="text-sm text-[#6F7A5A] mb-4">
+                Use this as the default logo everywhere possible.
+              </p>
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-16 h-16 rounded-lg bg-[#8F9E4F] flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none" className="h-10 w-10">
+                      <g fill="white" fillRule="evenodd" clipRule="evenodd">
+                        <path d="M512 132C391 132 292 231 292 352C292 442 346 516 420 570C458 598 476 636 493 674L512 716L531 674C548 636 566 598 604 570C678 516 732 442 732 352C732 231 633 132 512 132ZM512 232C595 232 662 299 662 382C662 465 595 532 512 532C429 532 362 465 362 382C362 299 429 232 512 232Z"/>
+                        <path d="M232 604C232 574 256 550 286 550L338 550C358 550 376 560 388 576L512 740L636 576C648 560 666 550 686 550L738 550C768 550 792 574 792 604L792 836C792 866 768 890 738 890L706 890C676 890 652 866 652 836L652 702L552 834C542 848 527 856 512 856C497 856 482 848 472 834L372 702L372 836C372 866 348 890 318 890L286 890C256 890 232 866 232 836Z"/>
+                      </g>
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-semibold text-[#1F2A1F] mb-1">Icon + Wordmark</div>
+                    <div className="text-sm text-[#6F7A5A]">Background: white • Icon: #8F9E4F • Wordmark: #8F9E4F</div>
+                  </div>
+                </div>
+                <div className="text-xs text-[#A8B096]">
+                  Where to use: website header, desktop UI, email templates, presentations, docs
+                </div>
+              </div>
+            </div>
+
+            {/* Inverted Logo */}
+            <div className="space-y-4 mb-6">
+              <h3 className="text-lg font-semibold text-[#1F2A1F]">Inverted Logo (Green Background)</h3>
+              <p className="text-sm text-[#6F7A5A] mb-4">
+                Use when the background is the Maporia green.
+              </p>
+              <div className="rounded-xl border border-[#ECEEE4] bg-[#8F9E4F] p-6">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-16 h-16 rounded-lg bg-white/10 flex items-center justify-center border border-white/20">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none" className="h-10 w-10">
+                      <g fill="white" fillRule="evenodd" clipRule="evenodd">
+                        <path d="M512 132C391 132 292 231 292 352C292 442 346 516 420 570C458 598 476 636 493 674L512 716L531 674C548 636 566 598 604 570C678 516 732 442 732 352C732 231 633 132 512 132ZM512 232C595 232 662 299 662 382C662 465 595 532 512 532C429 532 362 465 362 382C362 299 429 232 512 232Z"/>
+                        <path d="M232 604C232 574 256 550 286 550L338 550C358 550 376 560 388 576L512 740L636 576C648 560 666 550 686 550L738 550C768 550 792 574 792 604L792 836C792 866 768 890 738 890L706 890C676 890 652 866 652 836L652 702L552 834C542 848 527 856 512 856C497 856 482 848 472 834L372 702L372 836C372 866 348 890 318 890L286 890C256 890 232 866 232 836Z"/>
+                      </g>
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-semibold text-white mb-1">Icon + Wordmark</div>
+                    <div className="text-sm text-white/80">Background: #8F9E4F • Icon: white • Wordmark: white</div>
+                  </div>
+                </div>
+                <div className="text-xs text-white/70">
+                  Where to use: mobile splash screen, app icon, onboarding, hero blocks, stickers
+                </div>
+              </div>
+            </div>
+
+            {/* Typography for Wordmark */}
+            <div className="space-y-4 mb-6">
+              <h3 className="text-lg font-semibold text-[#1F2A1F]">Typography (Wordmark / UI)</h3>
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-4">
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-sm font-semibold text-[#1F2A1F] mb-1">Primary font: <span className="font-mono text-[#8F9E4F]">Manrope</span></div>
+                    <div className="text-xs text-[#6F7A5A]">Free, web-safe, modern, premium, readable. Works consistently across web + product UI.</div>
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-[#1F2A1F] mb-1">Recommended weights</div>
+                    <div className="text-xs text-[#6F7A5A] space-y-1">
+                      <div>• <strong>Desktop:</strong> Medium (500) / SemiBold (600)</div>
+                      <div>• <strong>Mobile:</strong> Medium (500)</div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-[#1F2A1F] mb-1">Fallbacks</div>
+                    <div className="text-xs text-[#6F7A5A] font-mono bg-[#FAFAF7] p-2 rounded-lg">
+                      Manrope, Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Usage Rules */}
+            <div className="space-y-4 mb-6">
+              <h3 className="text-lg font-semibold text-[#1F2A1F]">Usage Rules (Do / Don't)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-xl border border-[#7FA35C] bg-[#FAFAF7] p-4">
+                  <div className="text-sm font-semibold text-[#1F2A1F] mb-3">Do</div>
+                  <div className="space-y-2 text-sm text-[#6F7A5A]">
+                    <div>• Keep the logo <strong className="text-[#1F2A1F]">flat and clean</strong></div>
+                    <div>• Use <strong className="text-[#1F2A1F]">solid colors only</strong></div>
+                    <div>• Use <strong className="text-[#1F2A1F]">icon-only</strong> in tight spaces (mobile nav, tabs, small headers)</div>
+                    <div>• Use <strong className="text-[#1F2A1F]">icon + wordmark</strong> in spacious layouts (desktop header, marketing)</div>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-[#C96A5B] bg-[#FAFAF7] p-4">
+                  <div className="text-sm font-semibold text-[#1F2A1F] mb-3">Don't</div>
+                  <div className="space-y-2 text-sm text-[#6F7A5A]">
+                    <div>• <strong className="text-[#C96A5B]">Do not stretch</strong> or skew</div>
+                    <div>• <strong className="text-[#C96A5B">Do not add</strong> shadows, strokes, outlines, gradients, glows</div>
+                    <div>• <strong className="text-[#C96A5B">Do not change</strong> icon proportions or corner radii</div>
+                    <div>• <strong className="text-[#C96A5B">Do not recolor</strong> the logo outside the brand palette</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Clear Space & Minimum Sizes */}
+            <div className="space-y-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-xl border border-[#ECEEE4] bg-white p-4">
+                  <h4 className="text-sm font-semibold text-[#1F2A1F] mb-3">Clear Space</h4>
+                  <p className="text-xs text-[#6F7A5A] mb-2">Minimum clear space around the logo:</p>
+                  <div className="text-xs text-[#6F7A5A] space-y-1">
+                    <div>• <strong className="text-[#1F2A1F]">X = width of the "M" stroke</strong></div>
+                    <div>• Keep at least <strong className="text-[#1F2A1F]">1X padding</strong> on all sides</div>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-[#ECEEE4] bg-white p-4">
+                  <h4 className="text-sm font-semibold text-[#1F2A1F] mb-3">Minimum Sizes</h4>
+                  <div className="text-xs text-[#6F7A5A] space-y-1">
+                    <div>• <strong className="text-[#1F2A1F]">Icon-only:</strong> minimum <strong>24px</strong></div>
+                    <div>• <strong className="text-[#1F2A1F]">Full lockup (icon + wordmark):</strong> minimum <strong>120px width</strong></div>
+                    <div className="text-[#A8B096] mt-2">(If smaller → switch to icon-only.)</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Rules for Product UI */}
+            <div className="rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] p-4">
+              <h4 className="text-sm font-semibold text-[#1F2A1F] mb-3">Quick Rules for Product UI</h4>
+              <div className="space-y-2 text-sm text-[#6F7A5A]">
+                <div>• <strong className="text-[#1F2A1F]">Mobile header:</strong> icon-only</div>
+                <div>• <strong className="text-[#1F2A1F]">Desktop header:</strong> icon + "Maporia"</div>
+                <div>• <strong className="text-[#1F2A1F]">App icon / favicon:</strong> icon-only</div>
               </div>
             </div>
           </section>
@@ -600,6 +1090,13 @@ export default function BrandGuidePage() {
                   </div>
                 </div>
               </div>
+
+          {/* Premium Upsell Modal Section */}
+          <section>
+            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Premium Upsell Modal</h2>
+            
+            <PremiumUpsellModalEditor />
+          </section>
 
               {/* Place Card Specifications */}
               <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">

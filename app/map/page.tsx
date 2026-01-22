@@ -31,6 +31,7 @@ type Place = {
   lat: number | null;
   lng: number | null;
   created_at: string;
+  created_by?: string | null;
 };
 
 function cx(...a: Array<string | false | undefined | null>) {
@@ -1081,6 +1082,7 @@ function MapPageContent() {
                 userId={userId}
                 favorites={favorites}
                 onToggleFavorite={toggleFavorite}
+                userAccess={access}
               />
             </div>
           </div>
@@ -1207,6 +1209,7 @@ function MapPageContent() {
                 userId={userId}
                 favorites={favorites}
                 onToggleFavorite={toggleFavorite}
+                userAccess={access}
               />
             </div>
           )}
@@ -1294,6 +1297,7 @@ function MapView({
   userId,
   favorites,
   onToggleFavorite,
+  userAccess,
 }: {
   places: Place[];
   loading: boolean;
@@ -1304,6 +1308,7 @@ function MapView({
   userId?: string | null;
   favorites?: Set<string>;
   onToggleFavorite?: (placeId: string, e: React.MouseEvent) => void;
+  userAccess?: UserAccess;
 }) {
   const [internalSelectedPlaceId, setInternalSelectedPlaceId] = useState<string | null>(null);
   const [roundIcons, setRoundIcons] = useState<Map<string, string>>(new Map());
@@ -1392,9 +1397,32 @@ function MapView({
 
   const selectedPlaceId = externalSelectedPlaceId ?? internalSelectedPlaceId;
 
+  // Filter premium places for non-premium users on map (but keep them in list)
+  const defaultUserAccess: UserAccess = userAccess ?? { 
+    role: "guest", 
+    hasPremium: false, 
+    isAdmin: false 
+  };
+
   const placesWithCoords = useMemo(
-    () => places.filter((p) => p.lat != null && p.lng != null),
-    [places]
+    () => {
+      const withCoords = places.filter((p) => p.lat != null && p.lng != null);
+      
+      // Filter out premium places for non-premium users on the map
+      // They will still appear in the list view with locked content
+      return withCoords.filter((p) => {
+        const pIsPremium = isPlacePremium(p);
+        const pCanView = canUserViewPlace(defaultUserAccess, p);
+        const pIsOwner = userId && p.created_by === userId;
+        
+        // Show on map if:
+        // 1. Not premium, OR
+        // 2. Premium but user can view it, OR
+        // 3. Premium but user is the owner
+        return !pIsPremium || pCanView || pIsOwner;
+      });
+    },
+    [places, defaultUserAccess, userId]
   );
 
   // Создаем круглые иконки для всех мест
@@ -1652,17 +1680,6 @@ function MapView({
             if (!externalSelectedPlaceId) {
               setInternalSelectedPlaceId(null);
             }
-          }}
-          options={{
-            gestureHandling: "greedy",
-            disableDefaultUI: false,
-            zoomControl: true,
-            zoomControlOptions: {
-              position: google.maps.ControlPosition.RIGHT_CENTER,
-            },
-            mapTypeControl: false,
-            streetViewControl: false,
-            fullscreenControl: false,
           }}
           onDragEnd={() => {
             if (isUpdatingFromPropsRef.current) return;

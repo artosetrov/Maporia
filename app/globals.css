@@ -55,6 +55,13 @@ body {
   letter-spacing: -0.01em;
 }
 
+/* Typography - Manrope for wordmark */
+.font-manrope {
+  font-family: var(--font-manrope), Inter, system-ui, -apple-system, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
 /* Heading styles */
 h1, .h1 {
   font-family: var(--font-fraunces), Georgia, serif;

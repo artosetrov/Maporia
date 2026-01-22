@@ -73,7 +73,7 @@ export default function AddressAutocomplete({
       googlePlaceId: place.place_id ?? null,
       lat,
       lng,
-      city,
+      city: city ?? undefined,
     };
     
     onPlaceSelect(placeData);
