@@ -60,10 +60,5 @@ export function getAuthRedirectUrl(path: string = "/"): string {
   
   const redirectUrl = `${origin}${normalizedPath}`;
   
-  // Log in production for debugging
-  if (process.env.NODE_ENV === 'production') {
-    console.log('[getAuthRedirectUrl] Using origin:', origin, '→', redirectUrl);
-  }
-  
   return redirectUrl;
 }

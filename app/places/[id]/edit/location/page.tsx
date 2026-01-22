@@ -262,16 +262,6 @@ export default function LocationEditorPage() {
       }
     }
 
-    console.log("Saving location:", { 
-      placeId, 
-      userId: user.id, 
-      address, 
-      city: finalCity, 
-      city_id: cityId,
-      lat, 
-      lng 
-    });
-
     // Admin can update any place, owner can update their own
     const currentIsAdmin = isUserAdmin(access);
     const updateQuery = supabase
@@ -294,7 +284,6 @@ export default function LocationEditorPage() {
     
     const { data, error: updateError } = await updateQuery.select();
 
-    console.log("Update result:", { data, error: updateError });
 
     setSaving(false);
 

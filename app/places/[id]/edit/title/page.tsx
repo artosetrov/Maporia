@@ -128,7 +128,6 @@ export default function TitleEditorPage() {
     setSaving(true);
     setError(null);
 
-    console.log("Saving title:", { placeId, userId: user.id, title: title.trim() });
 
     // Admin can update any place, owner can update their own
     const currentIsAdmin = isUserAdmin(access);
@@ -144,7 +143,6 @@ export default function TitleEditorPage() {
     
     const { data, error: updateError } = await updateQuery.select();
 
-    console.log("Update result:", { data, error: updateError });
 
     setSaving(false);
 

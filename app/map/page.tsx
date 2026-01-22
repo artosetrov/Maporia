@@ -6,16 +6,13 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
-import { CATEGORIES } from "../constants";
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import PlaceCard from "../components/PlaceCard";
-import Pill from "../components/Pill";
 import FiltersModal, { ActiveFilters } from "../components/FiltersModal";
 import FavoriteIcon from "../components/FavoriteIcon";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../config/googleMaps";
 import { supabase } from "../lib/supabase";
-import { LAYOUT_BREAKPOINTS, LAYOUT_CONFIG } from "../config/layout";
 import { DEFAULT_CITY } from "../constants";
 import { useUserAccess } from "../hooks/useUserAccess";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
@@ -99,7 +96,6 @@ function MapPageContent() {
   const getInitialValues = () => {
     try {
       if (!searchParams) {
-        console.log('[MapPage] No searchParams available, using defaults');
         return {
           initialCity: null, // null для "Anywhere"
           initialQ: "",
@@ -118,10 +114,8 @@ function MapPageContent() {
         hasCityInUrl = true;
         try {
           initialCity = decodeURIComponent(cityParam.trim());
-          console.log('[MapPage] Initial city from URL:', initialCity);
         } catch {
           initialCity = cityParam.trim();
-          console.log('[MapPage] Initial city from URL (no decode):', initialCity);
         }
       }
       
@@ -195,14 +189,12 @@ function MapPageContent() {
       if (city && city.trim()) {
         try {
           const decodedCity = decodeURIComponent(city.trim());
-          console.log('[MapPage] Setting city from URL:', decodedCity);
           // Всегда устанавливаем город из URL, если он есть
           setAppliedCity(decodedCity);
           setSelectedCity(decodedCity);
           setHasExplicitCityInUrlState(true); // Город явно указан в URL
         } catch (e) {
           const trimmedCity = city.trim();
-          console.log('[MapPage] Setting city from URL (no decode):', trimmedCity);
           setAppliedCity(trimmedCity);
           setSelectedCity(trimmedCity);
           setHasExplicitCityInUrlState(true); // Город явно указан в URL
@@ -213,7 +205,6 @@ function MapPageContent() {
         setHasExplicitCityInUrlState(false); // Город не указан в URL
         setAppliedCity(prev => {
           if (!prev) {
-            console.log('[MapPage] No city in URL, using DEFAULT_CITY:', DEFAULT_CITY);
             return DEFAULT_CITY;
           }
           return prev;
@@ -411,13 +402,11 @@ function MapPageContent() {
   async function loadPlaces() {
     // Don't load if bootstrap not ready
     if (!bootReady) {
-      console.log("[MapPage] Bootstrap not ready, skipping loadPlaces");
       return;
     }
 
     // Check if request key changed - if not, don't refetch
     if (loadPlacesRef.current?.key === requestKey) {
-      console.log("[MapPage] Request key unchanged, skipping duplicate loadPlaces");
       return;
     }
 
@@ -433,14 +422,10 @@ function MapPageContent() {
     // Применяем фильтр, если:
     // 1. Город явно указан в URL (hasExplicitCityInUrlState = true), ИЛИ
     // 2. Город установлен и отличается от DEFAULT_CITY
-    console.log('[MapPage] loadPlaces - appliedCity:', appliedCity, 'DEFAULT_CITY:', DEFAULT_CITY, 'hasExplicitCityInUrl:', hasExplicitCityInUrlState);
     if (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) {
-      console.log('[MapPage] Filtering by city:', appliedCity);
       // Filter by city_name_cached (preferred) or city (backward compatibility)
       // Use OR filter: city_name_cached matches OR city matches
       query = query.or(`city_name_cached.eq.${appliedCity},city.eq.${appliedCity}`);
-    } else {
-      console.log('[MapPage] Not filtering by city (using all cities or default)');
     }
 
     // Фильтрация по категориям - если выбраны категории, проверяем что place.categories содержит хотя бы одну из них
@@ -482,8 +467,6 @@ function MapPageContent() {
         return;
       }
       
-      console.log("places data", data, error);
-      
       if (error) {
         // Silently ignore AbortError
         if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
@@ -499,7 +482,6 @@ function MapPageContent() {
       }
       
       if (!data || data.length === 0) {
-        console.log("No places found");
         if (loadPlacesRef.current && loadPlacesRef.current.requestId === requestId) {
           setPlaces([]);
           setLoading(false);
@@ -560,20 +542,6 @@ function MapPageContent() {
       lat: p.lat ?? null,
       lng: p.lng ?? null,
     }));
-    const placesWithValidCoords = placesWithCoords.filter((p: any) => p.lat !== null && p.lng !== null);
-    console.log("Loaded places:", placesWithCoords.length, "places with coordinates:", placesWithValidCoords.length);
-    
-    // Логируем места без координат для отладки
-    const placesWithoutCoords = placesWithCoords.filter((p: any) => p.lat === null || p.lng === null);
-    if (placesWithoutCoords.length > 0) {
-      console.warn("Places without coordinates:", placesWithoutCoords.map((p: any) => ({
-        id: p.id,
-        title: p.title,
-        address: p.address,
-        lat: p.lat,
-        lng: p.lng,
-      })));
-    }
     
       // Only update state if this is still the current request
       if (loadPlacesRef.current && loadPlacesRef.current.requestId === requestId) {
@@ -666,11 +634,6 @@ function MapPageContent() {
       isUnmounting = true;
     };
   }, [userId]);
-
-  useEffect(() => {
-    loadPlaces();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appliedQ, appliedCity, appliedCategories, selectedTag, activeFilters.sort]);
 
   // Live search: автоматически применяем поиск при вводе (с небольшой задержкой)
   useEffect(() => {

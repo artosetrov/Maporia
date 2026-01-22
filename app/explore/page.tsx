@@ -8,12 +8,10 @@ import { CATEGORIES } from "../constants";
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import PlaceCard from "../components/PlaceCard";
-import Pill from "../components/Pill";
 import FavoriteIcon from "../components/FavoriteIcon";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../config/googleMaps";
 import { supabase } from "../lib/supabase";
 import { DEFAULT_CITY } from "../constants";
-import { LAYOUT_BREAKPOINTS, LAYOUT_CONFIG } from "../config/layout";
 import { useUserAccess } from "../hooks/useUserAccess";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import Icon from "../components/Icon";
@@ -256,8 +254,6 @@ export default function ExplorePage() {
       // Note: This check is simplified - we rely on requestId comparison in the ref pattern
       // The Date.now() check was unreliable, so we remove it
       
-      console.log("places data", data, error);
-      
       if (error) {
         // Silently ignore AbortError
         if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
@@ -265,19 +261,8 @@ export default function ExplorePage() {
         }
         
         console.error("Error loading places:", error);
-        console.error("Error details:", {
-          message: error.message,
-          code: error.code,
-          details: error.details,
-          hint: error.hint,
-        });
-        // Show error to user in production
-        if (process.env.NODE_ENV === 'production') {
-          console.error("Production error - check RLS policies and Supabase connection");
-        }
         setPlaces([]);
       } else if (!data || data.length === 0) {
-        console.log("No places found");
         setPlaces([]);
       } else {
         const placesWithCoords = (data ?? []).map((p: any) => ({
@@ -285,20 +270,6 @@ export default function ExplorePage() {
           lat: p.lat ?? null,
           lng: p.lng ?? null,
         }));
-        const placesWithValidCoords = placesWithCoords.filter((p: any) => p.lat !== null && p.lng !== null);
-        console.log("Loaded places:", placesWithCoords.length, "places with coordinates:", placesWithValidCoords.length);
-        
-        // Логируем места без координат для отладки
-        const placesWithoutCoords = placesWithCoords.filter((p: any) => p.lat === null || p.lng === null);
-        if (placesWithoutCoords.length > 0) {
-          console.warn("Places without coordinates:", placesWithoutCoords.map((p: any) => ({
-            id: p.id,
-            title: p.title,
-            address: p.address,
-            lat: p.lat,
-            lng: p.lng,
-          })));
-        }
         
         setPlaces(placesWithCoords as Place[]);
       }

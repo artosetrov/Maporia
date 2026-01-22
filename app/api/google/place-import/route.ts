@@ -108,7 +108,6 @@ function isUrl(input: string): boolean {
  */
 async function findPlaceFromText(apiKey: string, query: string): Promise<string | null> {
   try {
-    console.log("Searching for place with text query:", query.substring(0, 100));
 
     const response = await fetch(
       `https://places.googleapis.com/v1/places:searchText`,
@@ -132,7 +131,6 @@ async function findPlaceFromText(apiKey: string, query: string): Promise<string 
     }
 
     const data = await response.json();
-    console.log("Find Place From Text API response:", data);
     
     if (data.places && data.places.length > 0) {
       // Return the first (best match) result
@@ -176,7 +174,6 @@ async function findPlaceByUrl(apiKey: string, url: string): Promise<string | nul
       }
     }
 
-    console.log("Searching for place with text:", searchText.substring(0, 100));
 
     const response = await fetch(
       `https://places.googleapis.com/v1/places:searchText`,
@@ -200,7 +197,6 @@ async function findPlaceByUrl(apiKey: string, url: string): Promise<string | nul
     }
 
     const data = await response.json();
-    console.log("Find Place API response:", data);
     
     if (data.places && data.places.length > 0) {
       return data.places[0].id;
@@ -248,7 +244,6 @@ async function getPlaceDetails(apiKey: string, placeId: string) {
 function getCachedResponse(placeId: string): any | null {
   const cached = responseCache.get(placeId);
   if (cached && Date.now() - cached.cachedAt < CACHE_TTL) {
-    console.log("Returning cached response for place_id:", placeId);
     return cached.data;
   }
   return null;
@@ -262,7 +257,6 @@ function cacheResponse(placeId: string, data: any) {
     data,
     cachedAt: Date.now(),
   });
-  console.log("Cached response for place_id:", placeId);
 }
 
 /**
@@ -438,12 +432,10 @@ export async function POST(request: NextRequest) {
     
     if (queryIsUrl) {
       placeId = extractPlaceIdFromUrl(trimmedQuery);
-      console.log("Extracted place_id from URL:", placeId ? "Found" : "Not found", trimmedQuery.substring(0, 100));
     }
 
     // Step 2: If no place_id found, use Find Place From Text API
     if (!placeId) {
-      console.log("Attempting to find place using Find Place From Text API...");
       placeId = await findPlaceFromText(googleApiKey, trimmedQuery);
       if (!placeId) {
         console.error("Could not find place from query:", trimmedQuery.substring(0, 100));
@@ -457,7 +449,6 @@ export async function POST(request: NextRequest) {
           { status: 404 }
         );
       }
-      console.log("Found place_id using Find Place From Text API:", placeId);
     }
 
     // Step 3: Check cache

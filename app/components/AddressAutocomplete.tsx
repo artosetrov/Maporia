@@ -43,40 +43,22 @@ export default function AddressAutocomplete({
       return;
     }
 
-    console.log("AddressAutocomplete: Place selected", {
-      formatted_address: place.formatted_address,
-      place_id: place.place_id,
-      geometry: place.geometry,
-    });
-
     // Извлекаем координаты - location может быть LatLng объектом или объектом с lat/lng
     let lat: number | null = null;
     let lng: number | null = null;
     
     if (place.geometry?.location) {
       const location = place.geometry.location;
-      console.log("AddressAutocomplete: Location object", {
-        location,
-        latType: typeof location.lat,
-        hasLatFunction: typeof location.lat === 'function',
-        hasLatNumber: typeof location.lat === 'number',
-      });
       
       // Проверяем, является ли location объектом LatLng с методами
       if (typeof location.lat === 'function') {
         lat = location.lat();
         lng = location.lng();
-        console.log("AddressAutocomplete: Extracted coordinates (function):", { lat, lng });
       } else if (typeof location.lat === 'number') {
         // Если это объект с полями lat и lng
         lat = location.lat;
         lng = location.lng;
-        console.log("AddressAutocomplete: Extracted coordinates (number):", { lat, lng });
-      } else {
-        console.warn("AddressAutocomplete: Unknown location format", location);
       }
-    } else {
-      console.warn("AddressAutocomplete: No geometry.location in place");
     }
 
     // Extract city, state, country from address components
@@ -94,7 +76,6 @@ export default function AddressAutocomplete({
       city,
     };
     
-    console.log("AddressAutocomplete: Calling onPlaceSelect with:", placeData);
     onPlaceSelect(placeData);
   };
 

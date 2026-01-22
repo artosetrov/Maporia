@@ -108,7 +108,6 @@ export default function PhotosEditorPage() {
       const ext = file.name.split(".").pop() || "jpg";
       const path = `places/${generateUUID()}.${ext}`;
 
-      console.log("Uploading to storage:", { path, fileName: file.name, fileSize: file.size });
 
       const { data: uploadData, error } = await supabase.storage
         .from("place-photos")
@@ -122,12 +121,10 @@ export default function PhotosEditorPage() {
         return { url: null, error: error.message || "Upload failed" };
       }
 
-      console.log("Upload successful:", { path, uploadData });
 
       const { data: urlData } = supabase.storage.from("place-photos").getPublicUrl(path);
       const publicUrl = urlData?.publicUrl ?? null;
       
-      console.log("Public URL:", publicUrl);
 
       return { url: publicUrl, error: null };
     } catch (err) {
@@ -166,11 +163,9 @@ export default function PhotosEditorPage() {
         return;
       }
 
-      console.log("Uploading photo:", { photoId: photo.id, fileName: file.name, fileSize: file.size });
 
       const result = await uploadToSupabase(file);
       
-      console.log("Upload result:", { photoId: photo.id, url: result.url, error: result.error });
 
       setPhotos((prev) =>
         prev.map((p) => {
@@ -308,7 +303,6 @@ export default function PhotosEditorPage() {
       .insert(rows)
       .select();
 
-    console.log("Photos insert result:", { data: insertData, error: photosError });
 
     setSaving(false);
 
