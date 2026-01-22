@@ -35,12 +35,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
  * Получает URL для редиректа после аутентификации
  * Использует текущий origin динамически (localhost или production)
  * 
+ * Supports both www and non-www domains by using current origin
+ * 
  * @param path - Путь для редиректа (по умолчанию "/")
  * @returns Полный URL для редиректа на текущий origin
  * 
  * @example
  * // На localhost:3000 → "http://localhost:3000/"
- * // На production → "https://yourdomain.com/"
+ * // На production → "https://maporia.co/" или "https://www.maporia.co/"
  * getAuthRedirectUrl("/") 
  * getAuthRedirectUrl("/profile")
  */
@@ -50,8 +52,18 @@ export function getAuthRedirectUrl(path: string = "/"): string {
     throw new Error('getAuthRedirectUrl can only be called on the client side');
   }
   
+  // Always use current origin (supports both www and non-www)
   const origin = window.location.origin;
+  
   // Убеждаемся, что path начинается с /
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  return `${origin}${normalizedPath}`;
+  
+  const redirectUrl = `${origin}${normalizedPath}`;
+  
+  // Log in production for debugging
+  if (process.env.NODE_ENV === 'production') {
+    console.log('[getAuthRedirectUrl] Using origin:', origin, '→', redirectUrl);
+  }
+  
+  return redirectUrl;
 }

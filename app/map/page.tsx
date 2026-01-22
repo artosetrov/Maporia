@@ -1399,15 +1399,16 @@ function MapView({
     libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
-  // Log Google Maps loading errors
+  // Log Google Maps loading status (production diagnostics)
   useEffect(() => {
-    if (loadError) {
+    if (process.env.NODE_ENV === 'production') {
+      import('../lib/diagnostics').then(({ logGoogleMapsStatus }) => {
+        logGoogleMapsStatus(isLoaded, loadError);
+      });
+    } else if (loadError) {
       console.error("Google Maps load error:", loadError);
-      if (process.env.NODE_ENV === 'production') {
-        console.error("Production error - check NEXT_PUBLIC_GOOGLE_MAPS_API_KEY and API restrictions");
-      }
     }
-  }, [loadError]);
+  }, [isLoaded, loadError]);
 
   // Prevent page scroll when interacting with map on mobile
   useEffect(() => {

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Fraunces } from "next/font/google";
 import "./globals.css";
 import GoogleMapsProvider from "./providers/GoogleMapsProvider";
+import { ProductionDiagnostics } from "./components/ProductionDiagnostics";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -32,6 +33,7 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${fraunces.variable} antialiased`}
       >
+        <ProductionDiagnostics />
         <GoogleMapsProvider>
           {children}
         </GoogleMapsProvider>
