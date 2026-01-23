@@ -37,6 +37,9 @@ type TopBarProps = {
   onFavoriteClick?: () => void;
   isFavorite?: boolean;
   favoriteLoading?: boolean;
+  // Map page view toggle props
+  view?: "list" | "map";
+  onViewChange?: (view: "list" | "map") => void;
 };
 
 function initialsFromEmail(email?: string | null) {
@@ -76,6 +79,8 @@ export default function TopBar({
   onFavoriteClick,
   isFavorite,
   favoriteLoading,
+  view,
+  onViewChange,
 }: TopBarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -152,7 +157,7 @@ export default function TopBar({
         selectedCity={selectedCity}
       />
 
-      <div className="fixed top-0 left-0 right-0 z-40 bg-white border-b border-[#ECEEE4]">
+      <div className={`fixed top-0 left-0 right-0 z-40 bg-white ${pathname === "/map" ? "" : "border-b border-[#ECEEE4]"}`}>
         {/* Mobile TopBar (default, < lg) */}
         <div className="lg:hidden relative">
           <div className="px-4 pt-safe-top pt-3 pb-3">
@@ -457,6 +462,34 @@ export default function TopBar({
           </div>
         </div>
       </div>
+
+      {/* View Toggle (List/Map) - только для страницы Map на следующей строке */}
+      {view !== undefined && onViewChange && (
+        <div className="fixed top-[64px] lg:top-[80px] left-0 right-0 z-30 bg-white lg:hidden">
+          <div className="flex items-center gap-2 px-4 py-2">
+            <button
+              onClick={() => onViewChange("list")}
+              className={`flex-1 px-4 py-2 rounded-xl text-sm font-medium transition ${
+                view === "list"
+                  ? "bg-[#8F9E4F] text-white"
+                  : "bg-white text-[#8F9E4F] border border-[#ECEEE4] hover:bg-[#FAFAF7]"
+              }`}
+            >
+              List
+            </button>
+            <button
+              onClick={() => onViewChange("map")}
+              className={`flex-1 px-4 py-2 rounded-xl text-sm font-medium transition ${
+                view === "map"
+                  ? "bg-[#8F9E4F] text-white"
+                  : "bg-white text-[#8F9E4F] border border-[#ECEEE4] hover:bg-[#FAFAF7]"
+              }`}
+            >
+              Map
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

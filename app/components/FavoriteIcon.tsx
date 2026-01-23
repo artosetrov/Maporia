@@ -18,7 +18,7 @@ export default function FavoriteIcon({
   size = 20,
   className = "" 
 }: FavoriteIconProps) {
-  const colorClass = isActive ? "text-[#8F9E4F]" : "text-[#A8B096] opacity-40";
+  const colorClass = isActive ? "text-[#8F9E4F]" : "text-[#A8B096]";
   
   return (
     <Icon 

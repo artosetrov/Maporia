@@ -9,6 +9,7 @@ import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import PlaceCard from "../components/PlaceCard";
 import FavoriteIcon from "../components/FavoriteIcon";
+import PremiumBadge from "../components/PremiumBadge";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../config/googleMaps";
 import { supabase } from "../lib/supabase";
 import { DEFAULT_CITY } from "../constants";
@@ -1992,7 +1993,14 @@ function MapView({
                                 className="absolute inset-0 w-full h-full object-cover rounded-t-xl"
                               />
                               
-                              {/* Top Right Buttons */}
+                              {/* Premium Badge - Top Left */}
+                              {isPlacePremium(place) && (
+                                <div className="absolute top-3 left-3 z-10">
+                                  <PremiumBadge />
+                                </div>
+                              )}
+                              
+                              {/* Top Right Buttons - Favorite Icon Always Visible */}
                               <div className="absolute top-3 right-3 flex gap-2 z-10">
                                 {userId && onToggleFavorite && (
                                   <button
@@ -2001,8 +2009,10 @@ function MapView({
                                       e.stopPropagation();
                                       onToggleFavorite(place.id, e);
                                     }}
-                                    className={`h-8 w-8 rounded-full bg-white border border-[#6b7d47]/20 hover:bg-[#f5f4f2] hover:border-[#6b7d47]/40 flex items-center justify-center transition shadow-sm ${
-                                      favorites?.has(place.id) ? "bg-[#6b7d47]/10 border-[#6b7d47]/30" : ""
+                                    className={`h-8 w-8 rounded-full bg-white border flex items-center justify-center transition shadow-sm ${
+                                      favorites?.has(place.id) 
+                                        ? "border-[#8F9E4F] bg-[#FAFAF7]" 
+                                        : "border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F]"
                                     }`}
                                     title={favorites?.has(place.id) ? "Remove from favorites" : "Add to favorites"}
                                     aria-label={favorites?.has(place.id) ? "Remove from favorites" : "Add to favorites"}
@@ -2010,25 +2020,9 @@ function MapView({
                                     <FavoriteIcon 
                                       isActive={favorites?.has(place.id) || false} 
                                       size={16}
-                                      className={favorites?.has(place.id) ? "scale-110" : ""}
                                     />
                                   </button>
                                 )}
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    if (!externalSelectedPlaceId) {
-                                      setInternalSelectedPlaceId(null);
-                                    }
-                                  }}
-                                  className="w-8 h-8 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-colors"
-                                  aria-label="Close"
-                                >
-                                  <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                </button>
                               </div>
                               
                               {/* Navigation Arrows - круглые как в карточках */}

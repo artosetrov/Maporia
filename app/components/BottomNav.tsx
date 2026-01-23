@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import FavoriteIcon from "./FavoriteIcon";
 import Icon from "./Icon";
@@ -30,6 +30,9 @@ export default function BottomNav() {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
+  const lastScrollY = useRef(0);
+  const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -83,6 +86,50 @@ export default function BottomNav() {
     })();
   }, []);
 
+  // Hide/show bottom nav on scroll (mobile only)
+  useEffect(() => {
+    // Only apply on mobile (screen width < 1024px)
+    if (typeof window === "undefined" || window.innerWidth >= 1024) {
+      return;
+    }
+
+    const handleScroll = () => {
+      if (scrollTimeout.current) {
+        cancelAnimationFrame(scrollTimeout.current as any);
+      }
+
+      scrollTimeout.current = requestAnimationFrame(() => {
+        const currentScrollY = window.scrollY || document.documentElement.scrollTop;
+        const scrollDifference = Math.abs(currentScrollY - lastScrollY.current);
+        const threshold = 15; // Minimum scroll distance to trigger hide/show
+
+        // Only update if scroll difference is significant
+        if (scrollDifference > threshold) {
+          if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
+            // Scrolling down - hide nav
+            setIsVisible(false);
+          } else if (currentScrollY < lastScrollY.current) {
+            // Scrolling up - show nav
+            setIsVisible(true);
+          }
+          lastScrollY.current = currentScrollY;
+        }
+      });
+    };
+
+    // Initialize last scroll position
+    lastScrollY.current = window.scrollY || document.documentElement.scrollTop;
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (scrollTimeout.current) {
+        cancelAnimationFrame(scrollTimeout.current as any);
+      }
+    };
+  }, []);
+
   const navItems = [
     { href: "/", label: "Explore", icon: SearchIcon },
     { href: "/saved", label: "Saved", icon: SavedIcon },
@@ -91,7 +138,9 @@ export default function BottomNav() {
 
   return (
     <div 
-      className="fixed left-0 right-0 z-40 bg-white lg:hidden"
+      className={`fixed left-0 right-0 z-40 bg-white lg:hidden transition-transform duration-300 ease-in-out ${
+        isVisible ? 'translate-y-0' : 'translate-y-full'
+      }`}
       style={{
         bottom: 'env(safe-area-inset-bottom, 0px)',
         paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',

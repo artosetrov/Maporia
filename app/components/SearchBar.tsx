@@ -19,6 +19,9 @@ type SearchBarProps = {
   
   // Responsive
   isMobile?: boolean;
+  
+  // Mobile search bar click handler
+  onSearchBarClick?: () => void;
 };
 
 export default function SearchBar({
@@ -74,11 +77,6 @@ export default function SearchBar({
         <span className="flex-1 text-sm text-[#A8B096] truncate">
           {displayText}
         </span>
-        {activeFiltersCount > 0 && (
-          <span className="h-5 w-5 rounded-full bg-[#8F9E4F] text-white text-[10px] font-medium flex items-center justify-center flex-shrink-0">
-            {activeFiltersCount > 9 ? "9+" : activeFiltersCount}
-          </span>
-        )}
       </button>
     );
   }

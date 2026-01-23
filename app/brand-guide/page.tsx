@@ -1387,6 +1387,253 @@ export default function BrandGuidePage() {
             </div>
           </section>
 
+          {/* TopBar Section */}
+          <section>
+            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">TopBar Navigation</h2>
+            
+            <div className="space-y-6">
+              {/* Overview */}
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Overview</h3>
+                <p className="text-sm text-[#6F7A5A] leading-relaxed mb-4">
+                  The TopBar is the primary navigation component used across all pages. It adapts responsively between 
+                  mobile and desktop layouts, with different configurations for each page type (Home, Map, Profile, Place pages, etc.).
+                </p>
+                <div className="space-y-2 text-sm text-[#6F7A5A]">
+                  <div><strong className="text-[#1F2A1F]">Component:</strong> <code className="bg-[#FAFAF7] px-2 py-0.5 rounded">app/components/TopBar.tsx</code></div>
+                  <div><strong className="text-[#1F2A1F]">Breakpoint:</strong> <code className="bg-[#FAFAF7] px-2 py-0.5 rounded">lg (1024px)</code> — переключение между мобильной и десктоп версиями</div>
+                  <div><strong className="text-[#1F2A1F]">Z-index:</strong> <code className="bg-[#FAFAF7] px-2 py-0.5 rounded">z-40</code> (основной TopBar), <code className="bg-[#FAFAF7] px-2 py-0.5 rounded">z-30</code> (переключатель List/Map)</div>
+                </div>
+              </div>
+
+              {/* Home Page */}
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Home Page (`/`)</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Mobile Version (&lt; 1024px)</h4>
+                    <div className="bg-[#FAFAF7] rounded-lg p-4 mb-3 font-mono text-xs">
+                      [Back] [Search Pill] [Filters]
+                    </div>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Back Button:</strong> Скрыт на главной странице</li>
+                      <li><strong>Search Pill:</strong> "Start to your search", центрирован, открывает SearchModal</li>
+                      <li><strong>Filters Button:</strong> Скрыт на главной странице</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Desktop Version (≥ 1024px)</h4>
+                    <div className="bg-[#FAFAF7] rounded-lg p-4 mb-3 font-mono text-xs">
+                      [Wordmark Logo] [SearchBar (Airbnb-style)] [Add Place] [Auth/Avatar]
+                    </div>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Wordmark Logo:</strong> text-4xl, без иконки, без ® символа</li>
+                      <li><strong>SearchBar:</strong> Полнофункциональный Airbnb-style pill с City Selector, Search Input, Filters</li>
+                      <li><strong>Add Place:</strong> Виден только для авторизованных пользователей</li>
+                      <li><strong>Auth Area:</strong> Login кнопка или Avatar с dropdown меню</li>
+                      <li><strong>Border-bottom:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">border-b border-[#ECEEE4]</code></li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Map Page */}
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Map Page (`/map`)</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Mobile Version (&lt; 1024px)</h4>
+                    <div className="bg-[#FAFAF7] rounded-lg p-4 mb-3 font-mono text-xs">
+                      [Back] [SearchBar (Mobile)] [Filters]<br/>
+                      ─────────────────────────────────────<br/>
+                      [List] [Map] ← Переключатель (fixed, top-[64px])
+                    </div>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Back Button:</strong> Навигация на `/`</li>
+                      <li><strong>SearchBar:</strong> Кнопка-триггер, показывает `searchValue` или `selectedCity · Search...`, открывает SearchModal</li>
+                      <li><strong>Filters Button:</strong> Badge с количеством фильтров (если `activeFiltersCount {'>'} 0`)</li>
+                      <li><strong>View Toggle:</strong> Fixed на второй строке, только на мобильных (`lg:hidden`), две кнопки List/Map</li>
+                      <li><strong>Border-bottom:</strong> Убран (`pathname === "/map"` → нет `border-b`)</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Desktop Version (≥ 1024px)</h4>
+                    <div className="bg-[#FAFAF7] rounded-lg p-4 mb-3 font-mono text-xs">
+                      [Wordmark Logo] [SearchBar (Airbnb-style)] [Add Place] [Auth/Avatar]
+                    </div>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>SearchBar:</strong> Встроенный компонент с live search (не модальное окно)</li>
+                      <li><strong>View Toggle:</strong> Скрыт (на десктопе используется split view)</li>
+                      <li><strong>Border-bottom:</strong> Убран</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Other Pages */}
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Other Pages</h3>
+                
+                <div className="space-y-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Place Page (`/id/[id]`)</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Mobile:</strong> [Back] [Share] [Favorite]</li>
+                      <li><strong>Desktop:</strong> Стандартный TopBar с Logo, SearchBar, Auth</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Profile Page (`/profile`)</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Mobile:</strong> [Back] [Add Place (fixed, top-right)]</li>
+                      <li><strong>Desktop:</strong> Стандартный TopBar</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Other Pages (`/explore`, `/feed`, `/saved`, `/settings`, `/collections`)</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Mobile:</strong> [Logo] [Search Pill] [Filters]</li>
+                      <li><strong>Desktop:</strong> Стандартный TopBar с Logo, SearchBar, Auth</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Technical Details */}
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Technical Details</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Positioning & Layout</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>TopBar:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">fixed top-0 left-0 right-0</code></li>
+                      <li><strong>View Toggle:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">fixed top-[64px] lg:top-[80px]</code></li>
+                      <li><strong>Add Place (profile):</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">absolute top-safe-top top-3 right-4</code></li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">SearchBar States</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Mobile:</strong> Кнопка-триггер → открывает SearchModal</li>
+                      <li><strong>Desktop:</strong> Встроенный компонент с live search</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Filter Indicators</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Mobile:</strong> Только на кнопке Filters (badge с количеством)</li>
+                      <li><strong>Desktop:</strong> На кнопке Filters внутри SearchBar (badge)</li>
+                      <li><strong>Badge style:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">w-5 h-5 rounded-full bg-[#8F9E4F] text-white text-xs</code></li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">View Toggle (List/Map)</h4>
+                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Visibility:</strong> Только на мобильных (`lg:hidden`)</li>
+                      <li><strong>Position:</strong> Fixed на второй строке под TopBar</li>
+                      <li><strong>Active state:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">bg-[#8F9E4F] text-white</code></li>
+                      <li><strong>Inactive state:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">bg-white text-[#8F9E4F] border border-[#ECEEE4]</code></li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Props Interface */}
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Props Interface</h3>
+                <pre className="bg-[#FAFAF7] rounded-lg p-4 overflow-x-auto text-xs text-[#6F7A5A]">
+{`type TopBarProps = {
+  // Search bar props
+  showSearchBar?: boolean;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  selectedCity?: string | null;
+  onCityChange?: (city: string | null) => void;
+  onFiltersClick?: () => void;
+  activeFiltersCount?: number;
+  activeFiltersSummary?: string;
+  onSearchBarClick?: () => void; // Mobile: opens SearchModal
+  
+  // User props
+  userAvatar?: string | null;
+  userDisplayName?: string | null;
+  userEmail?: string | null;
+  
+  // Custom props
+  showBackButton?: boolean;
+  showAddPlaceButton?: boolean;
+  onBackClick?: () => void;
+  
+  // Place page props
+  onShareClick?: () => void;
+  onFavoriteClick?: () => void;
+  isFavorite?: boolean;
+  favoriteLoading?: boolean;
+  
+  // Map page view toggle
+  view?: "list" | "map";
+  onViewChange?: (view: "list" | "map") => void;
+};`}
+                </pre>
+              </div>
+
+              {/* Visual Schemas */}
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Visual Schemas</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Home Page (Mobile)</h4>
+                    <div className="bg-[#FAFAF7] rounded-lg p-4 font-mono text-xs border border-[#ECEEE4]">
+                      ┌─────────────────────────────────┐<br/>
+                      │ [🔍 Start to your search]      │<br/>
+                      └─────────────────────────────────┘
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Home Page (Desktop)</h4>
+                    <div className="bg-[#FAFAF7] rounded-lg p-4 font-mono text-xs border border-[#ECEEE4]">
+                      ┌─────────────────────────────────────────────────────────────┐<br/>
+                      │ [Maporia] [Anywhere ▼ | Search... | 🔍 Filters] [➕] [👤▼] │<br/>
+                      └─────────────────────────────────────────────────────────────┘
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Map Page (Mobile)</h4>
+                    <div className="bg-[#FAFAF7] rounded-lg p-4 font-mono text-xs border border-[#ECEEE4]">
+                      ┌─────────────────────────────────┐<br/>
+                      │ [←] [Miami · Search...] [🔍 2]   │<br/>
+                      ├─────────────────────────────────┤<br/>
+                      │ [List] [Map]                    │<br/>
+                      └─────────────────────────────────┘
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Map Page (Desktop)</h4>
+                    <div className="bg-[#FAFAF7] rounded-lg p-4 font-mono text-xs border border-[#ECEEE4]">
+                      ┌─────────────────────────────────────────────────────────────┐<br/>
+                      │ [Maporia] [Miami ▼ | Search... | 🔍 2] [➕] [👤▼]          │<br/>
+                      └─────────────────────────────────────────────────────────────┘
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* Responsive Design Section */}
           <section>
             <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Responsive Design & Breakpoints</h2>
@@ -1688,6 +1935,105 @@ export default function BrandGuidePage() {
                   </div>
                   <div>
                     <strong className="text-[#1F2A1F]">Icon Buttons:</strong> Size adapts (16px, 20px, 24px) but proportions remain consistent
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Places Filtering Logic */}
+          <section>
+            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Places Filtering Logic</h2>
+            
+            <div className="space-y-6">
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Filter Structure</h3>
+                <div className="space-y-4 text-sm text-[#6F7A5A]">
+                  <div>
+                    <strong className="text-[#1F2A1F]">Filter Groups:</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li><strong>Top Pills:</strong> Premium, Hidden, Vibe (boolean filters)</li>
+                      <li><strong>City:</strong> Multi-select cities</li>
+                      <li><strong>Category:</strong> Multi-select categories</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong className="text-[#1F2A1F]">Filter Logic:</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li><strong>AND between groups:</strong> (Top Pills) AND (City) AND (Category)</li>
+                      <li><strong>OR within groups:</strong> City OR City OR City, Category OR Category</li>
+                      <li><strong>AND within Top Pills:</strong> Premium AND Hidden AND Vibe (if multiple selected)</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Filter Rules</h3>
+                <div className="space-y-4 text-sm text-[#6F7A5A]">
+                  <div>
+                    <strong className="text-[#1F2A1F]">Top Pills (Premium, Hidden, Vibe):</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li>Each enabled pill adds an AND condition</li>
+                      <li>Premium: <code className="bg-[#FAFAF7] px-1 rounded">is_premium === true</code> OR <code className="bg-[#FAFAF7] px-1 rounded">access_level === 'premium'</code></li>
+                      <li>Hidden: <code className="bg-[#FAFAF7] px-1 rounded">is_hidden === true</code> OR category includes "🤫 Hidden & Unique"</li>
+                      <li>Vibe: <code className="bg-[#FAFAF7] px-1 rounded">is_vibe === true</code> OR category includes "✨ Vibe & Atmosphere"</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong className="text-[#1F2A1F]">City Filter:</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li>0 cities selected → no city filter applied</li>
+                      <li>1 city selected → show places from that city only</li>
+                      <li>2+ cities selected → show places from any selected city (OR logic)</li>
+                      <li>All cities selected → show all places (sum of all cities)</li>
+                      <li>City comparison uses normalized names (trim, lowercase)</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong className="text-[#1F2A1F]">Category Filter:</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li>0 categories selected → no category filter applied</li>
+                      <li>1+ categories selected → place passes if it has ANY selected category (OR logic)</li>
+                      <li>All categories selected → show all places (no category filter)</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong className="text-[#1F2A1F]">Special Cases:</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li>If no filters selected → show all places</li>
+                      <li>If all cities selected → filter remains active, shows sum of all places</li>
+                      <li>If all categories selected → filter remains active, shows all places</li>
+                      <li>Search query is applied separately before filter logic</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Implementation</h3>
+                <div className="space-y-3 text-sm text-[#6F7A5A]">
+                  <div>
+                    <strong className="text-[#1F2A1F]">Centralized Function:</strong>
+                    <code className="block bg-[#FAFAF7] p-3 rounded-lg mt-2 font-mono text-xs">filterPlaces(places: Place[], filters: PlaceFilters): Place[]</code>
+                  </div>
+                  <div>
+                    <strong className="text-[#1F2A1F]">Filter Order:</strong>
+                    <ol className="list-decimal list-inside space-y-1 ml-4 mt-2">
+                      <li>Apply search query filter (if exists)</li>
+                      <li>Apply Top Pills filters (Premium, Hidden, Vibe) - AND between them</li>
+                      <li>Apply City filter (OR within selected cities)</li>
+                      <li>Apply Category filter (OR within selected categories)</li>
+                    </ol>
+                  </div>
+                  <div>
+                    <strong className="text-[#1F2A1F]">Count Calculation:</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li>Always loads all places from database for accurate count</li>
+                      <li>Applies all filters client-side using <code className="bg-[#FAFAF7] px-1 rounded">filterPlaces</code></li>
+                      <li>Returns filtered count for "Show X places" button</li>
+                      <li>Button is disabled when count is 0</li>
+                    </ul>
                   </div>
                 </div>
               </div>

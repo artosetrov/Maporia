@@ -486,11 +486,9 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
           </div>
         )}
         
-        {/* Favorite button - visible always if favorite, only on hover if not favorite */}
+        {/* Favorite button - visible always */}
         {favoriteButton && (
-          <div className={`absolute top-2 right-2 z-10 transition-opacity duration-200 ${
-            isFavorite ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-          }`}>
+          <div className="absolute top-2 right-2 z-10 opacity-100">
             {favoriteButton}
           </div>
         )}

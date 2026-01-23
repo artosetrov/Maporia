@@ -9,11 +9,16 @@ import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from "@react-google-map
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import PlaceCard from "../components/PlaceCard";
-import FiltersModal, { ActiveFilters } from "../components/FiltersModal";
+import nextDynamic from "next/dynamic";
+import { ActiveFilters } from "../components/FiltersModal";
+
+const FiltersModal = nextDynamic(() => import("../components/FiltersModal"), { ssr: false });
+const SearchModal = nextDynamic(() => import("../components/SearchModal"), { ssr: false });
 import FavoriteIcon from "../components/FavoriteIcon";
+import PremiumBadge from "../components/PremiumBadge";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../config/googleMaps";
 import { supabase } from "../lib/supabase";
-import { DEFAULT_CITY } from "../constants";
+import { DEFAULT_CITY, CATEGORIES, CITIES } from "../constants";
 import { useUserAccess } from "../hooks/useUserAccess";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import Icon from "../components/Icon";
@@ -23,6 +28,7 @@ type Place = {
   title: string;
   description: string | null;
   city: string | null;
+  city_name_cached?: string | null;
   country: string | null;
   address: string | null;
   cover_url: string | null;
@@ -32,7 +38,78 @@ type Place = {
   lng: number | null;
   created_at: string;
   created_by?: string | null;
+  // Premium/Hidden/Vibe fields
+  is_premium?: boolean | null;
+  is_hidden?: boolean | null;
+  is_vibe?: boolean | null;
+  access_level?: string | null;
+  premium_only?: boolean | null;
+  visibility?: string | null;
 };
+
+// Тип для фильтров
+type PlaceFilters = {
+  premium?: boolean;
+  hidden?: boolean;
+  vibe?: boolean;
+  cities?: string[];
+  categories?: string[];
+};
+
+// Нормализация города для сравнения
+function normalizeCity(city: string | null | undefined): string {
+  if (!city) return "";
+  return city.trim().toLowerCase();
+}
+
+// Проверка, является ли место Hidden (через категорию "🤫 Hidden & Unique")
+function isPlaceHidden(place: Place): boolean {
+  if (place.is_hidden === true) return true;
+  if (place.categories && place.categories.includes("🤫 Hidden & Unique")) return true;
+  return false;
+}
+
+// Проверка, является ли место Vibe (через категорию "✨ Vibe & Atmosphere")
+function isPlaceVibe(place: Place): boolean {
+  if (place.is_vibe === true) return true;
+  if (place.categories && place.categories.includes("✨ Vibe & Atmosphere")) return true;
+  return false;
+}
+
+// Централизованная функция фильтрации мест
+function filterPlaces(places: Place[], filters: PlaceFilters): Place[] {
+  let filtered = [...places];
+
+  // Фильтрация по Top Pills (Premium, Hidden, Vibe) - AND между ними
+  if (filters.premium) {
+    filtered = filtered.filter(place => isPlacePremium(place));
+  }
+  if (filters.hidden) {
+    filtered = filtered.filter(place => isPlaceHidden(place));
+  }
+  if (filters.vibe) {
+    filtered = filtered.filter(place => isPlaceVibe(place));
+  }
+
+  // Фильтрация по городам - OR внутри группы (место в любом из выбранных городов)
+  if (filters.cities && filters.cities.length > 0) {
+    const normalizedSelectedCities = filters.cities.map(normalizeCity);
+    filtered = filtered.filter(place => {
+      const placeCity = normalizeCity(place.city || place.city_name_cached);
+      return normalizedSelectedCities.includes(placeCity);
+    });
+  }
+
+  // Фильтрация по категориям - OR внутри группы (место имеет любую из выбранных категорий)
+  if (filters.categories && filters.categories.length > 0) {
+    filtered = filtered.filter(place => {
+      if (!place.categories || place.categories.length === 0) return false;
+      return filters.categories!.some(cat => place.categories!.includes(cat));
+    });
+  }
+
+  return filtered;
+}
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
@@ -170,6 +247,10 @@ function MapPageContent() {
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
     categories: initialCategories,
     sort: null,
+    premium: false,
+    hidden: false,
+    vibe: false,
+    premiumOnly: false, // Для обратной совместимости
   });
   
   // Инициализируем флаг наличия города в URL
@@ -183,9 +264,25 @@ function MapPageContent() {
   const [selectedTag, setSelectedTag] = useState<string>("");
   const [cameFromHome, setCameFromHome] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   
   // Backward compatibility: appliedCategories для существующего кода
   const appliedCategories = activeFilters.categories;
+
+  // Handle city change from SearchBar or SearchModal
+  // Объявляем appliedCities ДО requestKey, чтобы избежать ошибки инициализации
+  const [appliedCities, setAppliedCities] = useState<string[]>(() => {
+    const initialCity = getInitialValues().initialCity;
+    // Если в URL есть несколько городов через запятую, разбиваем их
+    if (searchParams?.get('cities')) {
+      const citiesParam = searchParams.get('cities');
+      if (citiesParam) {
+        return citiesParam.split(',').map(c => c.trim()).filter(Boolean);
+      }
+    }
+    return initialCity ? [initialCity] : [];
+  });
 
   // Читаем query params из URL (реагируем на изменения)
   useEffect(() => {
@@ -399,15 +496,20 @@ function MapPageContent() {
 
   // Create stable request key for deduplication
   const requestKey = useMemo(() => {
+    // Включаем все фильтры в ключ запроса, чтобы места перезагружались при изменении фильтров
     return JSON.stringify({
       city: appliedCity,
+      cities: appliedCities.join(','),
       q: appliedQ,
       categories: appliedCategories.join(','),
       tag: selectedTag,
       sort: activeFilters.sort,
+      premium: activeFilters.premium || activeFilters.premiumOnly,
+      hidden: activeFilters.hidden,
+      vibe: activeFilters.vibe,
       hasExplicitCity: hasExplicitCityInUrlState,
     });
-  }, [appliedCity, appliedQ, appliedCategories.join(','), selectedTag, activeFilters.sort, hasExplicitCityInUrlState]);
+  }, [appliedCity, appliedCities, appliedQ, appliedCategories.join(','), selectedTag, activeFilters.sort, activeFilters.premium, activeFilters.hidden, activeFilters.vibe, activeFilters.premiumOnly, hasExplicitCityInUrlState]);
 
   const loadPlacesRef = useRef<{ requestId: number; key: string } | null>(null);
 
@@ -428,33 +530,49 @@ function MapPageContent() {
     setLoading(true);
 
     try {
+      // Загружаем все места с нужными полями для фильтрации
+      // Фильтры Premium/Hidden/Vibe применяются на клиенте через filterPlaces
+      // Загружаем все поля, включая is_hidden и is_vibe (если они есть в БД)
       let query = supabase.from("places").select("*");
 
-    // Фильтрация по городу
-    // Применяем фильтр, если:
-    // 1. Город явно указан в URL (hasExplicitCityInUrlState = true), ИЛИ
-    // 2. Город установлен и отличается от DEFAULT_CITY
-    if (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) {
-      // Filter by city_name_cached (preferred) or city (backward compatibility)
-      // Use OR filter: city_name_cached matches OR city matches
-      query = query.or(`city_name_cached.eq.${appliedCity},city.eq.${appliedCity}`);
-    }
+      // Фильтрация по городам (если выбраны, но не все)
+      const citiesToFilter = appliedCities.filter(city => city !== DEFAULT_CITY);
+      const allCitiesSelectedInQuery = citiesToFilter.length > 0 && 
+                                       citiesToFilter.length === CITIES.length &&
+                                       CITIES.every(city => citiesToFilter.includes(city));
+      
+      if (citiesToFilter.length > 0 && !allCitiesSelectedInQuery) {
+        // Build OR condition for multiple cities
+        const cityFilters = citiesToFilter.flatMap(city => [
+          `city_name_cached.eq.${city}`,
+          `city.eq.${city}`
+        ]);
+        query = query.or(cityFilters.join(','));
+      } else if (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && !allCitiesSelectedInQuery) {
+        // Fallback для обратной совместимости
+        query = query.or(`city_name_cached.eq.${appliedCity},city.eq.${appliedCity}`);
+      }
 
-    // Фильтрация по категориям - если выбраны категории, проверяем что place.categories содержит хотя бы одну из них
-    if (appliedCategories.length > 0) {
-      // Используем overlaps для проверки пересечения массивов
-      query = query.overlaps("categories", appliedCategories);
-    }
+      // Фильтрация по категориям (если выбраны, но не все)
+      const allCategoriesSelectedInQuery = appliedCategories.length > 0 && 
+                                          appliedCategories.length === CATEGORIES.length &&
+                                          CATEGORIES.every(cat => appliedCategories.includes(cat));
+      
+      if (appliedCategories.length > 0 && !allCategoriesSelectedInQuery) {
+        // Используем overlaps для проверки пересечения массивов
+        query = query.overlaps("categories", appliedCategories);
+      }
 
-    if (appliedQ.trim()) {
-      const s = appliedQ.trim();
-      query = query.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
-    }
+      // Фильтрация по поисковому запросу
+      if (appliedQ.trim()) {
+        const s = appliedQ.trim();
+        query = query.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
+      }
 
-    // Фильтрация по тегам - используем selectedTag (для обратной совместимости)
-    if (selectedTag) {
-      query = query.contains("tags", [selectedTag]);
-    }
+      // Фильтрация по тегам - используем selectedTag (для обратной совместимости)
+      if (selectedTag) {
+        query = query.contains("tags", [selectedTag]);
+      }
 
     // Применяем сортировку
     if (activeFilters.sort === "newest") {
@@ -501,14 +619,13 @@ function MapPageContent() {
         return;
       }
 
-    // Don't filter premium places - show them as locked with pseudo names
-    // Premium places will be displayed with "Secret place #234" title for non-premium users
-    let filteredData = data;
+    // Обрабатываем данные перед применением фильтров
+    let processedData = data;
 
     // Если выбрана сортировка по комментариям или лайкам, нужно загрузить счетчики
-    let placesWithCounts = filteredData;
+    let placesWithCounts = processedData;
     if (activeFilters.sort === "most_commented" || activeFilters.sort === "most_liked") {
-      const placeIds = data.map((p: any) => p.id);
+      const placeIds = filteredData.map((p: any) => p.id);
       
       // Загружаем количество комментариев и лайков для всех мест
       const [commentsResult, likesResult] = await Promise.all([
@@ -536,7 +653,7 @@ function MapPageContent() {
       });
 
       // Добавляем счетчики к местам и сортируем
-      placesWithCounts = data.map((p: any) => ({
+      placesWithCounts = filteredData.map((p: any) => ({
         ...p,
         commentsCount: commentsCount.get(p.id) || 0,
         likesCount: likesCount.get(p.id) || 0,
@@ -553,11 +670,54 @@ function MapPageContent() {
       ...p,
       lat: p.lat ?? null,
       lng: p.lng ?? null,
+      // Убеждаемся, что поля для фильтрации присутствуют
+      is_premium: p.is_premium ?? null,
+      is_hidden: p.is_hidden ?? null,
+      is_vibe: p.is_vibe ?? null,
+      access_level: p.access_level ?? null,
+      premium_only: p.premium_only ?? null,
+      visibility: p.visibility ?? null,
+      city_name_cached: p.city_name_cached ?? null,
     }));
+    
+    // Фильтрация по поисковому запросу (если есть)
+    let filteredData = placesWithCoords as Place[];
+    if (appliedQ.trim()) {
+      const searchLower = appliedQ.trim().toLowerCase();
+      filteredData = filteredData.filter(place => 
+        place.title?.toLowerCase().includes(searchLower) ||
+        place.description?.toLowerCase().includes(searchLower) ||
+        place.country?.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    // Применяем централизованную функцию filterPlaces для фильтрации Premium/Hidden/Vibe/Cities/Categories
+    const citiesToFilterForLoad = appliedCities.filter(city => city !== DEFAULT_CITY);
+    const selectedCitiesForLoad = citiesToFilterForLoad.length > 0 ? citiesToFilterForLoad : 
+                                 (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) ? [appliedCity] : []);
+    
+    // Проверяем, выбраны ли все города или все категории
+    const allCitiesSelected = selectedCitiesForLoad.length > 0 && 
+                             selectedCitiesForLoad.length === CITIES.length &&
+                             CITIES.every(city => selectedCitiesForLoad.includes(city));
+    
+    const allCategoriesSelected = appliedCategories.length > 0 && 
+                                 appliedCategories.length === CATEGORIES.length &&
+                                 CATEGORIES.every(cat => appliedCategories.includes(cat));
+    
+    const filteredPlaces = filterPlaces(filteredData, {
+      premium: activeFilters.premium || activeFilters.premiumOnly || false,
+      hidden: activeFilters.hidden || false,
+      vibe: activeFilters.vibe || false,
+      // Если выбраны все города, не передаем cities (показываем все)
+      cities: selectedCitiesForLoad.length > 0 && !allCitiesSelected ? selectedCitiesForLoad : undefined,
+      // Если выбраны все категории, не передаем categories (показываем все)
+      categories: appliedCategories.length > 0 && !allCategoriesSelected ? appliedCategories : undefined,
+    });
     
       // Only update state if this is still the current request
       if (loadPlacesRef.current && loadPlacesRef.current.requestId === requestId) {
-        setPlaces(placesWithCoords as Place[]);
+        setPlaces(filteredPlaces);
         setLoading(false);
       }
     } catch (err: any) {
@@ -660,8 +820,10 @@ function MapPageContent() {
     setAppliedQ(searchDraft);
   }
 
-  // Handle city change from SearchBar or SearchModal
   const handleCityChange = (city: string | null) => {
+    // Для обратной совместимости
+    setAppliedCity(city || DEFAULT_CITY);
+    setAppliedCities(city ? [city] : []);
     setSelectedCity(city);
     // Если город явно выбран (не null), устанавливаем его и флаг
     if (city) {
@@ -859,6 +1021,59 @@ function MapPageContent() {
         userAvatar={userAvatar}
         userDisplayName={userDisplayName}
         userEmail={userEmail}
+        view={view}
+        onViewChange={setView}
+        onSearchBarClick={() => setSearchModalOpen(true)}
+      />
+
+      {/* Search Modal */}
+      <SearchModal
+        isOpen={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+        onCitySelect={handleCityChange}
+        onSearchSubmit={(city, query, tags) => {
+          // Update state
+          setSelectedCity(city);
+          if (city) {
+            setAppliedCity(city);
+            setHasExplicitCityInUrlState(true);
+          } else {
+            setAppliedCity(DEFAULT_CITY);
+            setHasExplicitCityInUrlState(false);
+          }
+          setAppliedQ(query);
+          setSearchDraft(query);
+          setSelectedTags(tags || []);
+          
+          // Update activeFilters with tags as categories
+          if (tags && tags.length > 0) {
+            setActiveFilters(prev => ({
+              ...prev,
+              categories: tags,
+            }));
+          }
+          
+          // Update URL
+          const params = new URLSearchParams();
+          if (city) params.set("city", encodeURIComponent(city));
+          if (query) params.set("q", encodeURIComponent(query));
+          if (tags && tags.length > 0) {
+            // Convert tags to categories for URL
+            params.set("categories", tags.map(t => encodeURIComponent(t)).join(','));
+          }
+          if (activeFilters.sort) {
+            params.set("sort", activeFilters.sort);
+          }
+          
+          const newUrl = params.toString() 
+            ? `/map?${params.toString()}`
+            : '/map';
+          router.push(newUrl);
+          setSearchModalOpen(false);
+        }}
+        selectedCity={selectedCity}
+        searchQuery={searchDraft}
+        selectedTags={selectedTags}
       />
 
       {/* Filters Modal */}
@@ -867,34 +1082,110 @@ function MapPageContent() {
         onClose={() => setFilterOpen(false)}
         onApply={handleFiltersApply}
         appliedFilters={activeFilters}
-        getFilteredCount={(draftFilters: ActiveFilters) => {
-          // Фильтруем уже загруженные места на клиенте с учетом draftFilters
-          let filtered = [...places];
-
-          // Фильтрация по категориям
-          if (draftFilters.categories.length > 0) {
-            filtered = filtered.filter(place => 
-              place.categories && 
-              draftFilters.categories.some(cat => place.categories?.includes(cat))
-            );
+        appliedCity={appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) ? appliedCity : null}
+        appliedCities={appliedCities.filter(city => city !== DEFAULT_CITY)}
+        onCityChange={handleCityChange}
+        onCitiesChange={(cities) => {
+          setAppliedCities(cities);
+          // Для обратной совместимости обновляем appliedCity
+          if (cities.length > 0) {
+            setAppliedCity(cities[0]);
+          } else {
+            setAppliedCity(DEFAULT_CITY);
           }
+        }}
+        getFilteredCount={async (draftFilters: ActiveFilters, draftCities: string[]) => {
+          // Используем централизованную функцию filterPlaces для подсчета
+          try {
+            // Используем draftCities из модального окна, если они есть, иначе fallback на appliedCities
+            // Важно: не фильтруем DEFAULT_CITY, если он явно выбран в draftCities
+            let selectedCities: string[] = [];
+            if (draftCities.length > 0) {
+              // Если в draftCities есть города, используем их (включая DEFAULT_CITY, если он там есть)
+              selectedCities = draftCities;
+            } else if (appliedCities.length > 0) {
+              // Fallback на appliedCities
+              selectedCities = appliedCities;
+            } else if (appliedCity) {
+              // Fallback на appliedCity (даже если это DEFAULT_CITY)
+              selectedCities = [appliedCity];
+            }
 
-          // Фильтрация по поисковому запросу (если есть)
-          if (appliedQ.trim()) {
-            const searchLower = appliedQ.toLowerCase();
-            filtered = filtered.filter(place => 
-              place.title?.toLowerCase().includes(searchLower) ||
-              place.description?.toLowerCase().includes(searchLower) ||
-              place.country?.toLowerCase().includes(searchLower)
-            );
+            // Проверяем, выбраны ли все города или все категории
+            const allCitiesSelected = selectedCities.length > 0 && 
+                                     selectedCities.length === CITIES.length &&
+                                     CITIES.every(city => selectedCities.includes(city));
+            
+            const allCategoriesSelected = draftFilters.categories.length > 0 && 
+                                         draftFilters.categories.length === CATEGORIES.length &&
+                                         CATEGORIES.every(cat => draftFilters.categories.includes(cat));
+
+            let dataToFilter: Place[] = [];
+            
+            const { data: allData, error: dataError } = await supabase
+              .from("places")
+              .select("*");
+            
+            if (dataError) {
+              console.error("Error fetching places for count:", dataError);
+              if (places.length > 0) {
+                dataToFilter = places;
+              } else {
+                return 0;
+              }
+            } else {
+              dataToFilter = (allData || []) as Place[];
+            }
+
+            if (dataToFilter.length === 0) {
+              return 0;
+            }
+
+            // Фильтрация по поисковому запросу (если есть)
+            let filtered = dataToFilter;
+            if (appliedQ.trim()) {
+              const searchLower = appliedQ.trim().toLowerCase();
+              filtered = filtered.filter(place => 
+                place.title?.toLowerCase().includes(searchLower) ||
+                place.description?.toLowerCase().includes(searchLower) ||
+                place.country?.toLowerCase().includes(searchLower)
+              );
+            }
+
+            filtered = filterPlaces(filtered, {
+              premium: draftFilters.premium || draftFilters.premiumOnly || false,
+              hidden: draftFilters.hidden || false,
+              vibe: draftFilters.vibe || false,
+              cities: selectedCities.length > 0 && !allCitiesSelected ? selectedCities : undefined,
+              categories: draftFilters.categories.length > 0 && !allCategoriesSelected ? draftFilters.categories : undefined,
+            });
+
+            return filtered.length;
+          } catch (error) {
+            console.error("Error in getFilteredCount:", error);
+            return 0;
           }
-
-          // Фильтрация по городу (уже применена при загрузке, но проверяем для точности)
-          if (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) {
-            filtered = filtered.filter(place => place.city === appliedCity);
+        }}
+        getCityCount={async (city: string) => {
+          try {
+            let query = supabase.from("places").select("*", { count: 'exact', head: true });
+            query = query.or(`city_name_cached.eq.${city},city.eq.${city}`);
+            const { count, error } = await query;
+            return count || 0;
+          } catch {
+            return 0;
           }
-
-          return filtered.length;
+        }}
+        getCategoryCount={async (category: string) => {
+          try {
+            const { count, error } = await supabase
+              .from("places")
+              .select("*", { count: 'exact', head: true })
+              .overlaps("categories", [category]);
+            return count || 0;
+          } catch {
+            return 0;
+          }
         }}
       />
 
@@ -924,45 +1215,17 @@ function MapPageContent() {
         Card image: aspect 4:3, radius 18-22px, carousel dots
         See app/config/layout.ts for detailed configuration
       */}
-      {/* View Toggle - только для мобильных и планшетов (<1120px) */}
-      {/* Обычный блок в flow, не sticky, чтобы не накладывался на карту */}
-      {/* TopBar fixed, поэтому нужен margin-top для компенсации */}
-      <div className="hidden max-[1119px]:block bg-[#FAFAF7] border-b border-[#ECEEE4] mt-[64px] min-[600px]:mt-[80px]">
-        <div className="flex items-center gap-2 px-4 py-2">
-          <button
-            onClick={() => setView("list")}
-            className={`flex-1 px-4 py-2 rounded-xl text-sm font-medium transition ${
-              view === "list"
-                ? "bg-[#8F9E4F] text-white"
-                : "bg-white text-[#8F9E4F] border border-[#ECEEE4] hover:bg-[#FAFAF7]"
-            }`}
-          >
-            List
-          </button>
-          <button
-            onClick={() => setView("map")}
-            className={`flex-1 px-4 py-2 rounded-xl text-sm font-medium transition ${
-              view === "map"
-                ? "bg-[#8F9E4F] text-white"
-                : "bg-white text-[#8F9E4F] border border-[#ECEEE4] hover:bg-[#FAFAF7]"
-            }`}
-          >
-            Map
-          </button>
-        </div>
-      </div>
-
-      {/* Контент: на desktop учитываем только TopBar (fixed), на mobile/tablet контент идет после ToggleBar в flow */}
-      <div className="flex-1 min-h-0 overflow-hidden min-[1120px]:pt-[80px]">
+      {/* Контент: на desktop учитываем только TopBar (fixed), на mobile/tablet учитываем TopBar + View Toggle */}
+      <div className="flex-1 min-h-0 overflow-hidden min-[1120px]:pt-[80px] max-[1119px]:pt-[112px]">
         {/* Desktop: Split view - список слева, карта справа (≥1120px) */}
         <div className="hidden min-[1120px]:flex h-full max-w-[1920px] min-[1920px]:max-w-none mx-auto px-6">
           {/* Left: Scrollable list - 60% on XL (>=1440px), 62.5% on Desktop (1120-1439px) */}
           <div className="w-[62.5%] min-[1440px]:w-[60%] min-[1920px]:w-[1152px] flex-shrink-0 overflow-y-auto scrollbar-hide pr-6">
             {/* Header in List Column */}
-            <div className="sticky top-0 z-30 bg-[#FAFAF7] pt-20 pb-3 border-b border-[#ECEEE4] mb-4">
+            <div className="sticky top-0 z-30 bg-[#FAFAF7] pb-3 border-b border-[#ECEEE4] mb-4">
               <div className="flex items-center gap-3 mb-2">
                 <div className="flex-1 min-w-0">
-                  <h1 className="text-xl font-semibold font-fraunces text-[#1F2A1F] truncate">{listTitle}</h1>
+                  <h2 className="text-lg min-[600px]:text-xl font-semibold font-fraunces text-[#1F2A1F] truncate">{listTitle}</h2>
                   {listSubtitle && (
                     <div className="text-sm text-[#6F7A5A] mt-0.5">
                       {listSubtitle}
@@ -993,7 +1256,7 @@ function MapPageContent() {
                       }}
                       className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
                     >
-                      {cat}
+                      {cat.replace(/^[^\s]+\s/, "")}
                       <Icon name="close" size={12} />
                     </button>
                   ))}
@@ -1015,7 +1278,7 @@ function MapPageContent() {
                 ))}
               </div>
             ) : places.length === 0 ? (
-              <Empty text="No places with this vibe yet. Try fewer filters." />
+              <Empty text="No places match your filters." />
             ) : (
               <div className="grid grid-cols-2 min-[1440px]:grid-cols-3 gap-6 min-[1440px]:gap-6 min-[1440px]:gap-y-7">
                 {places.map((p) => {
@@ -1106,7 +1369,7 @@ function MapPageContent() {
               <div className="max-w-[1920px] mx-auto px-4 min-[600px]:px-6 py-4">
                 {/* Header */}
                 <div className="mb-4">
-                  <h1 className="text-xl font-semibold font-fraunces text-[#1F2A1F] mb-2">{listTitle}</h1>
+                  <h2 className="text-lg min-[600px]:text-xl font-semibold font-fraunces text-[#1F2A1F] mb-2">{listTitle}</h2>
                   {listSubtitle && (
                     <div className="text-sm text-[#6F7A5A]">{listSubtitle}</div>
                   )}
@@ -1131,16 +1394,16 @@ function MapPageContent() {
                               categories: prev.categories.filter(c => c !== cat)
                             }));
                           }}
-                          className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
-                        >
-                          {cat}
-                          <Icon name="close" size={12} />
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
+                    >
+                      {cat.replace(/^[^\s]+\s/, "")}
+                      <Icon name="close" size={12} />
+                    </button>
+                  ))}
                 </div>
-                {/* Places grid */}
+              )}
+            </div>
+            {/* Places grid */}
                 {loading ? (
                   <div className="grid grid-cols-2 min-[600px]:grid-cols-3 gap-4">
                     {Array.from({ length: 6 }).map((_, i) => (
@@ -1156,7 +1419,7 @@ function MapPageContent() {
                     ))}
                   </div>
                 ) : places.length === 0 ? (
-                  <Empty text="No places with this vibe yet. Try fewer filters." />
+                  <Empty text="No places match your filters." />
                 ) : (
                   <div className="grid grid-cols-2 min-[600px]:grid-cols-3 gap-4">
                     {places.map((p) => {
@@ -1378,16 +1641,11 @@ function MapView({
     libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
-  // Log Google Maps loading status (production diagnostics)
   useEffect(() => {
-    if (process.env.NODE_ENV === 'production') {
-      import('../lib/diagnostics').then(({ logGoogleMapsStatus }) => {
-        logGoogleMapsStatus(isLoaded, loadError);
-      });
-    } else if (loadError) {
+    if (loadError) {
       console.error("Google Maps load error:", loadError);
     }
-  }, [isLoaded, loadError]);
+  }, [loadError]);
 
   // Prevent page scroll when interacting with map on mobile
   useEffect(() => {
@@ -1865,7 +2123,14 @@ function MapView({
                                 className="absolute inset-0 w-full h-full object-cover rounded-t-xl"
                               />
                               
-                              {/* Top Right Buttons */}
+                              {/* Premium Badge - Top Left */}
+                              {isPlacePremium(place) && (
+                                <div className="absolute top-3 left-3 z-10">
+                                  <PremiumBadge />
+                                </div>
+                              )}
+                              
+                              {/* Top Right Buttons - Favorite Icon Always Visible */}
                               <div className="absolute top-3 right-3 flex gap-2 z-10">
                                 {userId && onToggleFavorite && (
                                   <button
@@ -1874,8 +2139,10 @@ function MapView({
                                       e.stopPropagation();
                                       onToggleFavorite(place.id, e);
                                     }}
-                                    className={`h-8 w-8 rounded-full bg-white border border-[#6b7d47]/20 hover:bg-[#f5f4f2] hover:border-[#6b7d47]/40 flex items-center justify-center transition shadow-sm ${
-                                      favorites?.has(place.id) ? "bg-[#6b7d47]/10 border-[#6b7d47]/30" : ""
+                                    className={`h-8 w-8 rounded-full bg-white border flex items-center justify-center transition shadow-sm ${
+                                      favorites?.has(place.id) 
+                                        ? "border-[#8F9E4F] bg-[#FAFAF7]" 
+                                        : "border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F]"
                                     }`}
                                     title={favorites?.has(place.id) ? "Remove from favorites" : "Add to favorites"}
                                     aria-label={favorites?.has(place.id) ? "Remove from favorites" : "Add to favorites"}
@@ -1883,23 +2150,9 @@ function MapView({
                                     <FavoriteIcon 
                                       isActive={favorites?.has(place.id) || false} 
                                       size={16}
-                                      className={favorites?.has(place.id) ? "scale-110" : ""}
                                     />
                                   </button>
                                 )}
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    if (!externalSelectedPlaceId) {
-                                      setInternalSelectedPlaceId(null);
-                                    }
-                                  }}
-                                  className="w-8 h-8 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-colors"
-                                  aria-label="Close"
-                                >
-                                  <Icon name="close" size={16} className="text-[#1F2A1F]" />
-                                </button>
                               </div>
                               
                               {/* Navigation Arrows - круглые как в карточках */}

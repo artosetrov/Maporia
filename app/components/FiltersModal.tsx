@@ -2,13 +2,18 @@
 
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
-import { DEFAULT_CITY } from "../constants";
+import { DEFAULT_CITY, CITIES } from "../constants";
 import { CATEGORIES, SORT_OPTIONS } from "../constants";
 import Icon from "./Icon";
 
 export type ActiveFilters = {
   categories: string[];
   sort: string | null;
+  premium?: boolean;
+  hidden?: boolean;
+  vibe?: boolean;
+  // Для обратной совместимости
+  premiumOnly?: boolean;
 };
 
 type FiltersModalProps = {
@@ -19,10 +24,22 @@ type FiltersModalProps = {
   // Applied filters (current state)
   appliedFilters: ActiveFilters;
   
+  // Applied cities (for display in tags and city selection)
+  appliedCity?: string | null;
+  appliedCities?: string[];
+  onCityChange?: (city: string | null) => void;
+  onCitiesChange?: (cities: string[]) => void;
+  
   // Optional: callback to get filtered places count for "Show X places" button
-  // Takes draft filters as parameter to calculate count based on current selections
+  // Takes draft filters and draft cities as parameters to calculate count based on current selections
   // Can be async (returns Promise<number>) or sync (returns number)
-  getFilteredCount?: (filters: ActiveFilters) => number | Promise<number>;
+  getFilteredCount?: (filters: ActiveFilters, cities: string[]) => number | Promise<number>;
+  
+  // Optional: get count for each city
+  getCityCount?: (city: string) => number | Promise<number>;
+  
+  // Optional: get count for each category
+  getCategoryCount?: (category: string) => number | Promise<number>;
 };
 
 export default function FiltersModal({
@@ -30,20 +47,44 @@ export default function FiltersModal({
   onClose,
   onApply,
   appliedFilters,
+  appliedCity,
+  appliedCities,
+  onCityChange,
+  onCitiesChange,
   getFilteredCount,
+  getCityCount,
+  getCategoryCount,
 }: FiltersModalProps) {
   // Ensure appliedFilters is always defined
   const safeAppliedFilters: ActiveFilters = appliedFilters || {
     categories: [],
     sort: null,
+    premium: false,
+    hidden: false,
+    vibe: false,
+    premiumOnly: false, // Для обратной совместимости
   };
   
   // Draft state (changes while modal is open)
   const [draftFilters, setDraftFilters] = useState<ActiveFilters>(safeAppliedFilters);
+  // Поддерживаем как старый формат (один город), так и новый (массив городов)
+  const [draftCities, setDraftCities] = useState<string[]>(() => {
+    if (appliedCities && appliedCities.length > 0) {
+      return appliedCities;
+    }
+    if (appliedCity) {
+      return [appliedCity];
+    }
+    return [];
+  });
   
   // State for filtered count (can be async)
   const [filteredCount, setFilteredCount] = useState<number | null>(null);
   const [countLoading, setCountLoading] = useState(false);
+  
+  // City and category counts
+  const [cityCounts, setCityCounts] = useState<Record<string, number>>({});
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
   
   // Use ref to store getFilteredCount to avoid dependency issues
   const getFilteredCountRef = useRef(getFilteredCount);
@@ -55,10 +96,57 @@ export default function FiltersModal({
   useEffect(() => {
     if (isOpen) {
       setDraftFilters(safeAppliedFilters);
+      if (appliedCities && appliedCities.length > 0) {
+        setDraftCities(appliedCities);
+      } else if (appliedCity) {
+        setDraftCities([appliedCity]);
+      } else {
+        setDraftCities([]);
+      }
     }
-  }, [isOpen, safeAppliedFilters]);
+  }, [isOpen, safeAppliedFilters, appliedCity, appliedCities]);
+
   
-  // Update count when draftFilters change
+  // Load city and category counts
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    // Load city counts
+    if (getCityCount) {
+      const loadCityCounts = async () => {
+        const counts: Record<string, number> = {};
+        for (const city of CITIES) {
+          try {
+            const count = await getCityCount(city);
+            counts[city] = count;
+          } catch {
+            counts[city] = 0;
+          }
+        }
+        setCityCounts(counts);
+      };
+      loadCityCounts();
+    }
+    
+    // Load category counts
+    if (getCategoryCount) {
+      const loadCategoryCounts = async () => {
+        const counts: Record<string, number> = {};
+        for (const category of CATEGORIES) {
+          try {
+            const count = await getCategoryCount(category);
+            counts[category] = count;
+          } catch {
+            counts[category] = 0;
+          }
+        }
+        setCategoryCounts(counts);
+      };
+      loadCategoryCounts();
+    }
+  }, [isOpen, getCityCount, getCategoryCount]);
+  
+  // Update count when draftFilters or draftCities change
   useEffect(() => {
     // Всегда вызываем useEffect, но проверяем условия внутри
     if (!isOpen) {
@@ -75,7 +163,7 @@ export default function FiltersModal({
     }
     
     setCountLoading(true);
-    const result = getCountFn(draftFilters);
+    const result = getCountFn(draftFilters, draftCities);
     
     if (result instanceof Promise) {
       result
@@ -92,7 +180,7 @@ export default function FiltersModal({
       setFilteredCount(result);
       setCountLoading(false);
     }
-  }, [draftFilters, isOpen]);
+  }, [draftFilters, draftCities, isOpen]);
 
   if (!isOpen) return null;
 
@@ -111,20 +199,98 @@ export default function FiltersModal({
       sort: prev.sort === sort ? null : sort,
     }));
   };
+  
+  const handleTogglePremium = () => {
+    setDraftFilters((prev) => ({
+      ...prev,
+      premium: !prev.premium,
+      premiumOnly: !prev.premium, // Для обратной совместимости
+    }));
+  };
+
+  const handleToggleHidden = () => {
+    setDraftFilters((prev) => ({
+      ...prev,
+      hidden: !prev.hidden,
+    }));
+  };
+
+  const handleToggleVibe = () => {
+    setDraftFilters((prev) => ({
+      ...prev,
+      vibe: !prev.vibe,
+    }));
+  };
+  
+  const handleCitySelect = (city: string) => {
+    setDraftCities(prev => {
+      const isSelected = prev.includes(city);
+      return isSelected 
+        ? prev.filter(c => c !== city)
+        : [...prev, city];
+    });
+  };
 
   const handleClearAll = () => {
     const clearedFilters = {
       categories: [],
       sort: null,
+      premiumOnly: false,
     };
     setDraftFilters(clearedFilters);
+    setDraftCities([]);
     // Immediately apply cleared filters and close modal
     onApply(clearedFilters);
+    // Вызываем колбэки синхронно только при закрытии модального окна
+    if (onCitiesChange) {
+      onCitiesChange([]);
+    }
+    if (onCityChange) {
+      onCityChange(null);
+    }
     onClose();
+  };
+  
+  const handleRemoveFilter = (type: "city" | "category" | "premium" | "hidden" | "vibe", value?: string) => {
+    if (type === "city" && value) {
+      setDraftCities(prev => prev.filter(c => c !== value));
+    } else if (type === "category" && value) {
+      setDraftFilters((prev) => ({
+        ...prev,
+        categories: prev.categories.filter((c) => c !== value),
+      }));
+    } else if (type === "premium") {
+      setDraftFilters((prev) => ({
+        ...prev,
+        premium: false,
+        premiumOnly: false,
+      }));
+    } else if (type === "hidden") {
+      setDraftFilters((prev) => ({
+        ...prev,
+        hidden: false,
+      }));
+    } else if (type === "vibe") {
+      setDraftFilters((prev) => ({
+        ...prev,
+        vibe: false,
+      }));
+    }
   };
 
   const handleApply = () => {
+    // Применяем фильтры и обновляем родительский компонент
     onApply(draftFilters);
+    
+    // Обновляем города в родительском компоненте при применении
+    if (onCitiesChange) {
+      onCitiesChange(draftCities);
+    }
+    if (onCityChange) {
+      // Для обратной совместимости передаем первый город или null
+      onCityChange(draftCities.length > 0 ? draftCities[0] : null);
+    }
+    
     onClose();
   };
 
@@ -134,74 +300,186 @@ export default function FiltersModal({
     onClose();
   };
 
+  const currentAppliedCities = appliedCities && appliedCities.length > 0 
+    ? appliedCities 
+    : (appliedCity ? [appliedCity] : []);
   const hasChanges =
-    JSON.stringify(draftFilters) !== JSON.stringify(safeAppliedFilters);
+    JSON.stringify(draftFilters) !== JSON.stringify(safeAppliedFilters) ||
+    JSON.stringify(draftCities.sort()) !== JSON.stringify(currentAppliedCities.sort());
+  
+  // Get applied filters for display
+  const appliedFiltersList: Array<{ type: "city" | "category" | "premium" | "hidden" | "vibe"; label: string; value?: string }> = [];
+  draftCities.forEach(city => {
+    appliedFiltersList.push({ type: "city", label: city, value: city });
+  });
+  if (draftFilters.premium) {
+    appliedFiltersList.push({ type: "premium", label: "Premium" });
+  }
+  if (draftFilters.hidden) {
+    appliedFiltersList.push({ type: "hidden", label: "Hidden" });
+  }
+  if (draftFilters.vibe) {
+    appliedFiltersList.push({ type: "vibe", label: "Vibe" });
+  }
+  draftFilters.categories.forEach((cat) => {
+    appliedFiltersList.push({ type: "category", label: cat, value: cat });
+  });
+  if (draftFilters.premiumOnly) {
+    appliedFiltersList.push({ type: "premium", label: "Premium" });
+  }
+
+  // Get category emoji
+  const getCategoryEmoji = (category: string) => {
+    // Match any emoji at the start (including ✨, 🤫, etc.)
+    const emojiMatch = category.match(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u);
+    return emojiMatch ? emojiMatch[0] : "📍";
+  };
+  
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-end lg:items-center justify-center">
       {/* Overlay */}
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm lg:bg-black/50"
         onClick={handleClose}
       />
 
-      {/* Modal */}
-      <div className="relative bg-white rounded-2xl w-full max-w-[860px] min-[900px]:max-w-[980px] max-h-[80vh] flex flex-col mx-4 border border-[#ECEEE4]"
-           style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
+      {/* Modal - Desktop: centered, Mobile: bottom sheet */}
+      <div className="relative w-full lg:w-[600px] lg:max-w-[600px] lg:max-h-[85vh] lg:mx-4 lg:rounded-2xl bg-white flex flex-col border-t lg:border border-[#ECEEE4] transition-transform duration-300 ease-out lg:animate-none shadow-sm"
+           style={{ 
+             maxHeight: '90vh',
+             height: 'auto',
+             minHeight: '50vh',
+             borderTopLeftRadius: '1rem',
+             borderTopRightRadius: '1rem',
+             animation: 'slide-up 0.3s ease-out',
+           }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#ECEEE4]">
-          <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F]">Filters</h2>
-          <button
-            onClick={handleClose}
-            className="w-8 h-8 rounded-full hover:bg-[#FAFAF7] transition-colors flex items-center justify-center text-[#A8B096]"
-            aria-label="Close"
-          >
-            <Icon name="close" size={20} />
-          </button>
+        <div className="px-6 pt-5 pb-4 border-b border-[#ECEEE4] flex-shrink-0">
+          {/* Mobile: Drag handle */}
+          <div className="lg:hidden flex justify-center mb-3">
+            <div className="w-12 h-1.5 bg-[#ECEEE4] rounded-full" />
+          </div>
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-semibold text-[#1F2A1F] font-fraunces">Filters</h2>
+            <button
+              onClick={handleClose}
+              className="w-8 h-8 rounded-full hover:bg-[#FAFAF7] transition-colors flex items-center justify-center text-[#1F2A1F]"
+              aria-label="Close"
+            >
+              <Icon name="close" size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Content (scrollable) */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8">
-          {/* Categories Section */}
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 min-h-0">
+          {/* Quick Filters Block */}
           <div>
-            <h3 className="text-sm font-semibold text-[#1F2A1F] mb-4">Category</h3>
-            <div className="grid grid-cols-2 min-[600px]:grid-cols-3 min-[900px]:grid-cols-4 gap-3">
-              {CATEGORIES.map((category) => {
-                const isSelected = draftFilters.categories.includes(category);
+            <div className="flex gap-3">
+              {/* Premium Card */}
+              <button
+                onClick={() => handleTogglePremium()}
+                className={`flex-1 flex flex-col items-center justify-center px-4 py-5 rounded-xl border-2 transition-all ${
+                  draftFilters.premium
+                    ? "border-[#8F9E4F] bg-[#C9D2A3]"
+                    : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
+                }`}
+              >
+                <span className="text-3xl mb-2">⭐</span>
+                <span className={`text-sm font-medium text-center ${draftFilters.premium ? "text-[#1F2A1F]" : "text-[#1F2A1F]"}`}>
+                  Premium
+                </span>
+              </button>
+
+              {/* Hidden Card */}
+              <button
+                onClick={() => handleToggleHidden()}
+                className={`flex-1 flex flex-col items-center justify-center px-4 py-5 rounded-xl border-2 transition-all ${
+                  draftFilters.hidden
+                    ? "border-[#8F9E4F] bg-[#C9D2A3]"
+                    : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
+                }`}
+              >
+                <span className="text-3xl mb-2">🤫</span>
+                <span className={`text-sm font-medium text-center ${draftFilters.hidden ? "text-[#1F2A1F]" : "text-[#1F2A1F]"}`}>
+                  Hidden
+                </span>
+              </button>
+
+              {/* Vibe Card */}
+              <button
+                onClick={() => handleToggleVibe()}
+                className={`flex-1 flex flex-col items-center justify-center px-4 py-5 rounded-xl border-2 transition-all ${
+                  draftFilters.vibe
+                    ? "border-[#8F9E4F] bg-[#C9D2A3]"
+                    : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
+                }`}
+              >
+                <span className="text-3xl mb-2">✨</span>
+                <span className={`text-sm font-medium text-center ${draftFilters.vibe ? "text-[#1F2A1F]" : "text-[#1F2A1F]"}`}>
+                  Vibe
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* City Section */}
+          <div>
+            <h3 className="text-xs font-semibold text-[#6F7A5A] uppercase tracking-wide mb-3">CITY</h3>
+            <div className="flex flex-wrap gap-2">
+              {CITIES.map((city) => {
+                const isSelected = draftCities.includes(city);
+                const count = cityCounts[city];
                 return (
                   <button
-                    key={category}
-                    onClick={() => handleToggleCategory(category)}
-                    className={`px-4 py-3 rounded-xl border-2 transition-colors text-left ${
+                    key={city}
+                    onClick={() => handleCitySelect(city)}
+                    className={`inline-flex items-center gap-2 px-3 py-2 rounded-full border transition-colors whitespace-nowrap ${
                       isSelected
-                        ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#8F9E4F] font-medium"
+                        ? "border-[#8F9E4F] bg-[#C9D2A3] text-[#1F2A1F]"
                         : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
                     }`}
                   >
-                    <span className="text-sm">{category}</span>
+                    <Icon name="location" size={16} className={isSelected ? "text-[#1F2A1F]" : "text-[#6F7A5A]"} />
+                    <span className="text-sm font-medium">{city}</span>
+                    {count !== undefined && (
+                      <span className={`text-xs ${isSelected ? "text-[#6F7A5A]" : "text-[#A8B096]"}`}>
+                        ({count})
+                      </span>
+                    )}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Sort Section */}
+          {/* Category Section */}
           <div>
-            <h3 className="text-sm font-semibold text-[#1F2A1F] mb-4">Sort</h3>
-            <div className="space-y-2">
-              {SORT_OPTIONS.map((option) => {
-                const isSelected = draftFilters.sort === option.value;
+            <h3 className="text-xs font-semibold text-[#6F7A5A] uppercase tracking-wide mb-4">CATEGORY</h3>
+            <div className="flex flex-wrap gap-2">
+              {CATEGORIES.map((category) => {
+                const isSelected = draftFilters.categories.includes(category);
+                const count = categoryCounts[category];
+                const emoji = getCategoryEmoji(category);
+                const label = category.replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]+\s*/u, "").trim();
                 return (
                   <button
-                    key={option.value}
-                    onClick={() => handleSortChange(option.value)}
-                    className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-colors ${
+                    key={category}
+                    onClick={() => handleToggleCategory(category)}
+                    className={`inline-flex items-center gap-2 px-3 py-2 rounded-full border transition-colors whitespace-nowrap ${
                       isSelected
-                        ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#8F9E4F] font-medium"
+                        ? "border-[#8F9E4F] bg-[#C9D2A3] text-[#1F2A1F]"
                         : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
                     }`}
                   >
-                    <span className="text-sm">{option.label}</span>
+                    <span className="text-base">{emoji}</span>
+                    <span className="text-sm font-medium">{label}</span>
+                    {count !== undefined && (
+                      <span className={`text-xs ${isSelected ? "text-[#6F7A5A]" : "text-[#A8B096]"}`}>
+                        ({count})
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -210,26 +488,30 @@ export default function FiltersModal({
         </div>
 
         {/* Footer (sticky) */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[#ECEEE4] bg-white rounded-b-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-[#ECEEE4] bg-white lg:rounded-b-2xl flex-shrink-0"
+             style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
           <button
             onClick={handleClearAll}
-            className="text-sm font-medium text-[#8F9E4F] hover:text-[#6F7A5A] underline transition-colors"
+            className="text-sm font-medium text-[#6F7A5A] hover:text-[#1F2A1F] underline transition-colors"
           >
-            Clear all
+            Reset all
           </button>
           <button
             onClick={handleApply}
-            disabled={!hasChanges}
-            className={`px-6 py-3 h-11 rounded-xl font-medium transition-all ${
-              hasChanges
-                ? "bg-[#8F9E4F] text-white hover:brightness-110 active:brightness-90"
+            disabled={countLoading || filteredCount === null || filteredCount === 0}
+            className={`px-5 h-11 rounded-xl font-medium text-sm transition-all flex items-center gap-2 ${
+              !countLoading && filteredCount !== null && filteredCount > 0
+                ? "bg-[#8F9E4F] text-white hover:bg-[#7A8A42] shadow-sm"
                 : "bg-[#DADDD0] text-white cursor-not-allowed"
             }`}
           >
+            {(draftFilters.premium || draftFilters.premiumOnly) && (
+              <svg className="w-4 h-4 text-white flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+              </svg>
+            )}
             {countLoading
               ? "Loading..."
-              : filteredCount !== null && hasChanges
-              ? `Show ${filteredCount} ${filteredCount === 1 ? "place" : "places"}`
               : filteredCount !== null
               ? `Show ${filteredCount} ${filteredCount === 1 ? "place" : "places"}`
               : "Apply"}
