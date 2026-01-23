@@ -326,7 +326,7 @@ export default function HomePage() {
 
       <div className="flex-1 pt-[64px] pb-20">
         <div 
-          className="mx-auto py-6 min-[600px]:py-8 max-w-full min-[900px]:max-w-[960px] min-[1120px]:max-w-[1120px] min-[1440px]:max-w-[1440px] min-[1920px]:max-w-[1920px]"
+          className="mx-auto pb-6 min-[600px]:py-8 max-w-full min-[900px]:max-w-[960px] min-[1120px]:max-w-[1120px] min-[1440px]:max-w-[1440px] min-[1920px]:max-w-[1920px]"
           style={{
             paddingLeft: 'var(--home-page-padding, 16px)',
             paddingRight: 'var(--home-page-padding, 16px)',
@@ -334,7 +334,7 @@ export default function HomePage() {
         >
           {!bootReady ? (
             // Show skeleton while bootstrapping
-            <div className="space-y-6">
+            <div className="space-y-6 pt-6 min-[600px]:pt-8">
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="mb-6 min-[600px]:mb-8 min-[900px]:mb-9">
                   <div className="flex items-center justify-between mb-3 min-[600px]:mb-4 h-10 min-[600px]:h-12">
@@ -363,7 +363,7 @@ export default function HomePage() {
             </div>
           ) : (
             // Render sections only after bootstrap is ready
-            HOME_SECTIONS.map((section) => (
+            HOME_SECTIONS.map((section, index) => (
               <HomeSection
                 key={section.title}
                 section={section}
@@ -372,6 +372,7 @@ export default function HomePage() {
                 favorites={favorites}
                 onToggleFavorite={toggleFavorite}
                 onTagClick={handleTagClick}
+                isFirst={index === 0}
               />
             ))
           )}

@@ -184,8 +184,19 @@ export default function SavedPage() {
         getFilteredCount={() => 0}
       />
 
-      <div className="flex-1 pt-[80px] pb-20">
+      <div className="flex-1 max-lg:pt-[48px] lg:pt-[80px] pb-20">
         <div className="px-6 lg:px-8">
+          {/* Header */}
+          {!loading && (
+            <div className="mb-4">
+              <h2 className="text-lg min-[600px]:text-xl font-semibold font-fraunces text-[#1F2A1F] mb-2">
+                My favorites
+                <span className="ml-2 text-[#6F7A5A] font-normal">
+                  {places.length} {places.length === 1 ? "place" : "places"}
+                </span>
+              </h2>
+            </div>
+          )}
           {loading ? (
             <div className="grid grid-cols-2 min-[1440px]:grid-cols-3 gap-6 min-[1440px]:gap-6 min-[1440px]:gap-y-7">
               {Array.from({ length: 6 }).map((_, i) => (

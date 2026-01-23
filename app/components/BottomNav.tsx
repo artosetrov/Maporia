@@ -193,7 +193,7 @@ export default function BottomNav() {
       }`}
       style={{
         bottom: 'env(safe-area-inset-bottom, 0px)',
-        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}
     >
       <div className="mx-auto max-w-md">

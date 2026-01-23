@@ -256,21 +256,50 @@ export default function TopBar({
                     </>
                   )}
 
-                  {/* Right: Filter button (other pages, not profile, not home, not place page) */}
-                  {pathname !== "/profile" && pathname !== "/" && !pathname.startsWith("/id/") && (
-                    <button
-                      onClick={onFiltersClick}
-                      className="w-10 h-10 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] transition-colors flex items-center justify-center flex-shrink-0 relative"
-                      aria-label="Filters"
-                    >
-                      <Icon name="filter" size={20} className="text-[#1F2A1F]" />
-                      {activeFiltersCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#8F9E4F] text-white text-xs font-medium flex items-center justify-center">
-                          {activeFiltersCount}
-                        </span>
-                      )}
-                    </button>
-                  )}
+                  {/* Right: Filter button and View toggle (for map page) */}
+                  <div className="flex items-center gap-2 ml-auto">
+                    {/* Filter button (other pages, not profile, not home, not place page) */}
+                    {pathname !== "/profile" && pathname !== "/" && !pathname.startsWith("/id/") && (
+                      <button
+                        onClick={onFiltersClick}
+                        className="w-10 h-10 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] transition-colors flex items-center justify-center flex-shrink-0 relative"
+                        aria-label="Filters"
+                      >
+                        <Icon name="filter" size={20} className="text-[#1F2A1F]" />
+                        {activeFiltersCount > 0 && (
+                          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#8F9E4F] text-white text-xs font-medium flex items-center justify-center">
+                            {activeFiltersCount}
+                          </span>
+                        )}
+                      </button>
+                    )}
+                    
+                    {/* View Toggle - только для страницы Map */}
+                    {view !== undefined && onViewChange && pathname === "/map" && (
+                      <div className="flex items-center gap-1 bg-white border border-[#ECEEE4] rounded-full p-1">
+                        <button
+                          onClick={() => onViewChange("list")}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+                            view === "list"
+                              ? "bg-[#8F9E4F] text-white"
+                              : "bg-transparent text-[#6F7A5A] hover:text-[#1F2A1F]"
+                          }`}
+                        >
+                          List
+                        </button>
+                        <button
+                          onClick={() => onViewChange("map")}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+                            view === "map"
+                              ? "bg-[#8F9E4F] text-white"
+                              : "bg-transparent text-[#6F7A5A] hover:text-[#1F2A1F]"
+                          }`}
+                        >
+                          Map
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -336,7 +365,7 @@ export default function TopBar({
                       href="/add"
                       className="text-sm text-[#1F2A1F] hover:text-[#8F9E4F] transition-colors"
                     >
-                      + Add gem
+                      Add Gem
                     </Link>
                     
                     {/* Avatar - link to profile */}
@@ -412,7 +441,7 @@ export default function TopBar({
                                 <div className="w-12 h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
                                   <Icon name="add" size={24} className="text-[#1F2A1F]" />
                                 </div>
-                                <span className="text-xs font-medium text-[#1F2A1F] text-center">+ Add gem</span>
+                                <span className="text-xs font-medium text-[#1F2A1F] text-center">Add Gem</span>
                               </Link>
                               <Link
                                 href="/profile?section=trips"
@@ -479,33 +508,6 @@ export default function TopBar({
         </div>
       </div>
 
-      {/* View Toggle (List/Map) - только для страницы Map на следующей строке */}
-      {view !== undefined && onViewChange && (
-        <div className="fixed top-[64px] lg:top-[80px] left-0 right-0 z-30 bg-white lg:hidden">
-          <div className="flex items-center gap-2 px-4 py-2">
-            <button
-              onClick={() => onViewChange("list")}
-              className={`flex-1 px-4 py-2 rounded-xl text-sm font-medium transition ${
-                view === "list"
-                  ? "bg-[#8F9E4F] text-white"
-                  : "bg-white text-[#8F9E4F] border border-[#ECEEE4] hover:bg-[#FAFAF7]"
-              }`}
-            >
-              List
-            </button>
-            <button
-              onClick={() => onViewChange("map")}
-              className={`flex-1 px-4 py-2 rounded-xl text-sm font-medium transition ${
-                view === "map"
-                  ? "bg-[#8F9E4F] text-white"
-                  : "bg-white text-[#8F9E4F] border border-[#ECEEE4] hover:bg-[#FAFAF7]"
-              }`}
-            >
-              Map
-            </button>
-          </div>
-        </div>
-      )}
     </>
   );
 }

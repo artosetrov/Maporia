@@ -1009,7 +1009,7 @@ function ProfileInner() {
         <div className="min-[900px]:hidden">
           {section === "trips" || section === "added" || section === "history" || section === "activity" || (section === "users" && isAdmin) || (section === "elements" && isAdmin) ? (
             // Show section content on mobile
-            <div className="px-6 py-6 pt-[80px]">
+            <div className={`px-6 py-6 ${section === "activity" || section === "added" || (section === "users" && isAdmin) || (section === "elements" && isAdmin) ? "pt-[48px]" : "pt-[80px]"}`}>
               {section === "trips" && (
                 <TripsSection 
                   places={filteredSaved} 

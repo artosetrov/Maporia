@@ -1242,8 +1242,8 @@ function MapPageContent() {
         Card image: aspect 4:3, radius 18-22px, carousel dots
         See app/config/layout.ts for detailed configuration
       */}
-      {/* Контент: на desktop учитываем только TopBar (fixed), на mobile/tablet учитываем TopBar + View Toggle */}
-      <div className="flex-1 min-h-0 overflow-hidden min-[1120px]:pt-[80px] max-[1119px]:pt-[112px]">
+      {/* Контент: на desktop учитываем только TopBar (fixed), на mobile/tablet учитываем только TopBar */}
+      <div className="flex-1 min-h-0 overflow-hidden min-[1120px]:pt-[80px]">
         {/* Desktop: Split view - список слева, карта справа (≥1120px) */}
         <div className="hidden min-[1120px]:flex h-full max-w-[1920px] min-[1920px]:max-w-none mx-auto px-6">
           {/* Left: Scrollable list - 60% on XL (>=1440px), 62.5% on Desktop (1120-1439px) */}
@@ -1262,14 +1262,27 @@ function MapPageContent() {
               </div>
               {/* Active filter chips */}
               {((appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) || appliedCategories.length > 0) && (
-                <div className="mt-2 flex gap-2 overflow-x-auto pb-1 flex-nowrap">
+                <div className="mt-2 flex gap-2 flex-wrap">
                   {appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && (
                     <button
                       onClick={() => handleCityChange(null)}
                       className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
                     >
                       {appliedCity}
-                      <Icon name="close" size={12} />
+                      <svg
+                        className="w-3.5 h-3.5 text-[#8F9E4F] flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
                     </button>
                   )}
                   {appliedCategories.map((cat) => (
@@ -1284,7 +1297,20 @@ function MapPageContent() {
                       className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
                     >
                       {cat.replace(/^[^\s]+\s/, "")}
-                      <Icon name="close" size={12} />
+                      <svg
+                        className="w-3.5 h-3.5 text-[#8F9E4F] flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
                     </button>
                   ))}
                 </div>
@@ -1393,7 +1419,7 @@ function MapPageContent() {
         <div className="min-[1120px]:hidden h-full">
           {view === "list" ? (
             <div className="h-full overflow-y-auto">
-              <div className="max-w-[1920px] mx-auto px-4 min-[600px]:px-6 py-4">
+              <div className="max-w-[1920px] mx-auto px-4 min-[600px]:px-6 pb-4" style={{ paddingTop: '88px' }}>
                 {/* Header */}
                 <div className="mb-4">
                   <h2 className="text-lg min-[600px]:text-xl font-semibold font-fraunces text-[#1F2A1F] mb-2">{listTitle}</h2>
@@ -1402,14 +1428,27 @@ function MapPageContent() {
                   )}
                   {/* Active filter chips */}
                   {((appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) || appliedCategories.length > 0) && (
-                    <div className="mt-2 flex gap-2 overflow-x-auto pb-1 flex-nowrap">
+                    <div className="mt-2 flex gap-2 flex-wrap">
                       {appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && (
                         <button
                           onClick={() => handleCityChange(null)}
                           className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
                         >
                           {appliedCity}
-                          <Icon name="close" size={12} />
+                          <svg
+                            className="w-3.5 h-3.5 text-[#8F9E4F] flex-shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
                         </button>
                       )}
                       {appliedCategories.map((cat) => (
@@ -1424,7 +1463,20 @@ function MapPageContent() {
                       className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
                     >
                       {cat.replace(/^[^\s]+\s/, "")}
-                      <Icon name="close" size={12} />
+                      <svg
+                        className="w-3.5 h-3.5 text-[#8F9E4F] flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
                     </button>
                   ))}
                 </div>

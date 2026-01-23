@@ -44,7 +44,9 @@ export default function PhotosEditorPage() {
   const [originalPhotos, setOriginalPhotos] = useState<Photo[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropzoneRef = useRef<HTMLLabelElement>(null);
 
   // Load photos
   useEffect(() => {
@@ -179,6 +181,35 @@ export default function PhotosEditorPage() {
         })
       );
     });
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      handleFilePick(files);
+    }
+  }
+
+  function handleBrowseClick(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    fileInputRef.current?.click();
   }
 
   function removePhoto(photoId: string) {
@@ -371,9 +402,19 @@ export default function PhotosEditorPage() {
           </div>
         )}
 
-        {/* Upload Dropzone */}
-        <div className="mb-6">
-          <label className="block w-full rounded-2xl border-2 border-dashed border-[#ECEEE4] bg-white p-8 text-center cursor-pointer hover:border-[#8F9E4F] transition">
+        {/* Photo Grid with Upload Dropzone */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+          {/* Upload Dropzone - same size as photos */}
+          <label
+            ref={dropzoneRef}
+            className={cx(
+              "aspect-square rounded-2xl border-2 border-dashed bg-white flex flex-col items-center justify-center cursor-pointer transition relative overflow-hidden",
+              isDragging ? "border-[#8F9E4F] bg-[#FAFAF7]" : "border-[#ECEEE4] hover:border-[#8F9E4F]"
+            )}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             <input
               ref={fileInputRef}
               type="file"
@@ -382,62 +423,63 @@ export default function PhotosEditorPage() {
               className="hidden"
               onChange={(e) => handleFilePick(e.target.files)}
             />
-            <Icon name="photo" size={48} className="text-[#A8B096] mx-auto mb-3" />
-            <p className="text-sm font-medium text-[#1F2A1F] mb-1">Add photos</p>
-            <p className="text-xs text-[#6F7A5A]">Drag and drop or click to browse</p>
+            <div className="flex flex-col items-center justify-center flex-1 px-2 py-3">
+              <span className="text-[36px] mb-1.5">📷</span>
+              <p className="text-[11px] font-semibold text-[#1F2A1F] mb-0.5 text-center leading-tight">Drag and drop</p>
+              <p className="text-center leading-tight mb-1.5" style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>or browse for photos</p>
+              <button
+                type="button"
+                onClick={handleBrowseClick}
+                className="mt-1.5 rounded-md bg-[#8F9E4F] text-white text-xs font-medium py-1.5 px-3 hover:bg-[#556036] transition"
+              >
+                Browse
+              </button>
+            </div>
           </label>
-        </div>
 
-        {/* Photo Grid */}
-        {photos.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {photos.map((photo) => (
-              <div key={photo.id} className="relative group">
-                <div className="aspect-square rounded-2xl overflow-hidden bg-[#FAFAF7] border border-[#ECEEE4]">
-                  <img src={photo.url} alt="" className="w-full h-full object-cover" />
-                  {photo.uploading && (
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                      <div className="text-white text-xs">Uploading…</div>
-                    </div>
-                  )}
-                  {photo.error && (
-                    <div className="absolute inset-0 bg-red-500/40 flex items-center justify-center">
-                      <div className="text-white text-xs px-2 text-center">{photo.error}</div>
-                    </div>
-                  )}
-                  {photo.is_cover && (
-                    <div className="absolute top-2 left-2 rounded-full bg-[#8F9E4F] text-white text-[10px] px-2 py-0.5 font-medium">
-                      Cover
-                    </div>
-                  )}
-                </div>
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <div className="absolute inset-0 bg-black/20 rounded-2xl" />
-                  <div className="absolute bottom-2 left-2 right-2 flex gap-2">
-                    {!photo.is_cover && (
-                      <button
-                        onClick={() => setAsCover(photo.id)}
-                        className="flex-1 rounded-lg bg-white/90 backdrop-blur-sm px-2 py-1.5 text-xs font-medium text-[#1F2A1F] hover:bg-white transition"
-                      >
-                        Set cover
-                      </button>
-                    )}
-                    <button
-                      onClick={() => removePhoto(photo.id)}
-                      className="rounded-lg bg-red-500/90 backdrop-blur-sm px-2 py-1.5 text-xs font-medium text-white hover:bg-red-600 transition"
-                    >
-                      Remove
-                    </button>
+          {/* Photo Grid */}
+          {photos.map((photo) => (
+            <div key={photo.id} className="relative group">
+              <div className="aspect-square rounded-2xl overflow-hidden bg-[#FAFAF7] border border-[#ECEEE4]">
+                <img src={photo.url} alt="" className="w-full h-full object-cover" />
+                {photo.uploading && (
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                    <div className="text-white text-xs">Uploading…</div>
                   </div>
+                )}
+                {photo.error && (
+                  <div className="absolute inset-0 bg-red-500/40 flex items-center justify-center">
+                    <div className="text-white text-xs px-2 text-center">{photo.error}</div>
+                  </div>
+                )}
+                {photo.is_cover && (
+                  <div className="absolute top-2 left-2 rounded-full bg-[#8F9E4F] text-white text-[10px] px-2 py-0.5 font-medium">
+                    Cover
+                  </div>
+                )}
+              </div>
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute inset-0 bg-black/20 rounded-2xl" />
+                <div className="absolute bottom-2 left-2 right-2 flex gap-2">
+                  {!photo.is_cover && (
+                    <button
+                      onClick={() => setAsCover(photo.id)}
+                      className="flex-1 rounded-lg bg-white/90 backdrop-blur-sm px-2 py-1.5 text-xs font-medium text-[#1F2A1F] hover:bg-white transition"
+                    >
+                      Set cover
+                    </button>
+                  )}
+                  <button
+                    onClick={() => removePhoto(photo.id)}
+                    className="rounded-lg bg-red-500/90 backdrop-blur-sm px-2 py-1.5 text-xs font-medium text-white hover:bg-red-600 transition"
+                  >
+                    Remove
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-16">
-            <p className="text-sm text-[#6F7A5A]">No photos yet. Add at least one photo to use as cover.</p>
-          </div>
-        )}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Sticky Footer */}

@@ -177,22 +177,20 @@ export default function UnifiedGoogleImportField({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h4 className="text-sm font-medium text-[#1F2A1F] mb-1">
-            Import from Google
-          </h4>
-          <p className="text-xs text-[#6F7A5A]">
-            Paste a Google Maps link or enter an address for automatic filling
-          </p>
-        </div>
+      <div>
+        <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">
+          Import from Google
+        </h3>
+        <p className="text-sm text-[#6F7A5A]">
+          Paste a Google Maps link or enter an address for automatic filling
+        </p>
         <button
           onClick={() => {
             setShowForm(!showForm);
             setImportError(null);
             setImportSuccess(false);
           }}
-          className="px-3 py-1.5 rounded-lg border border-[#ECEEE4] bg-white text-xs font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] transition"
+          className="mt-2 text-sm font-medium text-[#8F9E4F] hover:text-[#556036] underline transition"
         >
           {showForm ? "Cancel" : "Import"}
         </button>

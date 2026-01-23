@@ -79,6 +79,8 @@ type Place = {
   is_premium?: boolean | null;
   premium_only?: boolean | null;
   visibility?: string | null;
+  // Comments
+  comments_enabled?: boolean | null;
 };
 
 type PlacePhoto = {
@@ -112,6 +114,8 @@ export default function PlaceEditorHub() {
   const [isHidden, setIsHidden] = useState(false);
   const [hiding, setHiding] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [commentsEnabled, setCommentsEnabled] = useState(true); // Default to enabled
+  const [togglingComments, setTogglingComments] = useState(false);
   const autoVisibilityEnabledRef = useRef(false); // Track if auto-visibility was already enabled
 
   // Load place data
@@ -156,6 +160,8 @@ export default function PlaceEditorHub() {
           placeItem.visibility === "hidden" ||
           placeItem.visibility === "private"
       );
+      // Load comments enabled state (default to true if not set)
+      setCommentsEnabled(placeItem.comments_enabled !== false);
 
       // Load photos
       const { data: photosData, error: photosError } = await supabase
@@ -264,6 +270,49 @@ export default function PlaceEditorHub() {
     if (newHiddenState) {
       autoVisibilityEnabledRef.current = false;
     }
+
+    if (navigator.vibrate) navigator.vibrate(10);
+  }
+
+  async function handleToggleComments() {
+    if (!placeId || !user) return;
+
+    setTogglingComments(true);
+    setError(null);
+
+    const newCommentsState = !commentsEnabled;
+
+    // Admin can update any place, owner can update their own
+    const currentIsAdmin = isUserAdmin(access);
+    const updateQuery = supabase
+      .from("places")
+      .update({ comments_enabled: newCommentsState })
+      .eq("id", placeId);
+
+    // If not admin, add ownership check
+    if (!currentIsAdmin) {
+      updateQuery.eq("created_by", user.id);
+    }
+
+    const { error: updateError } = await updateQuery.select();
+
+    setTogglingComments(false);
+
+    if (updateError) {
+      console.error("Update error:", updateError);
+      setError(updateError.message || "Failed to update comments setting");
+      return;
+    }
+
+    setCommentsEnabled(newCommentsState);
+    setPlace((prev) =>
+      prev
+        ? {
+            ...prev,
+            comments_enabled: newCommentsState,
+          }
+        : prev
+    );
 
     if (navigator.vibrate) navigator.vibrate(10);
   }
@@ -514,9 +563,16 @@ export default function PlaceEditorHub() {
               <Icon name="back" size={20} />
             </button>
             <div className="absolute left-1/2 -translate-x-1/2 font-semibold font-fraunces text-[#1F2A1F]" style={{ fontSize: '24px' }}>
-              {isNewPlace ? "Create new place" : "Place editor"}
+              {isNewPlace ? "Add Gem" : "Place editor"}
             </div>
-            <div className="w-[76px]" /> {/* Spacer (replaced Settings) */}
+            <Link
+              href={`/id/${placeId}`}
+              className="flex items-center gap-2 px-3 py-2 rounded-full bg-[#8F9E4F] text-white text-sm font-medium shadow-sm hover:bg-[#556036] transition"
+              aria-label="View place"
+            >
+              <Icon name="eye" size={16} />
+              View
+            </Link>
           </div>
         </div>
       </div>
@@ -527,24 +583,30 @@ export default function PlaceEditorHub() {
             {/* Required Steps Card */}
             {incompleteSteps.length > 0 && (
               <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-[#C96A5B] flex-shrink-0 mt-1.5" />
-                    <h3 className="font-semibold text-[#1F2A1F]">Complete required steps</h3>
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-[#1F2A1F]">Progress</span>
+                    <span className="text-sm font-semibold text-[#1F2A1F]">{completionPercentage}%</span>
                   </div>
-                  <span className="text-xs text-[#6F7A5A]">{completionPercentage}%</span>
+                  {/* Progress Bar */}
+                  <div className="w-full h-2 bg-[#ECEEE4] rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-[#8F9E4F] rounded-full transition-all duration-300"
+                      style={{ width: `${completionPercentage}%` }}
+                    />
+                  </div>
                 </div>
-                <p className="text-sm text-[#6F7A5A] mb-4">
+                <p className="text-sm text-[#6F7A5A]">
                   Finish these final tasks to publish your place.
                 </p>
-                <button
-                  onClick={() => router.push(`/places/${placeId}/edit/required`)}
-                  className="text-sm font-medium text-[#8F9E4F] hover:text-[#556036] transition"
-                >
-                  View all steps →
-                </button>
               </div>
             )}
+
+            <div className="pt-2">
+              <h2 className="font-fraunces font-semibold text-[#1F2A1F] text-base">
+                Tasks to publish
+              </h2>
+            </div>
 
             {/* Photo Tour Card */}
             <Link
@@ -552,29 +614,41 @@ export default function PlaceEditorHub() {
               className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
             >
               <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-[#1F2A1F] mb-1">Photo tour</h3>
-                  {photos.length > 0 ? (
-                    <div className="flex items-center gap-3">
-                      <div className="flex -space-x-2">
-                        {photos.slice(0, 3).map((photo, idx) => (
-                          <div
-                            key={idx}
-                            className="w-12 h-12 rounded-lg border-2 border-white overflow-hidden bg-[#FAFAF7]"
-                          >
-                            <img
-                              src={photo.url}
-                              alt=""
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        ))}
+                <div className="flex items-center gap-3 flex-1">
+                  {/* Status Icon */}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    photos.length > 0 ? 'bg-[#7FA35C]' : 'bg-[#ECEEE4]'
+                  }`}>
+                    <Icon 
+                      name="check" 
+                      size={16} 
+                      className={photos.length > 0 ? 'text-white' : 'text-[#A8B096]'} 
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Photo tour</h3>
+                    {photos.length > 0 ? (
+                      <div className="flex items-center gap-3">
+                        <div className="flex -space-x-2">
+                          {photos.slice(0, 3).map((photo, idx) => (
+                            <div
+                              key={idx}
+                              className="w-12 h-12 rounded-lg border-2 border-white overflow-hidden bg-[#FAFAF7]"
+                            >
+                              <img
+                                src={photo.url}
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <span className="text-sm text-[#6F7A5A]">{photos.length} photos</span>
                       </div>
-                      <span className="text-sm text-[#6F7A5A]">{photos.length} photos</span>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-[#6F7A5A]">No photos yet</p>
-                  )}
+                    ) : (
+                      <p className="text-sm text-[#6F7A5A]">No photos yet</p>
+                    )}
+                  </div>
                 </div>
                 <Icon name="forward" size={20} className="text-[#6F7A5A]" />
               </div>
@@ -586,45 +660,23 @@ export default function PlaceEditorHub() {
               className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
             >
               <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-[#1F2A1F] mb-1">Title</h3>
-                  <p className="text-sm text-[#6F7A5A] line-clamp-1">
-                    {place.title || "No title yet"}
-                  </p>
-                </div>
-                <Icon name="forward" size={20} className="text-[#6F7A5A]" />
-              </div>
-            </Link>
-
-            {/* Categories Card */}
-            <Link
-              href={`/places/${placeId}/edit/categories`}
-              className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-[#1F2A1F] mb-1">Categories</h3>
-                  <p className="text-sm text-[#6F7A5A]">
-                    {place.categories && place.categories.length > 0
-                      ? `${place.categories[0]}${place.categories.length > 1 ? ` +${place.categories.length - 1}` : ""}`
-                      : "No categories selected"}
-                  </p>
-                </div>
-                <Icon name="forward" size={20} className="text-[#6F7A5A]" />
-              </div>
-            </Link>
-
-            {/* Location Card */}
-            <Link
-              href={`/places/${placeId}/edit/location`}
-              className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-[#1F2A1F] mb-1">Location</h3>
-                  <p className="text-sm text-[#6F7A5A] line-clamp-1">
-                    {place.address || place.city || "No location set"}
-                  </p>
+                <div className="flex items-center gap-3 flex-1">
+                  {/* Status Icon */}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    place.title && place.title.trim().length > 0 ? 'bg-[#7FA35C]' : 'bg-[#ECEEE4]'
+                  }`}>
+                    <Icon 
+                      name="check" 
+                      size={16} 
+                      className={place.title && place.title.trim().length > 0 ? 'text-white' : 'text-[#A8B096]'} 
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Title</h3>
+                    <p className="text-sm text-[#6F7A5A] line-clamp-1">
+                      {place.title || "No title yet"}
+                    </p>
+                  </div>
                 </div>
                 <Icon name="forward" size={20} className="text-[#6F7A5A]" />
               </div>
@@ -636,41 +688,101 @@ export default function PlaceEditorHub() {
               className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
             >
               <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-[#1F2A1F] mb-1">Description</h3>
-                  <p className="text-sm text-[#6F7A5A] line-clamp-2">
-                    {place.description || "No description yet"}
-                  </p>
+                <div className="flex items-center gap-3 flex-1">
+                  {/* Status Icon */}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    place.description && place.description.trim().length > 0 ? 'bg-[#7FA35C]' : 'bg-[#ECEEE4]'
+                  }`}>
+                    <Icon 
+                      name="check" 
+                      size={16} 
+                      className={place.description && place.description.trim().length > 0 ? 'text-white' : 'text-[#A8B096]'} 
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Description</h3>
+                    <p className="text-sm text-[#6F7A5A] line-clamp-2">
+                      {place.description || "No description yet"}
+                    </p>
+                  </div>
                 </div>
                 <Icon name="forward" size={20} className="text-[#6F7A5A]" />
               </div>
             </Link>
 
-            {/* Access Card (Premium) */}
+            {/* Location Card */}
             <Link
-              href={`/places/${placeId}/edit/access`}
+              href={`/places/${placeId}/edit/location`}
               className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
             >
               <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-[#1F2A1F] mb-1">Access</h3>
-                  <p className="text-sm text-[#6F7A5A]">
-                    {place.access_level === 'premium' ? "Premium" : "Public"}
-                  </p>
+                <div className="flex items-center gap-3 flex-1">
+                  {/* Status Icon */}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    place.lat && place.lng ? 'bg-[#7FA35C]' : 'bg-[#ECEEE4]'
+                  }`}>
+                    <Icon 
+                      name="check" 
+                      size={16} 
+                      className={place.lat && place.lng ? 'text-white' : 'text-[#A8B096]'} 
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Location</h3>
+                    <p className="text-sm text-[#6F7A5A] line-clamp-1">
+                      {place.address || place.city || "No location set"}
+                    </p>
+                  </div>
                 </div>
                 <Icon name="forward" size={20} className="text-[#6F7A5A]" />
               </div>
             </Link>
+
+            {/* Categories Card */}
+            <Link
+              href={`/places/${placeId}/edit/categories`}
+              className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 flex-1">
+                  {/* Status Icon */}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    place.categories && place.categories.length > 0 ? 'bg-[#7FA35C]' : 'bg-[#ECEEE4]'
+                  }`}>
+                    <Icon 
+                      name="check" 
+                      size={16} 
+                      className={place.categories && place.categories.length > 0 ? 'text-white' : 'text-[#A8B096]'} 
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Categories</h3>
+                    <p className="text-sm text-[#6F7A5A]">
+                      {place.categories && place.categories.length > 0
+                        ? `${place.categories[0]}${place.categories.length > 1 ? ` +${place.categories.length - 1}` : ""}`
+                        : "No categories selected"}
+                    </p>
+                  </div>
+                </div>
+                <Icon name="forward" size={20} className="text-[#6F7A5A]" />
+              </div>
+            </Link>
+
+            <div className="pt-2">
+              <h2 className="font-fraunces font-semibold text-[#1F2A1F] text-base">
+                Settings
+              </h2>
+            </div>
 
             {/* Visibility (moved from Place settings) */}
             <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <h3 className="font-semibold text-[#1F2A1F] mb-1">Visibility</h3>
+                  <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Visibility</h3>
                   <p className="text-sm text-[#6F7A5A]">
-                    {isHidden
-                      ? "Hidden from other users (only you can see it)."
-                      : "Visible to all users on Maporia."}
+                    {!isHidden
+                      ? "Visible to all users on Maporia."
+                      : "Hidden from other users (only you can see it)."}
                   </p>
                 </div>
                 <button
@@ -679,21 +791,80 @@ export default function PlaceEditorHub() {
                   className={cx(
                     "relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] focus:ring-offset-2",
                     hiding && "opacity-50 cursor-not-allowed",
-                    isHidden ? "bg-[#8F9E4F]" : "bg-[#DADDD0]"
+                    !isHidden ? "bg-[#8F9E4F]" : "bg-[#DADDD0]"
                   )}
                   role="switch"
-                  aria-checked={isHidden}
-                  aria-label={isHidden ? "Make visible" : "Hide from users"}
+                  aria-checked={!isHidden}
+                  aria-label={!isHidden ? "Visible to users" : "Hidden from users"}
                 >
                   <span
                     className={cx(
                       "pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-                      isHidden ? "translate-x-5" : "translate-x-0"
+                      !isHidden ? "translate-x-5" : "translate-x-0"
                     )}
                   />
                 </button>
               </div>
             </div>
+
+            {/* Comments Card */}
+            <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Comments</h3>
+                  <p className="text-sm text-[#6F7A5A]">
+                    {commentsEnabled
+                      ? "Users can comment on this place."
+                      : "Comments are disabled for this place."}
+                  </p>
+                </div>
+                <button
+                  onClick={handleToggleComments}
+                  disabled={togglingComments}
+                  className={cx(
+                    "relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] focus:ring-offset-2",
+                    togglingComments && "opacity-50 cursor-not-allowed",
+                    commentsEnabled ? "bg-[#8F9E4F]" : "bg-[#DADDD0]"
+                  )}
+                  role="switch"
+                  aria-checked={commentsEnabled}
+                  aria-label={commentsEnabled ? "Disable comments" : "Enable comments"}
+                >
+                  <span
+                    className={cx(
+                      "pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                      commentsEnabled ? "translate-x-5" : "translate-x-0"
+                    )}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {/* Access Card */}
+            <Link
+              href={`/places/${placeId}/edit/access`}
+              className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 flex-1">
+                  {/* Status Icon - Access всегда заполнен */}
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-[#7FA35C]">
+                    <Icon 
+                      name="check" 
+                      size={16} 
+                      className="text-white" 
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Access</h3>
+                    <p className="text-sm text-[#6F7A5A]">
+                      {place.access_level === 'premium' ? "Premium" : "Public"}
+                    </p>
+                  </div>
+                </div>
+                <Icon name="forward" size={20} className="text-[#6F7A5A]" />
+              </div>
+            </Link>
 
             {/* Google Import Card (moved below Visibility) */}
             {user && placeId && (
@@ -775,7 +946,7 @@ export default function PlaceEditorHub() {
                 onClick={handleDelete}
                 disabled={deleting}
                 className={cx(
-                  "w-full h-11 rounded-xl border border-[#C96A5B] bg-[#C96A5B] px-5 text-sm font-medium text-white hover:bg-[#B85A4B] transition",
+                  "text-sm font-medium text-[#C96A5B] hover:text-[#C96A5B] underline transition hover:opacity-80",
                   deleting && "opacity-50 cursor-not-allowed"
                 )}
               >
@@ -797,7 +968,7 @@ export default function PlaceEditorHub() {
             </button>
             <Link
               href={`/id/${placeId}`}
-              className="flex-1 h-11 rounded-xl bg-[#8F9E4F] text-white px-5 text-sm font-medium text-center hover:bg-[#7A8A42] transition flex items-center justify-center"
+              className="flex-1 h-11 rounded-xl bg-[#8F9E4F] text-white px-5 text-sm font-medium text-center hover:bg-[#556036] transition flex items-center justify-center"
             >
               Save
             </Link>
@@ -805,16 +976,6 @@ export default function PlaceEditorHub() {
         </div>
       </div>
 
-      {/* Floating View Button */}
-      <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-30">
-        <Link
-          href={`/id/${placeId}`}
-          className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#1F2A1F] text-white text-sm font-medium shadow-lg hover:bg-[#2d3a2d] transition"
-        >
-          <Icon name="eye" size={16} />
-          View
-        </Link>
-      </div>
     </main>
   );
 }

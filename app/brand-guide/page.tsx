@@ -1448,12 +1448,12 @@ export default function BrandGuidePage() {
                   <div>
                     <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Desktop Version (≥ 1024px)</h4>
                     <div className="bg-[#FAFAF7] rounded-lg p-4 mb-3 font-mono text-xs">
-                      [Pin.svg Logo] [SearchBar (Airbnb-style)] [+ Add gem] [Avatar] [Hamburger Menu]
+                      [Pin.svg Logo] [SearchBar (Airbnb-style)] [Add Gem] [Avatar] [Hamburger Menu]
                     </div>
                     <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
                       <li><strong>Pin.svg Logo:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">h-10 w-auto</code> (40px height), ссылка на `/`</li>
                       <li><strong>SearchBar:</strong> Полнофункциональный Airbnb-style pill с City Selector, Search Input, Filters</li>
-                      <li><strong>+ Add gem:</strong> Текстовая ссылка на `/add`, видна только для авторизованных пользователей</li>
+                      <li><strong>Add Gem:</strong> Текстовая ссылка на `/add`, видна только для авторизованных пользователей</li>
                       <li><strong>Avatar:</strong> Прямая ссылка на `/profile`, без chevron-down иконки</li>
                       <li><strong>Hamburger Menu:</strong> Отдельная кнопка с иконкой меню, открывает dropdown с Profile, Feed, Saved, Settings, Logout</li>
                       <li><strong>Border-bottom:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">border-b border-[#ECEEE4]</code></li>
@@ -1486,12 +1486,12 @@ export default function BrandGuidePage() {
                   <div>
                     <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Desktop Version (≥ 1024px)</h4>
                     <div className="bg-[#FAFAF7] rounded-lg p-4 mb-3 font-mono text-xs">
-                      [Pin.svg Logo] [SearchBar (Airbnb-style)] [+ Add gem] [Avatar] [Hamburger Menu]
+                      [Pin.svg Logo] [SearchBar (Airbnb-style)] [Add Gem] [Avatar] [Hamburger Menu]
                     </div>
                     <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
                       <li><strong>Pin.svg Logo:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">h-10 w-auto</code> (40px height)</li>
                       <li><strong>SearchBar:</strong> Встроенный компонент с live search (не модальное окно)</li>
-                      <li><strong>+ Add gem:</strong> Текстовая ссылка на `/add`</li>
+                      <li><strong>Add Gem:</strong> Текстовая ссылка на `/add`</li>
                       <li><strong>Avatar:</strong> Прямая ссылка на `/profile`</li>
                       <li><strong>Hamburger Menu:</strong> Открывает dropdown меню</li>
                       <li><strong>View Toggle:</strong> Скрыт (на десктопе используется split view)</li>

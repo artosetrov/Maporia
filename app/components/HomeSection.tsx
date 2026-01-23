@@ -36,11 +36,12 @@ type HomeSectionProps = {
   userAccess?: UserAccess;
   onToggleFavorite?: (placeId: string, e: React.MouseEvent) => void;
   onTagClick?: (tag: string) => void;
+  isFirst?: boolean;
 };
 
 import { getRecentlyViewedPlaceIds } from "../utils";
 
-export default function HomeSection({ section, userId, favorites, userAccess, onToggleFavorite, onTagClick }: HomeSectionProps) {
+export default function HomeSection({ section, userId, favorites, userAccess, onToggleFavorite, onTagClick, isFirst = false }: HomeSectionProps) {
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -539,7 +540,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
   }
 
   return (
-    <div className="mb-6 min-[600px]:mb-8 min-[900px]:mb-9">
+    <div className={`mb-6 min-[600px]:mb-8 min-[900px]:mb-9 ${isFirst ? 'pt-6 min-[600px]:pt-8' : ''}`}>
       {/* Header: Title + See all arrow + Scroll arrows (desktop only) */}
       <div className="flex items-center justify-between mb-3 min-[600px]:mb-4 h-10 min-[600px]:h-12">
         {/* Left: Title + See all arrow (desktop) or just Title (mobile) */}
