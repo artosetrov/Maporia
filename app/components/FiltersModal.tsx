@@ -97,37 +97,13 @@ export default function FiltersModal({
   useEffect(() => {
     if (isOpen) {
       setDraftFilters(safeAppliedFilters);
-      if (appliedCities && appliedCities.length > 0) {
-        setDraftCities(appliedCities);
-      } else if (appliedCity) {
-        setDraftCities([appliedCity]);
-      } else {
-        setDraftCities([]);
-      }
     }
-  }, [isOpen, safeAppliedFilters, appliedCity, appliedCities]);
+  }, [isOpen, safeAppliedFilters]);
 
   
-  // Load city and category counts
+  // Load category counts
   useEffect(() => {
     if (!isOpen) return;
-    
-    // Load city counts
-    if (getCityCount) {
-      const loadCityCounts = async () => {
-        const counts: Record<string, number> = {};
-        for (const city of CITIES) {
-          try {
-            const count = await getCityCount(city);
-            counts[city] = count;
-          } catch {
-            counts[city] = 0;
-          }
-        }
-        setCityCounts(counts);
-      };
-      loadCityCounts();
-    }
     
     // Load category counts
     if (getCategoryCount) {
@@ -164,7 +140,8 @@ export default function FiltersModal({
     }
     
     setCountLoading(true);
-    const result = getCountFn(draftFilters, draftCities);
+    // Передаем пустой массив городов, так как города больше не фильтруются здесь
+    const result = getCountFn(draftFilters, []);
     
     if (result instanceof Promise) {
       result
@@ -181,7 +158,7 @@ export default function FiltersModal({
       setFilteredCount(result);
       setCountLoading(false);
     }
-  }, [draftFilters, draftCities, isOpen]);
+  }, [draftFilters, isOpen]);
 
   if (!isOpen) return null;
 
@@ -223,15 +200,6 @@ export default function FiltersModal({
     }));
   };
   
-  const handleCitySelect = (city: string) => {
-    setDraftCities(prev => {
-      const isSelected = prev.includes(city);
-      return isSelected 
-        ? prev.filter(c => c !== city)
-        : [...prev, city];
-    });
-  };
-
   const handleClearAll = () => {
     const clearedFilters = {
       categories: [],
@@ -239,23 +207,13 @@ export default function FiltersModal({
       premiumOnly: false,
     };
     setDraftFilters(clearedFilters);
-    setDraftCities([]);
     // Immediately apply cleared filters and close modal
     onApply(clearedFilters);
-    // Вызываем колбэки синхронно только при закрытии модального окна
-    if (onCitiesChange) {
-      onCitiesChange([]);
-    }
-    if (onCityChange) {
-      onCityChange(null);
-    }
     onClose();
   };
   
   const handleRemoveFilter = (type: "city" | "category" | "premium" | "hidden" | "vibe", value?: string) => {
-    if (type === "city" && value) {
-      setDraftCities(prev => prev.filter(c => c !== value));
-    } else if (type === "category" && value) {
+    if (type === "category" && value) {
       setDraftFilters((prev) => ({
         ...prev,
         categories: prev.categories.filter((c) => c !== value),
@@ -283,15 +241,6 @@ export default function FiltersModal({
     // Применяем фильтры и обновляем родительский компонент
     onApply(draftFilters);
     
-    // Обновляем города в родительском компоненте при применении
-    if (onCitiesChange) {
-      onCitiesChange(draftCities);
-    }
-    if (onCityChange) {
-      // Для обратной совместимости передаем первый город или null
-      onCityChange(draftCities.length > 0 ? draftCities[0] : null);
-    }
-    
     onClose();
   };
 
@@ -301,18 +250,11 @@ export default function FiltersModal({
     onClose();
   };
 
-  const currentAppliedCities = appliedCities && appliedCities.length > 0 
-    ? appliedCities 
-    : (appliedCity ? [appliedCity] : []);
   const hasChanges =
-    JSON.stringify(draftFilters) !== JSON.stringify(safeAppliedFilters) ||
-    JSON.stringify(draftCities.sort()) !== JSON.stringify(currentAppliedCities.sort());
+    JSON.stringify(draftFilters) !== JSON.stringify(safeAppliedFilters);
   
   // Get applied filters for display
   const appliedFiltersList: Array<{ type: "city" | "category" | "premium" | "hidden" | "vibe"; label: string; value?: string }> = [];
-  draftCities.forEach(city => {
-    appliedFiltersList.push({ type: "city", label: city, value: city });
-  });
   if (draftFilters.premium) {
     appliedFiltersList.push({ type: "premium", label: "Premium" });
   }
@@ -422,36 +364,6 @@ export default function FiltersModal({
                   Vibe
                 </span>
               </button>
-            </div>
-          </div>
-
-          {/* City Section */}
-          <div>
-            <h3 className="text-xs font-semibold text-[#6F7A5A] uppercase tracking-wide mb-3">CITY</h3>
-            <div className="flex flex-wrap gap-2">
-              {CITIES.map((city) => {
-                const isSelected = draftCities.includes(city);
-                const count = cityCounts[city];
-                return (
-                  <button
-                    key={city}
-                    onClick={() => handleCitySelect(city)}
-                    className={`inline-flex items-center gap-2 px-3 py-2 rounded-full border transition-colors whitespace-nowrap ${
-                      isSelected
-                        ? "border-[#8F9E4F] bg-[#F4F6EF] text-[#1F2A1F]"
-                        : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
-                    }`}
-                  >
-                    <Icon name="location" size={16} className={isSelected ? "text-[#1F2A1F]" : "text-[#6F7A5A]"} />
-                    <span className="text-sm font-medium">{city}</span>
-                    {count !== undefined && (
-                      <span className={`text-xs ${isSelected ? "text-[#6F7A5A]" : "text-[#A8B096]"}`}>
-                        ({count})
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
             </div>
           </div>
 

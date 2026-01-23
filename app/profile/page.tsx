@@ -275,20 +275,30 @@ function ProfileInner() {
   }
 
   // Handle filters apply - redirect to /map like on home page
+  const [pendingFilters, setPendingFilters] = useState<ActiveFilters | null>(null);
+  
   function handleFiltersApply(filters: ActiveFilters) {
     setActiveFilters(filters);
+    setPendingFilters(filters);
     setFilterOpen(false);
-    const params = new URLSearchParams();
-    if (selectedCity) params.set("city", selectedCity);
-    if (searchValue) params.set("q", searchValue);
-    if (filters.categories.length > 0) {
-      params.set("categories", filters.categories.map(c => encodeURIComponent(c)).join(','));
-    }
-    if (filters.sort) {
-      params.set("sort", filters.sort);
-    }
-    router.push(`/map?${params.toString()}`);
   }
+  
+  // Redirect to /map when filters are applied and city is updated
+  useEffect(() => {
+    if (pendingFilters) {
+      const params = new URLSearchParams();
+      if (selectedCity) params.set("city", selectedCity);
+      if (searchValue) params.set("q", searchValue);
+      if (pendingFilters.categories.length > 0) {
+        params.set("categories", pendingFilters.categories.map(c => encodeURIComponent(c)).join(','));
+      }
+      if (pendingFilters.sort) {
+        params.set("sort", pendingFilters.sort);
+      }
+      router.push(`/map?${params.toString()}`);
+      setPendingFilters(null);
+    }
+  }, [pendingFilters, selectedCity, searchValue, router]);
   
   // Admin access check - use profile data from useEffect
   const isAdmin = userIsAdmin || userRole === 'admin';
@@ -814,6 +824,8 @@ function ProfileInner() {
         onClose={() => setFilterOpen(false)}
         onApply={handleFiltersApply}
         appliedFilters={activeFilters}
+        appliedCity={selectedCity}
+        onCityChange={handleCityChange}
         getFilteredCount={async (draftFilters: ActiveFilters) => {
           // Since we redirect to /map, we don't need to count filtered places here
           // But we can still provide a count for better UX

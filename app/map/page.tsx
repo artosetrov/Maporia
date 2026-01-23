@@ -375,12 +375,14 @@ function MapPageContent() {
       const currentCity = searchParams.get('city');
       const currentQ = searchParams.get('q');
       const currentCategories = searchParams.get('categories');
+      const currentSort = searchParams.get('sort');
     
     // Сравниваем текущие значения в URL с applied filters
     // Включаем город в URL, если он явно выбран (даже если это DEFAULT_CITY)
     const expectedCity = appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) ? appliedCity : null;
     const expectedQ = appliedQ.trim() || null;
     const expectedCategories = appliedCategories.length > 0 ? appliedCategories : null;
+    const expectedSort = activeFilters.sort || null;
     
     const currentCityDecoded = currentCity ? (() => {
       try {
@@ -411,9 +413,10 @@ function MapPageContent() {
     const cityChanged = expectedCity !== currentCityDecoded;
     const qChanged = expectedQ !== currentQDecoded;
     const categoriesChanged = JSON.stringify(expectedCategoriesSorted) !== JSON.stringify(currentCategoriesDecoded);
+    const sortChanged = expectedSort !== currentSort;
     
     // Если ничего не изменилось, не обновляем URL
-    if (!cityChanged && !qChanged && !categoriesChanged) {
+    if (!cityChanged && !qChanged && !categoriesChanged && !sortChanged) {
       return;
     }
     
@@ -431,6 +434,10 @@ function MapPageContent() {
       params.set('categories', expectedCategories.map(c => encodeURIComponent(c)).join(','));
     }
     
+    if (expectedSort) {
+      params.set('sort', expectedSort);
+    }
+    
     const newUrl = params.toString()
       ? `${window.location.pathname}?${params.toString()}`
       : window.location.pathname;
@@ -439,7 +446,7 @@ function MapPageContent() {
     } catch (error) {
       console.error("Error updating URL:", error);
     }
-  }, [appliedCity, appliedQ, appliedCategories, searchParams]);
+  }, [appliedCity, appliedQ, appliedCategories, activeFilters.sort, searchParams, hasExplicitCityInUrlState]);
 
   // Cities are now fixed from constants, no need to compute from places
 
