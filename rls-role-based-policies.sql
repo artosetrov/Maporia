@@ -201,11 +201,19 @@ DROP POLICY IF EXISTS "Users can update their own comments" ON comments;
 DROP POLICY IF EXISTS "Users can delete their own comments" ON comments;
 DROP POLICY IF EXISTS "Admins can delete any comment" ON comments;
 
--- Policy: Authenticated users can create comments
+-- Policy: Authenticated users can create comments (only if comments are enabled for the place)
 CREATE POLICY "Authenticated users can comment"
 ON comments
 FOR INSERT
-WITH CHECK (auth.uid() IS NOT NULL AND auth.uid() = user_id);
+WITH CHECK (
+    auth.uid() IS NOT NULL 
+    AND auth.uid() = user_id
+    AND EXISTS (
+        SELECT 1 FROM places
+        WHERE places.id = comments.place_id
+        AND (places.comments_enabled IS NULL OR places.comments_enabled = TRUE)
+    )
+);
 
 -- Policy: Everyone can view comments on public places
 CREATE POLICY "Everyone can view comments on public places"

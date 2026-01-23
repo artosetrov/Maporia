@@ -10,6 +10,7 @@ import BottomNav from "../components/BottomNav";
 import PlaceCard from "../components/PlaceCard";
 import FavoriteIcon from "../components/FavoriteIcon";
 import PremiumBadge from "../components/PremiumBadge";
+import SearchModal from "../components/SearchModal";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../config/googleMaps";
 import { supabase } from "../lib/supabase";
 import { DEFAULT_CITY } from "../constants";
@@ -144,6 +145,7 @@ export default function ExplorePage() {
 
   // modal
   const [filterOpen, setFilterOpen] = useState(false);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
 
   const cities = useMemo(() => {
     // Get unique cities from places (use city_name_cached if available, fallback to city)
@@ -500,6 +502,53 @@ export default function ExplorePage() {
         userAvatar={userAvatar}
         userDisplayName={userDisplayName}
         userEmail={userEmail}
+        onSearchBarClick={() => setSearchModalOpen(true)}
+      />
+
+      {/* Search Modal */}
+      <SearchModal
+        isOpen={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+        onCitySelect={(city) => {
+          if (city) {
+            setSelectedCities([city]);
+          } else {
+            setSelectedCities([]);
+          }
+          const params = new URLSearchParams();
+          if (city) params.set("city", encodeURIComponent(city));
+          if (q) params.set("q", encodeURIComponent(q));
+          if (selectedCategories.length > 0) {
+            params.set("categories", selectedCategories.map(c => encodeURIComponent(c)).join(','));
+          }
+          router.push(`/map?${params.toString()}`);
+        }}
+        onSearchSubmit={(city, query, tags) => {
+          if (city) {
+            setSelectedCities([city]);
+          } else {
+            setSelectedCities([]);
+          }
+          setQ(query);
+          if (tags && tags.length > 0) {
+            setSelectedCategories(tags);
+          }
+          const params = new URLSearchParams();
+          if (city && city.trim()) {
+            params.set("city", encodeURIComponent(city.trim()));
+          }
+          if (query.trim()) {
+            params.set("q", encodeURIComponent(query.trim()));
+          }
+          const categoriesToUse = tags || selectedCategories;
+          if (categoriesToUse.length > 0) {
+            params.set("categories", categoriesToUse.map(c => encodeURIComponent(c)).join(','));
+          }
+          router.push(`/map?${params.toString()}`);
+        }}
+        selectedCity={selectedCities.length > 0 ? selectedCities[0] : null}
+        searchQuery={q}
+        selectedTags={selectedCategories}
       />
 
       {/* 

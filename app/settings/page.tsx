@@ -6,6 +6,7 @@ import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
 import { ActiveFilters } from "../components/FiltersModal";
+import SearchModal from "../components/SearchModal";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -17,11 +18,13 @@ export default function SettingsPage() {
   // Search and filter state (for SearchBar)
   const [searchValue, setSearchValue] = useState("");
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
     categories: [],
     sort: null,
   });
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
   
   // Calculate active filters count
   useEffect(() => {
@@ -102,6 +105,50 @@ export default function SettingsPage() {
         userAvatar={userAvatar}
         userDisplayName={userDisplayName}
         userEmail={userEmail}
+        onSearchBarClick={() => setSearchModalOpen(true)}
+      />
+
+      {/* Search Modal */}
+      <SearchModal
+        isOpen={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+        onCitySelect={(city) => {
+          setSelectedCity(city);
+          const params = new URLSearchParams();
+          if (city && city.trim()) {
+            params.set("city", encodeURIComponent(city.trim()));
+          }
+          if (searchValue && searchValue.trim()) {
+            params.set("q", encodeURIComponent(searchValue.trim()));
+          }
+          router.push(`/map?${params.toString()}`);
+        }}
+        onSearchSubmit={(city, query, tags) => {
+          setSelectedCity(city);
+          setSearchValue(query);
+          if (tags) {
+            setSelectedTags(tags);
+            setActiveFilters(prev => ({
+              ...prev,
+              categories: tags,
+            }));
+          }
+          const params = new URLSearchParams();
+          if (city && city.trim()) {
+            params.set("city", encodeURIComponent(city.trim()));
+          }
+          if (query.trim()) {
+            params.set("q", encodeURIComponent(query.trim()));
+          }
+          const categoriesToUse = tags || activeFilters.categories;
+          if (categoriesToUse.length > 0) {
+            params.set("categories", categoriesToUse.map(c => encodeURIComponent(c)).join(','));
+          }
+          router.push(`/map?${params.toString()}`);
+        }}
+        selectedCity={selectedCity}
+        searchQuery={searchValue}
+        selectedTags={selectedTags}
       />
 
       <div className="flex-1 pt-[80px] pb-20">

@@ -644,7 +644,7 @@ export default function SearchModal({
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="text-[#1F2A1F] font-medium text-base mb-0.5">
-                            {search.query || search.city || "Anywhere"}
+                            {search.query || search.city || "Where?"}
                           </div>
                           {search.city && (
                             <div className="text-sm text-[#6F7A5A]">{search.city}</div>

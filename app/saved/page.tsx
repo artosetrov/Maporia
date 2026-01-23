@@ -8,6 +8,7 @@ import BottomNav from "../components/BottomNav";
 import PlaceCard from "../components/PlaceCard";
 import FavoriteIcon from "../components/FavoriteIcon";
 import FiltersModal, { ActiveFilters } from "../components/FiltersModal";
+import SearchModal from "../components/SearchModal";
 import { supabase } from "../lib/supabase";
 import { DEFAULT_CITY } from "../constants";
 import { useUserAccess } from "../hooks/useUserAccess";
@@ -38,11 +39,13 @@ export default function SavedPage() {
   // Search and filter state
   const [searchValue, setSearchValue] = useState("");
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
     categories: [],
     sort: null,
   });
   const [filterOpen, setFilterOpen] = useState(false);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
   // User access and profile data
@@ -160,6 +163,49 @@ export default function SavedPage() {
         userAvatar={userAvatar}
         userDisplayName={userDisplayName}
         userEmail={userEmail}
+        onSearchBarClick={() => setSearchModalOpen(true)}
+      />
+
+      {/* Search Modal */}
+      <SearchModal
+        isOpen={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+        onCitySelect={(city) => {
+          setSelectedCity(city);
+          const params = new URLSearchParams();
+          if (city) params.set("city", city);
+          if (searchValue) params.set("q", searchValue);
+          if (activeFilters.categories.length > 0) {
+            params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+          }
+          router.push(`/map?${params.toString()}`);
+        }}
+        onSearchSubmit={(city, query, tags) => {
+          setSelectedCity(city);
+          setSearchValue(query);
+          if (tags) {
+            setSelectedTags(tags);
+            setActiveFilters(prev => ({
+              ...prev,
+              categories: tags,
+            }));
+          }
+          const params = new URLSearchParams();
+          if (city && city.trim()) {
+            params.set("city", encodeURIComponent(city.trim()));
+          }
+          if (query.trim()) {
+            params.set("q", encodeURIComponent(query.trim()));
+          }
+          const categoriesToUse = tags || activeFilters.categories;
+          if (categoriesToUse.length > 0) {
+            params.set("categories", categoriesToUse.map(c => encodeURIComponent(c)).join(','));
+          }
+          router.push(`/map?${params.toString()}`);
+        }}
+        selectedCity={selectedCity}
+        searchQuery={searchValue}
+        selectedTags={selectedTags}
       />
 
       {/* Filters Modal */}

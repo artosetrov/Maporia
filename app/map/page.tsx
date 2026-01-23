@@ -1070,10 +1070,9 @@ function MapPageContent() {
           }
           setAppliedQ(query);
           setSearchDraft(query);
-          setSelectedTags(tags || []);
-          
-          // Update activeFilters with tags as categories
-          if (tags && tags.length > 0) {
+          if (tags) {
+            setSelectedTags(tags);
+            // Update activeFilters with tags as categories
             setActiveFilters(prev => ({
               ...prev,
               categories: tags,
@@ -1082,11 +1081,16 @@ function MapPageContent() {
           
           // Update URL
           const params = new URLSearchParams();
-          if (city) params.set("city", encodeURIComponent(city));
-          if (query) params.set("q", encodeURIComponent(query));
-          if (tags && tags.length > 0) {
-            // Convert tags to categories for URL
-            params.set("categories", tags.map(t => encodeURIComponent(t)).join(','));
+          if (city && city.trim()) {
+            params.set("city", encodeURIComponent(city.trim()));
+          }
+          if (query.trim()) {
+            params.set("q", encodeURIComponent(query.trim()));
+          }
+          // Use tags if provided, otherwise use activeFilters.categories
+          const categoriesToUse = tags || activeFilters.categories;
+          if (categoriesToUse.length > 0) {
+            params.set("categories", categoriesToUse.map(t => encodeURIComponent(t)).join(','));
           }
           if (activeFilters.sort) {
             params.set("sort", activeFilters.sort);
@@ -1568,6 +1572,27 @@ function MapPageContent() {
           )}
         </div>
       </div>
+
+      {/* Floating View Toggle Button (mobile only) */}
+      {view !== undefined && (
+        <button
+          onClick={() => setView(view === "list" ? "map" : "list")}
+          style={{ bottom: 'calc(64px + 24px + env(safe-area-inset-bottom, 0px))' }}
+          className="fixed left-1/2 transform -translate-x-1/2 z-40 min-[600px]:hidden flex items-center gap-2 bg-[#8F9E4F] text-white px-4 py-3 rounded-full shadow-lg hover:bg-[#7A8A3F] transition-colors"
+        >
+          {view === "list" ? (
+            <>
+              <Icon name="map" size={20} className="text-white" />
+              <span className="text-sm font-medium">Map</span>
+            </>
+          ) : (
+            <>
+              <Icon name="list" size={20} className="text-white" />
+              <span className="text-sm font-medium">List</span>
+            </>
+          )}
+        </button>
+      )}
 
       <BottomNav />
     </main>

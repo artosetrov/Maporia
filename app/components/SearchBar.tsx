@@ -51,6 +51,11 @@ export default function SearchBar({
     }
   }, [cityDropdownOpen]);
 
+  // Close dropdown when selectedCity or activeFiltersCount changes (e.g., after filter is applied)
+  useEffect(() => {
+    setCityDropdownOpen(false);
+  }, [selectedCity, activeFiltersCount]);
+
   // Показываем "Anywhere" только если город явно не выбран (null)
   // Если город установлен (даже если это DEFAULT_CITY), показываем его название
   const displayCity = selectedCity || DEFAULT_CITY;
@@ -81,17 +86,30 @@ export default function SearchBar({
     );
   }
 
-  // Desktop: full search bar (Airbnb-style pill)
+  // Desktop: simplified search bar with only "Anywhere" and "Filters"
   return (
-    <div className="flex items-center gap-0 bg-white rounded-full border border-[#E5E8DB] hover:border-[#8F9E4F] transition-colors max-w-[920px] w-full">
+    <div className="flex items-center gap-0 bg-white rounded-full border border-[#E5E8DB] hover:border-[#8F9E4F] transition-colors">
       {/* City Selector */}
       <div ref={cityDropdownRef} className="relative flex-shrink-0">
         <button
-          onClick={() => setCityDropdownOpen(!cityDropdownOpen)}
-          className="h-11 px-6 rounded-l-full hover:bg-[#FAFAF7] transition-colors flex items-center justify-center border-r border-[#E5E8DB] min-w-[120px]"
+          onClick={() => {
+            // Always close dropdown first if it's open
+            if (cityDropdownOpen) {
+              setCityDropdownOpen(false);
+              return;
+            }
+            // Always open SearchModal if onSearchBarClick is provided (same as mobile)
+            if (onSearchBarClick) {
+              onSearchBarClick();
+            } else {
+              // Fallback: toggle dropdown for city selection (if no SearchModal handler)
+              setCityDropdownOpen(!cityDropdownOpen);
+            }
+          }}
+          className="h-11 px-6 rounded-l-full hover:bg-[#FAFAF7] transition-colors flex items-center justify-center border-r border-[#E5E8DB] min-w-[180px]"
         >
-          <span className="text-sm font-medium text-[#1F2A1F] truncate max-w-[100px]">
-            {isAnywhere ? "Anywhere" : displayCity}
+          <span className="text-sm font-medium text-[#1F2A1F] truncate">
+            {isAnywhere ? "Where?" : displayCity}
           </span>
         </button>
 
@@ -133,27 +151,16 @@ export default function SearchBar({
                   : "text-[#1F2A1F] hover:bg-[#FAFAF7]"
               }`}
             >
-              <div className="font-semibold text-sm">Anywhere</div>
+              <div className="font-semibold text-sm">Where?</div>
             </button>
           </div>
         )}
       </div>
 
-      {/* Search Input */}
-      <div className="flex-1 relative min-w-0">
-        <input
-          value={searchValue}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Search by vibe, mood, or place"
-          className="w-full h-11 px-6 pr-12 text-sm text-[#1F2A1F] placeholder:text-[#A8B096] outline-none bg-transparent focus:placeholder:text-[#6F7A5A]"
-        />
-        <Icon name="search" size={20} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#A8B096]" />
-      </div>
-
       {/* Filters Button */}
       <button
         onClick={onFiltersClick}
-        className="h-11 px-6 rounded-r-full hover:bg-[#FAFAF7] transition-colors flex items-center gap-2 border-l border-[#E5E8DB] flex-shrink-0 relative"
+        className="h-11 px-6 rounded-r-full hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 border-l border-[#E5E8DB] min-w-[180px] relative"
       >
         <Icon name="filter" size={20} className="text-[#1F2A1F]" />
         <span className="text-sm font-medium text-[#1F2A1F] hidden min-[600px]:inline">Filters</span>

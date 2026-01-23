@@ -117,10 +117,15 @@ export default function PlaceEditorHub() {
   const [commentsEnabled, setCommentsEnabled] = useState(true); // Default to enabled
   const [togglingComments, setTogglingComments] = useState(false);
   const autoVisibilityEnabledRef = useRef(false); // Track if auto-visibility was already enabled
+  const isUpdatingRef = useRef(false); // Track if we're currently updating to prevent reload
 
   // Load place data
   useEffect(() => {
     if (!placeId || !user || accessLoading) return;
+    if (isUpdatingRef.current) {
+      console.log("Skipping data reload - update in progress");
+      return; // Don't reload if we're updating
+    }
 
     let mounted = true;
 
@@ -153,15 +158,48 @@ export default function PlaceEditorHub() {
         return;
       }
 
+      // Check if we're updating - if so, check if data matches our expected state
+      if (isUpdatingRef.current) {
+        const loadedHiddenState = placeItem.is_hidden === true ||
+                                  placeItem.visibility === "hidden" ||
+                                  placeItem.visibility === "private";
+        console.warn("WARNING: Data reloaded during update!", {
+          isUpdating: isUpdatingRef.current,
+          loadedIsHidden: placeItem.is_hidden,
+          loadedVisibility: placeItem.visibility,
+          loadedHiddenState,
+          currentIsHidden: isHidden,
+          expectedHiddenState: isHidden // Keep current state
+        });
+        
+        // If data doesn't match our current state, it means update didn't persist
+        // In this case, we should keep the current state and log an error
+        if (loadedHiddenState !== isHidden) {
+          console.error("CRITICAL: Server data doesn't match current state! Update may have failed.", {
+            serverIsHidden: loadedHiddenState,
+            currentIsHidden: isHidden,
+            serverData: { is_hidden: placeItem.is_hidden, visibility: placeItem.visibility }
+          });
+          // Don't update state - keep the current state that user set
+          setLoading(false);
+          return;
+        }
+      }
+      
       setPlace(placeItem);
       // Check if place is hidden (try multiple possible fields)
-      setIsHidden(
-        placeItem.is_hidden === true ||
-          placeItem.visibility === "hidden" ||
-          placeItem.visibility === "private"
-      );
+      const hiddenState = placeItem.is_hidden === true ||
+                          placeItem.visibility === "hidden" ||
+                          placeItem.visibility === "private";
+      setIsHidden(hiddenState);
       // Load comments enabled state (default to true if not set)
       setCommentsEnabled(placeItem.comments_enabled !== false);
+      console.log("Loaded place data:", { 
+        isHidden: hiddenState, 
+        is_hidden: placeItem.is_hidden, 
+        visibility: placeItem.visibility,
+        isUpdating: isUpdatingRef.current
+      });
 
       // Load photos
       const { data: photosData, error: photosError } = await supabase
@@ -202,8 +240,8 @@ export default function PlaceEditorHub() {
     if (!placeId || !user) return;
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        // Reload data when page becomes visible
+      if (document.visibilityState === 'visible' && !isUpdatingRef.current) {
+        // Reload data when page becomes visible (but not if we're currently updating)
         (async () => {
           const { data: placeData } = await supabase
             .from("places")
@@ -213,6 +251,14 @@ export default function PlaceEditorHub() {
 
           if (placeData) {
             setPlace(placeData as Place);
+            // Update state from reloaded data
+            const placeItem = placeData as Place;
+            setIsHidden(
+              placeItem.is_hidden === true ||
+                placeItem.visibility === "hidden" ||
+                placeItem.visibility === "private"
+            );
+            setCommentsEnabled(placeItem.comments_enabled !== false);
           }
         })();
       }
@@ -223,12 +269,17 @@ export default function PlaceEditorHub() {
   }, [placeId, user]);
 
   async function handleToggleVisibility() {
-    if (!placeId || !user) return;
+    if (!placeId || !user) {
+      console.error("Missing placeId or user:", { placeId, user });
+      return;
+    }
 
+    isUpdatingRef.current = true;
     setHiding(true);
     setError(null);
 
     const newHiddenState = !isHidden;
+    console.log("Toggling visibility:", { placeId, newHiddenState, currentIsHidden: isHidden });
 
     // Try multiple possible field names
     const payload: any = {
@@ -238,6 +289,8 @@ export default function PlaceEditorHub() {
 
     // Admin can update any place, owner can update their own
     const currentIsAdmin = isUserAdmin(access);
+    console.log("User info:", { userId: user.id, isAdmin: currentIsAdmin, placeCreatedBy: place?.created_by });
+    
     const updateQuery = supabase.from("places").update(payload).eq("id", placeId);
 
     // If not admin, add ownership check
@@ -245,45 +298,125 @@ export default function PlaceEditorHub() {
       updateQuery.eq("created_by", user.id);
     }
 
-    const { error: updateError } = await updateQuery.select();
+    console.log("Update payload:", payload);
+    const { error: updateError, data: updateData, count } = await updateQuery.select();
+    console.log("Update response:", { 
+      error: updateError, 
+      data: updateData, 
+      count,
+      rowsAffected: updateData?.length || 0
+    });
+    
+    // Verify the update actually affected rows
+    if (!updateError && (!updateData || updateData.length === 0)) {
+      console.error("WARNING: Update succeeded but no data returned! This may indicate RLS policy issue.");
+    }
 
     setHiding(false);
 
     if (updateError) {
       console.error("Update error:", updateError);
-      setError(updateError.message || "Failed to update visibility");
+      
+      // Check for specific error types
+      if (updateError.message?.includes("is_hidden") || updateError.message?.includes("visibility")) {
+        setError("Database fields missing. Please run add-place-visibility-fields.sql in Supabase Dashboard > SQL Editor");
+      } else if (updateError.code === "PGRST116") {
+        setError("No rows updated. You may not have permission to edit this place.");
+      } else {
+        setError(updateError.message || "Failed to update visibility");
+      }
       return;
     }
 
-    setIsHidden(newHiddenState);
-    setPlace((prev) =>
-      prev
-        ? {
-            ...prev,
-            is_hidden: newHiddenState,
-            visibility: newHiddenState ? "hidden" : "public",
-          }
-        : prev
-    );
+    if (!updateData || updateData.length === 0) {
+      console.error("No data returned from update");
+      setError("No rows were updated. Please check your permissions or run the database migration.");
+      return;
+    }
+
+    // Use data from server response to update state
+    const updatedPlace = updateData[0] as Place;
+    const actualHiddenState = updatedPlace.is_hidden === true || 
+                              updatedPlace.visibility === "hidden" || 
+                              updatedPlace.visibility === "private";
+    
+    console.log("Updating state from server response:", { 
+      actualHiddenState, 
+      is_hidden: updatedPlace.is_hidden, 
+      visibility: updatedPlace.visibility 
+    });
+
+    // Update state immediately with server response
+    setIsHidden(actualHiddenState);
+    
+    // Update place object with server response - merge to preserve all fields
+    setPlace((prev) => {
+      const updated = {
+        ...(prev || {}),
+        ...updatedPlace,
+        is_hidden: updatedPlace.is_hidden ?? newHiddenState,
+        visibility: updatedPlace.visibility ?? (newHiddenState ? "hidden" : "public"),
+      } as Place;
+      
+      console.log("State updated in setPlace:", { 
+        isHidden: actualHiddenState, 
+        placeIsHidden: updated.is_hidden, 
+        placeVisibility: updated.visibility,
+        prevIsHidden: prev?.is_hidden,
+        prevVisibility: prev?.visibility
+      });
+      return updated;
+    });
+    
+    // Double-check state after a brief moment to ensure it sticks
+    setTimeout(() => {
+      setIsHidden((current) => {
+        if (current !== actualHiddenState) {
+          console.warn("State mismatch detected, forcing update from", current, "to", actualHiddenState);
+          return actualHiddenState;
+        }
+        return current;
+      });
+    }, 100);
 
     // Reset auto-visibility ref when manually hiding, so it can auto-enable again if all fields are filled
     if (newHiddenState) {
       autoVisibilityEnabledRef.current = false;
     }
 
+    console.log("Visibility updated successfully:", { 
+      newHiddenState, 
+      actualHiddenState,
+      updateData,
+      updatedPlace 
+    });
+
+    // Reset update flag after a longer delay to prevent data reload
+    setTimeout(() => {
+      isUpdatingRef.current = false;
+      console.log("Update flag reset - data reload now allowed");
+    }, 2000); // Increased to 2 seconds to prevent immediate reload
+
     if (navigator.vibrate) navigator.vibrate(10);
   }
 
   async function handleToggleComments() {
-    if (!placeId || !user) return;
+    if (!placeId || !user) {
+      console.error("Missing placeId or user:", { placeId, user });
+      return;
+    }
 
+    isUpdatingRef.current = true;
     setTogglingComments(true);
     setError(null);
 
     const newCommentsState = !commentsEnabled;
+    console.log("Toggling comments:", { placeId, newCommentsState, currentCommentsEnabled: commentsEnabled });
 
     // Admin can update any place, owner can update their own
     const currentIsAdmin = isUserAdmin(access);
+    console.log("User info:", { userId: user.id, isAdmin: currentIsAdmin, placeCreatedBy: place?.created_by });
+    
     const updateQuery = supabase
       .from("places")
       .update({ comments_enabled: newCommentsState })
@@ -294,25 +427,81 @@ export default function PlaceEditorHub() {
       updateQuery.eq("created_by", user.id);
     }
 
-    const { error: updateError } = await updateQuery.select();
+    console.log("Update payload:", { comments_enabled: newCommentsState });
+    const { error: updateError, data: updateData, count } = await updateQuery.select();
+    console.log("Update response:", { 
+      error: updateError, 
+      data: updateData, 
+      count,
+      rowsAffected: updateData?.length || 0
+    });
+    
+    // Verify the update actually affected rows
+    if (!updateError && (!updateData || updateData.length === 0)) {
+      console.error("WARNING: Update succeeded but no data returned! This may indicate RLS policy issue.");
+    }
+    
+    // Check if error is due to missing column
+    if (updateError && updateError.message?.includes("comments_enabled")) {
+      setError("Database migration required. Please run add-comments-enabled-field.sql in Supabase Dashboard > SQL Editor");
+      setTogglingComments(false);
+      return;
+    }
 
     setTogglingComments(false);
 
     if (updateError) {
       console.error("Update error:", updateError);
-      setError(updateError.message || "Failed to update comments setting");
+      
+      // Check for specific error types
+      if (updateError.message?.includes("comments_enabled")) {
+        setError("Database migration required. Please run add-all-place-fields.sql in Supabase Dashboard > SQL Editor");
+      } else if (updateError.code === "PGRST116") {
+        setError("No rows updated. You may not have permission to edit this place.");
+      } else {
+        setError(updateError.message || "Failed to update comments setting");
+      }
       return;
     }
 
-    setCommentsEnabled(newCommentsState);
+    if (!updateData || updateData.length === 0) {
+      console.error("No data returned from update");
+      setError("No rows were updated. Please check your permissions or run the database migration.");
+      return;
+    }
+
+    // Use data from server response to update state
+    const updatedPlace = updateData[0] as Place;
+    const actualCommentsState = updatedPlace.comments_enabled !== false;
+    
+    console.log("Updating state from server response:", { 
+      actualCommentsState, 
+      comments_enabled: updatedPlace.comments_enabled 
+    });
+
+    setCommentsEnabled(actualCommentsState);
     setPlace((prev) =>
       prev
         ? {
             ...prev,
-            comments_enabled: newCommentsState,
+            comments_enabled: updatedPlace.comments_enabled ?? newCommentsState,
           }
         : prev
     );
+
+    // Show success message
+    const successMessage = newCommentsState 
+      ? "Comments enabled. Changes will be visible on the place page."
+      : "Comments disabled. The comments section will be hidden on the place page.";
+    
+    // You may want to show a toast notification here
+    console.log(successMessage);
+
+    // Reset update flag after a longer delay to prevent data reload
+    setTimeout(() => {
+      isUpdatingRef.current = false;
+      console.log("Comments update flag reset - data reload now allowed");
+    }, 2000); // Increased to 2 seconds to prevent immediate reload
 
     if (navigator.vibrate) navigator.vibrate(10);
   }
@@ -579,6 +768,11 @@ export default function PlaceEditorHub() {
 
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+        {error && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50/50 p-4 text-sm text-red-700">
+            {error}
+          </div>
+        )}
         <div className="space-y-4">
             {/* Required Steps Card */}
             {incompleteSteps.length > 0 && (

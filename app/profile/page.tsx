@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import FiltersModal, { ActiveFilters } from "../components/FiltersModal";
+import SearchModal from "../components/SearchModal";
 import { supabase } from "../lib/supabase";
 import Icon from "../components/Icon";
 import PlaceCard from "../components/PlaceCard";
@@ -145,11 +146,13 @@ function ProfileInner() {
   // Search and filter state
   const [searchValue, setSearchValue] = useState("");
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
     categories: [],
     sort: null,
   });
   const [filterOpen, setFilterOpen] = useState(false);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
 
   // Calculate active filters count
   const activeFiltersCount = useMemo(() => {
@@ -740,8 +743,30 @@ function ProfileInner() {
             setSection("about");
             router.replace("/profile", { scroll: false });
           }}
+          onSearchBarClick={() => setSearchModalOpen(true)}
         />
       </div>
+
+      {/* Search Modal */}
+      <SearchModal
+        isOpen={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+        onCitySelect={handleCityChange}
+        onSearchSubmit={(city, query, tags) => {
+          if (tags) {
+            setSelectedTags(tags);
+            setActiveFilters(prev => ({
+              ...prev,
+              categories: tags,
+            }));
+          }
+          handleCityChange(city);
+          handleSearchChange(query);
+        }}
+        selectedCity={selectedCity}
+        searchQuery={searchValue}
+        selectedTags={selectedTags}
+      />
 
       {/* Mobile Custom Header */}
       <div className="min-[900px]:hidden fixed top-0 left-0 right-0 z-40 bg-white">
@@ -754,9 +779,7 @@ function ProfileInner() {
                 className="w-10 h-10 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] active:bg-[#ECEEE4] transition-colors flex items-center justify-center flex-shrink-0"
                 aria-label="Edit profile"
               >
-                <svg className="w-5 h-5 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
+                <Icon name="edit" size={20} className="text-[#1F2A1F]" />
               </Link>
             </>
           ) : (
@@ -1939,9 +1962,7 @@ function AddedPlacesSection({
                   className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/90 backdrop-blur-sm rounded-lg p-2 badge-shadow hover:bg-white z-10"
                   aria-label="Edit place"
                 >
-                  <svg className="w-5 h-5 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
+                  <Icon name="edit" size={20} className="text-[#1F2A1F]" />
                 </button>
               </div>
               <div>

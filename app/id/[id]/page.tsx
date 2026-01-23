@@ -9,6 +9,7 @@ import TopBar from "../../components/TopBar";
 import DesktopMosaic from "../../components/DesktopMosaic";
 import MobileCarousel from "../../components/MobileCarousel";
 import FiltersModal, { ActiveFilters } from "../../components/FiltersModal";
+import SearchModal from "../../components/SearchModal";
 import FavoriteIcon from "../../components/FavoriteIcon";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../../config/googleMaps";
 import { supabase } from "../../lib/supabase";
@@ -35,6 +36,7 @@ type Place = {
   lat: number | null;
   lng: number | null;
   created_at: string;
+  comments_enabled?: boolean | null;
 };
 
 type Comment = { 
@@ -113,13 +115,16 @@ export default function PlacePage() {
   const [commentsCount, setCommentsCount] = useState<number>(0);
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [photoGalleryOpen, setPhotoGalleryOpen] = useState(false);
+  const [isImageTransitioning, setIsImageTransitioning] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
     categories: [],
     sort: null,
   });
   const [searchValue, setSearchValue] = useState("");
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [galleryPhotoIndex, setGalleryPhotoIndex] = useState(0);
   const [photoZoom, setPhotoZoom] = useState(1);
   const [photoPosition, setPhotoPosition] = useState({ x: 0, y: 0 });
@@ -139,6 +144,7 @@ export default function PlacePage() {
       if (e.key === "Escape") {
         if (photoGalleryOpen) {
           setPhotoGalleryOpen(false);
+          setIsImageTransitioning(false);
           setPhotoZoom(1);
           setPhotoPosition({ x: 0, y: 0 });
         } else if (showDescriptionModal) {
@@ -164,17 +170,25 @@ export default function PlacePage() {
   // Photo gallery handlers
   const handleNextPhoto = () => {
     if (allPhotos.length > 0) {
-      setGalleryPhotoIndex((prev) => (prev < allPhotos.length - 1 ? prev + 1 : 0));
-      setPhotoZoom(1);
-      setPhotoPosition({ x: 0, y: 0 });
+      setIsImageTransitioning(true);
+      setTimeout(() => {
+        setGalleryPhotoIndex((prev) => (prev < allPhotos.length - 1 ? prev + 1 : 0));
+        setPhotoZoom(1);
+        setPhotoPosition({ x: 0, y: 0 });
+        setTimeout(() => setIsImageTransitioning(false), 50);
+      }, 150);
     }
   };
 
   const handlePrevPhoto = () => {
     if (allPhotos.length > 0) {
-      setGalleryPhotoIndex((prev) => (prev > 0 ? prev - 1 : allPhotos.length - 1));
-      setPhotoZoom(1);
-      setPhotoPosition({ x: 0, y: 0 });
+      setIsImageTransitioning(true);
+      setTimeout(() => {
+        setGalleryPhotoIndex((prev) => (prev > 0 ? prev - 1 : allPhotos.length - 1));
+        setPhotoZoom(1);
+        setPhotoPosition({ x: 0, y: 0 });
+        setTimeout(() => setIsImageTransitioning(false), 50);
+      }, 150);
     }
   };
 
@@ -644,6 +658,12 @@ export default function PlacePage() {
   async function addComment() {
     if (!place || !commentText.trim() || sending) return;
 
+    // Check if comments are enabled (default to enabled if null/undefined)
+    if (place.comments_enabled === false) {
+      setCommentError("Comments are disabled for this place.");
+      return;
+    }
+
     setSending(true);
     setCommentError(null);
     
@@ -852,21 +872,56 @@ export default function PlacePage() {
 
   return (
     <main className="min-h-screen bg-white">
-      <TopBar
-        showSearchBar={true}
-        searchValue={searchValue}
-        onSearchChange={(value) => {
-          setSearchValue(value);
-          const params = new URLSearchParams();
-          if (selectedCity) params.set("city", encodeURIComponent(selectedCity));
-          if (value.trim()) params.set("q", encodeURIComponent(value.trim()));
-          if (activeFilters.categories.length > 0) {
-            params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
-          }
-          router.push(`/map?${params.toString()}`);
-        }}
-        selectedCity={selectedCity}
-        onCityChange={(city) => {
+      {/* TopBar - скрыт на мобильных (< 900px), так как есть Mobile App Bar внутри карусели */}
+      <div className="hidden min-[900px]:block">
+        <TopBar
+          showSearchBar={true}
+          searchValue={searchValue}
+          onSearchChange={(value) => {
+            setSearchValue(value);
+            const params = new URLSearchParams();
+            if (selectedCity) params.set("city", encodeURIComponent(selectedCity));
+            if (value.trim()) params.set("q", encodeURIComponent(value.trim()));
+            if (activeFilters.categories.length > 0) {
+              params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+            }
+            router.push(`/map?${params.toString()}`);
+          }}
+          selectedCity={selectedCity}
+          onCityChange={(city) => {
+            setSelectedCity(city);
+            const params = new URLSearchParams();
+            if (city && city.trim()) {
+              params.set("city", encodeURIComponent(city.trim()));
+            }
+            if (searchValue && searchValue.trim()) {
+              params.set("q", encodeURIComponent(searchValue.trim()));
+            }
+            if (activeFilters.categories.length > 0) {
+              params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+            }
+            router.push(`/map?${params.toString()}`);
+          }}
+          onFiltersClick={handleFiltersClick}
+          activeFiltersCount={activeFiltersCount}
+          userAvatar={userAvatar}
+          userDisplayName={userDisplayName}
+          userEmail={userEmail}
+          showBackButton={true}
+          onBackClick={() => router.back()}
+          onShareClick={handleShare}
+          onFavoriteClick={toggleFavorite}
+          isFavorite={isFavorite}
+          favoriteLoading={favoriteLoading}
+          onSearchBarClick={() => setSearchModalOpen(true)}
+        />
+      </div>
+
+      {/* Search Modal */}
+      <SearchModal
+        isOpen={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+        onCitySelect={(city) => {
           setSelectedCity(city);
           const params = new URLSearchParams();
           if (city && city.trim()) {
@@ -880,17 +935,32 @@ export default function PlacePage() {
           }
           router.push(`/map?${params.toString()}`);
         }}
-        onFiltersClick={handleFiltersClick}
-        activeFiltersCount={activeFiltersCount}
-        userAvatar={userAvatar}
-        userDisplayName={userDisplayName}
-        userEmail={userEmail}
-        showBackButton={true}
-        onBackClick={() => router.back()}
-        onShareClick={handleShare}
-        onFavoriteClick={toggleFavorite}
-        isFavorite={isFavorite}
-        favoriteLoading={favoriteLoading}
+        onSearchSubmit={(city, query, tags) => {
+          setSelectedCity(city);
+          setSearchValue(query);
+          if (tags) {
+            setSelectedTags(tags);
+            setActiveFilters(prev => ({
+              ...prev,
+              categories: tags,
+            }));
+          }
+          const params = new URLSearchParams();
+          if (city && city.trim()) {
+            params.set("city", encodeURIComponent(city.trim()));
+          }
+          if (query.trim()) {
+            params.set("q", encodeURIComponent(query.trim()));
+          }
+          const categoriesToUse = tags || activeFilters.categories;
+          if (categoriesToUse.length > 0) {
+            params.set("categories", categoriesToUse.map(c => encodeURIComponent(c)).join(','));
+          }
+          router.push(`/map?${params.toString()}`);
+        }}
+        selectedCity={selectedCity}
+        searchQuery={searchValue}
+        selectedTags={selectedTags}
       />
 
 
@@ -974,6 +1044,7 @@ export default function PlacePage() {
             onShowAll={() => scrollToSection("photos")}
             onPhotoClick={(index) => {
               setGalleryPhotoIndex(index);
+              setIsImageTransitioning(false);
               setPhotoGalleryOpen(true);
               setPhotoZoom(1);
               setPhotoPosition({ x: 0, y: 0 });
@@ -998,7 +1069,7 @@ export default function PlacePage() {
         />
         
         {/* Mobile App Bar - Back, Share, Heart */}
-        <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-4">
+        <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-4 pt-safe-top">
           <button
             onClick={() => router.back()}
             className="h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#1F2A1F] hover:bg-white transition-colors"
@@ -1023,12 +1094,14 @@ export default function PlacePage() {
                 disabled={favoriteLoading}
                 className={cx(
                   "h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center transition-colors",
-                  isFavorite ? "text-[#8F9E4F]" : "text-[#A8B096]",
                   favoriteLoading && "opacity-50"
                 )}
                 aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
               >
-                <FavoriteIcon isActive={isFavorite} size={20} />
+                <FavoriteIcon 
+                  isActive={isFavorite} 
+                  size={20}
+                />
               </button>
             )}
             <button
@@ -1300,6 +1373,13 @@ export default function PlacePage() {
         <section ref={commentsRef} id="comments" className="mb-16">
           <h2 className="text-2xl font-semibold text-[#1F2A1F] mb-6">Comments</h2>
 
+          {/* Check if comments are enabled (default to enabled if null/undefined) */}
+          {place?.comments_enabled === false ? (
+            <div className="text-center py-12 text-[#8F9E4F]/60">
+              <div className="mb-1">Comments are disabled for this place</div>
+            </div>
+          ) : (
+            <>
           {/* Add comment */}
           {userId ? (
             <div className="mb-6 rounded-xl border border-[#ECEEE4] bg-white p-4">
@@ -1426,6 +1506,8 @@ export default function PlacePage() {
                 );
               })}
             </div>
+          )}
+          </>
           )}
         </section>
         </div>
@@ -1779,6 +1861,13 @@ export default function PlacePage() {
 
           <section ref={commentsRef} id="comments" className="mb-16">
             <h2 className="text-2xl font-semibold text-[#1F2A1F] mb-6">Comments</h2>
+            {/* Check if comments are enabled (default to enabled if null/undefined) */}
+            {place?.comments_enabled === false ? (
+              <div className="text-center py-12 text-[#8F9E4F]/60">
+                <div className="mb-1">Comments are disabled for this place</div>
+              </div>
+            ) : (
+              <>
             {userId ? (
               <div className="mb-6 rounded-xl border border-[#ECEEE4] bg-white p-4">
                 <textarea
@@ -1903,6 +1992,8 @@ export default function PlacePage() {
                 })}
               </div>
             )}
+            </>
+            )}
           </section>
         </div>
       </div>
@@ -1947,34 +2038,27 @@ export default function PlacePage() {
           onTouchEnd={handleGalleryTouchEnd}
         >
           {/* Top Bar */}
-          <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-4 pt-safe-top">
-            {/* Back button */}
-            <button
-              onClick={() => {
-                setPhotoGalleryOpen(false);
-                setPhotoZoom(1);
-                setPhotoPosition({ x: 0, y: 0 });
-              }}
-              className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
-              aria-label="Back"
-            >
-              <Icon name="back" size={24} className="text-white" />
-            </button>
-
+          <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-3 sm:p-4 pt-safe-top">
             {/* Photo counter */}
-            <div className="absolute left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-sm rounded-lg px-3 py-1.5 badge-shadow">
+            <div className="absolute left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-sm rounded-lg px-3 py-1.5 badge-shadow pointer-events-none">
               <span className="text-white text-sm font-medium">
                 {galleryPhotoIndex + 1} / {allPhotos.length}
               </span>
             </div>
 
-            {/* Share button */}
+            {/* Close button */}
             <button
-              onClick={handleShare}
-              className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
-              aria-label="Share"
+              onClick={() => {
+                setPhotoGalleryOpen(false);
+                setIsImageTransitioning(false);
+                setPhotoZoom(1);
+                setPhotoPosition({ x: 0, y: 0 });
+              }}
+              className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center active:bg-black/70 transition-colors touch-manipulation ml-auto"
+              style={{ minWidth: '48px', minHeight: '48px' }}
+              aria-label="Close"
             >
-              <Icon name="share" size={20} className="text-white" />
+              <Icon name="close" size={24} className="text-white" />
             </button>
           </div>
 
@@ -1991,33 +2075,32 @@ export default function PlacePage() {
                 ref={galleryImageRef}
                 src={allPhotos[galleryPhotoIndex]}
                 alt={`${place.title} - Photo ${galleryPhotoIndex + 1}`}
-                className="max-w-full max-h-full object-contain"
+                className="max-w-full max-h-full object-contain transition-opacity duration-300 ease-in-out"
+                style={{
+                  opacity: isImageTransitioning ? 0 : 1,
+                }}
                 onDoubleClick={handlePhotoDoubleClick}
                 draggable={false}
               />
             </div>
           </div>
 
-          {/* Navigation buttons (desktop) */}
+          {/* Navigation buttons */}
           {allPhotos.length > 1 && (
             <>
               <button
                 onClick={handlePrevPhoto}
-                className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center hover:bg-black/70 transition min-[600px]:block max-[599px]:hidden"
+                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center hover:bg-black/70 active:bg-black/80 transition-all z-20"
                 aria-label="Previous photo"
               >
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
+                <Icon name="back" size={24} className="text-white" />
               </button>
               <button
                 onClick={handleNextPhoto}
-                className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center hover:bg-black/70 transition min-[600px]:block max-[599px]:hidden"
+                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center hover:bg-black/70 active:bg-black/80 transition-all z-20"
                 aria-label="Next photo"
               >
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <Icon name="forward" size={24} className="text-white" />
               </button>
             </>
           )}
@@ -2031,6 +2114,7 @@ export default function PlacePage() {
                 if (e.key === 'ArrowRight') handleNextPhoto();
                 if (e.key === 'Escape') {
                   setPhotoGalleryOpen(false);
+                  setIsImageTransitioning(false);
                   setPhotoZoom(1);
                   setPhotoPosition({ x: 0, y: 0 });
                 }

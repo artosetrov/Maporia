@@ -188,9 +188,7 @@ export default function TopBar({
                     className="w-10 h-10 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] transition-colors flex items-center justify-center flex-shrink-0"
                     aria-label="Share"
                   >
-                    <svg className="w-5 h-5 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                    </svg>
+                    <Icon name="share" size={20} className="text-[#1F2A1F]" />
                   </button>
                   {/* Favorite button */}
                   <button
@@ -244,7 +242,7 @@ export default function TopBar({
                             <Icon name="search" size={20} className="text-[#A8B096] flex-shrink-0" />
                           )}
                           <div className={`text-sm font-medium text-[#1F2A1F] ${pathname === "/" ? "" : "truncate"}`}>
-                            {pathname === "/" ? "Start to your search" : (selectedCity || "Anywhere")}
+                            {pathname === "/" ? "Start to your search" : (selectedCity || "Where?")}
                           </div>
                           {activeFiltersSummary && pathname !== "/" && (
                             <div className="text-xs text-[#6F7A5A] truncate mt-0.5">
@@ -274,9 +272,9 @@ export default function TopBar({
                       </button>
                     )}
                     
-                    {/* View Toggle - только для страницы Map */}
+                    {/* View Toggle - только для страницы Map (скрыт на мобильной версии) */}
                     {view !== undefined && onViewChange && pathname === "/map" && (
-                      <div className="flex items-center gap-1 bg-white border border-[#ECEEE4] rounded-full p-1">
+                      <div className="hidden min-[600px]:flex items-center gap-1 bg-white border border-[#ECEEE4] rounded-full p-1">
                         <button
                           onClick={() => onViewChange("list")}
                           className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
@@ -342,6 +340,7 @@ export default function TopBar({
                     onSearchChange={onSearchChange || (() => {})}
                     onFiltersClick={onFiltersClick || (() => {})}
                     activeFiltersCount={activeFiltersCount}
+                    onSearchBarClick={onSearchBarClick}
                   />
                 </div>
               )}
