@@ -65,6 +65,8 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
   const [isHovered, setIsHovered] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
+  const cardRef = useRef<HTMLAnchorElement>(null);
+  const [isSmallCard, setIsSmallCard] = useState(false);
   
   // Premium gate hook
   const { canAccessPlace, openPremiumModal, closePremiumModal, modalOpen } = usePremiumGate();
@@ -381,9 +383,38 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
     }
   };
 
+  // Check if card is very small (to hide "Premium" text when it overlaps with favorite icon)
+  useEffect(() => {
+    const checkCardSize = () => {
+      if (cardRef.current) {
+        const width = cardRef.current.offsetWidth;
+        // Consider card small if width is less than 200px
+        setIsSmallCard(width < 200);
+      }
+    };
+
+    checkCardSize();
+    window.addEventListener('resize', checkCardSize);
+    
+    // Use ResizeObserver for more accurate detection
+    let resizeObserver: ResizeObserver | null = null;
+    if (cardRef.current && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(checkCardSize);
+      resizeObserver.observe(cardRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', checkCardSize);
+      if (resizeObserver && cardRef.current) {
+        resizeObserver.unobserve(cardRef.current);
+      }
+    };
+  }, []);
+
   return (
     <>
       <Link
+        ref={cardRef}
         href={isLocked ? "#" : `/id/${place.id}`}
         onClick={handleCardClick}
         className={`block group relative w-full ${isLocked ? "cursor-pointer" : "cursor-pointer"}`}
@@ -465,7 +496,8 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
             {/* Premium badge - top left */}
             {isPremium && (
               <div className="absolute top-2 left-2 z-20">
-                <PremiumBadge />
+                {/* Hide "Premium" text only on small cards when favorite button is present */}
+                <PremiumBadge showText={!(isSmallCard && favoriteButton)} />
               </div>
             )}
 

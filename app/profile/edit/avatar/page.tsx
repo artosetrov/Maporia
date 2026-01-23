@@ -190,8 +190,8 @@ export default function AvatarEditorPage() {
 
   return (
     <main className="min-h-screen bg-white flex flex-col">
-      {/* Header */}
-      <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
+      {/* Desktop Header */}
+      <div className="hidden min-[900px]:block sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-2xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16">
             <button
@@ -207,8 +207,23 @@ export default function AvatarEditorPage() {
         </div>
       </div>
 
+      {/* Mobile Custom Header */}
+      <div className="min-[900px]:hidden fixed top-0 left-0 right-0 z-40 bg-white">
+        <div className="px-4 pt-safe-top pt-4 pb-4 flex items-center justify-between h-[64px]">
+          <button
+            onClick={handleCancel}
+            className="w-10 h-10 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] active:bg-[#ECEEE4] transition-colors flex items-center justify-center flex-shrink-0"
+            aria-label="Back"
+          >
+            <Icon name="back" size={20} className="text-[#1F2A1F]" />
+          </button>
+          <h1 className="font-semibold text-[#1F2A1F] leading-none" style={{ fontSize: '24px' }}>Profile photo</h1>
+          <div className="w-10" /> {/* Spacer for centering */}
+        </div>
+      </div>
+
       {/* Body */}
-      <div className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-8">
+      <div className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-8 pt-[80px] min-[900px]:pt-8">
         {error && (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50/50 p-3 text-sm text-red-700">
             {error}

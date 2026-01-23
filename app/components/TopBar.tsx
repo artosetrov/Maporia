@@ -9,7 +9,6 @@ import SearchBar from "./SearchBar";
 import SearchModal from "./SearchModal";
 import FavoriteIcon from "./FavoriteIcon";
 import Icon from "./Icon";
-import Wordmark from "./Wordmark";
 
 type TopBarProps = {
   // Search bar props (only for /map page) - Airbnb style
@@ -87,7 +86,7 @@ export default function TopBar({
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const avatarRef = useRef<HTMLButtonElement>(null);
+  const hamburgerRef = useRef<HTMLButtonElement>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
@@ -116,8 +115,9 @@ export default function TopBar({
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(event.target as Node) && 
-          avatarRef.current && !avatarRef.current.contains(event.target as Node)) {
+          hamburgerRef.current && !hamburgerRef.current.contains(event.target as Node)) {
         setMenuOpen(false);
+        setMenuPosition(null);
       }
     }
 
@@ -294,14 +294,14 @@ export default function TopBar({
           <div className="px-8 pt-safe-top pt-3 pb-3">
             {/* Main row: Logo + SearchBar + Auth */}
             <div className="flex items-center gap-6">
-              {/* Left: Logo - Wordmark only */}
-              <Wordmark
-                href="/"
-                withIcon={false}
-                size="default"
-                showRegistered={false}
-                className="flex-shrink-0 text-4xl"
-              />
+              {/* Left: Logo - Pin.svg */}
+              <Link href="/" className="flex-shrink-0">
+                <img
+                  src="/Pin.svg"
+                  alt="Maporia"
+                  className="h-10 w-auto"
+                />
+              </Link>
 
               {/* Center: SearchBar (only when showSearchBar is true) */}
               {showSearchBar && (
@@ -318,20 +318,7 @@ export default function TopBar({
               )}
 
               {/* Right: Auth area */}
-              <div className="flex-shrink-0 flex items-center gap-3 ml-auto">
-                {/* Add Place Button - visible only for authenticated users */}
-                {isAuthenticated && (
-                  <Link
-                    href="/add"
-                    onClick={() => { if (navigator.vibrate) navigator.vibrate(10); }}
-                    className="h-10 w-10 rounded-xl flex items-center justify-center text-[#8F9E4F] hover:bg-[#FAFAF7] transition-colors"
-                    aria-label="Add new place"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                  </Link>
-                )}
+              <div className="flex-shrink-0 flex items-center gap-4 ml-auto">
                 {/* Login Button - visible for unauthenticated users */}
                 {!isAuthenticated && (
                   <Link
@@ -341,22 +328,23 @@ export default function TopBar({
                     Login
                   </Link>
                 )}
-                {/* Avatar with Dropdown Menu */}
+                {/* Authenticated: Switch to hosting + Avatar + Hamburger menu */}
                 {isAuthenticated && (userAvatar || userDisplayName || userEmail) && (
-                  <div className="relative">
-                    <button
-                      ref={avatarRef}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (avatarRef.current) {
-                          const rect = avatarRef.current.getBoundingClientRect();
-                          setMenuPosition({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
-                        }
-                        setMenuOpen(!menuOpen);
-                      }}
-                      className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#FAFAF7] transition-colors"
+                  <>
+                    {/* Add gem - link to add place */}
+                    <Link
+                      href="/add"
+                      className="text-sm text-[#1F2A1F] hover:text-[#8F9E4F] transition-colors"
                     >
-                      <div className="w-8 h-8 rounded-full bg-[#FAFAF7] overflow-hidden flex-shrink-0 border border-[#ECEEE4]">
+                      + Add gem
+                    </Link>
+                    
+                    {/* Avatar - link to profile */}
+                    <Link
+                      href="/profile"
+                      className="flex-shrink-0"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-[#FAFAF7] overflow-hidden flex-shrink-0 border border-[#ECEEE4] hover:border-[#8F9E4F] transition-colors">
                         {userAvatar ? (
                           <img
                             src={userAvatar}
@@ -369,93 +357,121 @@ export default function TopBar({
                           </span>
                         )}
                       </div>
-                      <Icon name="chevron-down" size={16} className="text-[#A8B096]" />
-                    </button>
+                    </Link>
+                    
+                    {/* Hamburger menu button */}
+                    <div className="relative">
+                      <button
+                        ref={hamburgerRef}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (hamburgerRef.current) {
+                            const rect = hamburgerRef.current.getBoundingClientRect();
+                            setMenuPosition({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+                          }
+                          setMenuOpen(!menuOpen);
+                        }}
+                        className="w-8 h-8 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition-colors flex items-center justify-center flex-shrink-0"
+                        aria-label="Menu"
+                      >
+                        <svg className="w-4 h-4 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                      </button>
 
-                    {/* Dropdown Menu */}
-                    {menuOpen && menuPosition && (
-                      <div className="fixed inset-0 z-50">
-                        <button
-                          className="absolute inset-0 bg-black/20 backdrop-blur-sm"
-                          onClick={() => {
-                            setMenuOpen(false);
-                            setMenuPosition(null);
-                          }}
-                          aria-label="Close menu"
-                        />
-                        <div
-                          ref={menuRef}
-                          className="absolute bg-white rounded-2xl border border-[#ECEEE4] overflow-hidden min-w-[200px]"
-                          style={{
-                            top: `${menuPosition.top}px`,
-                            right: `${menuPosition.right}px`,
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
-                          }}
-                        >
-                          <Link
-                            href="/profile"
-                            onClick={() => {
-                              setMenuOpen(false);
-                              setMenuPosition(null);
-                            }}
-                            className="w-full px-4 py-3 text-left text-sm text-[#1F2A1F] hover:bg-[#FAFAF7] transition-colors flex items-center gap-3"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                            </svg>
-                            Profile
-                          </Link>
-                          <Link
-                            href="/feed"
-                            onClick={() => {
-                              setMenuOpen(false);
-                              setMenuPosition(null);
-                            }}
-                            className="w-full px-4 py-3 text-left text-sm text-[#1F2A1F] hover:bg-[#FAFAF7] transition-colors flex items-center gap-3 border-t border-[#ECEEE4]"
-                          >
-                            <Icon name="add" size={16} />
-                            Feed
-                          </Link>
-                          <Link
-                            href="/saved"
-                            onClick={() => {
-                              setMenuOpen(false);
-                              setMenuPosition(null);
-                            }}
-                            className="w-full px-4 py-3 text-left text-sm text-[#1F2A1F] hover:bg-[#FAFAF7] transition-colors flex items-center gap-3 border-t border-[#ECEEE4]"
-                          >
-                            <FavoriteIcon isActive={true} size={16} />
-                            Saved
-                          </Link>
-                          <Link
-                            href="/settings"
-                            onClick={() => {
-                              setMenuOpen(false);
-                              setMenuPosition(null);
-                            }}
-                            className="w-full px-4 py-3 text-left text-sm text-[#1F2A1F] hover:bg-[#FAFAF7] transition-colors flex items-center gap-3 border-t border-[#ECEEE4]"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                            Settings
-                          </Link>
+                      {/* Dropdown Menu */}
+                      {menuOpen && menuPosition && (
+                        <div className="fixed inset-0 z-50">
                           <button
+                            className="absolute inset-0 bg-black/20 backdrop-blur-sm"
                             onClick={() => {
                               setMenuOpen(false);
                               setMenuPosition(null);
-                              handleLogout();
                             }}
-                            className="w-full px-4 py-3 text-left text-sm text-[#C96A5B] hover:bg-[#FAFAF7] transition-colors flex items-center gap-3 border-t border-[#ECEEE4]"
+                            aria-label="Close menu"
+                          />
+                          <div
+                            ref={menuRef}
+                            className="absolute bg-white rounded-2xl border border-[#ECEEE4] overflow-hidden p-3"
+                            style={{
+                              top: `${menuPosition.top}px`,
+                              right: `${menuPosition.right}px`,
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+                              minWidth: '280px',
+                            }}
                           >
-                            <Icon name="logout" size={16} />
-                            Logout
-                          </button>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Link
+                                href="/add"
+                                onClick={() => {
+                                  setMenuOpen(false);
+                                  setMenuPosition(null);
+                                }}
+                                className="flex flex-col items-center justify-center p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
+                              >
+                                <div className="w-12 h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
+                                  <Icon name="add" size={24} className="text-[#1F2A1F]" />
+                                </div>
+                                <span className="text-xs font-medium text-[#1F2A1F] text-center">+ Add gem</span>
+                              </Link>
+                              <Link
+                                href="/profile?section=trips"
+                                onClick={() => {
+                                  setMenuOpen(false);
+                                  setMenuPosition(null);
+                                }}
+                                className="flex flex-col items-center justify-center p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
+                              >
+                                <div className="w-12 h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
+                                  <FavoriteIcon isActive={true} size={24} />
+                                </div>
+                                <span className="text-xs font-medium text-[#1F2A1F] text-center">My favorites</span>
+                              </Link>
+                              <Link
+                                href="/profile?section=added"
+                                onClick={() => {
+                                  setMenuOpen(false);
+                                  setMenuPosition(null);
+                                }}
+                                className="flex flex-col items-center justify-center p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
+                              >
+                                <div className="w-12 h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
+                                  <Icon name="location" size={24} className="text-[#1F2A1F]" />
+                                </div>
+                                <span className="text-xs font-medium text-[#1F2A1F] text-center">Added places</span>
+                              </Link>
+                              <Link
+                                href="/profile?section=history"
+                                onClick={() => {
+                                  setMenuOpen(false);
+                                  setMenuPosition(null);
+                                }}
+                                className="flex flex-col items-center justify-center p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
+                              >
+                                <div className="w-12 h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
+                                  <Icon name="clock" size={24} className="text-[#1F2A1F]" />
+                                </div>
+                                <span className="text-xs font-medium text-[#1F2A1F] text-center">History</span>
+                              </Link>
+                              <Link
+                                href="/profile?section=activity"
+                                onClick={() => {
+                                  setMenuOpen(false);
+                                  setMenuPosition(null);
+                                }}
+                                className="flex flex-col items-center justify-center p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
+                              >
+                                <div className="w-12 h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
+                                  <Icon name="clock" size={24} className="text-[#1F2A1F]" />
+                                </div>
+                                <span className="text-xs font-medium text-[#1F2A1F] text-center">Activity</span>
+                              </Link>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
             </div>

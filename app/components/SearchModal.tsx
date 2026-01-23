@@ -316,7 +316,7 @@ export default function SearchModal({
 
       // Search places (limit to 10 for display)
       if (searchQuery.trim()) {
-        let placesQuery = supabase
+        const placesQuery = supabase
           .from("places")
           .select("id,title,city,city_name_cached,cover_url")
           .or(`title.ilike.%${searchQuery.trim()}%,description.ilike.%${searchQuery.trim()}%`)

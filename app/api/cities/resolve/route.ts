@@ -87,12 +87,14 @@ export async function POST(request: NextRequest) {
       lat: cityData.lat,
       lng: cityData.lng,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("City resolve error:", error);
+    const message = error instanceof Error ? error.message : "Failed to resolve city";
+    const stack = error instanceof Error ? error.stack : undefined;
     return NextResponse.json(
       {
-        error: error.message || "Failed to resolve city",
-        details: process.env.NODE_ENV === "development" ? error.stack : undefined,
+        error: message,
+        details: process.env.NODE_ENV === "development" ? stack : undefined,
       },
       { status: 500 }
     );

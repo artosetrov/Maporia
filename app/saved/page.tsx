@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import PlaceCard from "../components/PlaceCard";
+import FavoriteIcon from "../components/FavoriteIcon";
 import FiltersModal, { ActiveFilters } from "../components/FiltersModal";
 import { supabase } from "../lib/supabase";
 import { DEFAULT_CITY } from "../constants";
@@ -97,13 +98,14 @@ export default function SavedPage() {
     setLoading(false);
   }
 
-  async function handleRemoveFavorite(placeId: string, e: React.MouseEvent) {
+  async function toggleFavorite(placeId: string, e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
 
     if (!userId) return;
 
     try {
+      // Since all places on saved page are favorites, we only remove
       const { error } = await supabase
         .from("reactions")
         .delete()
@@ -116,13 +118,9 @@ export default function SavedPage() {
       } else {
         // Remove from local state
         setPlaces((prev) => prev.filter((p) => p.id !== placeId));
-        // Reload to ensure consistency
-        if (userId) {
-          await loadSavedPlaces(userId);
-        }
       }
     } catch (err) {
-      console.error("Remove favorite error:", err);
+      console.error("Toggle favorite error:", err);
     }
   }
 
@@ -189,15 +187,15 @@ export default function SavedPage() {
       <div className="flex-1 pt-[80px] pb-20">
         <div className="px-6 lg:px-8">
           {loading ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {Array.from({ length: 8 }).map((_, i) => (
+            <div className="grid grid-cols-2 min-[1440px]:grid-cols-3 gap-6 min-[1440px]:gap-6 min-[1440px]:gap-y-7">
+              {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="w-full">
                   <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
-                    <div className="absolute inset-0 rounded-2xl bg-gray-200 animate-pulse" />
+                    <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <div className="h-5 w-3/4 bg-gray-200 rounded animate-pulse" />
-                    <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                    <div className="h-5 w-3/4 bg-[#ECEEE4] rounded animate-pulse" />
+                    <div className="h-4 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
                   </div>
                 </div>
               ))}
@@ -208,7 +206,7 @@ export default function SavedPage() {
               <div className="text-xs text-[#A8B096]">Saved places appear here</div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 min-[1440px]:grid-cols-3 gap-6 min-[1440px]:gap-6 min-[1440px]:gap-y-7">
               {(() => {
                 // Calculate locked premium places for Haunted Gem indexing
                 const defaultUserAccess: UserAccess = access ?? { 
@@ -240,14 +238,36 @@ export default function SavedPage() {
                 
                 return places.map((place) => {
                   const hauntedGemIndex = lockedPlacesMap.get(place.id);
+                  const isFavorite = true; // All places on saved page are favorites
                   return (
                     <div key={place.id} className="h-full">
                       <PlaceCard 
                         place={place}
                         userAccess={access}
                         userId={userId}
+                        isFavorite={isFavorite}
                         hauntedGemIndex={hauntedGemIndex}
-                        onRemoveFavorite={handleRemoveFavorite}
+                        favoriteButton={
+                          userId ? (
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                toggleFavorite(place.id, e);
+                              }}
+                              className={`h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors ${
+                                isFavorite ? "bg-[#FAFAF7] border-[#8F9E4F]" : ""
+                              }`}
+                              title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                            >
+                              <FavoriteIcon 
+                                isActive={isFavorite} 
+                                size={16}
+                                className={isFavorite ? "scale-110" : ""}
+                              />
+                            </button>
+                          ) : undefined
+                        }
                       />
                     </div>
                   );

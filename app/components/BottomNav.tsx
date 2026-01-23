@@ -31,8 +31,8 @@ export default function BottomNav() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
-  const lastScrollY = useRef(0);
-  const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
+  const lastScrollByTarget = useRef<WeakMap<EventTarget, number>>(new WeakMap());
+  const rafId = useRef<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -93,42 +93,92 @@ export default function BottomNav() {
       return;
     }
 
-    const handleScroll = () => {
-      if (scrollTimeout.current) {
-        cancelAnimationFrame(scrollTimeout.current as any);
+    const getScrollTopForTarget = (target: EventTarget | null): number => {
+      // Window/document scroll
+      if (
+        target === null ||
+        target === window ||
+        target === document ||
+        target === document.documentElement ||
+        target === document.body
+      ) {
+        return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
       }
 
-      scrollTimeout.current = requestAnimationFrame(() => {
-        const currentScrollY = window.scrollY || document.documentElement.scrollTop;
-        const scrollDifference = Math.abs(currentScrollY - lastScrollY.current);
-        const threshold = 15; // Minimum scroll distance to trigger hide/show
+      // Element scroll
+      if (target instanceof HTMLElement) {
+        return target.scrollTop || 0;
+      }
 
-        // Only update if scroll difference is significant
-        if (scrollDifference > threshold) {
-          if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
-            // Scrolling down - hide nav
+      return window.scrollY || document.documentElement.scrollTop || 0;
+    };
+
+    const handleScroll = (e: Event) => {
+      if (rafId.current !== null) {
+        cancelAnimationFrame(rafId.current);
+      }
+
+      rafId.current = requestAnimationFrame(() => {
+        const target = (e.target ?? document) as EventTarget;
+        const currentScrollTop = getScrollTopForTarget(target);
+
+        const last = lastScrollByTarget.current.get(target) ?? currentScrollTop;
+        const diff = Math.abs(currentScrollTop - last);
+        const threshold = 10; // Minimum scroll distance to trigger hide/show
+
+        if (diff > threshold) {
+          if (currentScrollTop > last && currentScrollTop > 50) {
             setIsVisible(false);
-          } else if (currentScrollY < lastScrollY.current) {
-            // Scrolling up - show nav
+          } else if (currentScrollTop < last) {
             setIsVisible(true);
           }
-          lastScrollY.current = currentScrollY;
+          lastScrollByTarget.current.set(target, currentScrollTop);
         }
       });
     };
 
-    // Initialize last scroll position
-    lastScrollY.current = window.scrollY || document.documentElement.scrollTop;
+    // Initialize baseline for window/document scroll
+    lastScrollByTarget.current.set(document, getScrollTopForTarget(document));
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
+    // Add listeners to common scroll containers (cheap scan)
+    const attachToScrollable = () => {
+      const candidates = Array.from(
+        document.querySelectorAll<HTMLElement>(".overflow-y-auto, .overflow-y-scroll, .scrollbar-hide")
+      );
+      candidates.forEach((el) => {
+        if (!lastScrollByTarget.current.has(el) && el.scrollHeight > el.clientHeight) {
+          lastScrollByTarget.current.set(el, getScrollTopForTarget(el));
+          el.addEventListener("scroll", handleScroll, { passive: true });
+        }
+      });
+      return candidates;
+    };
+
+    const scrollableElements = attachToScrollable();
+
+    /**
+     * Use capture to catch scroll events from nested scroll containers
+     * (scroll doesn't bubble, but it can be captured).
+     */
+    window.addEventListener("scroll", handleScroll, { passive: true, capture: true });
+    document.addEventListener("scroll", handleScroll, { passive: true, capture: true });
 
     return () => {
-      window.removeEventListener("scroll", handleScroll);
-      if (scrollTimeout.current) {
-        cancelAnimationFrame(scrollTimeout.current as any);
+      // For removeEventListener, passing `true` ensures capture listener is removed reliably.
+      window.removeEventListener("scroll", handleScroll, true);
+      document.removeEventListener("scroll", handleScroll, true);
+      
+      // Remove listeners from scrollable elements
+      scrollableElements.forEach((el) => {
+        el.removeEventListener("scroll", handleScroll);
+      });
+
+      if (rafId.current !== null) {
+        cancelAnimationFrame(rafId.current);
+        rafId.current = null;
       }
     };
-  }, []);
+  }, [pathname]);
 
   const navItems = [
     { href: "/", label: "Explore", icon: SearchIcon },
@@ -147,7 +197,7 @@ export default function BottomNav() {
       }}
     >
       <div className="mx-auto max-w-md">
-        <div className="flex items-center justify-around px-4 pt-2 pb-2">
+        <div className="flex items-center justify-around px-4 pt-2.5 pb-2.5">
           {navItems.map((item) => {
             // For home page (/), check exact match. For other pages, check startsWith
             const isActive = item.href === "/" 
@@ -185,7 +235,7 @@ export default function BottomNav() {
 function SearchIcon({ active }: { active: boolean }) {
   return (
     <svg
-      className={`w-5 h-5 transition-colors ${active ? "text-[#8F9E4F]" : "text-[#A8B096]"}`}
+      className={`w-6 h-6 transition-colors ${active ? "text-[#8F9E4F]" : "text-[#A8B096]"}`}
       fill="none"
       stroke="currentColor"
       viewBox="0 0 24 24"
@@ -196,14 +246,14 @@ function SearchIcon({ active }: { active: boolean }) {
 }
 
 function SavedIcon({ active }: { active: boolean }) {
-  return <FavoriteIcon isActive={active} size={20} className="transition-colors" />;
+  return <FavoriteIcon isActive={active} size={24} className="transition-colors" />;
 }
 
 function ProfileIcon({ active }: { active: boolean }) {
   return (
     <Icon
       name="profile"
-      size={20}
+      size={24}
       className={`transition-colors ${active ? "text-[#8F9E4F]" : "text-[#A8B096]"}`}
     />
   );
@@ -225,7 +275,7 @@ function ProfileAvatarIcon({
     : initialsFromEmail(userEmail);
 
   return (
-    <div className={`w-5 h-5 rounded-full overflow-hidden flex items-center justify-center transition-colors ${
+    <div className={`w-6 h-6 rounded-full overflow-hidden flex items-center justify-center transition-colors ${
       active 
         ? "ring-2 ring-[#8F9E4F] ring-offset-2 ring-offset-white" 
         : ""
@@ -238,7 +288,7 @@ function ProfileAvatarIcon({
           className="w-full h-full object-cover"
         />
       ) : (
-        <div className={`w-full h-full flex items-center justify-center text-[10px] font-semibold border ${
+        <div className={`w-full h-full flex items-center justify-center text-[11px] font-semibold border ${
           active 
             ? "bg-[#8F9E4F] text-white border-[#8F9E4F]" 
             : "bg-[#FAFAF7] text-[#8F9E4F] border-[#ECEEE4]"

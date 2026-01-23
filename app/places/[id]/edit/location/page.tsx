@@ -339,7 +339,7 @@ export default function LocationEditorPage() {
             >
               <Icon name="back" size={20} />
             </button>
-            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Location</h1>
+            <h1 className="font-semibold font-fraunces text-[#1F2A1F]" style={{ fontSize: '24px' }}>Location</h1>
             <button
               onClick={() => setIsDragging(!isDragging)}
               className={cx(

@@ -45,18 +45,23 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
   const [loading, setLoading] = useState(true);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  const categoriesKey = section.categories ? section.categories.join(",") : "";
+
   // Create stable request key for deduplication
   const requestKey = useMemo(() => {
     return JSON.stringify({
       title: section.title,
       city: section.city || '',
       tag: section.tag || '',
-      categories: section.categories ? section.categories.join(',') : '',
+      categories: categoriesKey,
       daysAgo: section.daysAgo || 0,
       sort: section.sort || '',
       recentlyViewed: section.recentlyViewed || false,
     });
-  }, [section.title, section.city, section.tag, section.categories?.join(','), section.daysAgo, section.sort, section.recentlyViewed]);
+  }, [section.title, section.city, section.tag, categoriesKey, section.daysAgo, section.sort, section.recentlyViewed]);
+
+  // Store loadPlaces function in ref so it can be called from visibilitychange handler
+  const loadPlacesRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -293,18 +298,22 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
       }
     }
 
+    // Store function in ref
+    loadPlacesRef.current = loadPlaces;
+    
     loadPlaces();
 
     return () => {
       alive = false;
       currentRequestId = Date.now(); // Invalidate current request
+      loadPlacesRef.current = null;
     };
   }, [requestKey]); // Use stable request key instead of individual dependencies
 
-  // For "Recently viewed" section, reload when page becomes visible (user returns from viewing a place)
+  // Reload when page becomes visible (user returns from another tab)
+  // This fixes the issue where content stops loading after tab switches
+  // Applied to all sections, not just recentlyViewed
   useEffect(() => {
-    if (!section.recentlyViewed) return;
-
     let alive = true;
     let currentRequestId = Date.now();
 
@@ -399,6 +408,11 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
           }
         }
         reloadPlaces();
+      } else {
+        // For other sections, reload using the stored function
+        if (loadPlacesRef.current) {
+          loadPlacesRef.current();
+        }
       }
     };
 
@@ -408,7 +422,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
       currentRequestId = Date.now(); // Invalidate current request
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [section.recentlyViewed]);
+  }, [section.recentlyViewed, requestKey]); // Include requestKey to ensure reload when section changes
 
   // Calculate locked premium places for Haunted Gem indexing
   const defaultUserAccess: UserAccess = userAccess ?? { 

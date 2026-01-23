@@ -1,9 +1,10 @@
 "use client";
 
+/* eslint-disable react-hooks/set-state-in-effect */
+
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "../lib/supabase";
-import { DEFAULT_CITY, CITIES } from "../constants";
-import { CATEGORIES, SORT_OPTIONS } from "../constants";
+import { CITIES } from "../constants";
+import { CATEGORIES } from "../constants";
 import Icon from "./Icon";
 
 export type ActiveFilters = {
@@ -382,7 +383,7 @@ export default function FiltersModal({
                 onClick={() => handleTogglePremium()}
                 className={`flex-1 flex flex-col items-center justify-center px-4 py-5 rounded-xl border-2 transition-all ${
                   draftFilters.premium
-                    ? "border-[#8F9E4F] bg-[#C9D2A3]"
+                    ? "border-[#8F9E4F] bg-[#F4F6EF]"
                     : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
                 }`}
               >
@@ -397,7 +398,7 @@ export default function FiltersModal({
                 onClick={() => handleToggleHidden()}
                 className={`flex-1 flex flex-col items-center justify-center px-4 py-5 rounded-xl border-2 transition-all ${
                   draftFilters.hidden
-                    ? "border-[#8F9E4F] bg-[#C9D2A3]"
+                    ? "border-[#8F9E4F] bg-[#F4F6EF]"
                     : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
                 }`}
               >
@@ -412,7 +413,7 @@ export default function FiltersModal({
                 onClick={() => handleToggleVibe()}
                 className={`flex-1 flex flex-col items-center justify-center px-4 py-5 rounded-xl border-2 transition-all ${
                   draftFilters.vibe
-                    ? "border-[#8F9E4F] bg-[#C9D2A3]"
+                    ? "border-[#8F9E4F] bg-[#F4F6EF]"
                     : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
                 }`}
               >
@@ -437,7 +438,7 @@ export default function FiltersModal({
                     onClick={() => handleCitySelect(city)}
                     className={`inline-flex items-center gap-2 px-3 py-2 rounded-full border transition-colors whitespace-nowrap ${
                       isSelected
-                        ? "border-[#8F9E4F] bg-[#C9D2A3] text-[#1F2A1F]"
+                        ? "border-[#8F9E4F] bg-[#F4F6EF] text-[#1F2A1F]"
                         : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
                     }`}
                   >
@@ -469,7 +470,7 @@ export default function FiltersModal({
                     onClick={() => handleToggleCategory(category)}
                     className={`inline-flex items-center gap-2 px-3 py-2 rounded-full border transition-colors whitespace-nowrap ${
                       isSelected
-                        ? "border-[#8F9E4F] bg-[#C9D2A3] text-[#1F2A1F]"
+                        ? "border-[#8F9E4F] bg-[#F4F6EF] text-[#1F2A1F]"
                         : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
                     }`}
                   >

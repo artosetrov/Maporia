@@ -32,10 +32,9 @@ export default function AddPlacePage() {
           categories: null,
           link: null,
           access_level: "public",
+          is_hidden: true, // Hidden by default until all required fields are filled
           created_by: u.id,
         };
-
-        console.log("Creating place with payload:", payload);
 
         const { data: placeData, error: createError } = await supabase
           .from("places")
@@ -43,18 +42,8 @@ export default function AddPlacePage() {
           .select("id")
           .single();
 
-        console.log("Create result:", { data: placeData, error: createError });
-
         if (createError) {
           console.error("Error creating place:", createError);
-          console.error("Error type:", typeof createError);
-          console.error("Error keys:", Object.keys(createError));
-          console.error("Error message:", createError.message);
-          console.error("Error code:", createError.code);
-          console.error("Error details:", createError.details);
-          console.error("Error hint:", createError.hint);
-          console.error("Error stringified:", JSON.stringify(createError, Object.getOwnPropertyNames(createError), 2));
-          
           const errorMessage = createError.message || createError.code || createError.details || createError.hint || "Failed to create place. Check console for details.";
           setError(errorMessage);
           setCreating(false);
@@ -67,8 +56,6 @@ export default function AddPlacePage() {
           setCreating(false);
           return;
         }
-
-        console.log("Place created successfully, redirecting to editor:", placeData.id);
 
         // Redirect to editor
         window.location.href = `/places/${placeData.id}/edit`;

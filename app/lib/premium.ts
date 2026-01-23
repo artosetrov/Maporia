@@ -51,5 +51,5 @@ export async function setUserPremium(
   //   .eq('id', userId);
   // if (error) throw error;
 
-  console.log(`[setUserPremium] Would update user ${userId} to premium=${isPremium}`);
+  // Intentionally no-op for now (placeholder).
 }

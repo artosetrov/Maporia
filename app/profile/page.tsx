@@ -14,6 +14,7 @@ import { useUserAccess } from "../hooks/useUserAccess";
 import { isUserAdmin, isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import { DEFAULT_CITY } from "../constants";
 import PremiumUpsellModal from "../components/PremiumUpsellModal";
+import { getRecentlyViewedPlaceIds } from "../utils";
 
 type Place = {
   id: string;
@@ -122,7 +123,7 @@ function ProfileInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [section, setSection] = useState<"about" | "trips" | "added" | "activity" | "users" | "elements">("about");
+  const [section, setSection] = useState<"about" | "trips" | "added" | "activity" | "users" | "elements" | "history">("about");
   const [loading, setLoading] = useState(true);
 
   const [userId, setUserId] = useState<string | null>(null);
@@ -135,6 +136,7 @@ function ProfileInner() {
 
   const [added, setAdded] = useState<Place[]>([]);
   const [saved, setSaved] = useState<Place[]>([]);
+  const [recentlyViewed, setRecentlyViewed] = useState<Place[]>([]);
   const [commentsCount, setCommentsCount] = useState<number>(0);
   const [reviewsReceived, setReviewsReceived] = useState<Review[]>([]);
   const [reviewsWritten, setReviewsWritten] = useState<Review[]>([]);
@@ -308,6 +310,14 @@ function ProfileInner() {
     }
   }, [searchParams, router]);
 
+  // Handle section parameter from URL
+  useEffect(() => {
+    const sectionParam = searchParams?.get("section");
+    if (sectionParam && ["about", "trips", "added", "activity", "users", "elements", "history"].includes(sectionParam)) {
+      setSection(sectionParam as typeof section);
+    }
+  }, [searchParams]);
+
   const [displayNameDraft, setDisplayNameDraft] = useState("");
   const [bioDraft, setBioDraft] = useState("");
   const [avatarDraft, setAvatarDraft] = useState<string | null>(null);
@@ -387,6 +397,26 @@ function ProfileInner() {
         savedPlaces = (data ?? []) as Place[];
       }
       if (mounted) setSaved(savedPlaces);
+
+      // Load recently viewed places
+      const recentlyViewedIds = getRecentlyViewedPlaceIds();
+      let recentlyViewedPlaces: Place[] = [];
+      if (recentlyViewedIds.length > 0) {
+        const { data: recentlyViewedData } = await supabase
+          .from("places")
+          .select("id,title,city,country,address,cover_url,created_at,categories")
+          .in("id", recentlyViewedIds)
+          .limit(20);
+        
+        // Preserve order from localStorage
+        if (recentlyViewedData) {
+          const placesMap = new Map((recentlyViewedData as Place[]).map(p => [p.id, p]));
+          recentlyViewedPlaces = recentlyViewedIds
+            .map(id => placesMap.get(id))
+            .filter((p): p is Place => p !== undefined);
+        }
+      }
+      if (mounted) setRecentlyViewed(recentlyViewedPlaces);
 
       // Count comments written
       const { count: commentsCountData } = await supabase
@@ -689,26 +719,71 @@ function ProfileInner() {
 
   return (
     <main className="min-h-screen bg-white">
-      <TopBar
-        showSearchBar={true}
-        searchValue={searchValue}
-        onSearchChange={handleSearchChange}
-        selectedCity={selectedCity}
-        onCityChange={handleCityChange}
-        onFiltersClick={() => {
-          setFilterOpen(true);
-        }}
-        activeFiltersCount={activeFiltersCount}
-        userAvatar={profile?.avatar_url ?? null}
-        userDisplayName={displayName}
-        userEmail={userEmail}
-        showBackButton={section !== "about"}
-        showAddPlaceButton={true}
-        onBackClick={() => {
-          setSection("about");
-          router.replace("/profile", { scroll: false });
-        }}
-      />
+      {/* Desktop TopBar */}
+      <div className="hidden min-[900px]:block">
+        <TopBar
+          showSearchBar={true}
+          searchValue={searchValue}
+          onSearchChange={handleSearchChange}
+          selectedCity={selectedCity}
+          onCityChange={handleCityChange}
+          onFiltersClick={() => {
+            setFilterOpen(true);
+          }}
+          activeFiltersCount={activeFiltersCount}
+          userAvatar={profile?.avatar_url ?? null}
+          userDisplayName={displayName}
+          userEmail={userEmail}
+          showBackButton={section !== "about"}
+          showAddPlaceButton={true}
+          onBackClick={() => {
+            setSection("about");
+            router.replace("/profile", { scroll: false });
+          }}
+        />
+      </div>
+
+      {/* Mobile Custom Header */}
+      <div className="min-[900px]:hidden fixed top-0 left-0 right-0 z-40 bg-white">
+        <div className="px-4 pt-safe-top pt-4 pb-4 flex items-center justify-between h-[64px]">
+          {section === "about" ? (
+            <>
+              <h1 className="font-semibold text-[#1F2A1F] leading-none" style={{ fontSize: '24px' }}>Profile</h1>
+              <Link
+                href="/profile/edit"
+                className="w-10 h-10 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] active:bg-[#ECEEE4] transition-colors flex items-center justify-center flex-shrink-0"
+                aria-label="Edit profile"
+              >
+                <svg className="w-5 h-5 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </Link>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => {
+                  setSection("about");
+                  router.replace("/profile", { scroll: false });
+                }}
+                className="w-10 h-10 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] active:bg-[#ECEEE4] transition-colors flex items-center justify-center flex-shrink-0"
+                aria-label="Back"
+              >
+                <Icon name="back" size={20} className="text-[#1F2A1F]" />
+              </button>
+              <h1 className="font-semibold text-[#1F2A1F] leading-none" style={{ fontSize: '24px' }}>
+                {section === "trips" ? "My favorites" :
+                 section === "added" ? "Added places" :
+                 section === "history" ? "History" :
+                 section === "activity" ? "Activity" :
+                 section === "users" ? "Users" :
+                 section === "elements" ? "Elements" : "Profile"}
+              </h1>
+              <div className="w-10" /> {/* Spacer for centering */}
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Filters Modal */}
       <FiltersModal
@@ -812,6 +887,18 @@ function ProfileInner() {
                   <span>Added places</span>
                 </button>
                 <button
+                  onClick={() => setSection("history")}
+                  className={cx(
+                    "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition",
+                    section === "history"
+                      ? "bg-[#FAFAF7] text-[#1F2A1F] font-medium"
+                      : "text-[#6F7A5A] hover:bg-[#FAFAF7]"
+                  )}
+                >
+                  <Icon name="clock" size={24} className="flex-shrink-0" />
+                  <span>History</span>
+                </button>
+                <button
                   onClick={() => setSection("activity")}
                   className={cx(
                     "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition",
@@ -859,20 +946,26 @@ function ProfileInner() {
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-4xl mx-auto px-8 py-8">
               {section === "about" && (
-                <AboutSection
-                  profile={profile}
-                  displayName={displayName}
-                  stats={stats}
-                  myWork={myWork}
-                  bio={bioWithoutWork}
-                  reviewsReceived={reviewsReceived}
-                  reviewsWritten={reviewsWritten}
-                  onEditClick={() => router.push("/profile/edit")}
-                  loading={loading}
-                  userRole={userRole}
-                  subscriptionStatus={profile?.subscription_status}
-                  isAdmin={userIsAdmin}
-                />
+                <>
+                  <AboutSection
+                    profile={profile}
+                    displayName={displayName}
+                    stats={stats}
+                    myWork={myWork}
+                    bio={bioWithoutWork}
+                    reviewsReceived={reviewsReceived}
+                    reviewsWritten={reviewsWritten}
+                    onEditClick={() => router.push("/profile/edit")}
+                    loading={loading}
+                    userRole={userRole}
+                    subscriptionStatus={profile?.subscription_status}
+                    isAdmin={userIsAdmin}
+                    savedPlaces={saved}
+                    addedPlaces={added}
+                    recentlyViewedPlaces={recentlyViewed}
+                    onSectionChange={setSection}
+                  />
+                </>
               )}
               {section === "trips" && (
                 <TripsSection 
@@ -895,6 +988,9 @@ function ProfileInner() {
                   selectedCity={selectedCity}
                   activeFilters={activeFilters}
                 />
+              )}
+              {section === "history" && (
+                <HistorySection places={recentlyViewed} loading={loading} />
               )}
               {section === "activity" && (
                 <ActivitySection activity={activity} loading={loading} profile={profile} displayName={displayName} />
@@ -911,9 +1007,9 @@ function ProfileInner() {
 
         {/* Mobile Layout */}
         <div className="min-[900px]:hidden">
-          {section === "trips" || section === "added" || section === "activity" || (section === "users" && isAdmin) || (section === "elements" && isAdmin) ? (
+          {section === "trips" || section === "added" || section === "history" || section === "activity" || (section === "users" && isAdmin) || (section === "elements" && isAdmin) ? (
             // Show section content on mobile
-            <div className="px-6 py-6">
+            <div className="px-6 py-6 pt-[80px]">
               {section === "trips" && (
                 <TripsSection 
                   places={filteredSaved} 
@@ -936,50 +1032,17 @@ function ProfileInner() {
                   activeFilters={activeFilters}
                 />
               )}
+              {section === "history" && (
+                <HistorySection places={recentlyViewed} loading={loading} />
+              )}
               {section === "activity" && (
-                <div>
-                  <button
-                    onClick={() => {
-                      setSection("about");
-                      router.replace("/profile", { scroll: false });
-                    }}
-                    className="mb-4 flex items-center gap-2 text-[#6F7A5A] hover:text-[#1F2A1F] transition"
-                  >
-                    <Icon name="back" size={20} />
-                    <span className="text-sm font-medium">Back</span>
-                  </button>
-                  <ActivitySection activity={activity} loading={loading} profile={profile} displayName={displayName} />
-                </div>
+                <ActivitySection activity={activity} loading={loading} profile={profile} displayName={displayName} />
               )}
               {section === "users" && isAdmin && (
-                <div>
-                  <button
-                    onClick={() => {
-                      setSection("about");
-                      router.replace("/profile", { scroll: false });
-                    }}
-                    className="mb-4 flex items-center gap-2 text-[#6F7A5A] hover:text-[#1F2A1F] transition"
-                  >
-                    <Icon name="back" size={20} />
-                    <span className="text-sm font-medium">Back</span>
-                  </button>
-                  <UsersSection loading={loading} currentUserId={userId} />
-                </div>
+                <UsersSection loading={loading} currentUserId={userId} />
               )}
               {section === "elements" && isAdmin && (
-                <div>
-                  <button
-                    onClick={() => {
-                      setSection("about");
-                      router.replace("/profile", { scroll: false });
-                    }}
-                    className="mb-4 flex items-center gap-2 text-[#6F7A5A] hover:text-[#1F2A1F] transition"
-                  >
-                    <Icon name="back" size={20} />
-                    <span className="text-sm font-medium">Back</span>
-                  </button>
-                  <ElementsSection />
-                </div>
+                <ElementsSection />
               )}
             </div>
           ) : (
@@ -1183,25 +1246,43 @@ function ProfileInner() {
                     </div>
                   </button>
 
-                  {/* Edit profile button */}
-                  <Link
-                    href="/profile/edit"
-                    className="w-full py-4 transition text-left block"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <svg className="w-6 h-6 text-[#1F2A1F] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        <div>
-                          <div className="text-sm font-medium text-[#1F2A1F]">Edit profile</div>
-                          <div className="text-xs text-[#6F7A5A]">Update your information</div>
+                  {/* Users - Admin only */}
+                  {isAdmin && (
+                    <button
+                      onClick={() => setSection("users")}
+                      className="w-full py-4 transition text-left"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Icon name="users" size={24} className="text-[#1F2A1F] flex-shrink-0" />
+                          <div>
+                            <div className="text-sm font-medium text-[#1F2A1F]">Users</div>
+                            <div className="text-xs text-[#6F7A5A]">Manage users</div>
+                          </div>
                         </div>
+                        <Icon name="forward" size={20} className="text-[#A8B096]" />
                       </div>
-                      <Icon name="forward" size={20} className="text-[#A8B096]" />
-                    </div>
-                  </Link>
+                    </button>
+                  )}
+
+                  {/* Elements - Admin only */}
+                  {isAdmin && (
+                    <button
+                      onClick={() => setSection("elements")}
+                      className="w-full py-4 transition text-left"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Icon name="package" size={24} className="text-[#1F2A1F] flex-shrink-0" />
+                          <div>
+                            <div className="text-sm font-medium text-[#1F2A1F]">Elements</div>
+                            <div className="text-xs text-[#6F7A5A]">Manage elements</div>
+                          </div>
+                        </div>
+                        <Icon name="forward" size={20} className="text-[#A8B096]" />
+                      </div>
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -1229,6 +1310,10 @@ function AboutSection({
   userRole,
   subscriptionStatus,
   isAdmin,
+  savedPlaces,
+  addedPlaces,
+  recentlyViewedPlaces,
+  onSectionChange,
 }: {
   profile: Profile | null;
   displayName: string;
@@ -1243,6 +1328,10 @@ function AboutSection({
   userRole?: string | null;
   subscriptionStatus?: string | null;
   isAdmin?: boolean;
+  savedPlaces?: Place[];
+  addedPlaces?: Place[];
+  recentlyViewedPlaces?: Place[];
+  onSectionChange?: (section: "trips" | "added" | "history") => void;
 }) {
   if (loading) {
     return (
@@ -1315,6 +1404,182 @@ function AboutSection({
           </div>
         </div>
       </div>
+
+      {/* Quick Access Cards - Desktop only, right after Hero Card */}
+      {!mobile && savedPlaces !== undefined && addedPlaces !== undefined && recentlyViewedPlaces !== undefined && onSectionChange && (
+        <div className="grid grid-cols-3 gap-4 mb-8">
+          {/* My favorites */}
+          <button
+            onClick={() => onSectionChange("trips")}
+            className="bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md transition group"
+          >
+            <div className="aspect-[4/3] rounded-xl overflow-visible bg-white mb-3 relative" style={{ minHeight: '120px' }}>
+              {savedPlaces.length > 0 ? (
+                <div className="relative w-full h-full" style={{ padding: '8px' }}>
+                  {/* Display up to 2 overlapping, rotated images */}
+                  {savedPlaces.slice(0, 2).map((place, index) => {
+                    const rotation = index === 0 ? -5 : 5;
+                    const offsetX = index === 0 ? -8 : 8;
+                    const offsetY = index === 0 ? 0 : -5;
+                    const zIndex = savedPlaces.length - index;
+                    
+                    return place.cover_url ? (
+                      <div
+                        key={place.id}
+                        className="absolute rounded-lg overflow-hidden shadow-lg border-2 border-white"
+                        style={{
+                          width: '50%',
+                          height: '50%',
+                          transform: `translateX(-50%) translateY(-50%) rotate(${rotation}deg) translate(${offsetX}px, ${offsetY}px)`,
+                          transformOrigin: 'center center',
+                          zIndex: zIndex,
+                          left: '50%',
+                          top: '50%',
+                        }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={place.cover_url}
+                          alt={place.title}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : null;
+                  })}
+                  {/* Show count badge if more than 2 images */}
+                  {savedPlaces.length > 2 && (
+                    <div 
+                      className="absolute top-2 right-2 bg-white/95 backdrop-blur-sm rounded-lg px-2 py-1 text-xs font-medium text-[#1F2A1F] badge-shadow z-10"
+                      style={{ zIndex: 10 }}
+                    >
+                      +{savedPlaces.length - 2}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Icon name="photo" size={24} className="text-[#A8B096]" />
+                </div>
+              )}
+            </div>
+            <div className="text-sm font-medium text-[#1F2A1F] text-center">My favorites</div>
+          </button>
+
+          {/* Added places */}
+          <button
+            onClick={() => onSectionChange("added")}
+            className="bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md transition group"
+          >
+            <div className="aspect-[4/3] rounded-xl overflow-visible bg-white mb-3 relative" style={{ minHeight: '120px' }}>
+              {addedPlaces.length > 0 ? (
+                <div className="relative w-full h-full" style={{ padding: '8px' }}>
+                  {/* Display up to 2 overlapping, rotated images */}
+                  {addedPlaces.slice(0, 2).map((place, index) => {
+                    const rotation = index === 0 ? -5 : 5;
+                    const offsetX = index === 0 ? -8 : 8;
+                    const offsetY = index === 0 ? 0 : -5;
+                    const zIndex = addedPlaces.length - index;
+                    
+                    return place.cover_url ? (
+                      <div
+                        key={place.id}
+                        className="absolute rounded-lg overflow-hidden shadow-lg border-2 border-white"
+                        style={{
+                          width: '50%',
+                          height: '50%',
+                          transform: `translateX(-50%) translateY(-50%) rotate(${rotation}deg) translate(${offsetX}px, ${offsetY}px)`,
+                          transformOrigin: 'center center',
+                          zIndex: zIndex,
+                          left: '50%',
+                          top: '50%',
+                        }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={place.cover_url}
+                          alt={place.title}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : null;
+                  })}
+                  {/* Show count badge if more than 2 images */}
+                  {addedPlaces.length > 2 && (
+                    <div 
+                      className="absolute top-2 right-2 bg-white/95 backdrop-blur-sm rounded-lg px-2 py-1 text-xs font-medium text-[#1F2A1F] badge-shadow z-10"
+                      style={{ zIndex: 10 }}
+                    >
+                      +{addedPlaces.length - 2}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Icon name="add" size={24} className="text-[#A8B096]" />
+                </div>
+              )}
+            </div>
+            <div className="text-sm font-medium text-[#1F2A1F] text-center">Added places</div>
+          </button>
+
+          {/* History */}
+          <button
+            onClick={() => onSectionChange("history")}
+            className="bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md transition group"
+          >
+            <div className="aspect-[4/3] rounded-xl overflow-visible bg-white mb-3 relative" style={{ minHeight: '120px' }}>
+              {recentlyViewedPlaces.length > 0 ? (
+                <div className="relative w-full h-full" style={{ padding: '8px' }}>
+                  {/* Display up to 2 overlapping, rotated images */}
+                  {recentlyViewedPlaces.slice(0, 2).map((place, index) => {
+                    const rotation = index === 0 ? -5 : 5;
+                    const offsetX = index === 0 ? -8 : 8;
+                    const offsetY = index === 0 ? 0 : -5;
+                    const zIndex = recentlyViewedPlaces.length - index;
+                    
+                    return place.cover_url ? (
+                      <div
+                        key={place.id}
+                        className="absolute rounded-lg overflow-hidden shadow-lg border-2 border-white"
+                        style={{
+                          width: '50%',
+                          height: '50%',
+                          transform: `translateX(-50%) translateY(-50%) rotate(${rotation}deg) translate(${offsetX}px, ${offsetY}px)`,
+                          transformOrigin: 'center center',
+                          zIndex: zIndex,
+                          left: '50%',
+                          top: '50%',
+                        }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={place.cover_url}
+                          alt={place.title}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : null;
+                  })}
+                  {/* Show count badge if more than 2 images */}
+                  {recentlyViewedPlaces.length > 2 && (
+                    <div 
+                      className="absolute top-2 right-2 bg-white/95 backdrop-blur-sm rounded-lg px-2 py-1 text-xs font-medium text-[#1F2A1F] badge-shadow z-10"
+                      style={{ zIndex: 10 }}
+                    >
+                      +{recentlyViewedPlaces.length - 2}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Icon name="clock" size={24} className="text-[#A8B096]" />
+                </div>
+              )}
+            </div>
+            <div className="text-sm font-medium text-[#1F2A1F] text-center">History</div>
+          </button>
+        </div>
+      )}
 
       {/* My work */}
       {myWork && (
@@ -1453,6 +1718,37 @@ function TripsSection({
 }) {
   const { access } = useUserAccess();
 
+  // Calculate locked premium places for Haunted Gem indexing (hooks must not be conditional)
+  const defaultUserAccess: UserAccess = access ?? {
+    role: "guest",
+    hasPremium: false,
+    isAdmin: false,
+  };
+
+  const lockedPlacesMap = useMemo(() => {
+    const lockedPlaces = places
+      .filter((p) => {
+        const pIsPremium = isPlacePremium(p);
+        const pCanView = canUserViewPlace(defaultUserAccess, p);
+        const pIsOwner = userId && p.created_by === userId;
+        return pIsPremium && !pCanView && !pIsOwner;
+      })
+      .sort((a, b) => {
+        // Sort by created_at for consistent ordering
+        if (a.created_at && b.created_at) {
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        }
+        // Fallback to id for consistent ordering
+        return a.id.localeCompare(b.id);
+      });
+
+    const map = new Map<string, number>();
+    lockedPlaces.forEach((p, idx) => {
+      map.set(p.id, idx + 1);
+    });
+    return map;
+  }, [places, defaultUserAccess, userId]);
+
   async function handleRemoveFavorite(placeId: string, e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
@@ -1504,41 +1800,9 @@ function TripsSection({
     );
   }
 
-  // Calculate locked premium places for Haunted Gem indexing
-  const defaultUserAccess: UserAccess = access ?? { 
-    role: "guest", 
-    hasPremium: false, 
-    isAdmin: false 
-  };
-  
-  const lockedPlacesMap = useMemo(() => {
-    const lockedPlaces = places
-      .filter(p => {
-        const pIsPremium = isPlacePremium(p);
-        const pCanView = canUserViewPlace(defaultUserAccess, p);
-        const pIsOwner = userId && p.created_by === userId;
-        return pIsPremium && !pCanView && !pIsOwner;
-      })
-      .sort((a, b) => {
-        // Sort by created_at for consistent ordering
-        if (a.created_at && b.created_at) {
-          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-        }
-        // Fallback to id for consistent ordering
-        return a.id.localeCompare(b.id);
-      });
-    
-    // Create a map of place id -> index (1-based)
-    const map = new Map<string, number>();
-    lockedPlaces.forEach((p, idx) => {
-      map.set(p.id, idx + 1);
-    });
-    return map;
-  }, [places, defaultUserAccess, userId]);
-
   return (
     <div>
-      <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">My favorites</h1>
+      <h1 className="hidden min-[900px]:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">My favorites</h1>
       <div className="grid grid-cols-1 min-[900px]:grid-cols-4 gap-6">
         {places.map((place) => {
           const hauntedGemIndex = lockedPlacesMap.get(place.id);
@@ -1584,6 +1848,8 @@ function AddedPlacesSection({
   selectedCity?: string | null;
   activeFilters?: ActiveFilters;
 }) {
+  const router = useRouter();
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -1605,7 +1871,21 @@ function AddedPlacesSection({
     const hasFilters = searchValue || (selectedCity && selectedCity !== DEFAULT_CITY) || (activeFilters?.categories && activeFilters.categories.length > 0);
     return (
       <div>
-        <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Added places</h1>
+        <h1 className="hidden min-[900px]:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Added places</h1>
+        
+        {/* Add new place button - mobile only */}
+        <div className="min-[900px]:hidden mb-6">
+          <Link
+            href="/add"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] active:bg-[#556036] transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Add new place</span>
+          </Link>
+        </div>
+
         <div className="text-center py-16 text-[#6F7A5A]">
           {hasFilters ? "No places match your filters" : "You haven't added any places yet"}
         </div>
@@ -1613,11 +1893,23 @@ function AddedPlacesSection({
     );
   }
 
-  const router = useRouter();
-
   return (
     <div>
-      <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Added places</h1>
+      <h1 className="hidden min-[900px]:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Added places</h1>
+      
+      {/* Add new place button - mobile only */}
+      <div className="min-[900px]:hidden mb-6">
+        <Link
+          href="/add"
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] active:bg-[#556036] transition-colors"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          <span>Add new place</span>
+        </Link>
+      </div>
+
       <div className="grid grid-cols-1 min-[900px]:grid-cols-4 gap-6">
         {places.map((place) => (
           <div key={place.id} className="group relative">
@@ -1695,7 +1987,7 @@ function ActivitySection({
   if (activity.length === 0) {
     return (
       <div>
-        <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Activity</h1>
+        <h1 className="hidden min-[900px]:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Activity</h1>
         <div className="text-center py-16 text-[#6F7A5A]">No activity yet</div>
       </div>
     );
@@ -1703,7 +1995,7 @@ function ActivitySection({
 
   return (
     <div>
-      <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Activity</h1>
+      <h1 className="hidden min-[900px]:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Activity</h1>
       <div className="space-y-0">
         {activity.slice(0, 50).map((a, idx) => (
           <ActivityCard
@@ -1713,6 +2005,93 @@ function ActivitySection({
             userName={displayName}
           />
         ))}
+      </div>
+    </div>
+  );
+}
+
+function HistorySection({ 
+  places, 
+  loading
+}: { 
+  places: Place[]; 
+  loading: boolean;
+}) {
+  const { access } = useUserAccess();
+
+  // Calculate locked premium places for Haunted Gem indexing (hooks must not be conditional)
+  const defaultUserAccess: UserAccess = access ?? {
+    role: "guest",
+    hasPremium: false,
+    isAdmin: false,
+  };
+
+  const lockedPlacesMap = useMemo(() => {
+    const lockedPlaces = places
+      .filter((p) => {
+        const pIsPremium = isPlacePremium(p);
+        const pCanView = canUserViewPlace(defaultUserAccess, p);
+        const pIsOwner = false; // History places are not owned by user
+        return pIsPremium && !pCanView && !pIsOwner;
+      })
+      .sort((a, b) => {
+        // Sort by created_at for consistent ordering
+        if (a.created_at && b.created_at) {
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        }
+        // Fallback to id for consistent ordering
+        return a.id.localeCompare(b.id);
+      });
+
+    const map = new Map<string, number>();
+    lockedPlaces.forEach((p, idx) => {
+      map.set(p.id, idx + 1);
+    });
+    return map;
+  }, [places, defaultUserAccess]);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-white border border-[#ECEEE4] rounded-2xl p-6">
+          <div className="flex items-start gap-6">
+            <div className="h-24 w-24 rounded-full bg-[#ECEEE4] animate-pulse" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-24 bg-[#ECEEE4] rounded animate-pulse" />
+              <div className="h-4 w-32 bg-[#ECEEE4] rounded animate-pulse" />
+              <div className="h-6 w-40 bg-[#ECEEE4] rounded mt-4 animate-pulse" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (places.length === 0) {
+    return (
+      <div>
+        <h1 className="hidden min-[900px]:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">History</h1>
+        <div className="text-center py-16 text-[#6F7A5A]">No recently viewed places</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h1 className="hidden min-[900px]:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">History</h1>
+      <div className="grid grid-cols-1 min-[900px]:grid-cols-4 gap-6">
+        {places.map((place) => {
+          const hauntedGemIndex = lockedPlacesMap.get(place.id);
+          return (
+            <PlaceCard
+              key={place.id}
+              place={place}
+              userAccess={access}
+              userId={null}
+              hauntedGemIndex={hauntedGemIndex}
+            />
+          );
+        })}
       </div>
     </div>
   );
@@ -1881,7 +2260,7 @@ function ElementsSection() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="hidden min-[900px]:flex items-center justify-between mb-8">
         <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F]">Elements</h1>
       </div>
 
@@ -2353,7 +2732,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
   if (loading || usersLoading) {
     return (
       <div>
-        <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Users</h1>
+        <h1 className="hidden min-[900px]:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Users</h1>
         <div className="space-y-4">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="bg-white border border-[#ECEEE4] rounded-2xl p-6">
@@ -2373,7 +2752,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
 
   return (
     <div>
-      <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Users</h1>
+      <h1 className="hidden min-[900px]:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Users</h1>
       
       {error && (
         <div className="mb-4 p-4 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm">

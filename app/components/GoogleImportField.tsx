@@ -11,7 +11,7 @@ type GoogleImportData = {
   phone: string | null;
   rating: number | null;
   reviews_count: number | null;
-  opening_hours: any | null;
+  opening_hours: unknown | null;
   category: string | null;
   types: string[];
   place_id: string | null;
@@ -92,9 +92,9 @@ export default function GoogleImportField({
         setImportSuccess(false);
         setShowForm(false);
       }, 3000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Import error:", error);
-      setImportError(error.message || "Failed to import from Google");
+      setImportError(error instanceof Error ? error.message : "Failed to import from Google");
     } finally {
       setImporting(false);
     }

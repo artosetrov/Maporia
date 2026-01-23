@@ -1,30 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Fraunces, Manrope } from "next/font/google";
 import "./globals.css";
 import GoogleMapsProvider from "./providers/GoogleMapsProvider";
 import { ProductionDiagnostics } from "./components/ProductionDiagnostics";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  display: "swap",
-});
-
-const fraunces = Fraunces({
-  variable: "--font-fraunces",
-  subsets: ["latin"],
-  weight: ["400", "600"],
-  display: "swap",
-});
-
-const manrope = Manrope({
-  variable: "--font-manrope",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "Maporia",
@@ -45,11 +23,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${inter.variable} ${fraunces.variable} ${manrope.variable} antialiased`}
-      >
+      <body className="antialiased">
         <ErrorBoundary>
-          <ProductionDiagnostics />
+          {process.env.NODE_ENV === "production" &&
+            process.env.NEXT_PUBLIC_ENABLE_PROD_DIAGNOSTICS === "true" && (
+              <ProductionDiagnostics />
+            )}
           <GoogleMapsProvider>
             {children}
           </GoogleMapsProvider>

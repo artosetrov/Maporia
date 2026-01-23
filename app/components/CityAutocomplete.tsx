@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { getCitiesWithPlaces, type City } from "../lib/cities";
 import Icon from "./Icon";
 
@@ -22,7 +22,6 @@ export default function CityAutocomplete({
   disabled = false,
 }: CityAutocompleteProps) {
   const [cities, setCities] = useState<City[]>([]);
-  const [filteredCities, setFilteredCities] = useState<City[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -34,23 +33,15 @@ export default function CityAutocomplete({
       setLoading(true);
       const citiesData = await getCitiesWithPlaces();
       setCities(citiesData);
-      setFilteredCities(citiesData);
       setLoading(false);
     })();
   }, []);
 
-  // Filter cities based on input
-  useEffect(() => {
-    if (!value.trim()) {
-      setFilteredCities(cities);
-      return;
-    }
-
+  // Filter cities based on input (derived data, no setState-in-effect)
+  const filteredCities = useMemo(() => {
+    if (!value.trim()) return cities;
     const search = value.trim().toLowerCase();
-    const filtered = cities.filter((city) =>
-      city.name.toLowerCase().includes(search)
-    );
-    setFilteredCities(filtered);
+    return cities.filter((city) => city.name.toLowerCase().includes(search));
   }, [value, cities]);
 
   // Close dropdown when clicking outside
@@ -165,7 +156,7 @@ export default function CityAutocomplete({
             <div className="px-4 py-3 text-sm text-[#6F7A5A] text-center">
               <div className="mb-1">No cities found</div>
               <div className="text-xs">
-                Press Enter to create "{value}"
+                Press Enter to create &quot;{value}&quot;
               </div>
             </div>
           ) : null}

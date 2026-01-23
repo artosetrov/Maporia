@@ -620,7 +620,7 @@ function MapPageContent() {
       }
 
     // Обрабатываем данные перед применением фильтров
-    let processedData = data;
+    const processedData = data;
 
     // Если выбрана сортировка по комментариям или лайкам, нужно загрузить счетчики
     let placesWithCounts = processedData;
@@ -755,6 +755,33 @@ function MapPageContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestKey, bootReady]);
+
+  // Reload places when page becomes visible (user returns from another tab)
+  // This fixes the issue where content stops loading after tab switches
+  useEffect(() => {
+    if (!bootReady) return;
+
+    let isUnmounting = false;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !isUnmounting) {
+        // Reset the request key check to force reload
+        // This ensures data is fresh when user returns to the tab
+        if (loadPlacesRef.current) {
+          loadPlacesRef.current.key = ''; // Force reload by invalidating key
+        }
+        // Reload places when page becomes visible
+        loadPlaces();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      isUnmounting = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [bootReady, requestKey]); // Include requestKey to ensure fresh data
 
   // Загружаем избранное пользователя
   useEffect(() => {

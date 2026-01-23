@@ -1,8 +1,25 @@
 @import "tailwindcss";
 
+/* Self-hosted fonts (avoids build-time Google Fonts fetch) */
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/fraunces/400.css";
+@import "@fontsource/fraunces/600.css";
+@import "@fontsource/manrope/400.css";
+@import "@fontsource/manrope/500.css";
+@import "@fontsource/manrope/600.css";
+@import "@fontsource/manrope/700.css";
+@import "@fontsource/manrope/800.css";
+
 /* MAPORIA BRAND SYSTEM - Design Tokens */
 
 :root {
+  /* Font variables (used throughout the app) */
+  --font-inter: "Inter";
+  --font-fraunces: "Fraunces";
+  --font-manrope: "Manrope";
+
   /* Primary Colors */
   --olive-primary: #8F9E4F;
   --soft-sage: #C9D2A3;

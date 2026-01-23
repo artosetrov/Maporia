@@ -45,7 +45,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
@@ -72,6 +72,7 @@ type Place = {
   tags: string[] | null;
   cover_url: string | null;
   created_at: string;
+  is_hidden?: boolean | null;
   // Premium/Access fields
   access_level?: string | null; // Primary field: 'public' | 'premium'
   // Legacy fields (for backward compatibility)
@@ -108,6 +109,10 @@ export default function PlaceEditorHub() {
   const [place, setPlace] = useState<Place | null>(null);
   const [photos, setPhotos] = useState<PlacePhoto[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isHidden, setIsHidden] = useState(false);
+  const [hiding, setHiding] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const autoVisibilityEnabledRef = useRef(false); // Track if auto-visibility was already enabled
 
   // Load place data
   useEffect(() => {
@@ -145,6 +150,12 @@ export default function PlaceEditorHub() {
       }
 
       setPlace(placeItem);
+      // Check if place is hidden (try multiple possible fields)
+      setIsHidden(
+        placeItem.is_hidden === true ||
+          placeItem.visibility === "hidden" ||
+          placeItem.visibility === "private"
+      );
 
       // Load photos
       const { data: photosData, error: photosError } = await supabase
@@ -205,6 +216,141 @@ export default function PlaceEditorHub() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [placeId, user]);
 
+  async function handleToggleVisibility() {
+    if (!placeId || !user) return;
+
+    setHiding(true);
+    setError(null);
+
+    const newHiddenState = !isHidden;
+
+    // Try multiple possible field names
+    const payload: any = {
+      is_hidden: newHiddenState,
+      visibility: newHiddenState ? "hidden" : "public",
+    };
+
+    // Admin can update any place, owner can update their own
+    const currentIsAdmin = isUserAdmin(access);
+    const updateQuery = supabase.from("places").update(payload).eq("id", placeId);
+
+    // If not admin, add ownership check
+    if (!currentIsAdmin) {
+      updateQuery.eq("created_by", user.id);
+    }
+
+    const { error: updateError } = await updateQuery.select();
+
+    setHiding(false);
+
+    if (updateError) {
+      console.error("Update error:", updateError);
+      setError(updateError.message || "Failed to update visibility");
+      return;
+    }
+
+    setIsHidden(newHiddenState);
+    setPlace((prev) =>
+      prev
+        ? {
+            ...prev,
+            is_hidden: newHiddenState,
+            visibility: newHiddenState ? "hidden" : "public",
+          }
+        : prev
+    );
+
+    // Reset auto-visibility ref when manually hiding, so it can auto-enable again if all fields are filled
+    if (newHiddenState) {
+      autoVisibilityEnabledRef.current = false;
+    }
+
+    if (navigator.vibrate) navigator.vibrate(10);
+  }
+
+  async function handleDelete() {
+    if (!placeId || !user || !place) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${place.title || "this place"}"? This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setError(null);
+
+    try {
+      // Step 1: Get all photos to delete from storage
+      const { data: photosData } = await supabase
+        .from("place_photos")
+        .select("url")
+        .eq("place_id", placeId);
+
+      // Step 2: Delete photos from storage (if they exist in storage bucket)
+      if (photosData && photosData.length > 0) {
+        const photoUrls = photosData.map((p) => p.url).filter(Boolean) as string[];
+        const bucketName = "place-photos";
+
+        for (const url of photoUrls) {
+          try {
+            // Only delete if it's a Supabase storage URL, not external URL
+            if (url.includes("supabase.co/storage")) {
+              // Format: .../storage/v1/object/public/place-photos/<path>
+              const storageMatch = url.match(/\/place-photos\/(.+)$/);
+              if (storageMatch && storageMatch[1]) {
+                const filePath = storageMatch[1];
+                const { error: storageError } = await supabase.storage
+                  .from(bucketName)
+                  .remove([filePath]);
+
+                if (storageError) {
+                  console.warn(`Failed to delete photo from storage: ${filePath}`, storageError);
+                }
+              }
+            }
+          } catch (storageErr) {
+            console.warn("Error deleting photo from storage:", storageErr);
+          }
+        }
+      }
+
+      // Step 3: Delete related data from database
+      const [photosResult, commentsResult, reactionsResult] = await Promise.all([
+        supabase.from("place_photos").delete().eq("place_id", placeId),
+        supabase.from("comments").delete().eq("place_id", placeId),
+        supabase.from("reactions").delete().eq("place_id", placeId),
+      ]);
+
+      if (photosResult.error) console.warn("Error deleting place_photos:", photosResult.error);
+      if (commentsResult.error) console.warn("Error deleting comments:", commentsResult.error);
+      if (reactionsResult.error) console.warn("Error deleting reactions:", reactionsResult.error);
+
+      // Step 4: Delete the place itself (admin can delete any place, owner can delete their own)
+      const currentIsAdmin = isUserAdmin(access);
+      const deleteQuery = supabase.from("places").delete().eq("id", placeId);
+
+      if (!currentIsAdmin) {
+        deleteQuery.eq("created_by", user.id);
+      }
+
+      const { error: deleteError } = await deleteQuery;
+
+      if (deleteError) {
+        console.error("Delete error:", deleteError);
+        setError(deleteError.message || "Failed to delete place");
+        setDeleting(false);
+        return;
+      }
+
+      router.push("/profile");
+    } catch (err) {
+      console.error("Exception deleting place:", err);
+      setError(err instanceof Error ? err.message : "Failed to delete place");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   // Calculate required steps
   const requiredSteps = useMemo<RequiredStep[]>(() => {
     if (!place) return [];
@@ -259,6 +405,64 @@ export default function PlaceEditorHub() {
     ? Math.round((requiredSteps.filter((s) => s.completed).length / requiredSteps.length) * 100)
     : 100;
 
+  // Check if all required fields are filled (excluding description which is optional)
+  const allRequiredFieldsFilled = useMemo(() => {
+    if (!place) return false;
+    // Required fields: cover photo, title, category, location
+    return (
+      photos.length > 0 &&
+      !!(place.title && place.title.trim().length > 0) &&
+      !!(place.categories && place.categories.length > 0) &&
+      !!(place.lat && place.lng)
+    );
+  }, [place, photos]);
+
+  // Automatically enable Visibility when all required fields are filled
+  useEffect(() => {
+    if (!placeId || !user || !place || !allRequiredFieldsFilled || !isHidden) {
+      // Reset ref when conditions are not met
+      if (!allRequiredFieldsFilled || !isHidden) {
+        autoVisibilityEnabledRef.current = false;
+      }
+      return;
+    }
+    
+    // Prevent duplicate requests
+    if (autoVisibilityEnabledRef.current) return;
+    
+    // Only auto-enable if currently hidden
+    autoVisibilityEnabledRef.current = true;
+    (async () => {
+      const currentIsAdmin = isUserAdmin(access);
+      const updateQuery = supabase
+        .from("places")
+        .update({ is_hidden: false, visibility: "public" })
+        .eq("id", placeId);
+
+      if (!currentIsAdmin) {
+        updateQuery.eq("created_by", user.id);
+      }
+
+      const { error: updateError } = await updateQuery.select();
+
+      if (!updateError) {
+        setIsHidden(false);
+        setPlace((prev) =>
+          prev
+            ? {
+                ...prev,
+                is_hidden: false,
+                visibility: "public",
+              }
+            : prev
+        );
+      } else {
+        // Reset ref on error so it can retry
+        autoVisibilityEnabledRef.current = false;
+      }
+    })();
+  }, [placeId, user, place, allRequiredFieldsFilled, isHidden, access]);
+
   // Determine if this is a new place (no title or empty title)
   const isNewPlace = !place || !place.title || place.title.trim().length === 0;
 
@@ -301,7 +505,7 @@ export default function PlaceEditorHub() {
       {/* Top App Bar */}
       <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between h-16">
+          <div className="flex items-center justify-between h-16 relative">
             <button
               onClick={() => router.push("/profile")}
               className="p-2 -ml-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition"
@@ -309,16 +513,10 @@ export default function PlaceEditorHub() {
             >
               <Icon name="back" size={20} />
             </button>
-            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">
+            <div className="absolute left-1/2 -translate-x-1/2 font-semibold font-fraunces text-[#1F2A1F]" style={{ fontSize: '24px' }}>
               {isNewPlace ? "Create new place" : "Place editor"}
-            </h1>
-            <Link
-              href={`/places/${placeId}/settings`}
-              className="px-4 py-2 text-sm font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition"
-              aria-label="Settings"
-            >
-              Settings
-            </Link>
+            </div>
+            <div className="w-[76px]" /> {/* Spacer (replaced Settings) */}
           </div>
         </div>
       </div>
@@ -326,76 +524,6 @@ export default function PlaceEditorHub() {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <div className="space-y-4">
-            {/* Google Import Card */}
-            {user && placeId && (
-              <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
-                <UnifiedGoogleImportField
-                  userId={user.id}
-                  context="place"
-                  onImportSuccess={async (data) => {
-                    // Resolve city to city_id
-                    let cityId: string | null = null;
-                    const cityName = data.city || null;
-                    if (cityName) {
-                      const cityData = await resolveCity(
-                        cityName,
-                        data.city_state || null,
-                        data.city_country || null,
-                        data.lat || null,
-                        data.lng || null
-                      );
-                      if (cityData) {
-                        cityId = cityData.city_id;
-                      }
-                    }
-
-                    // Update place with imported data
-                    const updates: any = {
-                      title: data.name || data.business_name || place?.title || null,
-                      address: data.formatted_address || data.address || place?.address || null,
-                      city: cityName || place?.city || null, // Keep for backward compatibility
-                      city_id: cityId,
-                      city_name_cached: cityName || null,
-                      link: data.website || place?.link || null,
-                      google_place_id: data.place_id || data.google_place_id || place?.google_place_id || null,
-                      lat: data.lat || data.latitude || place?.lat || null,
-                      lng: data.lng || data.longitude || place?.lng || null,
-                    };
-                    // Update categories if types are available
-                    if (data.types && data.types.length > 0) {
-                      const categoryMap: Record<string, string> = {
-                        restaurant: "restaurant",
-                        cafe: "cafe",
-                        bar: "bar",
-                        hotel: "hotel",
-                        museum: "museum",
-                        park: "park",
-                        beach: "beach",
-                        shopping_mall: "shopping",
-                        store: "shopping",
-                      };
-                      const mappedCategories = data.types
-                        .map((type: string) => categoryMap[type])
-                        .filter(Boolean);
-                      if (mappedCategories.length > 0) {
-                        updates.categories = mappedCategories.slice(0, 3);
-                      }
-                    }
-                    await supabase.from("places").update(updates).eq("id", placeId);
-                    // Reload place data
-                    const { data: placeData } = await supabase
-                      .from("places")
-                      .select("*")
-                      .eq("id", placeId)
-                      .single();
-                    if (placeData) {
-                      setPlace(placeData as Place);
-                    }
-                  }}
-                />
-              </div>
-            )}
-
             {/* Required Steps Card */}
             {incompleteSteps.length > 0 && (
               <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition">
@@ -533,6 +661,127 @@ export default function PlaceEditorHub() {
                 <Icon name="forward" size={20} className="text-[#6F7A5A]" />
               </div>
             </Link>
+
+            {/* Visibility (moved from Place settings) */}
+            <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-[#1F2A1F] mb-1">Visibility</h3>
+                  <p className="text-sm text-[#6F7A5A]">
+                    {isHidden
+                      ? "Hidden from other users (only you can see it)."
+                      : "Visible to all users on Maporia."}
+                  </p>
+                </div>
+                <button
+                  onClick={handleToggleVisibility}
+                  disabled={hiding}
+                  className={cx(
+                    "relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] focus:ring-offset-2",
+                    hiding && "opacity-50 cursor-not-allowed",
+                    isHidden ? "bg-[#8F9E4F]" : "bg-[#DADDD0]"
+                  )}
+                  role="switch"
+                  aria-checked={isHidden}
+                  aria-label={isHidden ? "Make visible" : "Hide from users"}
+                >
+                  <span
+                    className={cx(
+                      "pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                      isHidden ? "translate-x-5" : "translate-x-0"
+                    )}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {/* Google Import Card (moved below Visibility) */}
+            {user && placeId && (
+              <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
+                <UnifiedGoogleImportField
+                  userId={user.id}
+                  context="place"
+                  onImportSuccess={async (data) => {
+                    // Resolve city to city_id
+                    let cityId: string | null = null;
+                    const cityName = data.city || null;
+                    if (cityName) {
+                      const cityData = await resolveCity(
+                        cityName,
+                        data.city_state || null,
+                        data.city_country || null,
+                        data.lat || null,
+                        data.lng || null
+                      );
+                      if (cityData) {
+                        cityId = cityData.city_id;
+                      }
+                    }
+
+                    // Update place with imported data
+                    const updates: any = {
+                      title: data.name || data.business_name || place?.title || null,
+                      address: data.formatted_address || data.address || place?.address || null,
+                      city: cityName || place?.city || null, // Keep for backward compatibility
+                      city_id: cityId,
+                      city_name_cached: cityName || null,
+                      link: data.website || place?.link || null,
+                      google_place_id: data.place_id || data.google_place_id || place?.google_place_id || null,
+                      lat: data.lat || data.latitude || place?.lat || null,
+                      lng: data.lng || data.longitude || place?.lng || null,
+                    };
+                    // Update categories if types are available
+                    if (data.types && data.types.length > 0) {
+                      const categoryMap: Record<string, string> = {
+                        restaurant: "restaurant",
+                        cafe: "cafe",
+                        bar: "bar",
+                        hotel: "hotel",
+                        museum: "museum",
+                        park: "park",
+                        beach: "beach",
+                        shopping_mall: "shopping",
+                        store: "shopping",
+                      };
+                      const mappedCategories = data.types
+                        .map((type: string) => categoryMap[type])
+                        .filter(Boolean);
+                      if (mappedCategories.length > 0) {
+                        updates.categories = mappedCategories.slice(0, 3);
+                      }
+                    }
+                    await supabase.from("places").update(updates).eq("id", placeId);
+                    // Reload place data
+                    const { data: placeData } = await supabase
+                      .from("places")
+                      .select("*")
+                      .eq("id", placeId)
+                      .single();
+                    if (placeData) {
+                      setPlace(placeData as Place);
+                    }
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Danger zone (moved from Place settings) */}
+            <div className="rounded-2xl border border-[#C96A5B]/30 bg-[#C96A5B]/5 p-5 shadow-sm">
+              <h3 className="font-semibold font-fraunces text-[#C96A5B] mb-2">Danger zone</h3>
+              <p className="text-sm text-[#6F7A5A] mb-4">
+                Once you delete a place, there is no going back. Please be certain.
+              </p>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className={cx(
+                  "w-full h-11 rounded-xl border border-[#C96A5B] bg-[#C96A5B] px-5 text-sm font-medium text-white hover:bg-[#B85A4B] transition",
+                  deleting && "opacity-50 cursor-not-allowed"
+                )}
+              >
+                {deleting ? "Deleting…" : "Delete place"}
+              </button>
+            </div>
           </div>
       </div>
 
@@ -550,7 +799,7 @@ export default function PlaceEditorHub() {
               href={`/id/${placeId}`}
               className="flex-1 h-11 rounded-xl bg-[#8F9E4F] text-white px-5 text-sm font-medium text-center hover:bg-[#7A8A42] transition flex items-center justify-center"
             >
-              Done
+              Save
             </Link>
           </div>
         </div>

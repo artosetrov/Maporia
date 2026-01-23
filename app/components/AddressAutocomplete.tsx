@@ -15,7 +15,7 @@ type AddressAutocompleteProps = {
     lng: number | null;
     city?: string;
   }) => void;
-  onAutocompleteRef: (ref: any) => void;
+  onAutocompleteRef: (ref: google.maps.places.Autocomplete | null) => void;
 };
 
 export default function AddressAutocomplete({
@@ -24,7 +24,7 @@ export default function AddressAutocomplete({
   onPlaceSelect,
   onAutocompleteRef,
 }: AddressAutocompleteProps) {
-  const autocompleteRef = useRef<any>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
   const { isLoaded } = useJsApiLoader({
     id: "google-maps-loader",
@@ -37,7 +37,7 @@ export default function AddressAutocomplete({
   }, [onAutocompleteRef]);
 
   const handlePlaceChanged = () => {
-    const place = autocompleteRef.current?.getPlace();
+    const place = autocompleteRef.current?.getPlace() as google.maps.places.PlaceResult | undefined;
     if (!place) {
       console.warn("AddressAutocomplete: No place selected");
       return;
@@ -92,7 +92,7 @@ export default function AddressAutocomplete({
 
   return (
     <Autocomplete
-      onLoad={(a) => {
+      onLoad={(a: google.maps.places.Autocomplete) => {
         autocompleteRef.current = a;
         onAutocompleteRef(a);
       }}

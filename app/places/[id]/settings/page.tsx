@@ -52,6 +52,11 @@ export default function PlaceSettingsPage() {
         return;
       }
 
+      // Settings moved into the main editor screen.
+      // Keep this route for backwards compatibility and redirect.
+      router.replace(`/places/${placeId}/edit`);
+      return;
+
       setPlace(data);
       // Check if place is hidden (try multiple possible fields)
       setIsHidden(data.is_hidden === true || data.visibility === 'hidden' || data.visibility === 'private');
@@ -244,7 +249,7 @@ export default function PlaceSettingsPage() {
             >
               <Icon name="back" size={20} />
             </button>
-            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Place settings</h1>
+            <h1 className="font-semibold font-fraunces text-[#1F2A1F]" style={{ fontSize: '24px' }}>Place settings</h1>
             <div className="w-9" /> {/* Spacer */}
           </div>
         </div>

@@ -195,7 +195,7 @@ export default function TitleEditorPage() {
             >
               <Icon name="close" size={20} />
             </button>
-            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Title</h1>
+            <h1 className="font-semibold font-fraunces text-[#1F2A1F]" style={{ fontSize: '24px' }}>Title</h1>
             <div className="w-9" /> {/* Spacer */}
           </div>
         </div>

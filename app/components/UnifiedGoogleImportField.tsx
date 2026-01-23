@@ -86,11 +86,11 @@ export default function UnifiedGoogleImportField({
         if (data.code === "MISSING_API_KEY") {
           errorMessage = "Google Maps API key is not configured. Please contact the administrator.";
         } else if (response.status === 404 || data.code === "PLACE_NOT_FOUND") {
-          errorMessage = "Место не найдено. Убедитесь, что ссылка Google Maps или адрес корректны. Попробуйте скопировать ссылку напрямую из Google Maps или введите полный адрес.";
+          errorMessage = "Place not found. Make sure the Google Maps link or address is correct. Try copying the link directly from Google Maps or enter the full address.";
         } else if (response.status === 429) {
-          errorMessage = "Слишком много запросов. Попробуйте позже.";
+          errorMessage = "Too many requests. Please try again later.";
         } else if (response.status === 401) {
-          errorMessage = "Требуется авторизация. Пожалуйста, войдите снова.";
+          errorMessage = "Authentication required. Please sign in again.";
         }
         throw new Error(errorMessage);
       }
@@ -127,7 +127,7 @@ export default function UnifiedGoogleImportField({
           }}
           className="text-sm text-[#8F9E4F] hover:text-[#556036] underline"
         >
-          {showForm ? "Отмена" : "Импорт из Google"}
+          {showForm ? "Cancel" : "Import from Google"}
         </button>
 
         {showForm && (
@@ -144,7 +144,7 @@ export default function UnifiedGoogleImportField({
                   handleImport();
                 }
               }}
-              placeholder="Ссылка Google Maps или адрес"
+              placeholder="Google Maps link or address"
               className="w-full rounded-xl border border-[#ECEEE4] px-3 py-2 text-sm text-[#1F2A1F] placeholder:text-[#A8B096] outline-none focus:border-[#8F9E4F] focus:bg-white bg-[#FAFAF7] transition"
               disabled={importing}
             />
@@ -154,7 +154,7 @@ export default function UnifiedGoogleImportField({
             {importSuccess && (
               <p className="text-xs text-green-600 flex items-center gap-1">
                 <Icon name="check" size={12} />
-                Импортировано из Google
+                Imported from Google
               </p>
             )}
             <button
@@ -167,7 +167,7 @@ export default function UnifiedGoogleImportField({
                   : "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
               )}
             >
-              {importing ? "Импорт..." : "Импорт"}
+              {importing ? "Importing..." : "Import"}
             </button>
           </div>
         )}
@@ -180,10 +180,10 @@ export default function UnifiedGoogleImportField({
       <div className="flex items-center justify-between">
         <div>
           <h4 className="text-sm font-medium text-[#1F2A1F] mb-1">
-            Импорт из Google
+            Import from Google
           </h4>
           <p className="text-xs text-[#6F7A5A]">
-            Вставьте ссылку Google Maps или введите адрес для автоматического заполнения
+            Paste a Google Maps link or enter an address for automatic filling
           </p>
         </div>
         <button
@@ -194,7 +194,7 @@ export default function UnifiedGoogleImportField({
           }}
           className="px-3 py-1.5 rounded-lg border border-[#ECEEE4] bg-white text-xs font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] transition"
         >
-          {showForm ? "Отмена" : "Импорт"}
+          {showForm ? "Cancel" : "Import"}
         </button>
       </div>
 

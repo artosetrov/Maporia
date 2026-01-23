@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 // Server-side Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -11,7 +13,7 @@ const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 10; // 10 requests per minute per user
 
 // Response cache: simple in-memory cache (in production, use Redis or similar)
-const responseCache = new Map<string, { data: any; cachedAt: number }>();
+const responseCache = new Map<string, { data: unknown; cachedAt: number }>();
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 function checkRateLimit(userId: string): boolean {
@@ -145,71 +147,6 @@ async function findPlaceFromText(apiKey: string, query: string): Promise<string 
 }
 
 /**
- * Find place using Google Places API Find Place endpoint
- * Uses the URL or extracted place name to search for the place
- * @deprecated Use findPlaceFromText instead for better results
- */
-async function findPlaceByUrl(apiKey: string, url: string): Promise<string | null> {
-  try {
-    // Try to extract place name from URL for search
-    const urlObj = new URL(url);
-    let searchText = url;
-
-    // Extract place name from pathname if available
-    // Format: /place/Name/@lat,lng
-    const placeMatch = url.match(/\/place\/([^\/@]+)/);
-    if (placeMatch && placeMatch[1]) {
-      // Decode URL-encoded place name
-      searchText = decodeURIComponent(placeMatch[1].replace(/\+/g, " "));
-      // Remove common URL encoding artifacts
-      searchText = searchText.trim();
-    }
-
-    // If we still have the full URL, try to use it as-is
-    if (searchText === url && searchText.length > 100) {
-      // URL is too long, try to extract just the domain and place name
-      const shortMatch = url.match(/google\.com\/maps\/place\/([^\/@]+)/);
-      if (shortMatch && shortMatch[1]) {
-        searchText = decodeURIComponent(shortMatch[1].replace(/\+/g, " "));
-      }
-    }
-
-
-    const response = await fetch(
-      `https://places.googleapis.com/v1/places:searchText`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Goog-Api-Key": apiKey,
-          "X-Goog-FieldMask": "places.id,places.displayName",
-        },
-        body: JSON.stringify({
-          textQuery: searchText,
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Find Place API error:", response.status, errorText);
-      return null;
-    }
-
-    const data = await response.json();
-    
-    if (data.places && data.places.length > 0) {
-      return data.places[0].id;
-    }
-
-    return null;
-  } catch (error) {
-    console.error("Find Place API exception:", error);
-    return null;
-  }
-}
-
-/**
  * Get place details from Google Places API
  */
 async function getPlaceDetails(apiKey: string, placeId: string) {
@@ -241,7 +178,7 @@ async function getPlaceDetails(apiKey: string, placeId: string) {
 /**
  * Get cached response if available
  */
-function getCachedResponse(placeId: string): any | null {
+function getCachedResponse(placeId: string): unknown | null {
   const cached = responseCache.get(placeId);
   if (cached && Date.now() - cached.cachedAt < CACHE_TTL) {
     return cached.data;
@@ -252,7 +189,7 @@ function getCachedResponse(placeId: string): any | null {
 /**
  * Cache response by place_id
  */
-function cacheResponse(placeId: string, data: any) {
+function cacheResponse(placeId: string, data: unknown) {
   responseCache.set(placeId, {
     data,
     cachedAt: Date.now(),
@@ -352,6 +289,7 @@ function normalizePlaceData(placeData: any, originalQuery: string, isUrl: boolea
   };
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export async function POST(request: NextRequest) {
   try {
     // Get request body
@@ -453,10 +391,10 @@ export async function POST(request: NextRequest) {
 
     // Step 3: Check cache
     const cachedData = getCachedResponse(placeId);
-    if (cachedData) {
+    if (cachedData && typeof cachedData === "object") {
       // Update google_maps_url if query was a URL
       if (queryIsUrl) {
-        cachedData.google_maps_url = trimmedQuery;
+        (cachedData as any).google_maps_url = trimmedQuery;
       }
       return NextResponse.json(cachedData);
     }
@@ -473,12 +411,14 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(normalizedData);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Place import error:", error);
+    const message = error instanceof Error ? error.message : "Failed to import place data";
+    const stack = error instanceof Error ? error.stack : undefined;
     return NextResponse.json(
       {
-        error: error.message || "Failed to import place data",
-        details: process.env.NODE_ENV === "development" ? error.stack : undefined,
+        error: message,
+        details: process.env.NODE_ENV === "development" ? stack : undefined,
       },
       { status: 500 }
     );

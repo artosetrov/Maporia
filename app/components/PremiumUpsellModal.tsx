@@ -170,7 +170,7 @@ export default function PremiumUpsellModal({
       try {
         // Query places with cover_url and access_level
         // Filter client-side to get premium places
-        let query = supabase
+        const query = supabase
           .from("places")
           .select("cover_url, access_level, visibility")
           .not("cover_url", "is", null)

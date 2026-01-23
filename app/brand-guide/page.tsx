@@ -2,15 +2,17 @@
 
 export const dynamic = "force-dynamic";
 
+/* eslint-disable react/no-unescaped-entities */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Icon from "../components/Icon";
 import PlaceCard from "../components/PlaceCard";
-import PremiumBadge from "../components/PremiumBadge";
 import FavoriteIcon from "../components/FavoriteIcon";
 import PremiumUpsellModal from "../components/PremiumUpsellModal";
 
-function ColorSwatch({ name, color, hex, description }: { name: string; color: string; hex: string; description?: string }) {
+function ColorSwatch({ name, hex, description }: { name: string; hex: string; description?: string }) {
   return (
     <div className="rounded-xl border border-[#ECEEE4] bg-white p-4">
       <div className="flex items-center gap-4 mb-3">
@@ -523,73 +525,91 @@ export default function BrandGuidePage() {
               </p>
               <div className="space-y-2 text-sm text-[#1F2A1F]">
                 <div className="flex items-start gap-2">
-                  <span className="font-semibold">• Product mark:</span>
-                  <span>the <strong>"M-pin" icon</strong> (symbol only)</span>
+                  <span className="font-semibold">• Primary logo:</span>
+                  <span>the <strong>Pin.svg</strong> icon (used in desktop TopBar)</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="font-semibold">• File location:</span>
+                  <span><code className="text-xs bg-[#FAFAF7] px-1 py-0.5 rounded">/public/Pin.svg</code></span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="font-semibold">• Brand lockup:</span>
-                  <span><strong>M-pin + "Maporia" wordmark</strong> (desktop / marketing)</span>
+                  <span><strong>Pin icon + "Maporia" wordmark</strong> (desktop / marketing via Wordmark component)</span>
                 </div>
               </div>
               <div className="mt-4 p-4 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7]">
                 <p className="text-sm text-[#1F2A1F] font-medium mb-2">Rule of thumb:</p>
                 <div className="space-y-1 text-sm text-[#6F7A5A]">
-                  <div>• <strong className="text-[#1F2A1F]">Icon = product UI</strong> (mobile-first)</div>
-                  <div>• <strong className="text-[#1F2A1F]">Icon + wordmark = brand presence</strong> (desktop + marketing)</div>
+                  <div>• <strong className="text-[#1F2A1F]">Pin.svg = desktop TopBar</strong> (primary logo)</div>
+                  <div>• <strong className="text-[#1F2A1F]">Wordmark component = brand presence</strong> (with icon + text option)</div>
                 </div>
               </div>
             </div>
 
             {/* Primary Logo */}
             <div className="space-y-4 mb-6">
-              <h3 className="text-lg font-semibold text-[#1F2A1F]">Primary Logo (White Background)</h3>
+              <h3 className="text-lg font-semibold text-[#1F2A1F]">Primary Logo (Pin.svg)</h3>
               <p className="text-sm text-[#6F7A5A] mb-4">
-                Use this as the default logo everywhere possible.
+                The primary logo used in desktop TopBar. File: <code className="text-xs bg-[#FAFAF7] px-1 py-0.5 rounded">/public/Pin.svg</code>
               </p>
               <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="w-16 h-16 rounded-lg bg-[#8F9E4F] flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none" className="h-10 w-10">
-                      <g fill="white" fillRule="evenodd" clipRule="evenodd">
-                        <path d="M512 132C391 132 292 231 292 352C292 442 346 516 420 570C458 598 476 636 493 674L512 716L531 674C548 636 566 598 604 570C678 516 732 442 732 352C732 231 633 132 512 132ZM512 232C595 232 662 299 662 382C662 465 595 532 512 532C429 532 362 465 362 382C362 299 429 232 512 232Z"/>
-                        <path d="M232 604C232 574 256 550 286 550L338 550C358 550 376 560 388 576L512 740L636 576C648 560 666 550 686 550L738 550C768 550 792 574 792 604L792 836C792 866 768 890 738 890L706 890C676 890 652 866 652 836L652 702L552 834C542 848 527 856 512 856C497 856 482 848 472 834L372 702L372 836C372 866 348 890 318 890L286 890C256 890 232 866 232 836Z"/>
-                      </g>
-                    </svg>
+                  <div className="w-16 h-16 rounded-lg bg-white flex items-center justify-center border border-[#ECEEE4]">
+                    <img
+                      src="/Pin.svg"
+                      alt="Maporia Pin Logo"
+                      className="h-10 w-auto"
+                    />
                   </div>
                   <div className="flex-1">
-                    <div className="font-semibold text-[#1F2A1F] mb-1">Icon + Wordmark</div>
-                    <div className="text-sm text-[#6F7A5A]">Background: white • Icon: #8F9E4F • Wordmark: #8F9E4F</div>
+                    <div className="font-semibold text-[#1F2A1F] mb-1">Pin.svg Logo</div>
+                    <div className="text-sm text-[#6F7A5A]">Background: white • Color: #81904C (fixed in SVG)</div>
+                    <div className="text-xs text-[#A8B096] mt-1">Size in TopBar: h-10 (40px height)</div>
                   </div>
                 </div>
                 <div className="text-xs text-[#A8B096]">
-                  Where to use: website header, desktop UI, email templates, presentations, docs
+                  Where to use: desktop TopBar (primary), website header, desktop UI
+                </div>
+                <div className="mt-4 p-3 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4]">
+                  <div className="text-xs font-semibold text-[#1F2A1F] mb-2">Usage in code:</div>
+                  <code className="text-xs text-[#6F7A5A] block">
+                    {`<img src="/Pin.svg" alt="Maporia" className="h-10 w-auto" />`}
+                  </code>
                 </div>
               </div>
             </div>
 
-            {/* Inverted Logo */}
+            {/* Wordmark Component */}
             <div className="space-y-4 mb-6">
-              <h3 className="text-lg font-semibold text-[#1F2A1F]">Inverted Logo (Green Background)</h3>
+              <h3 className="text-lg font-semibold text-[#1F2A1F]">Wordmark Component</h3>
               <p className="text-sm text-[#6F7A5A] mb-4">
-                Use when the background is the Maporia green.
+                The Wordmark component can display text with optional icon. For icon, it uses Pin.svg when <code className="text-xs bg-[#FAFAF7] px-1 py-0.5 rounded">withIcon={true}</code>.
               </p>
-              <div className="rounded-xl border border-[#ECEEE4] bg-[#8F9E4F] p-6">
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="w-16 h-16 rounded-lg bg-white/10 flex items-center justify-center border border-white/20">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none" className="h-10 w-10">
-                      <g fill="white" fillRule="evenodd" clipRule="evenodd">
-                        <path d="M512 132C391 132 292 231 292 352C292 442 346 516 420 570C458 598 476 636 493 674L512 716L531 674C548 636 566 598 604 570C678 516 732 442 732 352C732 231 633 132 512 132ZM512 232C595 232 662 299 662 382C662 465 595 532 512 532C429 532 362 465 362 382C362 299 429 232 512 232Z"/>
-                        <path d="M232 604C232 574 256 550 286 550L338 550C358 550 376 560 388 576L512 740L636 576C648 560 666 550 686 550L738 550C768 550 792 574 792 604L792 836C792 866 768 890 738 890L706 890C676 890 652 866 652 836L652 702L552 834C542 848 527 856 512 856C497 856 482 848 472 834L372 702L372 836C372 866 348 890 318 890L286 890C256 890 232 866 232 836Z"/>
-                      </g>
-                    </svg>
+                  <div className="w-16 h-16 rounded-lg bg-white flex items-center justify-center border border-[#ECEEE4]">
+                    <img
+                      src="/Pin.svg"
+                      alt="Maporia Pin"
+                      className="h-5 w-auto"
+                    />
+                    <span className="ml-2 font-manrope font-extrabold text-[#8F9E4F] text-lg" style={{ letterSpacing: "-0.02em" }}>
+                      Maporia
+                    </span>
                   </div>
                   <div className="flex-1">
-                    <div className="font-semibold text-white mb-1">Icon + Wordmark</div>
-                    <div className="text-sm text-white/80">Background: #8F9E4F • Icon: white • Wordmark: white</div>
+                    <div className="font-semibold text-[#1F2A1F] mb-1">Pin + Wordmark</div>
+                    <div className="text-sm text-[#6F7A5A]">Icon: Pin.svg • Text: Manrope SemiBold • Color: #8F9E4F</div>
                   </div>
                 </div>
-                <div className="text-xs text-white/70">
-                  Where to use: mobile splash screen, app icon, onboarding, hero blocks, stickers
+                <div className="text-xs text-[#A8B096]">
+                  Where to use: marketing pages, landing pages, email headers, presentations
+                </div>
+                <div className="mt-4 p-3 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4]">
+                  <div className="text-xs font-semibold text-[#1F2A1F] mb-2">Usage in code:</div>
+                  <code className="text-xs text-[#6F7A5A] block">
+                    {`<Wordmark href="/" withIcon={true} size="default" />`}
+                  </code>
                 </div>
               </div>
             </div>
@@ -659,7 +679,8 @@ export default function BrandGuidePage() {
                 <div className="rounded-xl border border-[#ECEEE4] bg-white p-4">
                   <h4 className="text-sm font-semibold text-[#1F2A1F] mb-3">Minimum Sizes</h4>
                   <div className="text-xs text-[#6F7A5A] space-y-1">
-                    <div>• <strong className="text-[#1F2A1F]">Icon-only:</strong> minimum <strong>24px</strong></div>
+                    <div>• <strong className="text-[#1F2A1F]">Pin.svg (desktop TopBar):</strong> <strong>h-10</strong> (40px height)</div>
+                    <div>• <strong className="text-[#1F2A1F]">Icon-only (mobile):</strong> minimum <strong>24px</strong></div>
                     <div>• <strong className="text-[#1F2A1F]">Full lockup (icon + wordmark):</strong> minimum <strong>120px width</strong></div>
                     <div className="text-[#A8B096] mt-2">(If smaller → switch to icon-only.)</div>
                   </div>
@@ -671,8 +692,9 @@ export default function BrandGuidePage() {
             <div className="rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] p-4">
               <h4 className="text-sm font-semibold text-[#1F2A1F] mb-3">Quick Rules for Product UI</h4>
               <div className="space-y-2 text-sm text-[#6F7A5A]">
-                <div>• <strong className="text-[#1F2A1F]">Mobile header:</strong> icon-only</div>
-                <div>• <strong className="text-[#1F2A1F]">Desktop header:</strong> icon + "Maporia"</div>
+                <div>• <strong className="text-[#1F2A1F]">Desktop TopBar:</strong> Pin.svg (h-10, 40px height)</div>
+                <div>• <strong className="text-[#1F2A1F]">Mobile header:</strong> icon-only (varies by page)</div>
+                <div>• <strong className="text-[#1F2A1F]">Wordmark component:</strong> Pin.svg + "Maporia" text (when withIcon={true})</div>
                 <div>• <strong className="text-[#1F2A1F]">App icon / favicon:</strong> icon-only</div>
               </div>
             </div>
@@ -1426,13 +1448,14 @@ export default function BrandGuidePage() {
                   <div>
                     <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Desktop Version (≥ 1024px)</h4>
                     <div className="bg-[#FAFAF7] rounded-lg p-4 mb-3 font-mono text-xs">
-                      [Wordmark Logo] [SearchBar (Airbnb-style)] [Add Place] [Auth/Avatar]
+                      [Pin.svg Logo] [SearchBar (Airbnb-style)] [+ Add gem] [Avatar] [Hamburger Menu]
                     </div>
                     <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Wordmark Logo:</strong> text-4xl, без иконки, без ® символа</li>
+                      <li><strong>Pin.svg Logo:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">h-10 w-auto</code> (40px height), ссылка на `/`</li>
                       <li><strong>SearchBar:</strong> Полнофункциональный Airbnb-style pill с City Selector, Search Input, Filters</li>
-                      <li><strong>Add Place:</strong> Виден только для авторизованных пользователей</li>
-                      <li><strong>Auth Area:</strong> Login кнопка или Avatar с dropdown меню</li>
+                      <li><strong>+ Add gem:</strong> Текстовая ссылка на `/add`, видна только для авторизованных пользователей</li>
+                      <li><strong>Avatar:</strong> Прямая ссылка на `/profile`, без chevron-down иконки</li>
+                      <li><strong>Hamburger Menu:</strong> Отдельная кнопка с иконкой меню, открывает dropdown с Profile, Feed, Saved, Settings, Logout</li>
                       <li><strong>Border-bottom:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">border-b border-[#ECEEE4]</code></li>
                     </ul>
                   </div>
@@ -1463,10 +1486,14 @@ export default function BrandGuidePage() {
                   <div>
                     <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Desktop Version (≥ 1024px)</h4>
                     <div className="bg-[#FAFAF7] rounded-lg p-4 mb-3 font-mono text-xs">
-                      [Wordmark Logo] [SearchBar (Airbnb-style)] [Add Place] [Auth/Avatar]
+                      [Pin.svg Logo] [SearchBar (Airbnb-style)] [+ Add gem] [Avatar] [Hamburger Menu]
                     </div>
                     <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
+                      <li><strong>Pin.svg Logo:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">h-10 w-auto</code> (40px height)</li>
                       <li><strong>SearchBar:</strong> Встроенный компонент с live search (не модальное окно)</li>
+                      <li><strong>+ Add gem:</strong> Текстовая ссылка на `/add`</li>
+                      <li><strong>Avatar:</strong> Прямая ссылка на `/profile`</li>
+                      <li><strong>Hamburger Menu:</strong> Открывает dropdown меню</li>
                       <li><strong>View Toggle:</strong> Скрыт (на десктопе используется split view)</li>
                       <li><strong>Border-bottom:</strong> Убран</li>
                     </ul>
@@ -1490,8 +1517,10 @@ export default function BrandGuidePage() {
                   <div>
                     <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Profile Page (`/profile`)</h4>
                     <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Mobile:</strong> [Back] [Add Place (fixed, top-right)]</li>
-                      <li><strong>Desktop:</strong> Стандартный TopBar</li>
+                      <li><strong>Mobile:</strong> Custom fixed header с "Profile" слева и "Edit" справа (ссылка на `/profile/edit`), без стандартного TopBar</li>
+                      <li><strong>Desktop:</strong> Стандартный TopBar с Pin.svg, SearchBar, Auth</li>
+                      <li><strong>Mobile Header:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">fixed top-0 left-0 right-0 z-40 bg-white</code>, высота <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">h-[64px]</code></li>
+                      <li><strong>Content Padding:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">pt-[64px]</code> для мобильной версии</li>
                     </ul>
                   </div>
 
@@ -2034,6 +2063,178 @@ export default function BrandGuidePage() {
                       <li>Returns filtered count for "Show X places" button</li>
                       <li>Button is disabled when count is 0</li>
                     </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Profile Page Structure */}
+          <section>
+            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Profile Page Structure</h2>
+            
+            <div className="space-y-6">
+              {/* Mobile Header */}
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Mobile Custom Header</h3>
+                <div className="space-y-3 text-sm text-[#6F7A5A]">
+                  <div>
+                    <strong className="text-[#1F2A1F]">Structure:</strong>
+                    <div className="bg-[#FAFAF7] rounded-lg p-4 mb-3 font-mono text-xs mt-2">
+                      [Profile Title] [Edit Button]
+                    </div>
+                  </div>
+                  <ul className="list-disc list-inside space-y-1 ml-4">
+                    <li><strong>Title:</strong> "Profile", text-lg, font-semibold, слева</li>
+                    <li><strong>Edit Button:</strong> Справа, ссылка на `/profile/edit`, иконка редактирования</li>
+                    <li><strong>Position:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">fixed top-0 left-0 right-0 z-40</code></li>
+                    <li><strong>Height:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">h-[64px]</code></li>
+                    <li><strong>No border:</strong> Без разделителя между header и контентом</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Desktop Layout */}
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Desktop Layout (≥ 900px)</h3>
+                <div className="space-y-3 text-sm text-[#6F7A5A]">
+                  <div>
+                    <strong className="text-[#1F2A1F]">Quick Access Cards:</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li>Расположены под "Hero Card" в секции About</li>
+                      <li>Grid: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">grid grid-cols-3 gap-4</code></li>
+                      <li>Карточки: "My favorites", "Added places", "History"</li>
+                      <li>Каждая карточка переключает соответствующую секцию</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong className="text-[#1F2A1F]">Sidebar Navigation:</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li>About, Trips, Added, History, Activity</li>
+                      <li>Для админов: Users, Elements</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Profile Sections */}
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Profile Sections</h3>
+                <div className="space-y-3 text-sm text-[#6F7A5A]">
+                  <div>
+                    <strong className="text-[#1F2A1F]">About Section:</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li>Hero Card с аватаром, именем, статистикой</li>
+                      <li>Quick Access Cards (только на desktop): My favorites, Added places, History</li>
+                      <li>Bio, Reviews, Stats</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong className="text-[#1F2A1F]">History Section:</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li>Показывает недавно просмотренные места</li>
+                      <li>Данные загружаются из localStorage (<code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">recentlyViewedPlaceIds</code>)</li>
+                      <li>Использует те же PlaceCard компоненты, что и на /map</li>
+                      <li>Grid layout: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">grid grid-cols-2 min-[1440px]:grid-cols-3 gap-6</code></li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong className="text-[#1F2A1F]">Mobile Quick Access Menu:</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li>Activity, Users (admin only), Elements (admin only)</li>
+                      <li>Убран "Edit profile" из списка (есть кнопка Edit в header)</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Profile Edit Pages */}
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Profile Edit Pages (`/profile/edit/*`)</h3>
+                <div className="space-y-3 text-sm text-[#6F7A5A]">
+                  <div>
+                    <strong className="text-[#1F2A1F]">Mobile Header (все sub-pages):</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li>Fixed header с кнопкой "назад" (стрелочка) слева</li>
+                      <li>Заголовок страницы по центру (например: "Profile editor", "Profile photo", "Display name", "Username", "Bio")</li>
+                      <li>Spacer справа для центрирования</li>
+                      <li>Кнопка "назад" ведет на `/profile/edit` (или `/profile` для главной edit страницы)</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong className="text-[#1F2A1F]">Desktop Header:</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li>Стандартный sticky header с кнопкой закрытия и заголовком</li>
+                      <li>Виден только на desktop: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">hidden min-[900px]:block</code></li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong className="text-[#1F2A1F]">Content Padding:</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li>Mobile: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">pt-[80px]</code></li>
+                      <li>Desktop: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">min-[900px]:pt-8</code></li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Performance & Behavior */}
+          <section>
+            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Performance & Behavior</h2>
+            
+            <div className="space-y-6">
+              {/* Tab Switching / Visibility */}
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Tab Switching & Visibility Change</h3>
+                <div className="space-y-3 text-sm text-[#6F7A5A]">
+                  <div>
+                    <strong className="text-[#1F2A1F]">Problem Solved:</strong>
+                    <p className="mt-1">После долгого использования и частого переключения вкладок контент переставал подгружаться при скролле.</p>
+                  </div>
+                  <div>
+                    <strong className="text-[#1F2A1F]">Solution:</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li>Обработка события <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">visibilitychange</code> на всех страницах с подгрузкой контента</li>
+                      <li>При возврате на вкладку (<code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">document.visibilityState === 'visible'</code>) данные автоматически перезагружаются</li>
+                      <li>Сброс <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">loadPlacesRef.current.key</code> для принудительной перезагрузки</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong className="text-[#1F2A1F]">Implementation:</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li><strong>Map Page:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">app/map/page.tsx</code> - useEffect с visibilitychange handler</li>
+                      <li><strong>HomeSection:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">app/components/HomeSection.tsx</code> - для всех секций, не только recentlyViewed</li>
+                      <li><strong>Cleanup:</strong> Все event listeners правильно очищаются при размонтировании</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* BottomNav Scroll Behavior */}
+              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">BottomNav Scroll Behavior</h3>
+                <div className="space-y-3 text-sm text-[#6F7A5A]">
+                  <div>
+                    <strong className="text-[#1F2A1F]">Behavior:</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li>Скрывается при скролле вниз на всех мобильных страницах</li>
+                      <li>Появляется при скролле вверх</li>
+                      <li>Работает на всех страницах (Home, Map, Profile, Saved, etc.)</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong className="text-[#1F2A1F]">Implementation:</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li>Слушает события скролла: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">window</code>, <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">document</code>, <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">document.documentElement</code></li>
+                      <li>Threshold: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">10px</code> минимальное расстояние для срабатывания</li>
+                      <li>Скрывается при скролле вниз на <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">{'>'} 50px</code> от начала</li>
+                      <li>Использует <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">requestAnimationFrame</code> для оптимизации</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong className="text-[#1F2A1F]">Component:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">app/components/BottomNav.tsx</code>
                   </div>
                 </div>
               </div>

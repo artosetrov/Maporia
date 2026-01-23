@@ -357,7 +357,7 @@ export default function PhotosEditorPage() {
             >
               <Icon name="back" size={20} />
             </button>
-            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Photos</h1>
+            <h1 className="font-semibold font-fraunces text-[#1F2A1F]" style={{ fontSize: '24px' }}>Photos</h1>
             <div className="w-9" />
           </div>
         </div>

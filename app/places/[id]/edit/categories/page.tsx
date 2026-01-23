@@ -143,7 +143,7 @@ export default function CategoriesEditorPage() {
             >
               <Icon name="back" size={20} />
             </button>
-            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Categories</h1>
+            <h1 className="font-semibold font-fraunces text-[#1F2A1F]" style={{ fontSize: '24px' }}>Categories</h1>
             <div className="w-9" />
           </div>
         </div>
