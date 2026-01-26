@@ -325,21 +325,25 @@ export default function SearchModal({
         const { data: placesData } = await placesQuery;
         if (placesData) {
           // Filter by city client-side if needed (since we can't chain .or() after .or())
-          const filtered = city 
-            ? placesData.filter(p => 
-                (p.city_name_cached === city) || (p.city === city)
+          // Fix: Ensure proper city matching using both city and city_name_cached fields, normalizing for casing and possible nulls
+          const filtered = city
+            ? placesData.filter((p: any) =>
+                (p.city_name_cached?.toLowerCase() === city.toLowerCase()) ||
+                (p.city?.toLowerCase() === city.toLowerCase())
               )
             : placesData;
-          
-          // Limit to 10 for display
-          filtered.slice(0, 10).forEach(place => {
+          filtered.slice(0, 10).forEach((place: any) => {
             results.push({
               type: "place",
               id: place.id,
-              title: place.title || "",
-              subtitle: place.city_name_cached || place.city || "",
+              title: typeof place.title === "string" ? place.title : "",
+              subtitle: typeof place.city_name_cached === "string"
+                ? place.city_name_cached
+                : typeof place.city === "string"
+                  ? place.city
+                  : "",
               icon: "photo",
-              coverUrl: place.cover_url || null,
+              coverUrl: typeof place.cover_url === "string" ? place.cover_url : null,
             });
           });
         }

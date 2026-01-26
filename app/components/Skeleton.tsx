@@ -2,7 +2,8 @@
 
 import { ReactNode } from "react";
 
-// Base skeleton component with shimmer animation
+// Base skeleton component with shimmer animation (used internally)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function SkeletonBase({ className = "", children }: { className?: string; children?: ReactNode }) {
   return (
     <div className={`animate-pulse ${className}`}>
@@ -237,7 +238,7 @@ export function SectionHeaderSkeleton() {
 // Home section skeleton (with carousel)
 export function HomeSectionSkeleton() {
   return (
-    <div className="mb-6 min-[600px]:mb-8 min-[900px]:mb-9">
+    <div className="mb-6 lg:mb-8 lg:mb-9">
       <SectionHeaderSkeleton />
       <div className="overflow-x-auto scrollbar-hide">
         <div className="flex gap-3 pb-2" style={{ width: "max-content" }}>

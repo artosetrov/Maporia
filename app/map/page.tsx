@@ -629,8 +629,19 @@ function MapPageContent() {
     // Обрабатываем данные перед применением фильтров
     const processedData = data;
 
+    // Фильтрация по поисковому запросу (если есть) - делаем это раньше для сортировки
+    let filteredData = processedData as Place[];
+    if (appliedQ.trim()) {
+      const searchLower = appliedQ.trim().toLowerCase();
+      filteredData = filteredData.filter(place => 
+        place.title?.toLowerCase().includes(searchLower) ||
+        place.description?.toLowerCase().includes(searchLower) ||
+        place.country?.toLowerCase().includes(searchLower)
+      );
+    }
+
     // Если выбрана сортировка по комментариям или лайкам, нужно загрузить счетчики
-    let placesWithCounts = processedData;
+    let placesWithCounts = filteredData;
     if (activeFilters.sort === "most_commented" || activeFilters.sort === "most_liked") {
       const placeIds = filteredData.map((p: any) => p.id);
       
@@ -687,16 +698,8 @@ function MapPageContent() {
       city_name_cached: p.city_name_cached ?? null,
     }));
     
-    // Фильтрация по поисковому запросу (если есть)
-    let filteredData = placesWithCoords as Place[];
-    if (appliedQ.trim()) {
-      const searchLower = appliedQ.trim().toLowerCase();
-      filteredData = filteredData.filter(place => 
-        place.title?.toLowerCase().includes(searchLower) ||
-        place.description?.toLowerCase().includes(searchLower) ||
-        place.country?.toLowerCase().includes(searchLower)
-      );
-    }
+    // Update filteredData with coordinates
+    filteredData = placesWithCoords as Place[];
     
     // Применяем централизованную функцию filterPlaces для фильтрации Premium/Hidden/Vibe/Cities/Categories
     const citiesToFilterForLoad = appliedCities.filter(city => city !== DEFAULT_CITY);
@@ -1254,16 +1257,16 @@ function MapPageContent() {
         See app/config/layout.ts for detailed configuration
       */}
       {/* Контент: на desktop учитываем только TopBar (fixed), на mobile/tablet учитываем только TopBar */}
-      <div className="flex-1 min-h-0 overflow-hidden min-[1120px]:pt-[80px]">
+      <div className="flex-1 min-h-0 overflow-hidden lg:pt-[80px]">
         {/* Desktop: Split view - список слева, карта справа (≥1120px) */}
-        <div className="hidden min-[1120px]:flex h-full max-w-[1920px] min-[1920px]:max-w-none mx-auto px-6">
+        <div className="hidden lg:flex h-full max-w-[1920px] lg:max-w-none mx-auto px-6">
           {/* Left: Scrollable list - 60% on XL (>=1440px), 62.5% on Desktop (1120-1439px) */}
-          <div className="w-[62.5%] min-[1440px]:w-[60%] min-[1920px]:w-[1152px] flex-shrink-0 overflow-y-auto scrollbar-hide pr-6">
+          <div className="w-[62.5%] lg:w-[60%] lg:w-[1152px] flex-shrink-0 overflow-y-auto scrollbar-hide pr-6">
             {/* Header in List Column */}
             <div className="sticky top-0 z-30 bg-[#FAFAF7] pb-3 border-b border-[#ECEEE4] mb-4">
               <div className="flex items-center gap-3 mb-2">
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-lg min-[600px]:text-xl font-semibold font-fraunces text-[#1F2A1F] truncate">{listTitle}</h2>
+                  <h2 className="text-lg lg:text-xl font-semibold font-fraunces text-[#1F2A1F] truncate">{listTitle}</h2>
                   {listSubtitle && (
                     <div className="text-sm text-[#6F7A5A] mt-0.5">
                       {listSubtitle}
@@ -1328,7 +1331,7 @@ function MapPageContent() {
               )}
             </div>
             {loading ? (
-              <div className="grid grid-cols-2 min-[1440px]:grid-cols-3 gap-6 min-[1440px]:gap-6 min-[1440px]:gap-y-7">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-6 lg:gap-y-7">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="w-full">
                     <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
@@ -1344,7 +1347,7 @@ function MapPageContent() {
             ) : places.length === 0 ? (
               <Empty text="No places match your filters." />
             ) : (
-              <div className="grid grid-cols-2 min-[1440px]:grid-cols-3 gap-6 min-[1440px]:gap-6 min-[1440px]:gap-y-7">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-6 lg:gap-y-7">
                 {places.map((p) => {
                   const isFavorite = favorites.has(p.id);
                   const isHovered = hoveredPlaceId === p.id || selectedPlaceId === p.id;
@@ -1405,7 +1408,7 @@ function MapPageContent() {
           </div>
 
           {/* Right: Sticky map - 37.5% on Desktop (1120-1439px), 40% on XL (1440-1919px), 100% of remaining on >=1920px */}
-          <div className="w-[37.5%] min-[1440px]:w-[40%] min-[1920px]:flex-1 h-full flex-shrink-0 flex-grow max-w-full pb-8">
+          <div className="w-[37.5%] lg:w-[40%] lg:flex-1 h-full flex-shrink-0 flex-grow max-w-full pb-8">
             <div className="sticky top-20 h-[calc(100vh-96px-32px)] rounded-2xl overflow-hidden w-full max-w-full">
               <MapView
                 places={places}
@@ -1427,13 +1430,13 @@ function MapPageContent() {
         </div>
 
         {/* Mobile & Tablet: переключатель между списком и картой (<1120px) */}
-        <div className="min-[1120px]:hidden h-full">
+        <div className="lg:hidden h-full">
           {view === "list" ? (
             <div className="h-full overflow-y-auto">
-              <div className="max-w-[1920px] mx-auto px-4 min-[600px]:px-6 pb-4" style={{ paddingTop: '88px' }}>
+              <div className="max-w-[1920px] mx-auto px-4 lg:px-6 pb-4" style={{ paddingTop: '88px' }}>
                 {/* Header */}
                 <div className="mb-4">
-                  <h2 className="text-lg min-[600px]:text-xl font-semibold font-fraunces text-[#1F2A1F] mb-2">{listTitle}</h2>
+                  <h2 className="text-lg lg:text-xl font-semibold font-fraunces text-[#1F2A1F] mb-2">{listTitle}</h2>
                   {listSubtitle && (
                     <div className="text-sm text-[#6F7A5A]">{listSubtitle}</div>
                   )}
@@ -1495,7 +1498,7 @@ function MapPageContent() {
             </div>
             {/* Places grid */}
                 {loading ? (
-                  <div className="grid grid-cols-2 min-[600px]:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                     {Array.from({ length: 6 }).map((_, i) => (
                       <div key={i} className="w-full">
                         <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
@@ -1511,7 +1514,7 @@ function MapPageContent() {
                 ) : places.length === 0 ? (
                   <Empty text="No places match your filters." />
                 ) : (
-                  <div className="grid grid-cols-2 min-[600px]:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                     {places.map((p) => {
                       const isFavorite = favorites.has(p.id);
                       const hauntedGemIndex = lockedPlacesMap.get(p.id);
@@ -1585,7 +1588,7 @@ function MapPageContent() {
         <button
           onClick={() => setView(view === "list" ? "map" : "list")}
           style={{ bottom: 'calc(64px + 24px + env(safe-area-inset-bottom, 0px))' }}
-          className="fixed left-1/2 transform -translate-x-1/2 z-40 min-[600px]:hidden flex items-center gap-2 bg-[#8F9E4F] text-white px-4 py-3 rounded-full shadow-lg hover:bg-[#7A8A3F] transition-colors"
+          className="fixed left-1/2 transform -translate-x-1/2 z-40 lg:hidden flex items-center gap-2 bg-[#8F9E4F] text-white px-4 py-3 rounded-full shadow-lg hover:bg-[#7A8A3F] transition-colors"
         >
           {view === "list" ? (
             <>
@@ -1993,7 +1996,7 @@ function MapView({
       }}
     >
       {/* Custom Map Controls - Top Right Corner */}
-      <div className="absolute top-[72px] min-[600px]:top-3 right-3 z-10 flex flex-col gap-2">
+      <div className="absolute top-[72px] lg:top-3 right-3 z-10 flex flex-col gap-2">
         {/* My Location Button */}
         <button
           onClick={handleMyLocation}

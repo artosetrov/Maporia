@@ -873,7 +873,7 @@ export default function PlacePage() {
   return (
     <main className="min-h-screen bg-white">
       {/* TopBar - скрыт на мобильных (< 900px), так как есть Mobile App Bar внутри карусели */}
-      <div className="hidden min-[900px]:block">
+      <div className="hidden lg:block">
         <TopBar
           showSearchBar={true}
           searchValue={searchValue}
@@ -965,8 +965,8 @@ export default function PlacePage() {
 
 
       {/* Title Row - Desktop (>= 1120px): Before gallery */}
-      <div className="hidden min-[1120px]:block pt-[80px]">
-        <div className="max-w-[1280px] min-[1120px]:max-w-[1120px] min-[1440px]:max-w-[1280px] mx-auto px-6">
+      <div className="hidden lg:block pt-[80px]">
+        <div className="max-w-[1280px] lg:max-w-[1120px] lg:max-w-[1280px] mx-auto px-6">
           <div className="flex items-center justify-between gap-4 mb-6 pt-12">
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <h1 className="font-fraunces text-2xl font-semibold text-[#1F2A1F]">{place.title}</h1>
@@ -1034,14 +1034,22 @@ export default function PlacePage() {
 
       {/* Hero Photo Gallery - Responsive */}
       {/* Desktop: Airbnb-style mosaic gallery (>= 900px) - 2:1 aspect ratio */}
-      <div ref={heroRef} className="hidden min-[900px]:block mb-6">
-        <div className="max-w-[1280px] min-[1120px]:max-w-[1120px] min-[1440px]:max-w-[1280px] mx-auto px-6 min-[1120px]:px-6 min-[1440px]:px-6">
+      <div ref={heroRef} className="hidden lg:block mb-6">
+        <div className="max-w-[1280px] lg:max-w-[1120px] lg:max-w-[1280px] mx-auto px-6 lg:px-6 lg:px-6">
           <DesktopMosaic
             photos={allPhotos}
             title={place.title}
             gap={PLACE_LAYOUT_CONFIG.desktopXL.galleryGap}
             radius={PLACE_LAYOUT_CONFIG.desktopXL.galleryRadius}
-            onShowAll={() => scrollToSection("photos")}
+            onShowAll={() => {
+              // Open photo gallery starting from the first photo not visible in mosaic (index 5)
+              const startIndex = allPhotos.length > 5 ? 5 : 0;
+              setGalleryPhotoIndex(startIndex);
+              setIsImageTransitioning(false);
+              setPhotoGalleryOpen(true);
+              setPhotoZoom(1);
+              setPhotoPosition({ x: 0, y: 0 });
+            }}
             onPhotoClick={(index) => {
               setGalleryPhotoIndex(index);
               setIsImageTransitioning(false);
@@ -1054,12 +1062,19 @@ export default function PlacePage() {
       </div>
 
       {/* Mobile: Full-bleed carousel (< 900px) */}
-      <div className="min-[900px]:hidden relative">
+      <div className="lg:hidden relative">
         <MobileCarousel
           photos={allPhotos}
           title={place.title}
           height={PLACE_LAYOUT_CONFIG.mobile.galleryHeight}
-          onShowAll={() => scrollToSection("photos")}
+          onShowAll={() => {
+            // Open photo gallery starting from the first photo
+            setGalleryPhotoIndex(0);
+            setIsImageTransitioning(false);
+            setPhotoGalleryOpen(true);
+            setPhotoZoom(1);
+            setPhotoPosition({ x: 0, y: 0 });
+          }}
           onPhotoClick={(index) => {
             setGalleryPhotoIndex(index);
             setPhotoGalleryOpen(true);
@@ -1117,7 +1132,7 @@ export default function PlacePage() {
 
 
       {/* Mobile/Tablet: Bottom sheet with title (mobile only) */}
-      <div className="min-[900px]:hidden">
+      <div className="lg:hidden">
         <div className="bg-white rounded-t-[24px] -mt-8 relative z-10 px-6 pt-12 pb-0">
           <div className="flex flex-col items-center gap-2">
             <h1 className="font-fraunces text-2xl font-semibold text-[#1F2A1F] mb-0 line-clamp-2 text-center">{place.title}</h1>
@@ -1136,35 +1151,13 @@ export default function PlacePage() {
         </div>
       </div>
 
-      {/* Tablet: Title section */}
-      <div className="hidden min-[600px]:max-[899px]:block max-w-full mx-auto px-5 pt-6 pb-4">
-        <div className="flex items-start justify-between gap-4 mb-3 pt-12">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 mb-2 flex-wrap">
-              <h1 className="font-fraunces text-2xl font-semibold text-[#1F2A1F]">{place.title}</h1>
-              {isPremium && (
-                <div className="flex items-center gap-2">
-                  <PremiumBadge />
-                  {/* Show pseudo title badge for owner to see what others see */}
-                  {isOwner && (
-                    <div className="px-3 py-1.5 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4] text-[#6F7A5A] text-xs font-medium badge-shadow">
-                      {`Haunted Gem #${getPseudoPlaceNumber(place.id)}`}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Content Sections - Responsive Layout */}
       {/* Desktop: 2 columns (Content + Sticky Booking) >= 1120px */}
-      <div className="hidden min-[1120px]:flex max-w-[1280px] min-[1120px]:max-w-[1120px] min-[1440px]:max-w-[1280px] mx-auto px-6 py-8 gap-8">
+      <div className="hidden lg:flex max-w-[1280px] lg:max-w-[1120px] lg:max-w-[1280px] mx-auto px-6 py-8 gap-8">
         {/* Left: Content (58-64%) */}
-        <div className="w-[62%] min-[1440px]:w-[60%]">
-        {/* City and Address */}
-        <div className="mb-6">
+        <div className="w-[62%] lg:w-[60%]">
+          {/* City and Address */}
+          <div className="mb-6">
           {place.city && (
             <h2 className="text-2xl font-semibold text-[#1F2A1F] mb-2">{place.city}</h2>
           )}
@@ -1271,7 +1264,7 @@ export default function PlacePage() {
                   </p>
                   <button
                     onClick={() => setShowDescriptionModal(true)}
-                    className="mt-4 w-full max-[599px]:w-full min-[600px]:w-auto min-[600px]:inline-block h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors text-base font-medium text-[#1F2A1F]"
+                    className="mt-4 w-full max-lg:w-full lg:w-auto lg:inline-block h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors text-base font-medium text-[#1F2A1F]"
                   >
                     Show more
                   </button>
@@ -1358,7 +1351,7 @@ export default function PlacePage() {
                 href={`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-[#6b7d47]/20 text-[#8F9E4F] text-sm font-medium hover:bg-[#FAFAF7] transition min-[600px]:inline-flex max-[599px]:w-full max-[599px]:py-3 max-[599px]:border-gray-200 max-[599px]:bg-white max-[599px]:text-[#1F2A1F] max-[599px]:text-base max-[599px]:hover:bg-[#FAFAF7]"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-[#6b7d47]/20 text-[#8F9E4F] text-sm font-medium hover:bg-[#FAFAF7] transition lg:inline-flex max-lg:w-full max-lg:py-3 max-lg:border-gray-200 max-lg:bg-white max-lg:text-[#1F2A1F] max-lg:text-base max-lg:hover:bg-[#FAFAF7]"
               >
                 <Icon name="external-link" size={16} />
                 Open in Maps
@@ -1513,7 +1506,7 @@ export default function PlacePage() {
         </div>
 
         {/* Right: Sticky Actions Card (38-42%) */}
-        <div className="w-[38%] min-[1440px]:w-[40%] flex-shrink-0">
+        <div className="w-[38%] lg:w-[40%] flex-shrink-0">
           <div className="sticky top-24 rounded-2xl border border-[#ECEEE4] bg-white p-6 shadow-sm" style={{ maxWidth: PLACE_LAYOUT_CONFIG.desktopXL.bookingCardMaxWidth }}>
             <div className="space-y-4">
               {/* Write Comment */}
@@ -1583,10 +1576,10 @@ export default function PlacePage() {
       </div>
 
       {/* Tablet/Mobile: Single column layout (< 1120px) */}
-      <div className="min-[1120px]:hidden pb-24 min-[600px]:pb-8">
-        <div className="max-w-full mx-auto px-6 min-[600px]:px-5 min-[900px]:px-6 max-[599px]:pt-4 min-[600px]:pt-8 pb-8">
+      <div className="lg:hidden pb-24 lg:pb-8">
+        <div className="max-w-full mx-auto px-6 lg:px-5 lg:px-6 max-lg:pt-4 lg:pt-8 pb-8">
           {/* City and Address */}
-          <div className="mb-6 max-[599px]:text-center min-[600px]:text-left">
+          <div className="mb-6 max-lg:text-center lg:text-left">
             {place.city && (
               <h2 className="text-sm font-medium text-[#1F2A1F] mb-2">{place.city}</h2>
             )}
@@ -1693,14 +1686,14 @@ export default function PlacePage() {
                     {/* Desktop: Show more with underline */}
                     <button
                       onClick={() => setShowDescriptionModal(true)}
-                      className="mt-3 text-base font-medium text-[#1F2A1F] hover:underline min-[600px]:block max-[599px]:hidden"
+                      className="mt-3 text-base font-medium text-[#1F2A1F] hover:underline lg:block max-lg:hidden"
                     >
                       Show more
                     </button>
                     {/* Mobile: Show more button with border */}
                     <button
                       onClick={() => setShowDescriptionModal(true)}
-                      className="mt-4 w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors text-base font-medium text-[#1F2A1F] min-[600px]:hidden"
+                      className="mt-4 w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors text-base font-medium text-[#1F2A1F] lg:hidden"
                     >
                       Show more
                     </button>
@@ -1731,7 +1724,7 @@ export default function PlacePage() {
           </section>
 
           {/* Actions Card - Below content on tablet/mobile */}
-          <div className="mb-16 max-w-[720px] min-[600px]:max-w-full mx-auto">
+          <div className="mb-16 max-w-[720px] lg:max-w-full mx-auto">
             <div className="rounded-2xl border border-[#ECEEE4] bg-white p-6 shadow-sm">
               <div className="space-y-3">
                 {/* Write Comment */}
@@ -1846,7 +1839,7 @@ export default function PlacePage() {
                   href={`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-[#6b7d47]/20 text-[#8F9E4F] text-sm font-medium hover:bg-[#FAFAF7] transition min-[600px]:inline-flex max-[599px]:w-full max-[599px]:py-3 max-[599px]:border-gray-200 max-[599px]:bg-white max-[599px]:text-[#1F2A1F] max-[599px]:text-base max-[599px]:hover:bg-[#FAFAF7]"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-[#6b7d47]/20 text-[#8F9E4F] text-sm font-medium hover:bg-[#FAFAF7] transition lg:inline-flex max-lg:w-full max-lg:py-3 max-lg:border-gray-200 max-lg:bg-white max-lg:text-[#1F2A1F] max-lg:text-base max-lg:hover:bg-[#FAFAF7]"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />

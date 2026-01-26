@@ -502,8 +502,8 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
 
   if (loading) {
     return (
-      <div className="mb-6 min-[600px]:mb-8 min-[900px]:mb-9">
-        <div className="flex items-center justify-between mb-3 min-[600px]:mb-4 h-10 min-[600px]:h-12">
+      <div className="mb-6 lg:mb-8 lg:mb-9">
+        <div className="flex items-center justify-between mb-3 lg:mb-4 h-10 lg:h-12">
           <div className="h-6 w-32 bg-gray-200 rounded animate-pulse" />
           <div className="h-8 w-8 rounded-full bg-gray-200 animate-pulse" />
         </div>
@@ -540,21 +540,21 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
   }
 
   return (
-    <div className={`mb-6 min-[600px]:mb-8 min-[900px]:mb-9 ${isFirst ? 'pt-6 min-[600px]:pt-8' : ''}`}>
+    <div className={`mb-6 lg:mb-8 lg:mb-9 ${isFirst ? 'pt-6 lg:pt-8' : ''}`}>
       {/* Header: Title + See all arrow + Scroll arrows (desktop only) */}
-      <div className="flex items-center justify-between mb-3 min-[600px]:mb-4 h-10 min-[600px]:h-12">
+      <div className="flex items-center justify-between mb-3 lg:mb-4 h-10 lg:h-12">
         {/* Left: Title + See all arrow (desktop) or just Title (mobile) */}
         <div className="flex items-center gap-2">
           <Link
             href={getSeeAllUrl()}
-            className="font-fraunces text-lg min-[600px]:text-xl font-semibold text-[#1F2A1F] hover:text-[#8F9E4F] transition-colors cursor-pointer"
+            className="font-fraunces text-lg lg:text-xl font-semibold text-[#1F2A1F] hover:text-[#8F9E4F] transition-colors cursor-pointer"
           >
             <h2>{section.title}</h2>
           </Link>
           {/* See all arrow - only on desktop, next to title */}
           <Link
             href={getSeeAllUrl()}
-            className="hidden min-[900px]:flex w-8 h-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] items-center justify-center transition-colors"
+            className="hidden lg:flex w-8 h-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] items-center justify-center transition-colors"
             aria-label="See all"
           >
             <Icon name="forward" size={16} className="text-[#1F2A1F]" />
@@ -564,7 +564,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
         <div className="flex items-center gap-2">
           {/* Стрелки прокрутки только на desktop >= 900px и если карточек >= 7 */}
           {places.length >= 7 && (
-            <div className="hidden min-[900px]:flex items-center gap-2">
+            <div className="hidden lg:flex items-center gap-2">
               <button
                 onClick={scrollLeft}
                 className="w-8 h-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] flex items-center justify-center transition-colors"
@@ -588,7 +588,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
           {/* See all arrow - only on mobile, on the right */}
           <Link
             href={getSeeAllUrl()}
-            className="min-[900px]:hidden w-8 h-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] flex items-center justify-center transition-colors"
+            className="lg:hidden w-8 h-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] flex items-center justify-center transition-colors"
             aria-label="See all"
           >
             <Icon name="forward" size={16} className="text-[#1F2A1F]" />
@@ -600,7 +600,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
       <div className="relative">
         <div 
           ref={scrollContainerRef}
-          className="overflow-x-auto scrollbar-hide max-[599px]:-mr-6 min-[600px]:mr-0"
+          className="overflow-x-auto scrollbar-hide max-lg:-mr-6 lg:mr-0"
           style={{ 
             scrollPaddingLeft: 'var(--home-page-padding, 16px)',
             scrollSnapType: 'x mandatory',
@@ -619,7 +619,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
               gap: 'var(--home-carousel-gap, 12px)'
             }}
           >
-            {places.map((place, index) => {
+            {places.map((place) => {
               const isFavorite = favorites?.has(place.id);
               
               // Get Haunted Gem index for locked premium places
@@ -714,9 +714,9 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
                   </div>
                   
                   {/* Text section - фиксированная высота ~52px */}
-                  <div className="p-3 min-[600px]:p-4 flex items-center justify-center" style={{ minHeight: '52px' }}>
+                  <div className="p-3 lg:p-4 flex items-center justify-center" style={{ minHeight: '52px' }}>
                     <div className="text-center">
-                      <div className="text-base min-[600px]:text-lg font-semibold text-[#1F2A1F]">See all</div>
+                      <div className="text-base lg:text-lg font-semibold text-[#1F2A1F]">See all</div>
                     </div>
                   </div>
                 </div>

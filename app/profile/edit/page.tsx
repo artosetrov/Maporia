@@ -9,17 +9,7 @@ import { supabase } from "../../lib/supabase";
 import { useUserAccess } from "../../hooks/useUserAccess";
 import Icon from "../../components/Icon";
 import UnifiedGoogleImportField from "../../components/UnifiedGoogleImportField";
-
-type Profile = {
-  id: string;
-  username: string | null;
-  display_name: string | null;
-  bio: string | null;
-  avatar_url: string | null;
-  role?: string | null;
-  subscription_status?: string | null;
-  is_admin?: boolean | null;
-};
+import type { Profile } from "../../types";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
@@ -134,7 +124,7 @@ export default function ProfileEditorHub() {
       <main className="min-h-screen bg-[#FAFAF7]">
         <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
           <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="bg-white rounded-2xl p-6 border border-gray-200">
                 <div className="h-6 w-32 bg-gray-200 rounded mb-4 animate-pulse" />
@@ -166,7 +156,7 @@ export default function ProfileEditorHub() {
   return (
     <main className="min-h-screen bg-[#FAFAF7] pb-24">
       {/* Desktop Top App Bar */}
-      <div className="hidden min-[900px]:block sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
+      <div className="hidden lg:block sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16">
             <button
@@ -183,7 +173,7 @@ export default function ProfileEditorHub() {
       </div>
 
       {/* Mobile Custom Header */}
-      <div className="min-[900px]:hidden fixed top-0 left-0 right-0 z-40 bg-white">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white">
         <div className="px-4 pt-safe-top pt-4 pb-4 flex items-center justify-between h-[64px]">
           <button
             onClick={() => router.push("/profile")}
@@ -198,7 +188,7 @@ export default function ProfileEditorHub() {
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 pt-[80px] min-[900px]:pt-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 pt-[80px] lg:pt-6">
         <div className="space-y-4">
             {/* Google Import Card */}
             {user && (

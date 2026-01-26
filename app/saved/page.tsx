@@ -235,7 +235,7 @@ export default function SavedPage() {
           {/* Header */}
           {!loading && (
             <div className="mb-4">
-              <h2 className="text-lg min-[600px]:text-xl font-semibold font-fraunces text-[#1F2A1F] mb-2">
+              <h2 className="text-lg lg:text-xl font-semibold font-fraunces text-[#1F2A1F] mb-2">
                 My favorites
                 <span className="ml-2 text-[#6F7A5A] font-normal">
                   {places.length} {places.length === 1 ? "place" : "places"}
@@ -244,7 +244,7 @@ export default function SavedPage() {
             </div>
           )}
           {loading ? (
-            <div className="grid grid-cols-2 min-[1440px]:grid-cols-3 gap-6 min-[1440px]:gap-6 min-[1440px]:gap-y-7">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-6 lg:gap-y-7">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="w-full">
                   <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
@@ -263,7 +263,7 @@ export default function SavedPage() {
               <div className="text-xs text-[#A8B096]">Saved places appear here</div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 min-[1440px]:grid-cols-3 gap-6 min-[1440px]:gap-6 min-[1440px]:gap-y-7">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-6 lg:gap-y-7">
               {(() => {
                 // Calculate locked premium places for Haunted Gem indexing
                 const defaultUserAccess: UserAccess = access ?? { 

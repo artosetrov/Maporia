@@ -2,15 +2,17 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /**
- * Middleware for route protection based on user roles
+ * Proxy for route handling (replaces deprecated middleware.ts)
  * 
  * Note: Authentication checks are handled by individual pages using useUserAccess hook.
- * This middleware is kept minimal to avoid issues with session checking in edge runtime.
- * Pages like /profile, /saved, /add already handle their own auth redirects.
+ * This proxy is kept minimal - pages like /profile, /saved, /add handle their own auth redirects.
+ * 
+ * Proxy in Next.js 16 is for routing only: rewrites, redirects, and headers.
+ * Complex logic and authentication should be in Server Components or API routes.
  */
-export async function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   // Let all requests pass through - pages handle their own auth checks
-  // This avoids issues with Supabase session checking in middleware edge runtime
+  // This avoids issues with Supabase session checking
   return NextResponse.next();
 }
 

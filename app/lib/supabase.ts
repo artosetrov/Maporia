@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import type { Database } from "../types/supabase";
 
 // Validate required environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -23,11 +24,15 @@ if (!supabaseAnonKey) {
 }
 
 // Единый экземпляр Supabase клиента для всего приложения
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+// Typed with Database schema for type-safe queries
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    // CRITICAL: Don't use default redirect URL - we'll handle redirects manually
+    // This prevents Supabase from redirecting to production
+    flowType: 'pkce', // Use PKCE flow for better security and control
   },
 });
 
@@ -52,13 +57,20 @@ export function getAuthRedirectUrl(path: string = "/"): string {
     throw new Error('getAuthRedirectUrl can only be called on the client side');
   }
   
-  // Always use current origin (supports both www and non-www)
+  // CRITICAL: Always use current origin to stay on the same host
+  // This ensures:
+  // - localhost:3000 → stays on localhost:3000
+  // - staging domain → stays on staging
+  // - production domain → stays on production
   const origin = window.location.origin;
   
   // Убеждаемся, что path начинается с /
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   
   const redirectUrl = `${origin}${normalizedPath}`;
+  
+  // Debug logging - always log to help debug redirect issues
+  console.log('[Auth] Redirect URL:', redirectUrl, 'from origin:', origin, 'current URL:', window.location.href);
   
   return redirectUrl;
 }

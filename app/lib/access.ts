@@ -150,8 +150,8 @@ export function canUserInteract(userAccess: UserAccess): boolean {
  * @returns true if user can add places
  */
 export function canUserAddPlace(userAccess: UserAccess): boolean {
-  // Only authenticated users (standard, premium, admin) can add places
-  return userAccess.role !== "guest";
+  // Only premium users and admins can add places
+  return userAccess.role === "premium" || userAccess.role === "admin";
 }
 
 /**

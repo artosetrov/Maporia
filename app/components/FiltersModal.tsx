@@ -3,7 +3,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useState, useEffect, useRef } from "react";
-import { CITIES } from "../constants";
 import { CATEGORIES } from "../constants";
 import Icon from "./Icon";
 
@@ -48,12 +47,12 @@ export default function FiltersModal({
   onClose,
   onApply,
   appliedFilters,
-  appliedCity,
-  appliedCities,
-  onCityChange,
-  onCitiesChange,
+  appliedCity: _appliedCity,
+  appliedCities: _appliedCities,
+  onCityChange: _onCityChange,
+  onCitiesChange: _onCitiesChange,
   getFilteredCount,
-  getCityCount,
+  getCityCount: _getCityCount,
   getCategoryCount,
 }: FiltersModalProps) {
   // Ensure appliedFilters is always defined
@@ -68,23 +67,12 @@ export default function FiltersModal({
   
   // Draft state (changes while modal is open)
   const [draftFilters, setDraftFilters] = useState<ActiveFilters>(safeAppliedFilters);
-  // Поддерживаем как старый формат (один город), так и новый (массив городов)
-  const [draftCities, setDraftCities] = useState<string[]>(() => {
-    if (appliedCities && appliedCities.length > 0) {
-      return appliedCities;
-    }
-    if (appliedCity) {
-      return [appliedCity];
-    }
-    return [];
-  });
   
   // State for filtered count (can be async)
   const [filteredCount, setFilteredCount] = useState<number | null>(null);
   const [countLoading, setCountLoading] = useState(false);
   
-  // City and category counts
-  const [cityCounts, setCityCounts] = useState<Record<string, number>>({});
+  // Category counts
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
   
   // Use ref to store getFilteredCount to avoid dependency issues
@@ -121,9 +109,9 @@ export default function FiltersModal({
       };
       loadCategoryCounts();
     }
-  }, [isOpen, getCityCount, getCategoryCount]);
+  }, [isOpen, getCategoryCount]);
   
-  // Update count when draftFilters or draftCities change
+  // Update count when draftFilters change
   useEffect(() => {
     // Всегда вызываем useEffect, но проверяем условия внутри
     if (!isOpen) {
@@ -171,7 +159,9 @@ export default function FiltersModal({
     }));
   };
 
-  const handleSortChange = (sort: string | null) => {
+  // Unused - kept for potential future use
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _handleSortChange = (sort: string | null) => {
     setDraftFilters((prev) => ({
       ...prev,
       sort: prev.sort === sort ? null : sort,
@@ -212,7 +202,9 @@ export default function FiltersModal({
     onClose();
   };
   
-  const handleRemoveFilter = (type: "city" | "category" | "premium" | "hidden" | "vibe", value?: string) => {
+  // Unused - kept for potential future use
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _handleRemoveFilter = (type: "city" | "category" | "premium" | "hidden" | "vibe", value?: string) => {
     if (type === "category" && value) {
       setDraftFilters((prev) => ({
         ...prev,
@@ -250,7 +242,9 @@ export default function FiltersModal({
     onClose();
   };
 
-  const hasChanges =
+  // Unused - kept for potential future use (e.g., disable apply button when no changes)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _hasChanges =
     JSON.stringify(draftFilters) !== JSON.stringify(safeAppliedFilters);
   
   // Get applied filters for display

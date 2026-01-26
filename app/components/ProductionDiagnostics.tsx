@@ -49,14 +49,22 @@ export function ProductionDiagnostics() {
         
         // Log first non-2xx response
         if (!response.ok) {
-          const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || 'unknown';
+          const url = typeof args[0] === 'string' 
+            ? args[0] 
+            : args[0] instanceof Request 
+            ? args[0].url 
+            : (args[0] as URL).toString();
           logFirstFailure(url, response.status, null);
         }
         
         return response;
       } catch (error: any) {
         // Log first fetch error
-        const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || 'unknown';
+        const url = typeof args[0] === 'string' 
+          ? args[0] 
+          : args[0] instanceof Request 
+          ? args[0].url 
+          : (args[0] as URL).toString();
         logFirstFailure(url, 0, error);
         throw error;
       }

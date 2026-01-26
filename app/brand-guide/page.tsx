@@ -103,7 +103,7 @@ function PremiumUpsellModalEditor() {
         {/* Editor Form */}
         {isEditing && (
           <div className="mt-6 p-6 bg-[#FAFAF7] rounded-xl border border-[#ECEEE4] space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Title */}
               <div>
                 <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Title</label>
@@ -127,7 +127,7 @@ function PremiumUpsellModalEditor() {
               </div>
 
               {/* Subtitle */}
-              <div className="md:col-span-2">
+              <div className="lg:col-span-2">
                 <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Subtitle</label>
                 <textarea
                   value={modalContent.subtitle}
@@ -138,10 +138,10 @@ function PremiumUpsellModalEditor() {
               </div>
 
               {/* Benefits */}
-              <div className="md:col-span-2">
+              <div className="lg:col-span-2">
                 <h4 className="text-sm font-semibold text-[#1F2A1F] mb-3">Benefits</h4>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 1 - Title</label>
                       <input
@@ -161,7 +161,7 @@ function PremiumUpsellModalEditor() {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 2 - Title</label>
                       <input
@@ -181,7 +181,7 @@ function PremiumUpsellModalEditor() {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 3 - Title</label>
                       <input
@@ -205,7 +205,7 @@ function PremiumUpsellModalEditor() {
               </div>
 
               {/* Social Proof */}
-              <div className="md:col-span-2">
+              <div className="lg:col-span-2">
                 <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Social Proof</label>
                 <input
                   type="text"
@@ -413,7 +413,7 @@ function IconGrid() {
   return (
     <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
       <h3 className="text-xl font-semibold font-fraunces text-[#1F2A1F] mb-4">Icon System</h3>
-      <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-4">
+      <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-4">
         {icons.map((icon) => (
           <div key={icon.name} className="flex flex-col items-center gap-2">
             <div className="w-12 h-12 rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] flex items-center justify-center">
@@ -469,6 +469,10 @@ export default function BrandGuidePage() {
               Complete design system and brand guidelines for Maporia. This guide includes all colors, typography, 
               UI components, icons, and styling rules used throughout the application.
             </p>
+            <p className="text-sm text-[#6F7A5A] mt-3">
+              <strong className="text-[#1F2A1F]">Access:</strong> This guide is available in the Profile → Elements section (admin only) 
+              or directly at <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">/brand-guide</code>
+            </p>
           </div>
 
           {/* Colors Section */}
@@ -477,38 +481,38 @@ export default function BrandGuidePage() {
             
             <div className="space-y-4 mb-6">
               <h3 className="text-lg font-semibold text-[#1F2A1F]">Primary Colors</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <ColorSwatch name="Olive Green" color="bg-[#8F9E4F]" hex="#8F9E4F" description="Primary brand color" />
-                <ColorSwatch name="Soft Sage" color="bg-[#C9D2A3]" hex="#C9D2A3" description="Secondary accent" />
-                <ColorSwatch name="Warm White" color="bg-[#FAFAF7]" hex="#FAFAF7" description="Background color" />
+              <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-3 gap-4">
+                <ColorSwatch name="Olive Green" hex="#8F9E4F" description="Primary brand color" />
+                <ColorSwatch name="Soft Sage" hex="#C9D2A3" description="Secondary accent" />
+                <ColorSwatch name="Warm White" hex="#FAFAF7" description="Background color" />
               </div>
             </div>
 
             <div className="space-y-4 mb-6">
               <h3 className="text-lg font-semibold text-[#1F2A1F]">Text Colors</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <ColorSwatch name="Primary Text" color="bg-[#1F2A1F]" hex="#1F2A1F" description="Main text color" />
-                <ColorSwatch name="Secondary Text" color="bg-[#6F7A5A]" hex="#6F7A5A" description="Secondary text" />
-                <ColorSwatch name="Muted Text" color="bg-[#A8B096]" hex="#A8B096" description="Muted/disabled text" />
+              <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-3 gap-4">
+                <ColorSwatch name="Primary Text" hex="#1F2A1F" description="Main text color" />
+                <ColorSwatch name="Secondary Text" hex="#6F7A5A" description="Secondary text" />
+                <ColorSwatch name="Muted Text" hex="#A8B096" description="Muted/disabled text" />
               </div>
             </div>
 
             <div className="space-y-4 mb-6">
               <h3 className="text-lg font-semibold text-[#1F2A1F]">State Colors</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <ColorSwatch name="Success" color="bg-[#7FA35C]" hex="#7FA35C" description="Success states" />
-                <ColorSwatch name="Warning / Premium" color="bg-[#D6B25E]" hex="#D6B25E" description="Warning states & Premium badge" />
-                <ColorSwatch name="Error" color="bg-[#C96A5B]" hex="#C96A5B" description="Error states" />
-                <ColorSwatch name="Disabled" color="bg-[#DADDD0]" hex="#DADDD0" description="Disabled states" />
+              <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-4 gap-4">
+                <ColorSwatch name="Success" hex="#7FA35C" description="Success states" />
+                <ColorSwatch name="Warning / Premium" hex="#D6B25E" description="Warning states & Premium badge" />
+                <ColorSwatch name="Error" hex="#C96A5B" description="Error states" />
+                <ColorSwatch name="Disabled" hex="#DADDD0" description="Disabled states" />
               </div>
             </div>
 
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-[#1F2A1F]">Borders & Backgrounds</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <ColorSwatch name="Border Light" color="bg-[#ECEEE4]" hex="#ECEEE4" description="Light borders" />
-                <ColorSwatch name="Border Input" color="bg-[#E5E8DB]" hex="#E5E8DB" description="Input borders" />
-                <ColorSwatch name="Card Background" color="bg-white" hex="#FFFFFF" description="Card backgrounds" />
+              <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-3 gap-4">
+                <ColorSwatch name="Border Light" hex="#ECEEE4" description="Light borders" />
+                <ColorSwatch name="Border Input" hex="#E5E8DB" description="Input borders" />
+                <ColorSwatch name="Card Background" hex="#FFFFFF" description="Card backgrounds" />
               </div>
             </div>
           </section>
@@ -643,7 +647,7 @@ export default function BrandGuidePage() {
             {/* Usage Rules */}
             <div className="space-y-4 mb-6">
               <h3 className="text-lg font-semibold text-[#1F2A1F]">Usage Rules (Do / Don't)</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="rounded-xl border border-[#7FA35C] bg-[#FAFAF7] p-4">
                   <div className="text-sm font-semibold text-[#1F2A1F] mb-3">Do</div>
                   <div className="space-y-2 text-sm text-[#6F7A5A]">
@@ -667,7 +671,7 @@ export default function BrandGuidePage() {
 
             {/* Clear Space & Minimum Sizes */}
             <div className="space-y-4 mb-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="rounded-xl border border-[#ECEEE4] bg-white p-4">
                   <h4 className="text-sm font-semibold text-[#1F2A1F] mb-3">Clear Space</h4>
                   <p className="text-xs text-[#6F7A5A] mb-2">Minimum clear space around the logo:</p>
@@ -753,7 +757,7 @@ export default function BrandGuidePage() {
             
             <div className="space-y-4 mb-6">
               <h3 className="text-lg font-semibold text-[#1F2A1F]">Primary Buttons</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <ButtonSample 
                   label="Primary Button" 
                   className="w-full h-11 rounded-xl bg-[#8F9E4F] text-white px-5 text-sm font-medium hover:bg-[#7A8A42] transition"
@@ -769,7 +773,7 @@ export default function BrandGuidePage() {
 
             <div className="space-y-4 mb-6">
               <h3 className="text-lg font-semibold text-[#1F2A1F]">Secondary Buttons</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <ButtonSample 
                   label="Secondary Button" 
                   className="w-full h-11 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] px-5 text-sm font-medium hover:bg-[#FAFAF7] transition"
@@ -785,7 +789,7 @@ export default function BrandGuidePage() {
 
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-[#1F2A1F]">Danger Buttons</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <ButtonSample 
                   label="Delete Button" 
                   className="w-full h-11 rounded-xl border border-[#C96A5B] bg-[#C96A5B] text-white px-5 text-sm font-medium hover:bg-[#B85A4B] transition"
@@ -799,7 +803,7 @@ export default function BrandGuidePage() {
           <section>
             <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Cards</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
                 <h3 className="font-semibold text-[#1F2A1F] mb-2">Standard Card</h3>
                 <p className="text-sm text-[#6F7A5A]">
@@ -820,22 +824,35 @@ export default function BrandGuidePage() {
           <section>
             <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Shadows</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="mb-4 p-4 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7]">
+              <p className="text-sm text-[#1F2A1F] font-medium mb-2">Shadow Rules:</p>
+              <ul className="text-xs text-[#6F7A5A] space-y-1 list-disc list-inside">
+                <li>Все тени используют <strong className="text-[#1F2A1F]">blur минимум 20px</strong> для мягкого эффекта</li>
+                <li>Тени переопределены в <code className="bg-white px-1.5 py-0.5 rounded">globals.css</code> для единообразия</li>
+                <li><code className="bg-white px-1.5 py-0.5 rounded">badge-shadow</code> - специальная тень для badge-элементов и плашек</li>
+              </ul>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="rounded-xl border border-[#ECEEE4] bg-white p-4 shadow-sm">
                 <div className="text-sm font-semibold text-[#1F2A1F] mb-1">shadow-sm</div>
                 <div className="text-xs text-[#6F7A5A]">Blur: 20px</div>
+                <div className="text-xs text-[#A8B096] mt-1">Стандартные карточки</div>
               </div>
               <div className="rounded-xl border border-[#ECEEE4] bg-white p-4 shadow-md">
                 <div className="text-sm font-semibold text-[#1F2A1F] mb-1">shadow-md</div>
                 <div className="text-xs text-[#6F7A5A]">Blur: 20px</div>
+                <div className="text-xs text-[#A8B096] mt-1">Hover состояния</div>
               </div>
               <div className="rounded-xl border border-[#ECEEE4] bg-white p-4 shadow-lg">
                 <div className="text-sm font-semibold text-[#1F2A1F] mb-1">shadow-lg</div>
                 <div className="text-xs text-[#6F7A5A]">Blur: 20px</div>
+                <div className="text-xs text-[#A8B096] mt-1">Модальные окна</div>
               </div>
               <div className="rounded-xl border border-[#ECEEE4] bg-white p-4 badge-shadow">
                 <div className="text-sm font-semibold text-[#1F2A1F] mb-1">badge-shadow</div>
-                <div className="text-xs text-[#6F7A5A]">Custom badge shadow</div>
+                <div className="text-xs text-[#6F7A5A]">Blur: 20px</div>
+                <div className="text-xs text-[#A8B096] mt-1">Badge, плашки, счетчики</div>
               </div>
             </div>
           </section>
@@ -881,7 +898,7 @@ export default function BrandGuidePage() {
 
             <div className="mt-6 rounded-xl border border-[#ECEEE4] bg-white p-6">
               <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Border Radius</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="p-4 bg-[#FAFAF7] rounded-lg border border-[#ECEEE4]">
                   <div className="text-sm font-semibold text-[#1F2A1F] mb-1">rounded-lg</div>
                   <div className="text-xs text-[#6F7A5A]">8px</div>
@@ -1361,7 +1378,7 @@ export default function BrandGuidePage() {
               {/* Brand Colors Used */}
               <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
                 <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Brand Colors Used</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg bg-[#8F9E4F]" />
                     <div>
@@ -1453,7 +1470,6 @@ export default function BrandGuidePage() {
                     <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
                       <li><strong>Pin.svg Logo:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">h-10 w-auto</code> (40px height), ссылка на `/`</li>
                       <li><strong>SearchBar:</strong> Полнофункциональный Airbnb-style pill с City Selector, Search Input, Filters</li>
-                      <li><strong>Add Gem:</strong> Текстовая ссылка на `/add`, видна только для авторизованных пользователей</li>
                       <li><strong>Avatar:</strong> Прямая ссылка на `/profile`, без chevron-down иконки</li>
                       <li><strong>Hamburger Menu:</strong> Отдельная кнопка с иконкой меню, открывает dropdown с Profile, Feed, Saved, Settings, Logout</li>
                       <li><strong>Border-bottom:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">border-b border-[#ECEEE4]</code></li>
@@ -1491,7 +1507,6 @@ export default function BrandGuidePage() {
                     <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
                       <li><strong>Pin.svg Logo:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">h-10 w-auto</code> (40px height)</li>
                       <li><strong>SearchBar:</strong> Встроенный компонент с live search (не модальное окно)</li>
-                      <li><strong>Add Gem:</strong> Текстовая ссылка на `/add`</li>
                       <li><strong>Avatar:</strong> Прямая ссылка на `/profile`</li>
                       <li><strong>Hamburger Menu:</strong> Открывает dropdown меню</li>
                       <li><strong>View Toggle:</strong> Скрыт (на десктопе используется split view)</li>
@@ -2135,14 +2150,26 @@ export default function BrandGuidePage() {
                       <li>Показывает недавно просмотренные места</li>
                       <li>Данные загружаются из localStorage (<code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">recentlyViewedPlaceIds</code>)</li>
                       <li>Использует те же PlaceCard компоненты, что и на /map</li>
-                      <li>Grid layout: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">grid grid-cols-2 min-[1440px]:grid-cols-3 gap-6</code></li>
+                      <li>Grid layout: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">grid grid-cols-2 lg:grid-cols-3 gap-6</code></li>
                     </ul>
                   </div>
                   <div>
-                    <strong className="text-[#1F2A1F]">Mobile Quick Access Menu:</strong>
+                    <strong className="text-[#1F2A1F]">Mobile Quick Access Cards:</strong>
                     <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li>Activity, Users (admin only), Elements (admin only)</li>
-                      <li>Убран "Edit profile" из списка (есть кнопка Edit в header)</li>
+                      <li>Все пункты оформлены как карточки в grid: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">grid grid-cols-2 gap-4</code></li>
+                      <li>Карточки: "My favorites", "Added places", "History", "Activity"</li>
+                      <li>Для админов дополнительно: "Users", "Elements"</li>
+                      <li>Стиль карточек: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md</code></li>
+                      <li>Карточки с фото показывают до 2 перекрывающихся изображений с поворотом</li>
+                      <li>Карточки без фото показывают иконку в центре</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong className="text-[#1F2A1F]">Elements Section (Admin only):</strong>
+                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                      <li>Premium Upsell Modal Editor - редактирование контента модального окна</li>
+                      <li>Brand Guide - ссылка на полный Brand Guide</li>
+                      <li>Доступна только для администраторов</li>
                     </ul>
                   </div>
                 </div>
@@ -2165,14 +2192,14 @@ export default function BrandGuidePage() {
                     <strong className="text-[#1F2A1F]">Desktop Header:</strong>
                     <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
                       <li>Стандартный sticky header с кнопкой закрытия и заголовком</li>
-                      <li>Виден только на desktop: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">hidden min-[900px]:block</code></li>
+                      <li>Виден только на desktop: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">hidden lg:block</code></li>
                     </ul>
                   </div>
                   <div>
                     <strong className="text-[#1F2A1F]">Content Padding:</strong>
                     <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
                       <li>Mobile: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">pt-[80px]</code></li>
-                      <li>Desktop: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">min-[900px]:pt-8</code></li>
+                      <li>Desktop: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">lg:pt-8</code></li>
                     </ul>
                   </div>
                 </div>

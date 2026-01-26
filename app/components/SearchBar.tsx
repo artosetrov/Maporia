@@ -28,7 +28,7 @@ export default function SearchBar({
   selectedCity,
   onCityChange,
   searchValue,
-  onSearchChange,
+  onSearchChange: _onSearchChange,
   onFiltersClick,
   activeFiltersCount,
   isMobile = false,
@@ -163,7 +163,7 @@ export default function SearchBar({
         className="h-11 px-6 rounded-r-full hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 border-l border-[#E5E8DB] min-w-[180px] relative"
       >
         <Icon name="filter" size={20} className="text-[#1F2A1F]" />
-        <span className="text-sm font-medium text-[#1F2A1F] hidden min-[600px]:inline">Filters</span>
+        <span className="text-sm font-medium text-[#1F2A1F] hidden lg:inline">Filters</span>
         {activeFiltersCount > 0 && (
           <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-[#8F9E4F] text-white text-[10px] font-medium flex items-center justify-center">
             {activeFiltersCount > 9 ? "9+" : activeFiltersCount}

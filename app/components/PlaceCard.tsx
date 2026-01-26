@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { ReactNode, useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
-import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
+import { isPlacePremium, type UserAccess } from "../lib/access";
 import PremiumBadge from "./PremiumBadge";
-import LockedPlaceOverlay from "./LockedPlaceOverlay";
 import Icon from "./Icon";
 import { usePremiumGate } from "../hooks/usePremiumGate";
 import PremiumUpsellModal from "./PremiumUpsellModal";
@@ -43,21 +42,13 @@ function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
 }
 
-function initialsFromName(name?: string | null) {
-  if (!name) return "U";
-  const parts = name.split(/\s+/).filter(Boolean);
-  const a = (parts[0]?.[0] ?? name[0] ?? "U").toUpperCase();
-  const b = (parts[1]?.[0] ?? "").toUpperCase();
-  return (a + b).slice(0, 2);
-}
-
 // Check if a string is a valid UUID format
 function isValidUUID(str: string): boolean {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   return uuidRegex.test(str);
 }
 
-export default function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite = false, hauntedGemIndex, showPhotoSlider = true, onClick, onTagClick, onPhotoClick, onRemoveFavorite }: PlaceCardProps) {
+export default function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isFavorite = false, hauntedGemIndex, showPhotoSlider = true, onClick, onTagClick, onPhotoClick, onRemoveFavorite }: PlaceCardProps) {
   const [creatorProfile, setCreatorProfile] = useState<{ display_name: string | null; username: string | null; avatar_url: string | null } | null>(null);
   const loadedUserIdRef = useRef<string | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
@@ -179,22 +170,37 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
         }
 
         if (error) {
-          // Silently ignore AbortError
-          if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+          // Silently ignore AbortError and network errors
+          const errorMessage = error.message;
+          const errorName = (error as any).name;
+          
+          if (errorMessage?.includes('abort') || 
+              errorName === 'AbortError' || 
+              (error as any).code === 'ECONNABORTED' ||
+              (errorName === 'TypeError' && errorMessage?.includes('Failed to fetch'))) {
+            // Fallback на cover_url silently
+            if (place.cover_url && !isUnmounting && place.id === placeId) {
+              setPhotos([place.cover_url]);
+            } else if (!isUnmounting && place.id === placeId) {
+              setPhotos([]);
+            }
             return;
           }
           
           // Check if error has meaningful content before logging
-          const errorMessage = error.message;
           const errorCode = error.code;
           const errorDetails = error.details;
           const errorHint = error.hint;
           
-          // Only log if there's actual error content (not empty object)
+          // Only log if there's actual error content (not empty object or network errors)
           if (errorMessage || errorCode || errorDetails || errorHint) {
-            // Log only meaningful errors
-            if (errorMessage || errorCode) {
-              console.error("Error loading photos:", errorMessage || errorCode);
+            // Don't log "Failed to fetch" errors
+            const messageStr = String(errorMessage || errorCode || '');
+            if (!messageStr.includes('Failed to fetch')) {
+              // Log only meaningful errors
+              if (errorMessage || errorCode) {
+                console.error("Error loading photos:", errorMessage || errorCode);
+              }
             }
           }
           // If error is empty object, silently handle it
@@ -229,24 +235,42 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
           setCurrentPhotoIndex(0);
         }
       } catch (error) {
-        // Silently ignore AbortError
-        if (error instanceof Error && (error.name === 'AbortError' || error.message?.includes('abort'))) {
-          return;
-        }
-        
-        // Only log meaningful errors (not empty objects)
+        // Silently ignore AbortError and network errors
         if (error instanceof Error) {
-          if (error.message) {
-            console.error("Exception loading photos:", error.message);
+          const errorName = error.name;
+          const errorMessage = error.message;
+          
+          // Ignore abort errors and network fetch errors
+          if (errorName === 'AbortError' || 
+              errorMessage?.includes('abort') || 
+              errorName === 'TypeError' && errorMessage?.includes('Failed to fetch')) {
+            // Fallback to cover_url silently
+            if (!isUnmounting && place.id === placeId && place.cover_url) {
+              setPhotos([place.cover_url]);
+            } else if (!isUnmounting && place.id === placeId) {
+              setPhotos([]);
+            }
+            return;
+          }
+          
+          // Only log meaningful errors (not network issues)
+          if (errorMessage && !errorMessage.includes('Failed to fetch')) {
+            console.error("Exception loading photos:", errorMessage);
           }
         } else if (typeof error === 'object' && error !== null) {
           const err = error as Record<string, unknown>;
           const errorMessage = err.message;
           const errorCode = err.code;
           if (errorMessage || errorCode) {
-            console.error("Exception loading photos:", errorMessage || errorCode);
+            // Don't log "Failed to fetch" errors
+            const messageStr = String(errorMessage || errorCode);
+            if (!messageStr.includes('Failed to fetch')) {
+              console.error("Exception loading photos:", errorMessage || errorCode);
+            }
           }
         }
+        
+        // Fallback на cover_url
         if (!isUnmounting && place.id === placeId && place.cover_url) {
           setPhotos([place.cover_url]);
         } else if (!isUnmounting && place.id === placeId) {
@@ -261,7 +285,9 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
     };
   }, [place.id, place.cover_url]);
 
-  const creatorName = creatorProfile?.display_name || creatorProfile?.username || "Unknown";
+  // Unused - kept for potential future use
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _creatorName = creatorProfile?.display_name || creatorProfile?.username || "Unknown";
 
   const handlePreviousPhoto = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -316,7 +342,9 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
   const hasMultiplePhotos = showPhotoSlider && photos.length > 1;
 
   // Premium access checks using role system
-  const defaultUserAccess: UserAccess = userAccess ?? { 
+  // Unused - userAccess is passed directly to canAccessPlace
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _defaultUserAccess: UserAccess = userAccess ?? { 
     role: "guest", 
     hasPremium: false, 
     isAdmin: false 
@@ -342,7 +370,9 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
 
   // For locked places, show "Haunted Gem #..." instead of real title
   const displayTitle = isLocked ? `Haunted Gem #${getPseudoPlaceNumber(place.id)}` : place.title;
-  const pseudoTitle = isPremium ? `Haunted Gem #${getPseudoPlaceNumber(place.id)}` : null;
+  // Unused - only displayTitle is used in JSX
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _pseudoTitle = isPremium ? `Haunted Gem #${getPseudoPlaceNumber(place.id)}` : null;
 
   const handlePhotoClick = (e: React.MouseEvent) => {
     e.preventDefault();

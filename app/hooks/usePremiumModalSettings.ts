@@ -53,29 +53,32 @@ export function usePremiumModalSettings() {
   const [settings, setSettings] = useState<PremiumModalSettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function loadSettings() {
-      try {
-        // Try to load from Supabase directly (public read access)
-        const { data, error } = await supabase
-          .from("app_settings")
-          .select("settings")
-          .eq("id", "premium_modal")
-          .single();
+  const loadSettings = async () => {
+    try {
+      // Try to load from Supabase directly (public read access)
+      const { data, error } = await supabase
+        .from("app_settings")
+        .select("settings")
+        .eq("id", "premium_modal")
+        .single();
 
-        if (!error && data?.settings) {
-          setSettings({ ...defaultSettings, ...data.settings });
-        }
-      } catch (error) {
+      if (!error && data?.settings) {
+        setSettings({ ...defaultSettings, ...data.settings });
+      } else if (error) {
         console.error("Error loading premium modal settings:", error);
         // Use defaults on error
-      } finally {
-        setLoading(false);
       }
+    } catch (error) {
+      console.error("Error loading premium modal settings:", error);
+      // Use defaults on error
+    } finally {
+      setLoading(false);
     }
+  };
 
+  useEffect(() => {
     loadSettings();
   }, []);
 
-  return { settings, loading };
+  return { settings, loading, reloadSettings: loadSettings };
 }

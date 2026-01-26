@@ -56,11 +56,6 @@ export default function PlaceSettingsPage() {
       // Keep this route for backwards compatibility and redirect.
       router.replace(`/places/${placeId}/edit`);
       return;
-
-      setPlace(data);
-      // Check if place is hidden (try multiple possible fields)
-      setIsHidden(data.is_hidden === true || data.visibility === 'hidden' || data.visibility === 'private');
-      setLoading(false);
     })();
   }, [placeId, user, router, access, accessLoading]);
 

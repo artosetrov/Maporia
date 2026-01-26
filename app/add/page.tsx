@@ -3,19 +3,28 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
+import { useUserAccess } from "../hooks/useUserAccess";
+import { canUserAddPlace } from "../lib/access";
 
 export default function AddPlacePage() {
   const router = useRouter();
+  const { loading: accessLoading, user, access } = useUserAccess(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (accessLoading) return;
+
     (async () => {
       // Check authentication
-      const { data } = await supabase.auth.getUser();
-      const u = data.user;
-      if (!u) {
+      if (!user) {
         router.push("/auth");
+        return;
+      }
+
+      // Check if user can add places (only Premium and Admin)
+      if (!canUserAddPlace(access)) {
+        setError("Only Premium users can create places. Please upgrade to Premium to add new places.");
         return;
       }
 
@@ -33,7 +42,7 @@ export default function AddPlacePage() {
           link: null,
           access_level: "public",
           is_hidden: true, // Hidden by default until all required fields are filled
-          created_by: u.id,
+          created_by: user.id,
         };
 
         const { data: placeData, error: createError } = await supabase
@@ -66,7 +75,7 @@ export default function AddPlacePage() {
         setCreating(false);
       }
     })();
-  }, [router]);
+  }, [router, user, access, accessLoading]);
 
   if (creating) {
     return (
@@ -76,6 +85,33 @@ export default function AddPlacePage() {
           {error && (
             <div className="text-sm text-red-600 mt-2">{error}</div>
           )}
+        </div>
+      </main>
+    );
+  }
+
+  if (accessLoading) {
+    return (
+      <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-sm text-[#6F7A5A] mb-2">Loading...</div>
+        </div>
+      </main>
+    );
+  }
+
+  if (error && !canUserAddPlace(access)) {
+    return (
+      <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
+        <div className="max-w-md mx-auto px-6 text-center">
+          <div className="text-lg font-semibold text-[#1F2A1F] mb-2">Premium Required</div>
+          <div className="text-sm text-[#6F7A5A] mb-4">{error}</div>
+          <button
+            onClick={() => router.push("/")}
+            className="px-4 py-2 bg-[#1F2A1F] text-white rounded-lg hover:bg-[#2A3A2A] transition-colors"
+          >
+            Go Home
+          </button>
         </div>
       </main>
     );

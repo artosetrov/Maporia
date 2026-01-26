@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase, getAuthRedirectUrl } from "../lib/supabase";
 import Icon from "../components/Icon";
 
+
 export default function AuthPage() {
   const router = useRouter();
+  const originalOriginRef = useRef<string | null>(null);
 
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -15,21 +17,130 @@ export default function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [isAuthed, setIsAuthed] = useState(false);
 
+  // Store original origin on mount to prevent redirects to production
   useEffect(() => {
-    // если уже залогинен — сразу в профиль
-    (async () => {
+    if (typeof window !== 'undefined' && !originalOriginRef.current) {
+      originalOriginRef.current = window.location.origin;
+      console.log('[Auth] Stored original origin:', originalOriginRef.current);
+      
+      // Intercept any navigation attempts that might redirect to production
+      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+        const target = (e.target as Window)?.location?.href;
+        if (target && !target.startsWith(originalOriginRef.current || '')) {
+          console.warn('[Auth] Intercepted navigation to different origin:', target);
+        }
+      };
+      
+      // Monitor for any redirects
+      const checkOrigin = () => {
+        if (window.location.origin !== originalOriginRef.current) {
+          console.warn('[Auth] Origin changed! Redirecting back to:', originalOriginRef.current);
+          window.location.replace(originalOriginRef.current + window.location.pathname + window.location.search + window.location.hash);
+        }
+      };
+      
+      // Check immediately and periodically
+      checkOrigin();
+      const interval = setInterval(checkOrigin, 100);
+      
+      return () => {
+        clearInterval(interval);
+      };
+    }
+  }, []);
+
+  useEffect(() => {
+    // CRITICAL: Use stored original origin to prevent redirects to production
+    const currentOrigin = originalOriginRef.current || window.location.origin;
+    const currentPath = window.location.pathname;
+    
+    // IMMEDIATE CHECK: If we're on a different host, redirect immediately
+    if (window.location.origin !== currentOrigin) {
+      console.warn('[Auth] IMMEDIATE: Detected redirect to different origin:', window.location.origin, 'expected:', currentOrigin);
+      // Force redirect back to original host IMMEDIATELY
+      const targetPath = window.location.pathname + window.location.search + window.location.hash;
+      window.location.replace(currentOrigin + targetPath);
+      return;
+    }
+    
+    // Handle auth callback - check for hash fragment or query params (OAuth/magic link)
+    const handleAuthCallback = async () => {
+      // Check if we have a hash fragment (OAuth callback)
+      if (window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        const error = hashParams.get('error');
+        const type = hashParams.get('type');
+        
+        if (error) {
+          setError(`Authentication error: ${error}`);
+          // Clean up URL - stay on current host
+          window.history.replaceState({}, '', currentPath);
+          return;
+        }
+        
+        if (accessToken || type === 'recovery' || type === 'magiclink') {
+          // Session will be set by Supabase automatically
+          // Clean up URL to remove hash - stay on current host
+          window.history.replaceState({}, '', currentPath);
+        }
+      }
+      
+      // Check for query params (magic link callback)
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get('token');
+      const type = urlParams.get('type');
+      
+      if (token && (type === 'recovery' || type === 'magiclink')) {
+        // Magic link callback - clean up URL and stay on current host
+        window.history.replaceState({}, '', currentPath);
+      }
+      
+      // Check if already logged in
       const { data } = await supabase.auth.getUser();
       if (data.user) {
         setIsAuthed(true);
+        // CRITICAL: Use relative path to stay on current host
+        // Never use absolute URL that could redirect to production
         router.replace("/");
       }
-    })();
+    };
 
-    // слушаем изменения сессии (когда кликнул magic link)
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    handleAuthCallback();
+
+    // Listen for auth state changes (when clicked magic link or OAuth completes)
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[Auth] onAuthStateChange:', event, 'session:', session?.user?.id);
+      
       if (session?.user) {
         setIsAuthed(true);
-        router.replace("/");
+        
+        // CRITICAL: Always use relative path to stay on current host
+        // This ensures we stay on localhost if logging in from localhost
+        // or on production if logging in from production
+        const currentPath = window.location.pathname;
+        const currentHost = window.location.origin;
+        
+        // Double-check we're still on the same host (prevent production redirect)
+        if (currentHost !== currentOrigin) {
+          console.warn('[Auth] onAuthStateChange: Host changed from', currentOrigin, 'to', currentHost, '- forcing redirect back');
+          // Force redirect back to original host IMMEDIATELY
+          window.location.replace(currentOrigin + currentPath);
+          return;
+        }
+        
+        // Small delay to ensure session is fully set
+        setTimeout(() => {
+          if (currentPath === '/auth' || currentPath.startsWith('/auth')) {
+            // Use relative path, not absolute URL
+            console.log('[Auth] Redirecting to / from /auth');
+            router.replace("/");
+          } else {
+            // If we're already on a page, just refresh to update auth state
+            console.log('[Auth] Refreshing current page');
+            router.refresh();
+          }
+        }, 100);
       }
     });
 

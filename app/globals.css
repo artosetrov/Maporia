@@ -98,7 +98,7 @@ h2, .h2 {
   color: var(--text-primary);
 }
 
-@media (min-width: 600px) {
+@media (min-width: 1024px) {
   h1, .h1 {
     font-size: 32px;
   }
@@ -266,80 +266,14 @@ button.gm-ui-hover-effect {
   --recently-viewed-card-width: calc((100vw - 48px - 12px) / 3.3);
 }
 
-@media (min-width: 390px) {
-  /* Mobile L (390-599px) - 2 cards visible + part of 3rd */
-  :root {
-    --home-page-padding: 24px;
-    --home-carousel-gap: 12px;
-    --home-card-width: calc((100vw - 48px - 12px) / 2.2);
-    /* Recently viewed: 3 cards visible + part of 4th on mobile */
-    --recently-viewed-card-width: calc((100vw - 48px - 12px) / 3.3);
-  }
-}
-
-@media (min-width: 600px) {
-  /* Tablet (600-899px) */
-  :root {
-    --home-page-padding: 20px;
-    --home-carousel-gap: 14px;
-    --home-card-width: 270px;
-  }
-}
-
-@media (min-width: 900px) {
-  /* Small Desktop (900-1119px) - 7 cards visible */
-  /* Container max-width: 960px, header+arrows: ~280px, available: ~680px */
-  /* Card width: (680 - 96 gaps) / 7 ≈ 83px, но используем больший размер для читаемости */
-  /* Используем фиксированную ширину карточки и ограничиваем контейнер */
-  :root {
-    --home-page-padding: 24px;
-    --home-carousel-gap: 16px;
-    --home-card-width: 200px;
-    /* Recently viewed: 5 cards visible on desktop */
-    /* Container: 960px, padding: 48px, available: 912px, gaps: 64px (4 gaps), cards: 848px / 5 ≈ 170px */
-    --recently-viewed-card-width: calc((960px - 48px - 64px) / 5);
-  }
-}
-
-@media (min-width: 1120px) {
-  /* Desktop (1120-1439px) - 7 cards visible */
-  /* Container max-width: 1120px, header+arrows: ~300px, available: ~820px */
-  /* Card width: (820 - 96) / 7 ≈ 103px */
+/* Desktop (>= 1024px) - unified desktop styles */
+@media (min-width: 1024px) {
   :root {
     --home-page-padding: 24px;
     --home-carousel-gap: 16px;
     --home-card-width: 220px;
     /* Recently viewed: 5 cards visible on desktop */
-    /* Container: 1120px, padding: 48px, available: 1072px, gaps: 64px, cards: 1008px / 5 ≈ 202px */
     --recently-viewed-card-width: calc((1120px - 48px - 64px) / 5);
-  }
-}
-
-@media (min-width: 1440px) {
-  /* Desktop XL (>= 1440px) - 7 cards visible */
-  /* Container max-width: 1440px, header+arrows: ~320px, available: ~1120px */
-  /* Card width: (1120 - 96) / 7 ≈ 146px */
-  :root {
-    --home-page-padding: 24px;
-    --home-carousel-gap: 16px;
-    --home-card-width: 185px;
-    /* Recently viewed: 5 cards visible on desktop */
-    /* Container: 1440px, padding: 48px, available: 1392px, gaps: 64px, cards: 1328px / 5 ≈ 266px */
-    --recently-viewed-card-width: calc((1440px - 48px - 64px) / 5);
-  }
-}
-
-@media (min-width: 1920px) {
-  /* Very Large Desktop (>= 1920px) - 7 cards visible */
-  /* Container max-width: 1920px, header+arrows: ~350px, available: ~1570px */
-  /* Card width: (1570 - 96) / 7 ≈ 210px */
-  :root {
-    --home-page-padding: 32px;
-    --home-carousel-gap: 16px;
-    --home-card-width: 220px;
-    /* Recently viewed: 5 cards visible on desktop */
-    /* Container: 1920px, padding: 64px, available: 1856px, gaps: 64px, cards: 1792px / 5 ≈ 358px */
-    --recently-viewed-card-width: calc((1920px - 64px - 64px) / 5);
   }
 }
 
@@ -378,22 +312,10 @@ button.gm-ui-hover-effect {
   flex-grow: 0 !important;
 }
 
-@media (min-width: 1120px) and (max-width: 1439px) {
+/* Desktop (>= 1024px) - unified desktop styles */
+@media (min-width: 1024px) {
   .map-list-container {
     width: 62.5% !important;
-  }
-}
-
-@media (min-width: 1440px) and (max-width: 1919px) {
-  .map-list-container {
-    width: 60% !important;
-  }
-}
-
-@media (min-width: 1920px) {
-  .map-list-container {
-    width: 1152px !important;
-    max-width: 1152px !important;
   }
 }
 

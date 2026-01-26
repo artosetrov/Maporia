@@ -37,14 +37,14 @@ export default function AvatarEditorPage() {
         .from("profiles")
         .select("avatar_url")
         .eq("id", user.id)
-        .single();
+        .single<{ avatar_url: string | null }>();
 
       if (profileError || !data) {
         router.push(`/profile/edit`);
         return;
       }
 
-      const currentAvatarUrl = data.avatar_url;
+      const currentAvatarUrl = data?.avatar_url ?? null;
       setAvatarUrl(currentAvatarUrl);
       setOriginalAvatarUrl(currentAvatarUrl);
       setLoading(false);
@@ -120,8 +120,8 @@ export default function AvatarEditorPage() {
     setSaving(true);
     setError(null);
 
-    const { error: updateError } = await supabase
-      .from("profiles")
+    const { error: updateError } = await (supabase
+      .from("profiles") as any)
       .update({ avatar_url: avatarUrl })
       .eq("id", user.id);
 
@@ -152,9 +152,9 @@ export default function AvatarEditorPage() {
     }
 
     // Update profile
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({ avatar_url: null })
+    const { error: updateError } = await (supabase
+      .from("profiles") as any)
+      .update({ avatar_url: null } as any)
       .eq("id", user.id);
 
     setUploading(false);
@@ -191,7 +191,7 @@ export default function AvatarEditorPage() {
   return (
     <main className="min-h-screen bg-white flex flex-col">
       {/* Desktop Header */}
-      <div className="hidden min-[900px]:block sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
+      <div className="hidden lg:block sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-2xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16">
             <button
@@ -208,7 +208,7 @@ export default function AvatarEditorPage() {
       </div>
 
       {/* Mobile Custom Header */}
-      <div className="min-[900px]:hidden fixed top-0 left-0 right-0 z-40 bg-white">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white">
         <div className="px-4 pt-safe-top pt-4 pb-4 flex items-center justify-between h-[64px]">
           <button
             onClick={handleCancel}
@@ -223,7 +223,7 @@ export default function AvatarEditorPage() {
       </div>
 
       {/* Body */}
-      <div className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-8 pt-[80px] min-[900px]:pt-8">
+      <div className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-8 pt-[80px] lg:pt-8">
         {error && (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50/50 p-3 text-sm text-red-700">
             {error}

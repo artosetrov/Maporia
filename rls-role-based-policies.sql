@@ -93,16 +93,35 @@ ON places
 FOR SELECT
 USING (auth.uid() = created_by);
 
+-- Policy: Everyone can view cover_url of premium places (for modal slider)
+-- This allows the premium upsell modal to show premium place covers
+-- Note: This policy allows viewing premium places, but the modal only uses cover_url
+-- Only uses fields that exist in the database: access_level and visibility
+DROP POLICY IF EXISTS "Everyone can view premium place covers" ON places;
+CREATE POLICY "Everyone can view premium place covers"
+ON places
+FOR SELECT
+USING (
+    cover_url IS NOT NULL
+    AND (
+        access_level = 'premium'
+        OR visibility = 'premium'
+    )
+);
+
 -- 3. PLACES TABLE - INSERT policies
 DROP POLICY IF EXISTS "Authenticated users can create public places" ON places;
 DROP POLICY IF EXISTS "Premium users and admins can create premium places" ON places;
+DROP POLICY IF EXISTS "Premium users and admins can create places" ON places;
+DROP POLICY IF EXISTS "Premium users and admins can create public places" ON places;
 
--- Policy: Authenticated users (standard, premium, admin) can create public places
-CREATE POLICY "Authenticated users can create public places"
+-- Policy: Premium users and admins can create public places
+CREATE POLICY "Premium users and admins can create public places"
 ON places
 FOR INSERT
 WITH CHECK (
     auth.uid() IS NOT NULL
+    AND has_premium_access() = TRUE
     AND (
         access_level IS NULL
         OR access_level != 'premium'

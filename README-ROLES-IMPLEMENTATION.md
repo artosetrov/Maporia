@@ -23,9 +23,9 @@ Maporia has exactly four user types:
   - All Guest permissions
   - Like places
   - Comment on places
-  - Add new places (public only)
   - View own profile
 - **Restrictions**:
+  - Cannot create places (only Premium and Admin can)
   - Cannot view premium-only places
   - Cannot add or edit premium places
 - **UX**: Premium content is visually locked with upgrade-to-premium CTA
@@ -217,8 +217,7 @@ The RLS policies enforce access control at the database level:
   - Users can always view their own places
 
 - **INSERT**:
-  - Authenticated users can create public places
-  - Only premium users and admins can create premium places
+  - Only premium users and admins can create places (both public and premium)
 
 - **UPDATE**:
   - Users can update their own places

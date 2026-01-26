@@ -580,10 +580,10 @@ export default function ExplorePage() {
       <div className="flex-1 min-h-0 pt-[64px] overflow-hidden">
         {/* Desktop XL & Desktop: Split view (≥1120px) - Airbnb-like responsive rules */}
         {/* On very large screens (>=1920px), container stretches to full width, map takes 100% of right side */}
-        <div className="hidden min-[1120px]:flex h-full max-w-[1920px] min-[1920px]:max-w-none mx-auto px-6">
+        <div className="hidden lg:flex h-full max-w-[1920px] lg:max-w-none mx-auto px-6">
           {/* Left: Scrollable list - 60% on XL (>=1440px), 62.5% on Desktop (1120-1439px) */}
           {/* On very large screens (>=1920px), list has fixed max-width, map stretches to fill remaining space */}
-          <div className="w-[62.5%] min-[1440px]:w-[60%] min-[1920px]:w-auto min-[1920px]:max-w-[1152px] overflow-y-auto scrollbar-hide pr-6">
+          <div className="w-[62.5%] lg:w-[60%] lg:w-auto lg:max-w-[1152px] overflow-y-auto scrollbar-hide pr-6">
             {/* Search and Filter Bar */}
             <div className="sticky top-0 z-30 bg-[#FAFAF7] pt-4 pb-3 border-b border-[#ECEEE4] mb-4">
               <div className="flex items-center gap-2 mb-2">
@@ -662,7 +662,7 @@ export default function ExplorePage() {
               </div>
             </div>
             {loading ? (
-              <div className="grid grid-cols-2 min-[1440px]:grid-cols-3 gap-6 min-[1440px]:gap-6 min-[1440px]:gap-y-7">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-6 lg:gap-y-7">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="w-full">
                     <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
@@ -678,7 +678,7 @@ export default function ExplorePage() {
             ) : places.length === 0 ? (
               <Empty text="No places with this vibe yet. Try fewer filters." />
             ) : (
-              <div className="grid grid-cols-2 min-[1440px]:grid-cols-3 gap-6 min-[1440px]:gap-6 min-[1440px]:gap-y-7">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-6 lg:gap-y-7">
                 {/* Airbnb-like responsive grid: 2 cols on desktop, 3 cols on XL */}
                 {/* Cards: min 320px, ideal 360-380px, max 420px */}
                 {places.map((p) => {
@@ -743,7 +743,7 @@ export default function ExplorePage() {
           </div>
 
           {/* Right: Sticky map - 37.5% on Desktop (1120-1439px), 40% on XL (1440-1919px), 100% of remaining on >=1920px */}
-          <div className="w-[37.5%] min-[1440px]:w-[40%] min-[1920px]:flex-1 h-full flex-shrink-0 max-w-full pb-8">
+          <div className="w-[37.5%] lg:w-[40%] lg:flex-1 h-full flex-shrink-0 max-w-full pb-8">
             <div className="sticky top-20 h-[calc(100vh-96px-32px)] rounded-2xl overflow-hidden w-full max-w-full">
               <MapView
                 places={places}
@@ -764,7 +764,7 @@ export default function ExplorePage() {
         </div>
 
         {/* Tablet Large: List only with Show Map button (900px - 1119px) */}
-        <div className="hidden min-[900px]:max-[1119px]:block h-full">
+        <div className="hidden max-lg:block h-full">
           <div className="max-w-[1920px] mx-auto px-5">
             {/* Search and Filter Bar */}
             <div className="sticky top-[64px] z-30 bg-[#faf9f7] pt-4 pb-3 border-b border-gray-200 mb-4">
@@ -866,7 +866,7 @@ export default function ExplorePage() {
         </div>
 
         {/* Tablet: List only (600px - 899px) */}
-        <div className="hidden min-[600px]:max-[899px]:block h-full">
+        <div className="hidden max-lg:block h-full">
           <div className="max-w-[680px] mx-auto px-6">
             {/* Search and Filter Bar */}
             <div className="sticky top-[64px] z-30 bg-[#faf9f7] pt-4 pb-3 border-b border-gray-200 mb-4">
@@ -966,7 +966,7 @@ export default function ExplorePage() {
         </div>
 
         {/* Mobile: List or Map view (< 600px) */}
-        <div className="min-[600px]:hidden h-full flex flex-col transition-opacity duration-300">
+        <div className="lg:hidden h-full flex flex-col transition-opacity duration-300">
           {/* Search and Filter for Mobile */}
           <div className="sticky top-[64px] z-30 bg-[#faf9f7] pb-4 -mt-4 px-6 flex-shrink-0">
             <div className="flex items-center gap-2 mb-2">

@@ -51,13 +51,15 @@ export default function AddressAutocomplete({
       const location = place.geometry.location;
       
       // Проверяем, является ли location объектом LatLng с методами
-      if (typeof location.lat === 'function') {
-        lat = location.lat();
-        lng = location.lng();
-      } else if (typeof location.lat === 'number') {
+      if (location && typeof (location as any).lat === 'function') {
+        const latLng = location as google.maps.LatLng;
+        lat = latLng.lat();
+        lng = latLng.lng();
+      } else if (location && typeof (location as any).lat === 'number') {
         // Если это объект с полями lat и lng
-        lat = location.lat;
-        lng = location.lng;
+        const coords = location as unknown as { lat: number; lng: number };
+        lat = coords.lat;
+        lng = coords.lng;
       }
     }
 

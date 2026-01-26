@@ -1,14 +1,16 @@
 "use client";
 
-import { ReactNode, useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
-import { CATEGORIES, DEFAULT_CITY } from "../constants";
+import { DEFAULT_CITY } from "../constants";
 import SearchBar from "./SearchBar";
 import SearchModal from "./SearchModal";
 import FavoriteIcon from "./FavoriteIcon";
 import Icon from "./Icon";
+import { useUserAccess } from "../hooks/useUserAccess";
+import { canUserAddPlace } from "../lib/access";
 
 type TopBarProps = {
   // Search bar props (only for /map page) - Airbnb style
@@ -90,6 +92,9 @@ export default function TopBar({
   const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+  // Получаем права пользователя
+  const { access } = useUserAccess();
+
   // Проверяем авторизацию
   useEffect(() => {
     (async () => {
@@ -105,6 +110,9 @@ export default function TopBar({
       subscription.unsubscribe();
     };
   }, []);
+
+  // Проверяем, может ли пользователь создавать места
+  const canAddPlace = canUserAddPlace(access);
 
   const navItems = [
     { href: "/", label: "Home" },
@@ -274,7 +282,7 @@ export default function TopBar({
                     
                     {/* View Toggle - только для страницы Map (скрыт на мобильной версии) */}
                     {view !== undefined && onViewChange && pathname === "/map" && (
-                      <div className="hidden min-[600px]:flex items-center gap-1 bg-white border border-[#ECEEE4] rounded-full p-1">
+                      <div className="hidden lg:flex items-center gap-1 bg-white border border-[#ECEEE4] rounded-full p-1">
                         <button
                           onClick={() => onViewChange("list")}
                           className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
@@ -304,7 +312,7 @@ export default function TopBar({
           </div>
           
           {/* Add Place button - fixed in top right corner (on profile page) */}
-          {pathname === "/profile" && shouldShowAddPlace && (
+          {pathname === "/profile" && shouldShowAddPlace && canAddPlace && (
             <Link
                 href="/add"
                 onClick={() => { if (navigator.vibrate) navigator.vibrate(10); }}
@@ -359,14 +367,6 @@ export default function TopBar({
                 {/* Authenticated: Switch to hosting + Avatar + Hamburger menu */}
                 {isAuthenticated && (userAvatar || userDisplayName || userEmail) && (
                   <>
-                    {/* Add gem - link to add place */}
-                    <Link
-                      href="/add"
-                      className="text-sm text-[#1F2A1F] hover:text-[#8F9E4F] transition-colors"
-                    >
-                      Add Gem
-                    </Link>
-                    
                     {/* Avatar - link to profile */}
                     <Link
                       href="/profile"
@@ -429,19 +429,22 @@ export default function TopBar({
                             }}
                           >
                             <div className="grid grid-cols-2 gap-2">
-                              <Link
-                                href="/add"
-                                onClick={() => {
-                                  setMenuOpen(false);
-                                  setMenuPosition(null);
-                                }}
-                                className="flex flex-col items-center justify-center p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
-                              >
-                                <div className="w-12 h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
-                                  <Icon name="add" size={24} className="text-[#1F2A1F]" />
-                                </div>
-                                <span className="text-xs font-medium text-[#1F2A1F] text-center">Add Gem</span>
-                              </Link>
+                              {/* Add Gem - only for Premium and Admin, first and highlighted */}
+                              {canAddPlace && (
+                                <Link
+                                  href="/add"
+                                  onClick={() => {
+                                    setMenuOpen(false);
+                                    setMenuPosition(null);
+                                  }}
+                                  className="flex flex-col items-center justify-center p-4 rounded-xl bg-[#8F9E4F] hover:bg-[#7A8A42] transition-colors group"
+                                >
+                                  <div className="w-12 h-12 rounded-full bg-white/20 group-hover:bg-white/30 flex items-center justify-center mb-2 transition-colors">
+                                    <Icon name="add" size={24} className="text-white" />
+                                  </div>
+                                  <span className="text-xs font-medium text-white text-center">Add Gem</span>
+                                </Link>
+                              )}
                               <Link
                                 href="/profile?section=trips"
                                 onClick={() => {
@@ -451,7 +454,7 @@ export default function TopBar({
                                 className="flex flex-col items-center justify-center p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
                               >
                                 <div className="w-12 h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
-                                  <FavoriteIcon isActive={true} size={24} />
+                                  <Icon name="favorite" size={24} className="text-[#1F2A1F]" />
                                 </div>
                                 <span className="text-xs font-medium text-[#1F2A1F] text-center">My favorites</span>
                               </Link>
@@ -490,10 +493,24 @@ export default function TopBar({
                                 className="flex flex-col items-center justify-center p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
                               >
                                 <div className="w-12 h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
-                                  <Icon name="clock" size={24} className="text-[#1F2A1F]" />
+                                  <Icon name="star" size={24} className="text-[#1F2A1F]" />
                                 </div>
                                 <span className="text-xs font-medium text-[#1F2A1F] text-center">Activity</span>
                               </Link>
+                              <button
+                                onClick={async () => {
+                                  await handleLogout();
+                                  setMenuOpen(false);
+                                  setMenuPosition(null);
+                                  router.push("/");
+                                }}
+                                className="flex flex-col items-center justify-center p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
+                              >
+                                <div className="w-12 h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
+                                  <Icon name="logout" size={24} className="text-[#1F2A1F]" />
+                                </div>
+                                <span className="text-xs font-medium text-[#1F2A1F] text-center">Log out</span>
+                              </button>
                             </div>
                           </div>
                         </div>

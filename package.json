@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "fix-rls": "node scripts/fix-rls-policies.mjs"
+    "fix-rls": "node scripts/fix-rls-policies.mjs",
+    "db:pull": "supabase db pull",
+    "db:push": "supabase db push",
+    "db:types": "supabase gen types typescript --linked > app/types/supabase.ts",
+    "db:types:local": "supabase gen types typescript --local > app/types/supabase.ts"
   },
   "dependencies": {
     "@fontsource/fraunces": "^5.2.9",

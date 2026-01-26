@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import Icon from "./Icon";
 
 interface MobileCarouselProps {
@@ -15,7 +15,7 @@ export default function MobileCarousel({
   photos,
   title,
   height = "56vh",
-  onShowAll,
+  onShowAll: _onShowAll,
   onPhotoClick,
 }: MobileCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -53,11 +53,14 @@ export default function MobileCarousel({
     setCurrentIndex(index);
   };
 
-  const goToPrevious = () => {
+  // Unused - kept for potential future use (keyboard navigation, etc.)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _goToPrevious = () => {
     setCurrentIndex((prev) => (prev > 0 ? prev - 1 : photos.length - 1));
   };
 
-  const goToNext = () => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _goToNext = () => {
     setCurrentIndex((prev) => (prev < photos.length - 1 ? prev + 1 : 0));
   };
 

@@ -45,8 +45,35 @@ export default function PhotosEditorPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropzoneRef = useRef<HTMLLabelElement>(null);
+  const menuRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent | TouchEvent) {
+      if (openMenuId) {
+        const menuElement = menuRefs.current.get(openMenuId);
+        const target = event.target as HTMLElement;
+        if (menuElement && !menuElement.contains(target)) {
+          // Check if click is on the menu button
+          if (!target.closest(`[data-menu-button="${openMenuId}"]`)) {
+            setOpenMenuId(null);
+          }
+        }
+      }
+    }
+
+    if (openMenuId) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("touchstart", handleClickOutside);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+        document.removeEventListener("touchstart", handleClickOutside);
+      };
+    }
+  }, [openMenuId]);
 
   // Load photos
   useEffect(() => {
@@ -365,7 +392,7 @@ export default function PhotosEditorPage() {
       <main className="min-h-screen bg-[#FAFAF7]">
         <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
           <div className="h-8 w-48 bg-[#ECEEE4] rounded animate-pulse" />
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="aspect-square bg-[#ECEEE4] rounded-xl animate-pulse" />
             ))}
@@ -403,7 +430,7 @@ export default function PhotosEditorPage() {
         )}
 
         {/* Photo Grid with Upload Dropzone */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {/* Upload Dropzone - same size as photos */}
           <label
             ref={dropzoneRef}
@@ -453,12 +480,65 @@ export default function PhotosEditorPage() {
                   </div>
                 )}
                 {photo.is_cover && (
-                  <div className="absolute top-2 left-2 rounded-full bg-[#8F9E4F] text-white text-[10px] px-2 py-0.5 font-medium">
+                  <div className="absolute top-2 left-2 rounded-full bg-[#8F9E4F] text-white text-[10px] px-2 py-0.5 font-medium z-10">
                     Cover
                   </div>
                 )}
+                {/* Menu button - visible on mobile, hidden on desktop (where hover works) */}
+                <button
+                  data-menu-button={photo.id}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setOpenMenuId(openMenuId === photo.id ? null : photo.id);
+                  }}
+                  className="lg:hidden absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center z-20 shadow-sm"
+                  aria-label="Photo options"
+                >
+                  <svg className="w-5 h-5 text-[#1F2A1F]" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                  </svg>
+                </button>
+                {/* Mobile Menu */}
+                {openMenuId === photo.id && (
+                  <div
+                    ref={(el) => {
+                      if (el) menuRefs.current.set(photo.id, el);
+                      else menuRefs.current.delete(photo.id);
+                    }}
+                    className="lg:hidden absolute top-10 right-2 bg-white rounded-xl border border-[#ECEEE4] shadow-lg z-30 min-w-[140px] overflow-hidden"
+                  >
+                    {!photo.is_cover && (
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setAsCover(photo.id);
+                          setOpenMenuId(null);
+                        }}
+                        className="w-full px-4 py-3 text-left text-sm text-[#1F2A1F] hover:bg-[#FAFAF7] transition-colors flex items-center gap-2"
+                      >
+                        <Icon name="star" size={16} className="text-[#1F2A1F]" />
+                        Set as cover
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        removePhoto(photo.id);
+                        setOpenMenuId(null);
+                      }}
+                      className="w-full px-4 py-3 text-left text-sm text-[#C96A5B] hover:bg-red-50 transition-colors flex items-center gap-2"
+                    >
+                      <Icon name="delete" size={16} className="text-[#C96A5B]" />
+                      Delete photo
+                    </button>
+                  </div>
+                )}
               </div>
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* Desktop hover overlay */}
+              <div className="hidden lg:block absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity">
                 <div className="absolute inset-0 bg-black/20 rounded-2xl" />
                 <div className="absolute bottom-2 left-2 right-2 flex gap-2">
                   {!photo.is_cover && (

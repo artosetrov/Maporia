@@ -12,9 +12,10 @@ import Icon from "../components/Icon";
 import PlaceCard from "../components/PlaceCard";
 import FavoriteIcon from "../components/FavoriteIcon";
 import { useUserAccess } from "../hooks/useUserAccess";
-import { isUserAdmin, isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
+import { isUserAdmin, isPlacePremium, canUserViewPlace, canUserAddPlace, type UserAccess } from "../lib/access";
 import { DEFAULT_CITY } from "../constants";
 import PremiumUpsellModal from "../components/PremiumUpsellModal";
+import PremiumBadge from "../components/PremiumBadge";
 import { getRecentlyViewedPlaceIds } from "../utils";
 
 type Place = {
@@ -300,8 +301,14 @@ function ProfileInner() {
     }
   }, [pendingFilters, selectedCity, searchValue, router]);
   
+  // Get user access for permission checks
+  const { access } = useUserAccess();
+  
   // Admin access check - use profile data from useEffect
   const isAdmin = userIsAdmin || userRole === 'admin';
+  
+  // Check if user can add places
+  const canAddPlace = canUserAddPlace(access);
 
   const stats = useMemo(() => {
     return {
@@ -733,7 +740,7 @@ function ProfileInner() {
   return (
     <main className="min-h-screen bg-white">
       {/* Desktop TopBar */}
-      <div className="hidden min-[900px]:block">
+      <div className="hidden lg:block">
         <TopBar
           showSearchBar={true}
           searchValue={searchValue}
@@ -779,7 +786,7 @@ function ProfileInner() {
       />
 
       {/* Mobile Custom Header */}
-      <div className="min-[900px]:hidden fixed top-0 left-0 right-0 z-40 bg-white">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white">
         <div className="px-4 pt-safe-top pt-4 pb-4 flex items-center justify-between h-[64px]">
           {section === "about" ? (
             <>
@@ -870,9 +877,9 @@ function ProfileInner() {
         }}
       />
 
-      <div className="pt-[64px] min-[900px]:pt-[80px]">
+      <div className="pt-[64px] lg:pt-[80px]">
         {/* Desktop Layout */}
-        <div className="hidden min-[900px]:flex min-h-[calc(100vh-80px)]">
+        <div className="hidden lg:flex min-h-[calc(100vh-80px)]">
           {/* Left Sidebar */}
           <aside className="w-64 border-r border-[#ECEEE4] bg-white flex-shrink-0">
             <div className="sticky top-[80px] p-6">
@@ -942,7 +949,7 @@ function ProfileInner() {
                       : "text-[#6F7A5A] hover:bg-[#FAFAF7]"
                   )}
                 >
-                  <Icon name="clock" size={24} className="flex-shrink-0" />
+                  <Icon name="star" size={24} className="flex-shrink-0" />
                   <span>Activity</span>
                 </button>
                 {isAdmin && (
@@ -1022,6 +1029,10 @@ function ProfileInner() {
                   searchValue={searchValue}
                   selectedCity={selectedCity}
                   activeFilters={activeFilters}
+                  canAddPlace={canAddPlace}
+                  onPlaceDeleted={(placeId) => {
+                    setAdded((prev) => prev.filter((p) => p.id !== placeId));
+                  }}
                 />
               )}
               {section === "history" && (
@@ -1041,7 +1052,7 @@ function ProfileInner() {
         </div>
 
         {/* Mobile Layout */}
-        <div className="min-[900px]:hidden">
+        <div className="lg:hidden">
           {section === "trips" || section === "added" || section === "history" || section === "activity" || (section === "users" && isAdmin) || (section === "elements" && isAdmin) ? (
             // Show section content on mobile
             <div className={`px-6 py-6 ${section === "activity" || section === "added" || (section === "users" && isAdmin) || (section === "elements" && isAdmin) ? "pt-[48px]" : "pt-[80px]"}`}>
@@ -1065,6 +1076,10 @@ function ProfileInner() {
                   searchValue={searchValue}
                   selectedCity={selectedCity}
                   activeFilters={activeFilters}
+                  canAddPlace={canAddPlace}
+                  onPlaceDeleted={(placeId) => {
+                    setAdded((prev) => prev.filter((p) => p.id !== placeId));
+                  }}
                 />
               )}
               {section === "history" && (
@@ -1262,62 +1277,101 @@ function ProfileInner() {
                       </div>
                       <div className="text-sm font-medium text-[#1F2A1F] text-center">Added places</div>
                     </button>
+
+                    {/* History */}
+                    <button
+                      onClick={() => setSection("history")}
+                      className="bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md transition group"
+                    >
+                      <div className="aspect-[4/3] rounded-xl overflow-visible bg-white mb-3 relative" style={{ minHeight: '120px' }}>
+                        {recentlyViewed.length > 0 ? (
+                          <div className="relative w-full h-full" style={{ padding: '8px' }}>
+                            {/* Display up to 2 overlapping, rotated images */}
+                            {recentlyViewed.slice(0, 2).map((place, index) => {
+                              const rotation = index === 0 ? -5 : 5;
+                              const offsetX = index === 0 ? -8 : 8;
+                              const offsetY = index === 0 ? 0 : -5;
+                              const zIndex = recentlyViewed.length - index;
+                              
+                              return place.cover_url ? (
+                                <div
+                                  key={place.id}
+                                  className="absolute rounded-lg overflow-hidden shadow-lg border-2 border-white"
+                                  style={{
+                                    width: '50%',
+                                    height: '50%',
+                                    transform: `translateX(-50%) translateY(-50%) rotate(${rotation}deg) translate(${offsetX}px, ${offsetY}px)`,
+                                    transformOrigin: 'center center',
+                                    zIndex: zIndex,
+                                    left: '50%',
+                                    top: '50%',
+                                  }}
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={place.cover_url}
+                                    alt={place.title}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                              ) : null;
+                            })}
+                            {/* Show count badge if more than 2 images */}
+                            {recentlyViewed.length > 2 && (
+                              <div 
+                                className="absolute top-2 right-2 bg-white/95 backdrop-blur-sm rounded-lg px-2 py-1 text-xs font-medium text-[#1F2A1F] badge-shadow z-10"
+                                style={{ zIndex: 10 }}
+                              >
+                                +{recentlyViewed.length - 2}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Icon name="clock" size={24} className="text-[#A8B096]" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-sm font-medium text-[#1F2A1F] text-center">History</div>
+                    </button>
+
+                    {/* Activity */}
+                    <button
+                      onClick={() => setSection("activity")}
+                      className="bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md transition group"
+                    >
+                      <div className="aspect-[4/3] rounded-xl overflow-visible bg-white mb-3 relative flex items-center justify-center" style={{ minHeight: '120px' }}>
+                        <Icon name="star" size={32} className="text-[#A8B096]" />
+                      </div>
+                      <div className="text-sm font-medium text-[#1F2A1F] text-center">Activity</div>
+                    </button>
+
+                    {/* Users - Admin only */}
+                    {isAdmin && (
+                      <button
+                        onClick={() => setSection("users")}
+                        className="bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md transition group"
+                      >
+                        <div className="aspect-[4/3] rounded-xl overflow-visible bg-white mb-3 relative flex items-center justify-center" style={{ minHeight: '120px' }}>
+                          <Icon name="users" size={32} className="text-[#A8B096]" />
+                        </div>
+                        <div className="text-sm font-medium text-[#1F2A1F] text-center">Users</div>
+                      </button>
+                    )}
+
+                    {/* Elements - Admin only */}
+                    {isAdmin && (
+                      <button
+                        onClick={() => setSection("elements")}
+                        className="bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md transition group"
+                      >
+                        <div className="aspect-[4/3] rounded-xl overflow-visible bg-white mb-3 relative flex items-center justify-center" style={{ minHeight: '120px' }}>
+                          <Icon name="package" size={32} className="text-[#A8B096]" />
+                        </div>
+                        <div className="text-sm font-medium text-[#1F2A1F] text-center">Elements</div>
+                      </button>
+                    )}
                   </div>
-
-                  {/* Activity Card */}
-                  <button
-                    onClick={() => setSection("activity")}
-                    className="w-full py-4 transition text-left"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Icon name="clock" size={24} className="text-[#1F2A1F] flex-shrink-0" />
-                        <div>
-                          <div className="text-sm font-medium text-[#1F2A1F]">Activity</div>
-                          <div className="text-xs text-[#6F7A5A]">View your recent activity</div>
-                        </div>
-                      </div>
-                      <Icon name="forward" size={20} className="text-[#A8B096]" />
-                    </div>
-                  </button>
-
-                  {/* Users - Admin only */}
-                  {isAdmin && (
-                    <button
-                      onClick={() => setSection("users")}
-                      className="w-full py-4 transition text-left"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Icon name="users" size={24} className="text-[#1F2A1F] flex-shrink-0" />
-                          <div>
-                            <div className="text-sm font-medium text-[#1F2A1F]">Users</div>
-                            <div className="text-xs text-[#6F7A5A]">Manage users</div>
-                          </div>
-                        </div>
-                        <Icon name="forward" size={20} className="text-[#A8B096]" />
-                      </div>
-                    </button>
-                  )}
-
-                  {/* Elements - Admin only */}
-                  {isAdmin && (
-                    <button
-                      onClick={() => setSection("elements")}
-                      className="w-full py-4 transition text-left"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Icon name="package" size={24} className="text-[#1F2A1F] flex-shrink-0" />
-                          <div>
-                            <div className="text-sm font-medium text-[#1F2A1F]">Elements</div>
-                            <div className="text-xs text-[#6F7A5A]">Manage elements</div>
-                          </div>
-                        </div>
-                        <Icon name="forward" size={20} className="text-[#A8B096]" />
-                      </div>
-                    </button>
-                  )}
                 </>
               )}
             </div>
@@ -1650,51 +1704,6 @@ function AboutSection({
         </div>
       )}
 
-      {/* Reviews I've written */}
-      {reviewsWritten.length > 0 && (
-        <div>
-          <div className="flex items-center gap-2 mb-4">
-            <svg className="w-5 h-5 text-[#6F7A5A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            <h3 className="text-2xl font-semibold font-fraunces text-[#1F2A1F]">Reviews I've written</h3>
-          </div>
-          <div className="space-y-6">
-            {reviewsWritten.slice(0, 5).map((review) => (
-              <ReviewCard key={review.id} review={review} />
-            ))}
-            {reviewsWritten.length > 5 && (
-              <button className="text-sm text-[#6F7A5A] hover:text-[#1F2A1F] transition">
-                Show all reviews
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Admin Section */}
-      {isAdmin && (
-        <div className="mt-8 pt-8 border-t border-[#ECEEE4]">
-          <h3 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-4">Admin Tools</h3>
-          <Link
-            href="/brand-guide"
-            className="block rounded-xl border border-[#ECEEE4] bg-white p-5 hover:shadow-md transition group"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4] flex items-center justify-center">
-                  <Icon name="package" size={20} className="text-[#8F9E4F]" />
-                </div>
-                <div>
-                  <div className="font-semibold text-[#1F2A1F]">Brand Guide</div>
-                  <div className="text-sm text-[#6F7A5A]">Complete design system and brand guidelines</div>
-                </div>
-              </div>
-              <Icon name="forward" size={20} className="text-[#A8B096] group-hover:text-[#6F7A5A] transition" />
-            </div>
-          </Link>
-        </div>
-      )}
     </div>
   );
 }
@@ -1837,8 +1846,8 @@ function TripsSection({
 
   return (
     <div>
-      <h1 className="hidden min-[900px]:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">My favorites</h1>
-      <div className="grid grid-cols-1 min-[900px]:grid-cols-4 gap-6">
+      <h1 className="hidden lg:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">My favorites</h1>
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         {places.map((place) => {
           const hauntedGemIndex = lockedPlacesMap.get(place.id);
           return (
@@ -1875,15 +1884,114 @@ function AddedPlacesSection({
   loading,
   searchValue,
   selectedCity,
-  activeFilters
+  activeFilters,
+  canAddPlace = false,
+  onPlaceDeleted
 }: { 
   places: Place[]; 
   loading: boolean;
   searchValue?: string;
   selectedCity?: string | null;
   activeFilters?: ActiveFilters;
+  canAddPlace?: boolean;
+  onPlaceDeleted?: (placeId: string) => void;
 }) {
   const router = useRouter();
+  const { access, user } = useUserAccess();
+  const [deletingPlaceId, setDeletingPlaceId] = useState<string | null>(null);
+
+  async function handleDelete(placeId: string, placeTitle: string) {
+    if (!user) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${placeTitle || 'this place'}"? This action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+
+    setDeletingPlaceId(placeId);
+
+    try {
+      // Step 1: Get all photos to delete from storage
+      const { data: photosData } = await supabase
+        .from("place_photos")
+        .select("url")
+        .eq("place_id", placeId);
+
+      // Step 2: Delete photos from storage (if they exist in storage bucket)
+      if (photosData && photosData.length > 0) {
+        const photoUrls = photosData.map((p) => p.url).filter(Boolean) as string[];
+        const bucketName = 'place-photos';
+        
+        for (const url of photoUrls) {
+          try {
+            if (url.includes('supabase.co/storage')) {
+              const storageMatch = url.match(/\/place-photos\/(.+)$/);
+              if (storageMatch && storageMatch[1]) {
+                const filePath = storageMatch[1];
+                const { error: storageError } = await supabase.storage
+                  .from(bucketName)
+                  .remove([filePath]);
+                
+                if (storageError) {
+                  console.warn(`Failed to delete photo from storage: ${filePath}`, storageError);
+                }
+              }
+            }
+          } catch (storageErr) {
+            console.warn("Error deleting photo from storage:", storageErr);
+          }
+        }
+      }
+
+      // Step 3: Delete related data from database
+      const [photosResult, commentsResult, reactionsResult] = await Promise.all([
+        supabase.from("place_photos").delete().eq("place_id", placeId),
+        supabase.from("comments").delete().eq("place_id", placeId),
+        supabase.from("reactions").delete().eq("place_id", placeId),
+      ]);
+
+      if (photosResult.error) {
+        console.warn("Error deleting place_photos:", photosResult.error);
+      }
+      if (commentsResult.error) {
+        console.warn("Error deleting comments:", commentsResult.error);
+      }
+      if (reactionsResult.error) {
+        console.warn("Error deleting reactions:", reactionsResult.error);
+      }
+
+      // Step 4: Delete the place itself
+      const currentIsAdmin = isUserAdmin(access);
+      const deleteQuery = supabase
+        .from("places")
+        .delete()
+        .eq("id", placeId);
+      
+      if (!currentIsAdmin) {
+        deleteQuery.eq("created_by", user.id);
+      }
+      
+      const { error: deleteError } = await deleteQuery;
+
+      if (deleteError) {
+        console.error("Delete error:", deleteError);
+        alert(deleteError.message || "Failed to delete place");
+        setDeletingPlaceId(null);
+        return;
+      }
+
+      // Call callback to update parent state
+      if (onPlaceDeleted) {
+        onPlaceDeleted(placeId);
+      }
+    } catch (err) {
+      console.error("Exception deleting place:", err);
+      alert(err instanceof Error ? err.message : "Failed to delete place");
+    } finally {
+      setDeletingPlaceId(null);
+    }
+  }
 
   if (loading) {
     return (
@@ -1906,20 +2014,22 @@ function AddedPlacesSection({
     const hasFilters = searchValue || (selectedCity && selectedCity !== DEFAULT_CITY) || (activeFilters?.categories && activeFilters.categories.length > 0);
     return (
       <div>
-        <h1 className="hidden min-[900px]:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Added places</h1>
+        <h1 className="hidden lg:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Added places</h1>
         
-        {/* Add new place button - mobile only */}
-        <div className="min-[900px]:hidden mb-6">
-          <Link
-            href="/add"
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] active:bg-[#556036] transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            <span>Add new place</span>
-          </Link>
-        </div>
+        {/* Add new place button - mobile only (only for Premium and Admin) */}
+        {canAddPlace && (
+          <div className="lg:hidden mb-6">
+            <Link
+              href="/add"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] active:bg-[#556036] transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span>Add new place</span>
+            </Link>
+          </div>
+        )}
 
         <div className="text-center py-16 text-[#6F7A5A]">
           {hasFilters ? "No places match your filters" : "You haven't added any places yet"}
@@ -1930,60 +2040,85 @@ function AddedPlacesSection({
 
   return (
     <div>
-      <h1 className="hidden min-[900px]:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Added places</h1>
+      <h1 className="hidden lg:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Added places</h1>
       
-      {/* Add new place button - mobile only */}
-      <div className="min-[900px]:hidden mb-6">
-        <Link
-          href="/add"
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] active:bg-[#556036] transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          <span>Add new place</span>
-        </Link>
-      </div>
+      {/* Add new place button - mobile only (only for Premium and Admin) */}
+      {canAddPlace && (
+        <div className="lg:hidden mb-6">
+          <Link
+            href="/add"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] active:bg-[#556036] transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Add new place</span>
+          </Link>
+        </div>
+      )}
 
-      <div className="grid grid-cols-1 min-[900px]:grid-cols-4 gap-6">
-        {places.map((place) => (
-          <div key={place.id} className="group relative">
-            <Link href={`/id/${place.id}`}>
-              <div className="aspect-[4/3] rounded-xl overflow-hidden bg-[#FAFAF7] mb-2 relative">
-                {place.cover_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={place.cover_url}
-                    alt={place.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <svg className="w-12 h-12 text-[#A8B096]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        {places.map((place) => {
+          const isPremium = isPlacePremium(place);
+          return (
+            <div key={place.id} className="group relative">
+              <Link href={`/id/${place.id}`}>
+                <div className="aspect-[4/3] rounded-xl overflow-hidden bg-[#FAFAF7] mb-2 relative">
+                  {place.cover_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={place.cover_url}
+                      alt={place.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <svg className="w-12 h-12 text-[#A8B096]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                  )}
+                  {/* Premium Badge */}
+                  {isPremium && (
+                    <div className="absolute top-2 left-2 z-20">
+                      <PremiumBadge />
+                    </div>
+                  )}
+                  {/* Edit and Delete buttons - appear on hover */}
+                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-2 z-10">
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        router.push(`/places/${place.id}/edit`);
+                      }}
+                      className="bg-white/90 backdrop-blur-sm rounded-lg p-2 badge-shadow hover:bg-white transition-colors"
+                      aria-label="Edit place"
+                    >
+                      <Icon name="edit" size={20} className="text-[#1F2A1F]" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleDelete(place.id, place.title);
+                      }}
+                      disabled={deletingPlaceId === place.id}
+                      className="bg-white/90 backdrop-blur-sm rounded-lg p-2 badge-shadow hover:bg-white transition-colors disabled:opacity-50"
+                      aria-label="Delete place"
+                    >
+                      <Icon name="delete" size={20} className="text-[#C96A5B]" />
+                    </button>
                   </div>
-                )}
-                {/* Edit button - appears on hover */}
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    router.push(`/places/${place.id}/edit`);
-                  }}
-                  className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/90 backdrop-blur-sm rounded-lg p-2 badge-shadow hover:bg-white z-10"
-                  aria-label="Edit place"
-                >
-                  <Icon name="edit" size={20} className="text-[#1F2A1F]" />
-                </button>
-              </div>
-              <div>
-                <h3 className="text-sm font-medium font-fraunces text-[#1F2A1F] mb-1 line-clamp-1">{place.title}</h3>
-                {place.city && <p className="text-xs text-[#6F7A5A]">{place.city}</p>}
-              </div>
-            </Link>
-          </div>
-        ))}
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium font-fraunces text-[#1F2A1F] mb-1 line-clamp-1">{place.title}</h3>
+                  {place.city && <p className="text-xs text-[#6F7A5A]">{place.city}</p>}
+                </div>
+              </Link>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -2020,7 +2155,7 @@ function ActivitySection({
   if (activity.length === 0) {
     return (
       <div>
-        <h1 className="hidden min-[900px]:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Activity</h1>
+        <h1 className="hidden lg:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Activity</h1>
         <div className="text-center py-16 text-[#6F7A5A]">No activity yet</div>
       </div>
     );
@@ -2028,7 +2163,7 @@ function ActivitySection({
 
   return (
     <div>
-      <h1 className="hidden min-[900px]:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Activity</h1>
+      <h1 className="hidden lg:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Activity</h1>
       <div className="space-y-0">
         {activity.slice(0, 50).map((a, idx) => (
           <ActivityCard
@@ -2103,7 +2238,7 @@ function HistorySection({
   if (places.length === 0) {
     return (
       <div>
-        <h1 className="hidden min-[900px]:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">History</h1>
+        <h1 className="hidden lg:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">History</h1>
         <div className="text-center py-16 text-[#6F7A5A]">No recently viewed places</div>
       </div>
     );
@@ -2111,8 +2246,8 @@ function HistorySection({
 
   return (
     <div>
-      <h1 className="hidden min-[900px]:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">History</h1>
-      <div className="grid grid-cols-1 min-[900px]:grid-cols-4 gap-6">
+      <h1 className="hidden lg:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">History</h1>
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         {places.map((place) => {
           const hauntedGemIndex = lockedPlacesMap.get(place.id);
           return (
@@ -2293,7 +2428,7 @@ function ElementsSection() {
   return (
     <div>
       {/* Header */}
-      <div className="hidden min-[900px]:flex items-center justify-between mb-8">
+      <div className="hidden lg:flex items-center justify-between mb-8">
         <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F]">Elements</h1>
       </div>
 
@@ -2330,7 +2465,7 @@ function ElementsSection() {
                   Settings saved successfully! Changes will apply to all premium modal windows.
                 </div>
               )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Title */}
                 <div>
                   <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Title</label>
@@ -2354,7 +2489,7 @@ function ElementsSection() {
                 </div>
 
                 {/* Subtitle */}
-                <div className="md:col-span-2">
+                <div className="lg:col-span-2">
                   <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Subtitle</label>
                   <textarea
                     value={modalContent.subtitle}
@@ -2365,10 +2500,10 @@ function ElementsSection() {
                 </div>
 
                 {/* Benefits */}
-                <div className="md:col-span-2">
+                <div className="lg:col-span-2">
                   <h4 className="text-sm font-semibold text-[#1F2A1F] mb-3">Benefits</h4>
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 1 - Title</label>
                         <input
@@ -2388,7 +2523,7 @@ function ElementsSection() {
                         />
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 2 - Title</label>
                         <input
@@ -2408,7 +2543,7 @@ function ElementsSection() {
                         />
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 3 - Title</label>
                         <input
@@ -2432,7 +2567,7 @@ function ElementsSection() {
                 </div>
 
                 {/* Social Proof */}
-                <div className="md:col-span-2">
+                <div className="lg:col-span-2">
                   <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Social Proof</label>
                   <input
                     type="text"
@@ -2580,6 +2715,25 @@ function ElementsSection() {
             </div>
           )}
         </div>
+
+        {/* Brand Guide */}
+        <Link
+          href="/brand-guide"
+          className="block rounded-xl border border-[#ECEEE4] bg-white p-6 hover:shadow-md transition group"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4] flex items-center justify-center">
+                <Icon name="package" size={24} className="text-[#8F9E4F]" />
+              </div>
+              <div>
+                <div className="font-semibold text-[#1F2A1F] mb-1">Brand Guide</div>
+                <div className="text-sm text-[#6F7A5A]">Complete design system and brand guidelines</div>
+              </div>
+            </div>
+            <Icon name="forward" size={20} className="text-[#A8B096] group-hover:text-[#6F7A5A] transition" />
+          </div>
+        </Link>
       </div>
 
       {/* Modal Preview with Custom Content */}
@@ -2765,7 +2919,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
   if (loading || usersLoading) {
     return (
       <div>
-        <h1 className="hidden min-[900px]:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Users</h1>
+        <h1 className="hidden lg:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Users</h1>
         <div className="space-y-4">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="bg-white border border-[#ECEEE4] rounded-2xl p-6">
@@ -2785,7 +2939,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
 
   return (
     <div>
-      <h1 className="hidden min-[900px]:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Users</h1>
+      <h1 className="hidden lg:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Users</h1>
       
       {error && (
         <div className="mb-4 p-4 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm">
@@ -2941,7 +3095,7 @@ function ActivityCard({ item, userAvatar, userName }: { item: ActivityItem; user
   return (
     <Link
       href={`/id/${item.placeId}`}
-      className="block w-full py-4 min-[900px]:py-5 px-6 hover:bg-[#FAFAF7] transition-colors border-b border-[#ECEEE4] last:border-b-0"
+      className="block w-full py-4 lg:py-5 px-6 hover:bg-[#FAFAF7] transition-colors border-b border-[#ECEEE4] last:border-b-0"
     >
       <div className="flex items-start gap-6">
         {/* Action Icon слева */}
@@ -2962,7 +3116,7 @@ function ActivityCard({ item, userAvatar, userName }: { item: ActivityItem; user
           {/* Place preview */}
           <div className="flex items-center gap-3">
             {item.coverUrl ? (
-              <div className="w-16 h-16 min-[900px]:w-20 min-[900px]:h-20 rounded-lg bg-[#FAFAF7] overflow-hidden flex-shrink-0">
+              <div className="w-16 h-16 lg:w-20 lg:h-20 rounded-lg bg-[#FAFAF7] overflow-hidden flex-shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={item.coverUrl}
@@ -2971,7 +3125,7 @@ function ActivityCard({ item, userAvatar, userName }: { item: ActivityItem; user
                 />
               </div>
             ) : (
-              <div className="w-16 h-16 min-[900px]:w-20 min-[900px]:h-20 rounded-lg bg-[#FAFAF7] flex items-center justify-center flex-shrink-0">
+              <div className="w-16 h-16 lg:w-20 lg:h-20 rounded-lg bg-[#FAFAF7] flex items-center justify-center flex-shrink-0">
                 <Icon name="photo" size={24} className="text-[#A8B096]" />
               </div>
             )}

@@ -95,21 +95,27 @@ export type IconName =
   | "maximize"
   | "minimize"
   | "briefcase"
-  | "calendar-days";
+  | "calendar-days"
+  | "mail";
 
 type IconProps = {
   name: IconName;
-  size?: 16 | 20 | 24;
+  size?: 12 | 14 | 16 | 20 | 24 | 32 | 48 | 64;
   className?: string;
   strokeWidth?: number;
   filled?: boolean; // For icons that can be filled (heart, favorite, star)
   active?: boolean; // For icons with active state
 };
 
-const sizeMap = {
+const sizeMap: Record<number, string> = {
+  12: "w-3 h-3",
+  14: "w-3.5 h-3.5",
   16: "w-4 h-4",
   20: "w-5 h-5",
   24: "w-6 h-6",
+  32: "w-8 h-8",
+  48: "w-12 h-12",
+  64: "w-16 h-16",
 };
 
 export default function Icon({
@@ -527,6 +533,14 @@ export default function Icon({
         strokeLinejoin="round"
         strokeWidth={strokeWidth}
         d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+      />
+    ),
+    mail: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={strokeWidth}
+        d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
       />
     ),
   };
