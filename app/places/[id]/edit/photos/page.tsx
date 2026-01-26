@@ -403,7 +403,7 @@ export default function PhotosEditorPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
+    <main className="min-h-screen bg-[#FAFAF7]">
       {/* Header */}
       <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
@@ -422,7 +422,7 @@ export default function PhotosEditorPage() {
       </div>
 
       {/* Body */}
-      <div className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 py-6">
+      <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 pb-24">
         {error && (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50/50 p-3 text-sm text-red-700">
             {error}

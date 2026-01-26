@@ -9,7 +9,7 @@ import HomeSection from "./components/HomeSection";
 import FiltersModal, { ActiveFilters } from "./components/FiltersModal";
 import SearchModal from "./components/SearchModal";
 import { HOME_SECTIONS } from "./constants/homeSections";
-import { supabase } from "./lib/supabase";
+import { supabase, hasValidSupabaseConfig } from "./lib/supabase";
 import { DEFAULT_CITY } from "./constants";
 import { useUserAccess } from "./hooks/useUserAccess";
 
@@ -40,6 +40,13 @@ export default function HomePage() {
   const userEmail = user?.email ?? null;
   const userDisplayName = profile?.display_name ?? (userEmail ? userEmail.split("@")[0] : null);
   const userAvatar = profile?.avatar_url ?? null;
+
+  // Check Supabase configuration
+  useEffect(() => {
+    if (!hasValidSupabaseConfig) {
+      console.error('[HomePage] Supabase configuration is missing. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.');
+    }
+  }, []);
 
   // Wait for bootstrap to complete before rendering sections
   useEffect(() => {

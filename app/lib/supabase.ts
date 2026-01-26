@@ -5,13 +5,27 @@ import type { Database } from "../types/supabase";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+// Log environment variable status (without values for security)
+if (typeof window !== 'undefined') {
+  console.log('[Supabase] Environment check:', {
+    hasUrl: !!supabaseUrl,
+    hasKey: !!supabaseAnonKey,
+    urlLength: supabaseUrl?.length || 0,
+    keyLength: supabaseAnonKey?.length || 0,
+  });
+}
+
 if (!supabaseUrl) {
   const error = "Missing NEXT_PUBLIC_SUPABASE_URL environment variable";
   console.error("❌", error);
   if (typeof window !== 'undefined') {
     console.error("This error will prevent the app from working. Please set NEXT_PUBLIC_SUPABASE_URL in your environment variables.");
+    // Don't throw in browser - allow app to render with error state
+    // This prevents complete app failure on production
+  } else {
+    // Throw on server side to fail fast during build
+    throw new Error(error);
   }
-  throw new Error(error);
 }
 
 if (!supabaseAnonKey) {
@@ -19,13 +33,25 @@ if (!supabaseAnonKey) {
   console.error("❌", error);
   if (typeof window !== 'undefined') {
     console.error("This error will prevent the app from working. Please set NEXT_PUBLIC_SUPABASE_ANON_KEY in your environment variables.");
+    // Don't throw in browser - allow app to render with error state
+  } else {
+    // Throw on server side to fail fast during build
+    throw new Error(error);
   }
-  throw new Error(error);
 }
+
+// Check if we have valid environment variables
+export const hasValidSupabaseConfig = !!(supabaseUrl && supabaseAnonKey);
+
+// Create Supabase client - use actual values if available, otherwise placeholder
+// This prevents app crash on production if env vars are not set
+// The app will show an error message instead of crashing
+const safeUrl = supabaseUrl || 'https://placeholder.supabase.co';
+const safeKey = supabaseAnonKey || 'placeholder-key';
 
 // Единый экземпляр Supabase клиента для всего приложения
 // Typed with Database schema for type-safe queries
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient<Database>(safeUrl, safeKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
