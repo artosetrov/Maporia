@@ -14,6 +14,26 @@ export function ProductionDiagnostics() {
       return;
     }
 
+    // Handle unhandled promise rejections globally
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      // Silently ignore AbortError
+      if (event.reason && (
+        event.reason.name === 'AbortError' ||
+        event.reason.message?.includes('abort') ||
+        event.reason.message?.includes('signal is aborted')
+      )) {
+        event.preventDefault();
+        return;
+      }
+      // Log other unhandled rejections for debugging
+      console.error('Unhandled promise rejection:', {
+        reason: event.reason?.message || String(event.reason),
+        name: event.reason?.name,
+      });
+    };
+
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
     // Log initial diagnostics
     logProductionDiagnostics();
 
@@ -74,6 +94,8 @@ export function ProductionDiagnostics() {
       clearTimeout(timeout);
       // Restore original fetch (though this component shouldn't unmount)
       window.fetch = originalFetch;
+      // Remove unhandled rejection handler
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
   }, []);
 

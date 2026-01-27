@@ -92,10 +92,22 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
     userAgent: navigator.userAgent.substring(0, 50),
   });
   
-  // Test connection immediately
+  // Test connection immediately with timeout and proper error handling
+  const sessionCheckTimeout = setTimeout(() => {
+    console.warn('[Supabase] Initial session check timed out');
+  }, 5000);
+  
   supabase.auth.getSession().then(({ data, error }) => {
+    clearTimeout(sessionCheckTimeout);
     if (error) {
-      console.error('[Supabase] Initial session check failed:', error.message);
+      // Silently ignore AbortError
+      if (error.message?.includes('abort') || error.name === 'AbortError') {
+        return;
+      }
+      console.error('[Supabase] Initial session check failed:', {
+        message: error.message,
+        name: error.name,
+      });
     } else {
       console.log('[Supabase] Initial session check:', {
         hasSession: !!data.session,
@@ -103,7 +115,15 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
       });
     }
   }).catch((err) => {
-    console.error('[Supabase] Initial session check exception:', err);
+    clearTimeout(sessionCheckTimeout);
+    // Silently ignore AbortError
+    if (err?.name === 'AbortError' || err?.message?.includes('abort') || err?.message?.includes('signal is aborted')) {
+      return;
+    }
+    console.error('[Supabase] Initial session check exception:', {
+      name: err?.name,
+      message: err?.message,
+    });
   });
 }
 

@@ -67,7 +67,16 @@ export async function logSupabaseStatus(supabase: any) {
   }
 
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Session check timeout')), 5000);
+    });
+    
+    const sessionPromise = supabase.auth.getSession();
+    const { data: sessionData, error: sessionError } = await Promise.race([
+      sessionPromise,
+      timeoutPromise,
+    ]) as any;
     
     console.group('🔐 Supabase Status');
     console.log('Session:', {
@@ -81,7 +90,17 @@ export async function logSupabaseStatus(supabase: any) {
     });
     console.groupEnd();
   } catch (err: any) {
-    console.error('❌ Error checking Supabase status:', err);
+    // Silently ignore AbortError and timeout
+    if (err?.name === 'AbortError' || 
+        err?.message?.includes('abort') || 
+        err?.message?.includes('signal is aborted') ||
+        err?.message?.includes('timeout')) {
+      return;
+    }
+    console.error('❌ Error checking Supabase status:', {
+      name: err?.name,
+      message: err?.message,
+    });
   }
 }
 
