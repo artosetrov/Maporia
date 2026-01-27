@@ -113,6 +113,45 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
         hasSession: !!data.session,
         userId: data.session?.user?.id?.substring(0, 8) || null,
       });
+      
+      // Test a simple query to places table to verify RLS policies
+      if (hasValidSupabaseConfig) {
+        const testQueryStart = Date.now();
+        supabase
+          .from("places")
+          .select("id", { count: 'exact', head: true })
+          .limit(1)
+          .then(({ data: testData, error: testError, count }) => {
+            const testDuration = Date.now() - testQueryStart;
+            if (testError) {
+              // Don't log AbortError
+              if (!testError.message?.includes('abort') && testError.name !== 'AbortError' && (testError as any).code !== 'ECONNABORTED') {
+                console.error('[Supabase] Test query failed:', {
+                  message: testError.message,
+                  code: testError.code,
+                  details: testError.details,
+                  hint: testError.hint,
+                  duration: `${testDuration}ms`,
+                });
+              }
+            } else {
+              console.log('[Supabase] Test query success:', {
+                count: count || 0,
+                duration: `${testDuration}ms`,
+              });
+            }
+          })
+          .catch((testErr) => {
+            // Silently ignore AbortError
+            if (testErr?.name === 'AbortError' || testErr?.message?.includes('abort')) {
+              return;
+            }
+            console.error('[Supabase] Test query exception:', {
+              name: testErr?.name,
+              message: testErr?.message,
+            });
+          });
+      }
     }
   }).catch((err) => {
     clearTimeout(sessionCheckTimeout);

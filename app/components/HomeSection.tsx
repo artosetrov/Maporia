@@ -215,7 +215,42 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
       query = query.limit(10);
 
       try {
+        // Log query start in production for debugging
+        const queryStartTime = Date.now();
+        if (process.env.NODE_ENV === 'production') {
+          console.log('[HomeSection] Loading places:', {
+            section: section.title,
+            city: section.city || 'all',
+            tag: section.tag || 'none',
+            categories: section.categories?.length || 0,
+          });
+        }
+        
         const { data, error } = await query;
+        const queryDuration = Date.now() - queryStartTime;
+        
+        // Log query result in production
+        if (process.env.NODE_ENV === 'production') {
+          if (error) {
+            // Don't log AbortError
+            if (!error.message?.includes('abort') && error.name !== 'AbortError' && (error as any).code !== 'ECONNABORTED') {
+              console.error('[HomeSection] Query error:', {
+                section: section.title,
+                message: error.message,
+                code: error.code,
+                details: error.details,
+                hint: error.hint,
+                duration: `${queryDuration}ms`,
+              });
+            }
+          } else {
+            console.log('[HomeSection] Query success:', {
+              section: section.title,
+              count: data?.length || 0,
+              duration: `${queryDuration}ms`,
+            });
+          }
+        }
 
         // Check if this request is still current
         if (!alive || currentRequestId !== requestId) {

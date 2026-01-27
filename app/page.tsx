@@ -52,9 +52,20 @@ export default function HomePage() {
   useEffect(() => {
     if (!accessLoading) {
       // Auth and profile are ready, allow sections to render
+      if (process.env.NODE_ENV === 'production') {
+        console.log('[HomePage] Bootstrap ready:', {
+          hasUser: !!user,
+          hasProfile: !!profile,
+          access: {
+            role: access.role,
+            hasPremium: access.hasPremium,
+            isAdmin: access.isAdmin,
+          },
+        });
+      }
       setBootReady(true);
     }
-  }, [accessLoading]);
+  }, [accessLoading, user, profile, access]);
 
   // Загружаем избранное пользователя
   useEffect(() => {
