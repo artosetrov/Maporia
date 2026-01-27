@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
 import PlaceCard from "./PlaceCard";
 import FavoriteIcon from "./FavoriteIcon";
@@ -8,6 +8,8 @@ import { supabase } from "../lib/supabase";
 import { HomeSectionFilter } from "../constants/homeSections";
 import { type UserAccess, isPlacePremium, canUserViewPlace } from "../lib/access";
 import Icon from "./Icon";
+import { HomeSectionSkeleton } from "./Skeleton";
+import { getRecentlyViewedPlaceIds } from "../utils";
 
 type Place = {
   id: string;
@@ -39,426 +41,93 @@ type HomeSectionProps = {
   isFirst?: boolean;
 };
 
-import { getRecentlyViewedPlaceIds } from "../utils";
-
 export default function HomeSection({ section, userId, favorites, userAccess, onToggleFavorite, onTagClick, isFirst = false }: HomeSectionProps) {
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const categoriesKey = section.categories ? section.categories.join(",") : "";
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // Create stable request key for deduplication
-  const requestKey = useMemo(() => {
-    return JSON.stringify({
-      title: section.title,
-      city: section.city || '',
-      tag: section.tag || '',
-      categories: categoriesKey,
-      daysAgo: section.daysAgo || 0,
-      sort: section.sort || '',
-      recentlyViewed: section.recentlyViewed || false,
-    });
-  }, [section.title, section.city, section.tag, categoriesKey, section.daysAgo, section.sort, section.recentlyViewed]);
-
-  // Store loadPlaces function in ref so it can be called from visibilitychange handler
-  const loadPlacesRef = useRef<(() => Promise<void>) | null>(null);
-
+  // Fetch places when section or refresh key changes
   useEffect(() => {
-    let alive = true;
-    let currentRequestId = Date.now();
+    let cancelled = false;
+    setLoading(true);
 
-    async function loadPlaces() {
-      if (!alive) {
-        return;
-      }
-
-      const requestId = currentRequestId;
-      setLoading(true);
-      
+    (async () => {
       try {
-        // Special handling for "Recently viewed" section
         if (section.recentlyViewed) {
           const recentlyViewedIds = getRecentlyViewedPlaceIds();
-          
           if (recentlyViewedIds.length === 0) {
-            if (alive && currentRequestId === requestId) {
+            if (!cancelled) {
               setPlaces([]);
               setLoading(false);
             }
             return;
           }
-
-          // Load places by IDs, preserving the order from localStorage
-          // Only select fields needed for PlaceCard display
-          try {
-            const { data, error } = await supabase
-              .from("places")
-              .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility")
-              .in("id", recentlyViewedIds)
-              .limit(10);
-
-            // Check if this request is still current
-            if (!alive || currentRequestId !== requestId) {
-              return;
-            }
-
-            if (error) {
-              // Silently ignore AbortError
-              if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
-                return;
-              }
-
-              // Completely skip logging if error is empty
-              // First check if error object is empty by stringifying
-              let isEmpty = false;
-              try {
-                const errorStr = JSON.stringify(error);
-                isEmpty = errorStr === '{}';
-              } catch {
-                // If stringify fails, check fields
-                const msg = error.message ? String(error.message).trim() : '';
-                const code = error.code ? String(error.code).trim() : '';
-                const details = error.details ? String(error.details).trim() : '';
-                const hint = error.hint ? String(error.hint).trim() : '';
-                isEmpty = !(msg.length > 0 || code.length > 0 || details.length > 0 || hint.length > 0);
-              }
-              
-              if (!isEmpty) {
-                // Check individual fields
-                const msg = error.message ? String(error.message).trim() : '';
-                const code = error.code ? String(error.code).trim() : '';
-                const details = error.details ? String(error.details).trim() : '';
-                const hint = error.hint ? String(error.hint).trim() : '';
-                
-                const hasContent = msg.length > 0 || code.length > 0 || details.length > 0 || hint.length > 0;
-                
-                if (hasContent) {
-                  const errorObj: Record<string, any> = {};
-                  if (msg) errorObj.message = msg;
-                  if (code) errorObj.code = code;
-                  if (details) errorObj.details = details;
-                  if (hint) errorObj.hint = hint;
-                  console.error("Error loading recently viewed places:", errorObj);
-                }
-              }
-              // Silently handle empty errors - don't log at all
-              if (alive && currentRequestId === requestId) {
-                setPlaces([]);
-              }
-            } else {
-              if (alive && currentRequestId === requestId) {
-                // Sort by the order in recentlyViewedIds (most recent first)
-                const placesMap = new Map((data || []).map((p: any) => [p.id, p]));
-                const orderedPlaces = recentlyViewedIds
-                  .map(id => placesMap.get(id))
-                  .filter((p): p is Place => p !== undefined)
-                  .slice(0, 10);
-                setPlaces(orderedPlaces);
-              }
-            }
-          } catch (err: any) {
-            // Silently ignore AbortError
-            if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-              return;
-            }
-            // Handle unexpected errors
-            console.error("Unexpected error loading recently viewed places:", err instanceof Error ? err.message : String(err));
-            if (alive && currentRequestId === requestId) {
-              setPlaces([]);
-            }
-          }
-          
-          if (alive && currentRequestId === requestId) {
+          const { data, error } = await supabase
+            .from("places")
+            .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility")
+            .in("id", recentlyViewedIds)
+            .limit(10);
+          if (error) throw error;
+          const placesMap = new Map((data || []).map((p: any) => [p.id, p]));
+          const result = recentlyViewedIds
+            .map(id => placesMap.get(id))
+            .filter((p): p is Place => p !== undefined)
+            .slice(0, 10);
+          if (!cancelled) {
+            setPlaces(result);
             setLoading(false);
           }
           return;
         }
-      
-      // Only select fields needed for PlaceCard display
-      let query = supabase.from("places").select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility");
 
-      // Фильтр по городу (use city_name_cached if available, fallback to city)
-      if (section.city) {
-        query = query.or(`city_name_cached.eq.${section.city},city.eq.${section.city}`);
-      }
-
-      // Фильтр по категориям
-      if (section.categories && section.categories.length > 0) {
-        query = query.overlaps("categories", section.categories);
-      }
-
-      // Фильтр по тегу
-      if (section.tag) {
-        query = query.contains("tags", [section.tag]);
-      }
-
-      // Фильтр по дате (для "New this week")
-      if (section.daysAgo) {
-        const dateThreshold = new Date();
-        dateThreshold.setDate(dateThreshold.getDate() - section.daysAgo);
-        query = query.gte("created_at", dateThreshold.toISOString());
-      }
-
-      // Сортировка
-      if (section.sort === "popular") {
-        // Для популярных - сортируем по количеству реакций
-        // Пока используем created_at как fallback, можно улучшить позже
-        query = query.order("created_at", { ascending: false });
-      } else if (section.sort === "newest" || section.daysAgo) {
-        query = query.order("created_at", { ascending: false });
-      } else {
-        query = query.order("created_at", { ascending: false });
-      }
-
-      // Лимит для секции
-      query = query.limit(10);
-
-      try {
-        // Log query start in production for debugging
-        const queryStartTime = Date.now();
-        if (process.env.NODE_ENV === 'production') {
-          console.log('[HomeSection] Loading places:', {
-            section: section.title,
-            city: section.city || 'all',
-            tag: section.tag || 'none',
-            categories: section.categories?.length || 0,
-          });
+        let query = supabase.from("places").select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility");
+        if (section.city) {
+          query = query.or(`city_name_cached.eq.${section.city},city.eq.${section.city}`);
         }
-        
+        if (section.categories && section.categories.length > 0) {
+          query = query.overlaps("categories", section.categories);
+        }
+        if (section.tag) {
+          query = query.contains("tags", [section.tag]);
+        }
+        if (section.daysAgo) {
+          const dateThreshold = new Date();
+          dateThreshold.setDate(dateThreshold.getDate() - section.daysAgo);
+          query = query.gte("created_at", dateThreshold.toISOString());
+        }
+        query = query.order("created_at", { ascending: false }).limit(10);
+
         const { data, error } = await query;
-        const queryDuration = Date.now() - queryStartTime;
-        
-        // Log query result in production
-        if (process.env.NODE_ENV === 'production') {
-          if (error) {
-            // Don't log AbortError
-            if (!error.message?.includes('abort') && error.name !== 'AbortError' && (error as any).code !== 'ECONNABORTED') {
-              console.error('[HomeSection] Query error:', {
-                section: section.title,
-                message: error.message,
-                code: error.code,
-                details: error.details,
-                hint: error.hint,
-                duration: `${queryDuration}ms`,
-              });
-            }
-          } else {
-            console.log('[HomeSection] Query success:', {
-              section: section.title,
-              count: data?.length || 0,
-              duration: `${queryDuration}ms`,
-            });
-          }
+        if (error) throw error;
+        if (!cancelled) {
+          setPlaces((data || []) as Place[]);
+          setLoading(false);
         }
-
-        // Check if this request is still current
-        if (!alive || currentRequestId !== requestId) {
-          return;
-        }
-
-        if (error) {
-          // Silently ignore AbortError
-          if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
-            return;
-          }
-
-          // Completely skip logging if error is empty
-          // First check if error object is empty by stringifying
-          let isEmpty = false;
-          try {
-            const errorStr = JSON.stringify(error);
-            isEmpty = errorStr === '{}';
-          } catch {
-            // If stringify fails, check fields
-            const msg = error.message ? String(error.message).trim() : '';
-            const code = error.code ? String(error.code).trim() : '';
-            const details = error.details ? String(error.details).trim() : '';
-            const hint = error.hint ? String(error.hint).trim() : '';
-            isEmpty = !(msg.length > 0 || code.length > 0 || details.length > 0 || hint.length > 0);
-          }
-          
-          if (!isEmpty) {
-            // Check individual fields
-            const msg = error.message ? String(error.message).trim() : '';
-            const code = error.code ? String(error.code).trim() : '';
-            const details = error.details ? String(error.details).trim() : '';
-            const hint = error.hint ? String(error.hint).trim() : '';
-            
-            const hasContent = msg.length > 0 || code.length > 0 || details.length > 0 || hint.length > 0;
-            
-            if (hasContent) {
-              const errorObj: Record<string, any> = {};
-              if (msg) errorObj.message = msg;
-              if (code) errorObj.code = code;
-              if (details) errorObj.details = details;
-              if (hint) errorObj.hint = hint;
-              console.error("Error loading places for section:", section.title, errorObj);
-            }
-          }
-          // Silently handle empty errors - don't log at all
-          if (alive && currentRequestId === requestId) {
-            setPlaces([]);
-          }
-        } else {
-          if (alive && currentRequestId === requestId) {
-            setPlaces((data || []) as Place[]);
-          }
-        }
-      } catch (err: any) {
-        // Silently ignore AbortError
-        if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-          return;
-        }
-        // Handle unexpected errors
-        console.error("Unexpected error loading places for section:", section.title, err instanceof Error ? err.message : String(err));
-        if (alive && currentRequestId === requestId) {
-          setPlaces([]);
-        }
-      }
-      
-      if (alive && currentRequestId === requestId) {
-        setLoading(false);
-      }
-      } catch (err: any) {
-        // Silently ignore AbortError
-        if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-          return;
-        }
-        // Top-level error handler - ensure loading state is always reset
-        console.error("Critical error in loadPlaces:", err instanceof Error ? err.message : String(err));
-        if (alive && currentRequestId === requestId) {
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Error loading places for section:", section.title, err);
           setPlaces([]);
           setLoading(false);
         }
       }
-    }
+    })();
 
-    // Store function in ref
-    loadPlacesRef.current = loadPlaces;
-    
-    loadPlaces();
+    return () => { cancelled = true; };
+  }, [section.title, section.city, section.tag, categoriesKey, section.daysAgo, section.sort, section.recentlyViewed, refreshKey]);
 
-    return () => {
-      alive = false;
-      currentRequestId = Date.now(); // Invalidate current request
-      loadPlacesRef.current = null;
-    };
-  }, [requestKey]); // Use stable request key instead of individual dependencies
-
-  // Reload when page becomes visible (user returns from another tab)
-  // This fixes the issue where content stops loading after tab switches
-  // Applied to all sections, not just recentlyViewed
+  // Reload when page becomes visible
   useEffect(() => {
-    let alive = true;
-    let currentRequestId = Date.now();
-
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && alive) {
-        // Reload places when page becomes visible
-        async function reloadPlaces() {
-          if (!alive) return;
-          
-          const requestId = Date.now();
-          currentRequestId = requestId;
-          
-          try {
-            const recentlyViewedIds = getRecentlyViewedPlaceIds();
-            
-            if (recentlyViewedIds.length === 0) {
-              if (alive && currentRequestId === requestId) {
-                setPlaces([]);
-              }
-              return;
-            }
-
-            const { data, error } = await supabase
-              .from("places")
-              .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility")
-              .in("id", recentlyViewedIds)
-              .limit(10);
-
-            if (!alive || currentRequestId !== requestId) {
-              return;
-            }
-
-            if (error) {
-              // Silently ignore AbortError
-              if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
-                return;
-              }
-
-              // Completely skip logging if error is empty
-              // First check if error object is empty by stringifying
-              let isEmpty = false;
-              try {
-                const errorStr = JSON.stringify(error);
-                isEmpty = errorStr === '{}';
-              } catch {
-                // If stringify fails, check fields
-                const msg = error.message ? String(error.message).trim() : '';
-                const code = error.code ? String(error.code).trim() : '';
-                const details = error.details ? String(error.details).trim() : '';
-                const hint = error.hint ? String(error.hint).trim() : '';
-                isEmpty = !(msg.length > 0 || code.length > 0 || details.length > 0 || hint.length > 0);
-              }
-              
-              if (!isEmpty) {
-                // Check individual fields
-                const msg = error.message ? String(error.message).trim() : '';
-                const code = error.code ? String(error.code).trim() : '';
-                const details = error.details ? String(error.details).trim() : '';
-                const hint = error.hint ? String(error.hint).trim() : '';
-                
-                const hasContent = msg.length > 0 || code.length > 0 || details.length > 0 || hint.length > 0;
-                
-                if (hasContent) {
-                  const errorObj: Record<string, any> = {};
-                  if (msg) errorObj.message = msg;
-                  if (code) errorObj.code = code;
-                  if (details) errorObj.details = details;
-                  if (hint) errorObj.hint = hint;
-                  console.error("Error reloading recently viewed places:", errorObj);
-                }
-              }
-              // Silently handle empty errors - don't log at all
-              // Don't clear places on error, keep existing state
-              return;
-            }
-
-            if (alive && currentRequestId === requestId && data) {
-              const placesMap = new Map((data || []).map((p: any) => [p.id, p]));
-              const orderedPlaces = recentlyViewedIds
-                .map(id => placesMap.get(id))
-                .filter((p): p is Place => p !== undefined)
-                .slice(0, 10);
-              setPlaces(orderedPlaces);
-            }
-          } catch (err: any) {
-            // Silently ignore AbortError
-            if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-              return;
-            }
-            // Handle unexpected errors
-            console.error("Unexpected error reloading recently viewed places:", err instanceof Error ? err.message : String(err));
-          }
-        }
-        reloadPlaces();
-      } else {
-        // For other sections, reload using the stored function
-        if (loadPlacesRef.current) {
-          loadPlacesRef.current();
-        }
+      if (document.visibilityState === "visible") {
+        setRefreshKey((k) => k + 1);
       }
     };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      alive = false;
-      currentRequestId = Date.now(); // Invalidate current request
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [section.recentlyViewed, requestKey]); // Include requestKey to ensure reload when section changes
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
 
   // Calculate locked premium places for Haunted Gem indexing
   const defaultUserAccess: UserAccess = userAccess ?? { 
@@ -536,31 +205,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
   };
 
   if (loading) {
-    return (
-      <div className="mb-6 lg:mb-8 lg:mb-9">
-        <div className="flex items-center justify-between mb-3 lg:mb-4 h-10 lg:h-12">
-          <div className="h-6 w-32 bg-[#ECEEE4] rounded animate-pulse" />
-          <div className="h-8 w-8 rounded-full bg-[#ECEEE4] animate-pulse" />
-        </div>
-        <div className="overflow-x-auto scrollbar-hide">
-          <div className="flex gap-3 pb-2" style={{ width: "max-content" }}>
-            {Array.from({ length: 7 }).map((_, i) => (
-              <div key={i} className="flex-shrink-0" style={{ width: 'var(--home-card-width, 220px)' }}>
-                <div className="w-full">
-                  <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
-                    <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <div className="h-5 w-3/4 bg-[#ECEEE4] rounded animate-pulse" />
-                    <div className="h-4 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
+    return <HomeSectionSkeleton isFirst={isFirst} />;
   }
 
   // Don't hide section if places are empty - let it show empty state or just return null silently

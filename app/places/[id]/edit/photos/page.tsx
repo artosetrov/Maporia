@@ -381,7 +381,9 @@ export default function PhotosEditorPage() {
     // If no data returned but no error, the insert likely succeeded
     // This can happen with RLS policies that allow INSERT but restrict SELECT
     if (!insertData || insertData.length === 0) {
-      console.warn("No data returned from photos insert, but no error occurred. Insert likely succeeded.");
+      if (process.env.NODE_ENV === 'development') {
+        console.warn("No data returned from photos insert, but no error occurred. Insert likely succeeded.");
+      }
       // Don't show error - just proceed with navigation
       // The data will be reloaded when we navigate back to the hub
     }

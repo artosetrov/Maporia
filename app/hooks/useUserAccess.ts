@@ -115,21 +115,40 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
 
         if (profileError) {
           // Silently ignore AbortError
-          if (profileError.message?.includes('abort') || profileError.name === 'AbortError') {
+          if (profileError.message?.includes('abort') || profileError.name === 'AbortError' || (profileError as any).code === 'ECONNABORTED') {
             return;
           }
           
-          // Enhanced error logging for production
-          if (process.env.NODE_ENV === 'production') {
-            console.error('[useUserAccess] Profile error:', {
-              message: profileError.message,
-              code: profileError.code,
-              details: profileError.details,
-              hint: profileError.hint,
-            });
-          } else {
-            console.error("Error loading profile:", profileError);
+          // Check if error object is empty or has no meaningful content
+          // First check if error object is empty by stringifying
+          let isEmpty = false;
+          try {
+            const errorStr = JSON.stringify(profileError);
+            isEmpty = errorStr === '{}';
+          } catch {
+            // If stringify fails, check fields
+            const msg = profileError.message ? String(profileError.message).trim() : '';
+            const code = profileError.code ? String(profileError.code).trim() : '';
+            const details = profileError.details ? String(profileError.details).trim() : '';
+            const hint = profileError.hint ? String(profileError.hint).trim() : '';
+            isEmpty = !(msg.length > 0 || code.length > 0 || details.length > 0 || hint.length > 0);
           }
+          
+          // Only log if error has meaningful content
+          if (!isEmpty) {
+            // Enhanced error logging for production
+            if (process.env.NODE_ENV === 'production') {
+              const errorObj: Record<string, any> = {};
+              if (profileError.message) errorObj.message = profileError.message;
+              if (profileError.code) errorObj.code = profileError.code;
+              if (profileError.details) errorObj.details = profileError.details;
+              if (profileError.hint) errorObj.hint = profileError.hint;
+              console.error('[useUserAccess] Profile error:', errorObj);
+            } else {
+              console.error("Error loading profile:", profileError);
+            }
+          }
+          // Silently ignore empty error objects
         }
 
         const currentProfile = profileData ?? null;
@@ -141,7 +160,9 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
           if (requireProfile && !currentProfile) {
             // TODO: Redirect to profile setup if route exists
             // router.replace("/profile/setup");
-            console.warn("Profile required but not found");
+            if (process.env.NODE_ENV === 'development') {
+              console.warn("Profile required but not found");
+            }
           }
 
           // Calculate access based on role system

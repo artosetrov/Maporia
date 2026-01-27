@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
 import { CATEGORIES } from "../constants";
@@ -17,6 +17,7 @@ import { DEFAULT_CITY } from "../constants";
 import { useUserAccess } from "../hooks/useUserAccess";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import Icon from "../components/Icon";
+import { PlaceCardGridSkeleton, MapSkeleton, Empty } from "../components/Skeleton";
 
 type Place = {
   id: string;
@@ -68,6 +69,8 @@ export default function ExplorePage() {
   const pathname = usePathname();
   
   const [view, setView] = useState<"list" | "map">("list");
+  
+  const shouldLoadMap = view === "map";
   const [showMapMobile, setShowMapMobile] = useState(false);
   const [bottomSheetPosition, setBottomSheetPosition] = useState<number>(0.6); // 0.3, 0.6, or 0.9
   const [searchFocused, setSearchFocused] = useState(false);
@@ -209,92 +212,58 @@ export default function ExplorePage() {
     }
   }
 
-  async function loadPlaces() {
-    // Use a request ID to track if this request should be processed
-    const requestId = Date.now();
+  // Fetch places when filters change
+  useEffect(() => {
+    let cancelled = false;
     setLoading(true);
-
-    try {
-      let query = supabase.from("places").select("*").order("created_at", { ascending: false });
-
-    // Фильтрация по городам - если выбраны города, проверяем что place.city_name_cached или place.city входит в список
-    if (selectedCities.length > 0) {
-      // Filter by city_name_cached (preferred) or city (backward compatibility)
-      // Build OR condition for multiple cities
-      const cityFilters = selectedCities.flatMap(city => [
-        `city_name_cached.eq.${city}`,
-        `city.eq.${city}`
-      ]);
-      query = query.or(cityFilters.join(','));
-    }
-
-    // Фильтрация по категориям - если выбраны категории, проверяем что place.categories содержит хотя бы одну из них
-    if (selectedCategories.length > 0) {
-      // Используем overlaps для проверки пересечения массивов
-      query = query.overlaps("categories", selectedCategories);
-    }
-
-    if (q.trim()) {
-      const s = q.trim();
-      query = query.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
-    }
-
-    if (selectedTag) {
-      query = query.contains("tags", [selectedTag]);
-    }
-
-    // TODO: Filter premium places if schema has premium field
-    // If user doesn't have premium access, filter out premium places
-    // if (!access.hasPremium) {
-    //   query = query.eq("is_premium", false);
-    //   // OR query = query.neq("access_level", "premium");
-    //   // OR query = query.eq("premium_only", false);
-    // }
-    // For now, we filter client-side after fetching
-
-      const { data, error } = await query;
-      
-      // Check if this is still the latest request (prevent race conditions)
-      // Note: This check is simplified - we rely on requestId comparison in the ref pattern
-      // The Date.now() check was unreliable, so we remove it
-      
-      if (error) {
-        // Silently ignore AbortError
-        if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+    (async () => {
+      try {
+        let query = supabase.from("places").select("*").order("created_at", { ascending: false });
+        if (selectedCities.length > 0) {
+          const cityFilters = selectedCities.flatMap(city => [
+            `city_name_cached.eq.${city}`,
+            `city.eq.${city}`
+          ]);
+          query = query.or(cityFilters.join(','));
+        }
+        if (selectedCategories.length > 0) {
+          query = query.overlaps("categories", selectedCategories);
+        }
+        if (q.trim()) {
+          const s = q.trim();
+          query = query.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
+        }
+        if (selectedTag) {
+          query = query.contains("tags", [selectedTag]);
+        }
+        const { data, error } = await query;
+        if (cancelled) return;
+        if (error) {
+          console.error("Error loading places:", error);
+          setPlaces([]);
           return;
         }
-        
-        console.error("Error loading places:", error);
-        setPlaces([]);
-      } else if (!data || data.length === 0) {
-        setPlaces([]);
-      } else {
-        const placesWithCoords = (data ?? []).map((p: any) => ({
+        setPlaces((data ?? []).map((p: any) => ({
           ...p,
           lat: p.lat ?? null,
           lng: p.lng ?? null,
-        }));
-        
-        setPlaces(placesWithCoords as Place[]);
+        })) as Place[]);
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Error loading places:", err);
+          setPlaces([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    } catch (err: any) {
-      // Silently ignore AbortError
-      if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-        return;
-      }
-      console.error("[loadPlaces] Exception:", err);
-      setPlaces([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
+    })();
+    return () => { cancelled = true; };
+  }, [selectedCities, selectedCategories, q, selectedTag]);
 
   useEffect(() => {
     (async () => {
       try {
         await loadUser();
-        await loadPlaces();
       } catch (err: any) {
         // Silently ignore AbortError
         if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
@@ -306,61 +275,25 @@ export default function ExplorePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]); // Add pathname to re-trigger on route change
 
-  // Загружаем избранное пользователя
+  // Fetch favorites when userId changes
   useEffect(() => {
     if (!userId) {
       setFavorites(new Set());
       return;
     }
-
-    let isUnmounting = false;
-    const capturedUserId = userId;
-
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("reactions")
-          .select("place_id")
-          .eq("user_id", capturedUserId)
-          .eq("reaction", "like");
-
-        // Only check unmounting, not cancelled (to avoid aborting on dependency changes)
-        if (isUnmounting || userId !== capturedUserId) {
-          return;
-        }
-
-        if (error) {
-          // Silently ignore AbortError
-          if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
-            return;
-          }
-          
-          console.error("Error loading favorites:", error);
-          return;
-        }
-
-        if (!isUnmounting && userId === capturedUserId && data) {
-          setFavorites(new Set(data.map((r) => r.place_id)));
-        }
-      } catch (err: any) {
-        // Silently ignore AbortError
-        if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-          return;
-        }
-        
-        console.error("Exception loading favorites:", err);
-      }
-    })();
-
-    return () => {
-      isUnmounting = true;
-    };
+    let cancelled = false;
+    supabase
+      .from("reactions")
+      .select("place_id")
+      .eq("user_id", userId)
+      .eq("reaction", "like")
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) return;
+        setFavorites(new Set((data || []).map((r) => r.place_id)));
+      });
+    return () => { cancelled = true; };
   }, [userId]);
-
-  useEffect(() => {
-    loadPlaces();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, selectedCities, selectedCategories, selectedTag, pathname]); // Add pathname to re-trigger on route change
 
   // Live search: автоматически применяем поиск при вводе (с небольшой задержкой)
   useEffect(() => {
@@ -1201,19 +1134,7 @@ export default function ExplorePage() {
           ) : (
             <div className="flex-1 overflow-y-auto scrollbar-hide px-6 pt-4 pb-24">
               {loading ? (
-                <div className="grid grid-cols-1 gap-4">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="w-full">
-                      <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
-                        <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <div className="h-5 w-3/4 bg-[#ECEEE4] rounded animate-pulse" />
-                        <div className="h-4 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <PlaceCardGridSkeleton count={3} columns={1} />
               ) : places.length === 0 ? (
                 <Empty text="No places with this vibe yet. Try fewer filters." />
               ) : (
@@ -1426,9 +1347,6 @@ function Card({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Empty({ text }: { text: string }) {
-  return <div className="text-sm text-[#6b7d47]/60 py-10">{text}</div>;
-}
 
 // Функция для создания круглого изображения
 function createRoundIcon(imageUrl: string, size: number): Promise<string> {
@@ -1585,6 +1503,8 @@ function MapView({
       document.removeEventListener('msfullscreenchange', handleFullscreenChange);
     };
   }, []);
+  // Always use consistent parameters for useJsApiLoader
+  // The component will only render when shouldLoadMap is true
   const { isLoaded, loadError } = useJsApiLoader({
     id: "google-maps-loader",
     googleMapsApiKey: getGoogleMapsApiKey(),
@@ -1756,11 +1676,7 @@ function MapView({
   // Теперь карточка просто появляется без изменения масштаба и позиции карты
 
   if (loading) {
-    return (
-      <div className="h-full w-full bg-[#ECEEE4] animate-pulse flex items-center justify-center">
-        <div className="text-sm text-[#6F7A5A]">Loading map…</div>
-      </div>
-    );
+    return <MapSkeleton className="h-full w-full" />;
   }
 
   if (placesWithCoords.length === 0) {
@@ -1776,12 +1692,13 @@ function MapView({
     );
   }
 
+  // Don't render map content if lazy loading hasn't triggered yet
+  if (!shouldLoadMap) {
+    return <MapSkeleton className="h-full w-full" />;
+  }
+
   if (!isLoaded) {
-    return (
-      <div className="h-full w-full bg-[#ECEEE4] animate-pulse flex items-center justify-center">
-        <div className="text-sm text-[#6F7A5A]">Loading map…</div>
-      </div>
-    );
+    return <MapSkeleton className="h-full w-full" />;
   }
 
   return (
@@ -1847,14 +1764,16 @@ function MapView({
         }}
       >
         {!isLoaded && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#ECEEE4] text-[#6F7A5A]">
+          <div className="absolute inset-0">
             {loadError ? (
-              <div className="text-center">
-                <div className="text-sm font-medium mb-1">Error loading map</div>
-                <div className="text-xs">Check console for details</div>
+              <div className="absolute inset-0 flex items-center justify-center bg-[#ECEEE4] text-[#6F7A5A]">
+                <div className="text-center">
+                  <div className="text-sm font-medium mb-1">Error loading map</div>
+                  <div className="text-xs">Check console for details</div>
+                </div>
               </div>
             ) : (
-              <div className="text-sm">Loading map...</div>
+              <MapSkeleton className="h-full w-full" />
             )}
           </div>
         )}

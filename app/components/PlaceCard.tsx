@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ReactNode, useEffect, useState, useRef } from "react";
+import { ReactNode, useEffect, useState, useRef, memo } from "react";
 import { supabase } from "../lib/supabase";
 import { isPlacePremium, type UserAccess } from "../lib/access";
 import PremiumBadge from "./PremiumBadge";
@@ -48,7 +48,7 @@ function isValidUUID(str: string): boolean {
   return uuidRegex.test(str);
 }
 
-export default function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isFavorite = false, hauntedGemIndex, showPhotoSlider = true, onClick, onTagClick, onPhotoClick, onRemoveFavorite }: PlaceCardProps) {
+function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isFavorite = false, hauntedGemIndex, showPhotoSlider = true, onClick, onTagClick, onPhotoClick, onRemoveFavorite }: PlaceCardProps) {
   const [creatorProfile, setCreatorProfile] = useState<{ display_name: string | null; username: string | null; avatar_url: string | null } | null>(null);
   const loadedUserIdRef = useRef<string | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
@@ -611,3 +611,19 @@ export default function PlaceCard({ place, userAccess, userId, favoriteButton, i
     </>
   );
 }
+
+// Memoize PlaceCard to prevent unnecessary re-renders
+export default memo(PlaceCard, (prevProps, nextProps) => {
+  // Custom comparison function for better performance
+  return (
+    prevProps.place.id === nextProps.place.id &&
+    prevProps.place.title === nextProps.place.title &&
+    prevProps.place.cover_url === nextProps.place.cover_url &&
+    prevProps.place.city === nextProps.place.city &&
+    prevProps.userId === nextProps.userId &&
+    prevProps.isFavorite === nextProps.isFavorite &&
+    prevProps.hauntedGemIndex === nextProps.hauntedGemIndex &&
+    prevProps.showPhotoSlider === nextProps.showPhotoSlider &&
+    prevProps.favoriteButton === nextProps.favoriteButton
+  );
+});

@@ -19,6 +19,7 @@ import { isPlacePremium, canUserViewPlace, isUserAdmin } from "../../lib/access"
 import LockedPlaceOverlay from "../../components/LockedPlaceOverlay";
 import PremiumBadge from "../../components/PremiumBadge";
 import Icon from "../../components/Icon";
+import { MapSkeleton } from "../../components/Skeleton";
 
 type Place = {
   id: string;
@@ -53,6 +54,19 @@ type CreatorProfile = {
   display_name: string | null; 
   username: string | null; 
   avatar_url: string | null;
+};
+
+type ProfileData = {
+  display_name: string | null;
+  username?: string | null;
+  avatar_url: string | null;
+};
+
+type CommentData = {
+  id: string;
+  text: string;
+  created_at: string;
+  user_id: string;
 };
 
 function cx(...a: Array<string | false | undefined | null>) {
@@ -356,14 +370,22 @@ export default function PlacePage() {
       comments: commentsRef,
     };
     const ref = refs[section];
-    if (ref.current) {
-      const offset = 80; // Account for top bar
-      const elementPosition = ref.current.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.scrollY - offset;
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: "smooth",
-      });
+    if (ref?.current) {
+      const offset = 100; // Account for top bar and padding
+      
+      // Try to find element by ID first (more reliable)
+      const elementById = document.getElementById(section);
+      const targetElement = elementById || ref.current;
+      
+      if (targetElement) {
+        const elementPosition = targetElement.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.scrollY - offset;
+        
+        window.scrollTo({
+          top: offsetPosition,
+          behavior: "smooth",
+        });
+      }
     }
   };
 
@@ -379,7 +401,7 @@ export default function PlacePage() {
           .from("profiles")
           .select("display_name, avatar_url")
           .eq("id", data.user.id)
-          .maybeSingle();
+          .maybeSingle() as { data: ProfileData | null; error: any };
 
         if (profileError) {
           console.error("Error loading user profile:", profileError);
@@ -441,7 +463,7 @@ export default function PlacePage() {
           .from("profiles")
           .select("display_name, username, avatar_url")
           .eq("id", placeItem.created_by)
-          .maybeSingle();
+          .maybeSingle() as { data: ProfileData | null; error: any };
 
         if (profileError) {
           console.error("Error loading creator profile:", profileError);
@@ -606,7 +628,7 @@ export default function PlacePage() {
               place_id: id,
               user_id: userId,
               reaction: "like",
-            });
+            } as any);
 
           if (error) {
             console.error("Error adding favorite:", error);
@@ -703,9 +725,9 @@ export default function PlacePage() {
           place_id: place.id,
           user_id: user.id,
           text: trimmedText,
-        })
+        } as any)
         .select("id,text,created_at,user_id")
-        .single();
+        .single() as { data: CommentData | null; error: any };
 
       setSending(false);
       
@@ -716,11 +738,13 @@ export default function PlacePage() {
       }
       
       if (data) {
-        const { data: profileData } = await supabase
+        const profileResult = await supabase
           .from("profiles")
           .select("display_name, username, avatar_url")
           .eq("id", user.id)
-          .single();
+          .single() as { data: ProfileData | null; error: any };
+        
+        const profileData = profileResult.data;
 
         const newComment: Comment = {
           ...data,
@@ -2015,18 +2039,13 @@ export default function PlacePage() {
               if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
                 return 0;
               }
-              // Enhanced logging for production
-              if (process.env.NODE_ENV === 'production') {
-                console.error("Error counting filtered places:", {
-                  categories: draftFilters.categories,
-                  message: error.message,
-                  code: error.code,
-                  details: error.details,
-                  hint: error.hint,
-                });
-              } else {
-                console.error("Error counting filtered places:", error);
-              }
+              console.error("Error counting filtered places:", {
+                message: error.message,
+                code: (error as any).code,
+                details: (error as any).details,
+                hint: (error as any).hint,
+                categories: draftFilters.categories,
+              });
               return 0;
             }
             return count || 0;
@@ -2035,14 +2054,12 @@ export default function PlacePage() {
             if (error?.name === 'AbortError' || error?.message?.includes('abort') || error?.code === 'ECONNABORTED') {
               return 0;
             }
-            // Enhanced logging for production
-            if (process.env.NODE_ENV === 'production') {
-              console.error("Error in getFilteredCount:", {
-                error: error?.message || String(error),
-              });
-            } else {
-              console.error("Error in getFilteredCount:", error);
-            }
+            console.error("Error in getFilteredCount:", {
+              message: error?.message,
+              name: error?.name,
+              code: (error as any)?.code,
+              string: String(error),
+            });
             return 0;
           }
         }}
@@ -2186,6 +2203,10 @@ export default function PlacePage() {
 
 // Map View Component
 function PlaceMapView({ place }: { place: Place }) {
+  const shouldLoadMap = true;
+  
+  // Always use consistent parameters for useJsApiLoader
+  // This ensures the loader is initialized with the same options every time
   const { isLoaded } = useJsApiLoader({
     id: "google-maps-loader",
     googleMapsApiKey: getGoogleMapsApiKey(),
@@ -2220,12 +2241,13 @@ function PlaceMapView({ place }: { place: Place }) {
     );
   }
 
+  // Don't render map content if lazy loading hasn't triggered yet
+  if (!shouldLoadMap) {
+    return <MapSkeleton className="w-full h-full" />;
+  }
+
   if (!isLoaded) {
-    return (
-      <div className="w-full h-full flex items-center justify-center text-[#8F9E4F]/60">
-        Loading map…
-      </div>
-    );
+    return <MapSkeleton className="w-full h-full" />;
   }
 
   return (

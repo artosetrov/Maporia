@@ -444,25 +444,7 @@ export default function FeedPage() {
           {loading ? (
             <div className="bg-white rounded-2xl border border-[#ECEEE4] overflow-hidden">
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="py-4 px-4 border-b border-[#ECEEE4]">
-                  <div className="flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-[#ECEEE4] flex-shrink-0 animate-pulse" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="h-4 w-32 bg-[#ECEEE4] rounded animate-pulse" />
-                        <div className="h-3 w-20 bg-[#ECEEE4] rounded animate-pulse" />
-                      </div>
-                      <div className="h-10 w-full bg-[#FAFAF7] rounded-xl mb-3 animate-pulse" />
-                      <div className="flex items-center gap-3">
-                        <div className="w-14 h-14 rounded-lg bg-[#ECEEE4] flex-shrink-0 animate-pulse" />
-                        <div className="flex-1 min-w-0">
-                          <div className="h-4 w-3/4 bg-[#ECEEE4] rounded mb-1 animate-pulse" />
-                          <div className="h-3 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <ActivityItemSkeleton key={i} />
               ))}
             </div>
           ) : activities.length === 0 ? (

@@ -68,6 +68,10 @@ export default function FiltersModal({
   // Draft state (changes while modal is open)
   const [draftFilters, setDraftFilters] = useState<ActiveFilters>(safeAppliedFilters);
   
+  // Draft cities state (changes while modal is open)
+  const safeAppliedCities = _appliedCities || [];
+  const [draftCities, setDraftCities] = useState<string[]>(safeAppliedCities);
+  
   // State for filtered count (can be async)
   const [filteredCount, setFilteredCount] = useState<number | null>(null);
   const [countLoading, setCountLoading] = useState(false);
@@ -81,12 +85,17 @@ export default function FiltersModal({
     getFilteredCountRef.current = getFilteredCount;
   }, [getFilteredCount]);
 
-  // Reset draft to applied when modal opens
+  // Reset draft to applied only when modal opens (avoid deps that change every render)
+  const appliedFiltersRef = useRef(safeAppliedFilters);
+  const appliedCitiesRef = useRef(safeAppliedCities);
+  appliedFiltersRef.current = safeAppliedFilters;
+  appliedCitiesRef.current = safeAppliedCities;
   useEffect(() => {
     if (isOpen) {
-      setDraftFilters(safeAppliedFilters);
+      setDraftFilters(appliedFiltersRef.current);
+      setDraftCities(appliedCitiesRef.current);
     }
-  }, [isOpen, safeAppliedFilters]);
+  }, [isOpen]);
 
   
   // Load category counts
@@ -128,8 +137,8 @@ export default function FiltersModal({
     }
     
     setCountLoading(true);
-    // Передаем пустой массив городов, так как города больше не фильтруются здесь
-    const result = getCountFn(draftFilters, []);
+    // Передаем выбранные города для правильного подсчета
+    const result = getCountFn(draftFilters, draftCities);
     
     if (result instanceof Promise) {
       result
@@ -138,7 +147,11 @@ export default function FiltersModal({
           setCountLoading(false);
         })
         .catch(error => {
-          console.error("Error getting filtered count:", error);
+          console.error("Error getting filtered count:", {
+            message: error?.message,
+            name: error?.name,
+            code: (error as any)?.code,
+          });
           setFilteredCount(null);
           setCountLoading(false);
         });
@@ -146,7 +159,7 @@ export default function FiltersModal({
       setFilteredCount(result);
       setCountLoading(false);
     }
-  }, [draftFilters, isOpen]);
+  }, [draftFilters, draftCities, isOpen]);
 
   if (!isOpen) return null;
 
@@ -235,6 +248,17 @@ export default function FiltersModal({
   const handleApply = () => {
     // Применяем фильтры и обновляем родительский компонент
     onApply(draftFilters);
+    
+    // Обновляем города в родительском компоненте
+    // Важно: вызываем это ДО onClose, чтобы состояние обновилось до закрытия модального окна
+    if (_onCitiesChange) {
+      if (process.env.NODE_ENV === 'development') {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[FiltersModal] handleApply: calling onCitiesChange with:', draftCities);
+        }
+      }
+      _onCitiesChange(draftCities);
+    }
     
     onClose();
   };

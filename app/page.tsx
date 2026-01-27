@@ -6,12 +6,15 @@ import { useRouter } from "next/navigation";
 import TopBar from "./components/TopBar";
 import BottomNav from "./components/BottomNav";
 import HomeSection from "./components/HomeSection";
-import FiltersModal, { ActiveFilters } from "./components/FiltersModal";
+import { ActiveFilters } from "./components/FiltersModal";
+import { ActiveFilters } from "./components/FiltersModal";
 import SearchModal from "./components/SearchModal";
+import FiltersModal from "./components/FiltersModal";
 import { HOME_SECTIONS } from "./constants/homeSections";
 import { supabase, hasValidSupabaseConfig } from "./lib/supabase";
 import { DEFAULT_CITY } from "./constants";
 import { useUserAccess } from "./hooks/useUserAccess";
+import { HomeSectionSkeleton } from "./components/Skeleton";
 
 export default function HomePage() {
   const router = useRouter();
@@ -52,7 +55,7 @@ export default function HomePage() {
   useEffect(() => {
     if (!accessLoading) {
       // Auth and profile are ready, allow sections to render
-      if (process.env.NODE_ENV === 'production') {
+      if (process.env.NODE_ENV === 'development') {
         console.log('[HomePage] Bootstrap ready:', {
           hasUser: !!user,
           hasProfile: !!profile,
@@ -335,20 +338,13 @@ export default function HomePage() {
               if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
                 return 0;
               }
-              // Enhanced logging for production
-              if (process.env.NODE_ENV === 'production') {
-                console.error("Error counting filtered places:", {
-                  selectedCity,
-                  categories: draftFilters.categories,
-                  searchValue,
-                  message: error.message,
-                  code: error.code,
-                  details: error.details,
-                  hint: error.hint,
-                });
-              } else {
-                console.error("Error counting filtered places:", error);
-              }
+              console.error("Error counting filtered places:", {
+                message: error.message,
+                code: (error as any).code,
+                details: (error as any).details,
+                hint: (error as any).hint,
+                context: { selectedCity, categories: draftFilters.categories, searchValue },
+              });
               return 0;
             }
             return count || 0;
@@ -357,14 +353,12 @@ export default function HomePage() {
             if (error?.name === 'AbortError' || error?.message?.includes('abort') || error?.code === 'ECONNABORTED') {
               return 0;
             }
-            // Enhanced logging for production
-            if (process.env.NODE_ENV === 'production') {
-              console.error("Error in getFilteredCount:", {
-                error: error?.message || String(error),
-              });
-            } else {
-              console.error("Error in getFilteredCount:", error);
-            }
+            console.error("Error in getFilteredCount:", {
+              message: error?.message,
+              name: error?.name,
+              code: (error as any)?.code,
+              string: String(error),
+            });
             return 0;
           }
         }}
@@ -382,29 +376,7 @@ export default function HomePage() {
             // Show skeleton while bootstrapping
             <div className="space-y-6 pt-6 lg:pt-8">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="mb-6 lg:mb-8 lg:mb-9">
-                  <div className="flex items-center justify-between mb-3 lg:mb-4 h-10 lg:h-12">
-                    <div className="h-6 w-32 bg-[#ECEEE4] rounded animate-pulse" />
-                    <div className="h-8 w-8 rounded-full bg-[#ECEEE4] animate-pulse" />
-                  </div>
-                  <div className="overflow-x-auto scrollbar-hide">
-                    <div className="flex gap-3 pb-2" style={{ width: "max-content" }}>
-                      {Array.from({ length: 7 }).map((_, j) => (
-                        <div key={j} className="flex-shrink-0" style={{ width: 'var(--home-card-width, 220px)' }}>
-                          <div className="w-full">
-                            <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
-                              <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <div className="h-5 w-3/4 bg-[#ECEEE4] rounded animate-pulse" />
-                              <div className="h-4 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                <HomeSectionSkeleton key={i} isFirst={i === 0} />
               ))}
             </div>
           ) : (

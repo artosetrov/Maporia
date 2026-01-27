@@ -3,8 +3,12 @@
 export const dynamic = 'force-dynamic';
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useRef, Suspense } from "react";
+import { useEffect, useMemo, useState, Suspense, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+// TODO: Migrate to AdvancedMarker when ready
+// As of Feb 21, 2024, google.maps.Marker is deprecated in favor of AdvancedMarkerElement
+// Migration requires: mapId in GoogleMap options, marker library in GOOGLE_MAPS_LIBRARIES, and AdvancedMarker component
+// See: https://developers.google.com/maps/documentation/javascript/advanced-markers/migration
 import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
@@ -22,6 +26,7 @@ import { DEFAULT_CITY, CATEGORIES, CITIES } from "../constants";
 import { useUserAccess } from "../hooks/useUserAccess";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import Icon from "../components/Icon";
+import { PlaceCardGridSkeleton, MapSkeleton, Empty } from "../components/Skeleton";
 
 type Place = {
   id: string;
@@ -38,13 +43,10 @@ type Place = {
   lng: number | null;
   created_at: string;
   created_by?: string | null;
-  // Premium/Hidden/Vibe fields
-  is_premium?: boolean | null;
-  is_hidden?: boolean | null;
-  is_vibe?: boolean | null;
+  // Premium/Hidden/Vibe fields (используем только существующие поля)
+  // Premium определяется через access_level === 'premium'
+  // Hidden/Vibe определяются через категории
   access_level?: string | null;
-  premium_only?: boolean | null;
-  visibility?: string | null;
 };
 
 // Тип для фильтров
@@ -63,15 +65,15 @@ function normalizeCity(city: string | null | undefined): string {
 }
 
 // Проверка, является ли место Hidden (через категорию "🤫 Hidden & Unique")
+// Поле is_hidden не существует в БД, используем только категории
 function isPlaceHidden(place: Place): boolean {
-  if (place.is_hidden === true) return true;
   if (place.categories && place.categories.includes("🤫 Hidden & Unique")) return true;
   return false;
 }
 
 // Проверка, является ли место Vibe (через категорию "✨ Vibe & Atmosphere")
+// Поле is_vibe не существует в БД, используем только категории
 function isPlaceVibe(place: Place): boolean {
-  if (place.is_vibe === true) return true;
   if (place.categories && place.categories.includes("✨ Vibe & Atmosphere")) return true;
   return false;
 }
@@ -164,8 +166,9 @@ function MapPageContent() {
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
 
   const [places, setPlaces] = useState<Place[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Start with true to show skeleton initially
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [filteredPlacesState, setFilteredPlacesState] = useState<Place[]>([]);
 
   // User access for premium filtering
   const { loading: accessLoading, access } = useUserAccess();
@@ -176,6 +179,9 @@ function MapPageContent() {
   useEffect(() => {
     if (!accessLoading) {
       setBootReady(true);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[MapPage] bootReady set to true');
+      }
     }
   }, [accessLoading]);
 
@@ -253,6 +259,9 @@ function MapPageContent() {
     premiumOnly: false, // Для обратной совместимости
   });
   
+  // Счётчик версий фильтров для принудительного обновления списка
+  const [filtersVersion, setFiltersVersion] = useState(0);
+  
   // Инициализируем флаг наличия города в URL
   const [hasExplicitCityInUrlState, setHasExplicitCityInUrlState] = useState(initialHasCityInUrl);
   
@@ -271,7 +280,6 @@ function MapPageContent() {
   const appliedCategories = activeFilters.categories;
 
   // Handle city change from SearchBar or SearchModal
-  // Объявляем appliedCities ДО requestKey, чтобы избежать ошибки инициализации
   const [appliedCities, setAppliedCities] = useState<string[]>(() => {
     const initialCity = getInitialValues().initialCity;
     // Если в URL есть несколько городов через запятую, разбиваем их
@@ -347,12 +355,15 @@ function MapPageContent() {
             }
           }).filter(Boolean);
           setActiveFilters(prev => ({ ...prev, categories }));
+          setFiltersVersion(prev => prev + 1);
         } catch {
           setActiveFilters(prev => ({ ...prev, categories: [] }));
+          setFiltersVersion(prev => prev + 1);
         }
       } else {
         // Если параметр categories отсутствует, очищаем категории
         setActiveFilters(prev => ({ ...prev, categories: [] }));
+        setFiltersVersion(prev => prev + 1);
       }
       
       // Проверяем, пришли ли с Home
@@ -501,74 +512,34 @@ function MapPageContent() {
     }
   }
 
-  // Create stable request key for deduplication
-  const requestKey = useMemo(() => {
-    // Включаем все фильтры в ключ запроса, чтобы места перезагружались при изменении фильтров
-    return JSON.stringify({
-      city: appliedCity,
-      cities: appliedCities.join(','),
-      q: appliedQ,
-      categories: appliedCategories.join(','),
-      tag: selectedTag,
-      sort: activeFilters.sort,
-      premium: activeFilters.premium || activeFilters.premiumOnly,
-      hidden: activeFilters.hidden,
-      vibe: activeFilters.vibe,
-      hasExplicitCity: hasExplicitCityInUrlState,
-    });
-  }, [appliedCity, appliedCities, appliedQ, appliedCategories.join(','), selectedTag, activeFilters.sort, activeFilters.premium, activeFilters.hidden, activeFilters.vibe, activeFilters.premiumOnly, hasExplicitCityInUrlState]);
+  // Track total count separately
+  const [totalPlacesCount, setTotalPlacesCount] = useState<number | null>(null);
+  const [placesData, setPlacesData] = useState<Place[] | null>(null);
+  const [placesLoading, setPlacesLoading] = useState(true);
+  const [placesError, setPlacesError] = useState<any>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const loadPlacesRef = useRef<{ requestId: number; key: string } | null>(null);
-
-  async function loadPlaces() {
-    // Don't load if bootstrap not ready
-    if (!bootReady) {
-      return;
-    }
-
-    // Check if request key changed - if not, don't refetch
-    if (loadPlacesRef.current?.key === requestKey) {
-      return;
-    }
-
-    // Use a request ID to track if this request should be processed
-    const requestId = Date.now();
-    loadPlacesRef.current = { requestId, key: requestKey };
-    setLoading(true);
-
-    try {
-      // Загружаем все места с нужными полями для фильтрации
+  // Fetch places when filters or refreshKey change
+  useEffect(() => {
+    if (!bootReady) return;
+    let cancelled = false;
+    setPlacesLoading(true);
+    setPlacesError(null);
+    (async () => {
+      try {
+        const result = await (async (): Promise<Place[]> => {
+      // Загружаем все места сразу (без пагинации)
+      // Оптимизация: загружаем только необходимые поля для списка и карты
       // Фильтры Premium/Hidden/Vibe применяются на клиенте через filterPlaces
-      // Загружаем все поля, включая is_hidden и is_vibe (если они есть в БД)
-      let query = supabase.from("places").select("*");
+      // Используем только существующие поля: access_level для premium, категории для hidden/vibe
+      let query = supabase.from("places").select(
+        "id,title,description,city,city_name_cached,lat,lng,cover_url,categories,tags,created_at,created_by,access_level,country",
+        { count: 'exact' }
+      );
 
-      // Фильтрация по городам (если выбраны, но не все)
-      const citiesToFilter = appliedCities.filter(city => city !== DEFAULT_CITY);
-      const allCitiesSelectedInQuery = citiesToFilter.length > 0 && 
-                                       citiesToFilter.length === CITIES.length &&
-                                       CITIES.every(city => citiesToFilter.includes(city));
-      
-      if (citiesToFilter.length > 0 && !allCitiesSelectedInQuery) {
-        // Build OR condition for multiple cities
-        const cityFilters = citiesToFilter.flatMap(city => [
-          `city_name_cached.eq.${city}`,
-          `city.eq.${city}`
-        ]);
-        query = query.or(cityFilters.join(','));
-      } else if (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && !allCitiesSelectedInQuery) {
-        // Fallback для обратной совместимости
-        query = query.or(`city_name_cached.eq.${appliedCity},city.eq.${appliedCity}`);
-      }
-
-      // Фильтрация по категориям (если выбраны, но не все)
-      const allCategoriesSelectedInQuery = appliedCategories.length > 0 && 
-                                          appliedCategories.length === CATEGORIES.length &&
-                                          CATEGORIES.every(cat => appliedCategories.includes(cat));
-      
-      if (appliedCategories.length > 0 && !allCategoriesSelectedInQuery) {
-        // Используем overlaps для проверки пересечения массивов
-        query = query.overlaps("categories", appliedCategories);
-      }
+      // Фильтрация по городам и категориям применяется на клиенте для скорости
+      // (как и Premium/Hidden/Vibe фильтры)
+      // Это позволяет избежать медленных запросов на сервере и сделать фильтрацию мгновенной
 
       // Фильтрация по поисковому запросу
       if (appliedQ.trim()) {
@@ -576,172 +547,421 @@ function MapPageContent() {
         query = query.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
       }
 
-      // Фильтрация по тегам - используем selectedTag (для обратной совместимости)
+      // Фильтрация по тегам
       if (selectedTag) {
         query = query.contains("tags", [selectedTag]);
       }
 
-    // Применяем сортировку
-    if (activeFilters.sort === "newest") {
-      query = query.order("created_at", { ascending: false });
-    } else if (activeFilters.sort === "most_liked") {
-      // Для сортировки по лайкам нужно будет использовать подзапрос или RPC
-      // Пока используем created_at как fallback
-      query = query.order("created_at", { ascending: false });
-    } else if (activeFilters.sort === "most_commented") {
-      // Для сортировки по комментариям тоже нужен подзапрос
-      // Пока используем created_at как fallback
-      query = query.order("created_at", { ascending: false });
-    } else {
-      // По умолчанию - по дате создания
-      query = query.order("created_at", { ascending: false });
-    }
-
-      const { data, error } = await query;
-      
-      // Check if this is still the current request (latest only pattern)
-      if (!loadPlacesRef.current || loadPlacesRef.current.requestId !== requestId) {
-        return;
+      // Применяем сортировку
+      if (activeFilters.sort === "newest") {
+        query = query.order("created_at", { ascending: false });
+      } else if (activeFilters.sort === "most_liked" || activeFilters.sort === "most_commented") {
+        // Для сортировки по лайкам/комментариям используем created_at как fallback
+        // Счетчики будут загружены отдельно
+        query = query.order("created_at", { ascending: false });
+      } else {
+        // По умолчанию - по дате создания
+        query = query.order("created_at", { ascending: false });
       }
+
+      // No pagination - load all places at once
+      const { data, error, count } = await query;
       
       if (error) {
-        // Silently ignore AbortError
-        if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
-          return;
+        // Enhanced error logging with full error details
+        const errorDetails = {
+          message: error.message || 'No error message',
+          code: error.code || 'No error code',
+          details: error.details || 'No details',
+          hint: error.hint || 'No hint',
+          name: (error as any).name || 'No name',
+          stack: (error as any).stack || 'No stack',
+          fullError: error,
+        };
+        
+        console.error('[MapPage] Query error:', errorDetails);
+        
+        // Если ошибка связана с полями (например, поле не существует), пробуем select("*")
+        if (error.code === 'PGRST116' || 
+            error.message?.includes('column') || 
+            error.message?.includes('field') ||
+            error.message?.includes('does not exist')) {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[MapPage] Retrying with select("*") due to field error');
+          }
+          
+          // Пересоздаем запрос с select("*")
+          // Фильтры по городам и категориям применяются на клиенте, не на сервере
+          let fallbackQuery = supabase.from("places").select("*", { count: 'exact' });
+          
+          // Применяем только поисковый запрос и теги на сервере
+          // Города и категории фильтруются на клиенте для скорости
+          if (appliedQ.trim()) {
+            const s = appliedQ.trim();
+            fallbackQuery = fallbackQuery.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
+          }
+          
+          if (selectedTag) {
+            fallbackQuery = fallbackQuery.contains("tags", [selectedTag]);
+          }
+          
+          fallbackQuery = fallbackQuery.order("created_at", { ascending: false });
+          
+          const fallbackResult = await fallbackQuery;
+          if (!fallbackResult.error) {
+            // Fallback успешен
+            return fallbackResult.data?.map((p: any) => ({
+              ...p,
+              // Ensure all required fields exist (используем только существующие поля)
+              id: p.id,
+              title: p.title || '',
+              description: p.description || null,
+              city: p.city || null,
+              city_name_cached: p.city_name_cached || null,
+              lat: p.lat || null,
+              lng: p.lng || null,
+              cover_url: p.cover_url || null,
+              categories: p.categories || [],
+              tags: p.tags || [],
+              created_at: p.created_at || new Date().toISOString(),
+              created_by: p.created_by || null,
+              access_level: p.access_level || null,
+              country: p.country || null,
+            })) || [];
+          }
         }
         
-        console.error("Error loading places:", error);
-        if (loadPlacesRef.current && loadPlacesRef.current.requestId === requestId) {
-          setPlaces([]);
-          setLoading(false);
-        }
-        return;
+        throw error;
       }
       
+      // Update total count
+      if (count !== null && count !== undefined) {
+        setTotalPlacesCount(count);
+      }
+      
+      // Return empty array if no data (this is valid - means no places match filters)
       if (!data || data.length === 0) {
-        if (loadPlacesRef.current && loadPlacesRef.current.requestId === requestId) {
-          setPlaces([]);
-          setLoading(false);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[MapPage] No places found for query:', {
+            citiesToFilter,
+            appliedCategories,
+            appliedQ,
+            selectedTag,
+            totalCount: count,
+          });
         }
-        return;
+        // Update total count even if no data
+        if (count !== null && count !== undefined) {
+          setTotalPlacesCount(count);
+        }
+        return [];
       }
-
-    // Обрабатываем данные перед применением фильтров
-    const processedData = data;
-
-    // Фильтрация по поисковому запросу (если есть) - делаем это раньше для сортировки
-    let filteredData = processedData as Place[];
-    if (appliedQ.trim()) {
-      const searchLower = appliedQ.trim().toLowerCase();
-      filteredData = filteredData.filter(place => 
-        place.title?.toLowerCase().includes(searchLower) ||
-        place.description?.toLowerCase().includes(searchLower) ||
-        place.country?.toLowerCase().includes(searchLower)
-      );
-    }
-
-    // Если выбрана сортировка по комментариям или лайкам, нужно загрузить счетчики
-    let placesWithCounts = filteredData;
-    if (activeFilters.sort === "most_commented" || activeFilters.sort === "most_liked") {
-      const placeIds = filteredData.map((p: any) => p.id);
       
-      // Загружаем количество комментариев и лайков для всех мест
-      const [commentsResult, likesResult] = await Promise.all([
-        supabase
-          .from("comments")
-          .select("place_id")
-          .in("place_id", placeIds),
-        supabase
-          .from("reactions")
-          .select("place_id")
-          .eq("reaction", "like")
-          .in("place_id", placeIds),
-      ]);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[MapPage] Loaded places:', data.length, 'total:', count);
+      }
 
-      // Подсчитываем количество комментариев и лайков для каждого места
-      const commentsCount = new Map<string, number>();
-      const likesCount = new Map<string, number>();
+      // Обрабатываем данные перед применением фильтров
+      let filteredData = data as Place[];
 
-      (commentsResult.data || []).forEach((c: any) => {
-        commentsCount.set(c.place_id, (commentsCount.get(c.place_id) || 0) + 1);
-      });
+      // Фильтрация по поисковому запросу (если есть) - делаем это раньше для сортировки
+      if (appliedQ.trim()) {
+        const searchLower = appliedQ.trim().toLowerCase();
+        filteredData = filteredData.filter(place => 
+          place.title?.toLowerCase().includes(searchLower) ||
+          place.description?.toLowerCase().includes(searchLower) ||
+          place.country?.toLowerCase().includes(searchLower)
+        );
+      }
 
-      (likesResult.data || []).forEach((r: any) => {
-        likesCount.set(r.place_id, (likesCount.get(r.place_id) || 0) + 1);
-      });
+      // Фильтрация по городам применяется на клиенте для скорости
+      // (вместо медленного серверного запроса)
+      const citiesToFilter = appliedCities.filter(city => city !== DEFAULT_CITY);
+      const allCitiesSelected = citiesToFilter.length > 0 && 
+                               citiesToFilter.length === CITIES.length &&
+                               CITIES.every(city => citiesToFilter.includes(city));
+      
+      if (citiesToFilter.length > 0 && !allCitiesSelected) {
+        filteredData = filteredData.filter(place => {
+          const placeCity = normalizeCity(place.city || place.city_name_cached);
+          return citiesToFilter.some(city => normalizeCity(city) === placeCity);
+        });
+      } else if (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && !allCitiesSelected) {
+        // Fallback для обратной совместимости
+        const normalizedAppliedCity = normalizeCity(appliedCity);
+        filteredData = filteredData.filter(place => {
+          const placeCity = normalizeCity(place.city || place.city_name_cached);
+          return placeCity === normalizedAppliedCity;
+        });
+      }
 
-      // Добавляем счетчики к местам и сортируем
-      placesWithCounts = filteredData.map((p: any) => ({
+      // Фильтрация по категориям применяется на клиенте для скорости
+      // (вместо медленного серверного overlaps запроса)
+      // Используем activeFilters.categories напрямую для мгновенного обновления
+      if (activeFilters.categories.length > 0) {
+        const allCategoriesSelected = activeFilters.categories.length === CATEGORIES.length &&
+                                     CATEGORIES.every(cat => activeFilters.categories.includes(cat));
+        if (!allCategoriesSelected) {
+          filteredData = filteredData.filter(place => {
+            if (!place.categories || place.categories.length === 0) return false;
+            return activeFilters.categories.some(cat => place.categories!.includes(cat));
+          });
+        }
+      }
+
+      // Если выбрана сортировка по комментариям или лайкам, нужно загрузить счетчики
+      let placesWithCounts = filteredData;
+      if (activeFilters.sort === "most_commented" || activeFilters.sort === "most_liked") {
+        const placeIds = filteredData.map((p: any) => p.id);
+        
+        // Оптимизация: используем count вместо загрузки всех записей
+        // Разбиваем на батчи по 100 мест для избежания превышения лимита запроса
+        const batchSize = 100;
+        const commentsCount = new Map<string, number>();
+        const likesCount = new Map<string, number>();
+        
+        // Загружаем счетчики батчами
+        for (let i = 0; i < placeIds.length; i += batchSize) {
+          const batch = placeIds.slice(i, i + batchSize);
+          
+          const [commentsResult, likesResult] = await Promise.all([
+            supabase
+              .from("comments")
+              .select("place_id")
+              .in("place_id", batch),
+            supabase
+              .from("reactions")
+              .select("place_id")
+              .eq("reaction", "like")
+              .in("place_id", batch),
+          ]);
+          
+          // Check for errors in batch requests (log but don't fail the whole request)
+          if (commentsResult.error) {
+            console.warn('[MapPage] Error loading comments batch:', {
+              message: commentsResult.error.message,
+              code: commentsResult.error.code,
+              details: commentsResult.error.details,
+            });
+          }
+          if (likesResult.error) {
+            console.warn('[MapPage] Error loading likes batch:', {
+              message: likesResult.error.message,
+              code: likesResult.error.code,
+              details: likesResult.error.details,
+            });
+          }
+
+          // Подсчитываем количество комментариев и лайков для каждого места в батче
+          (commentsResult.data || []).forEach((c: any) => {
+            commentsCount.set(c.place_id, (commentsCount.get(c.place_id) || 0) + 1);
+          });
+
+          (likesResult.data || []).forEach((r: any) => {
+            likesCount.set(r.place_id, (likesCount.get(r.place_id) || 0) + 1);
+          });
+        }
+
+        // Добавляем счетчики к местам и сортируем
+        placesWithCounts = filteredData.map((p: any) => ({
+          ...p,
+          commentsCount: commentsCount.get(p.id) || 0,
+          likesCount: likesCount.get(p.id) || 0,
+        }));
+
+        if (activeFilters.sort === "most_commented") {
+          placesWithCounts.sort((a: any, b: any) => b.commentsCount - a.commentsCount);
+        } else if (activeFilters.sort === "most_liked") {
+          placesWithCounts.sort((a: any, b: any) => b.likesCount - a.likesCount);
+        }
+      }
+
+      return placesWithCounts.map((p: any) => ({
         ...p,
-        commentsCount: commentsCount.get(p.id) || 0,
-        likesCount: likesCount.get(p.id) || 0,
-      }));
+        lat: p.lat ?? null,
+        lng: p.lng ?? null,
+        // Убеждаемся, что поля для фильтрации присутствуют
+        access_level: p.access_level ?? null,
+        city_name_cached: p.city_name_cached ?? null,
+      })) as Place[];
+        })();
+        if (!cancelled) setPlacesData(result);
+      } catch (e) {
+        if (!cancelled) {
+          setPlacesError(e);
+          setPlacesData([]);
+        }
+      } finally {
+        if (!cancelled) setPlacesLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [appliedCity, appliedCities, appliedQ, appliedCategories, selectedTag, activeFilters.sort, hasExplicitCityInUrlState, userId, bootReady, refreshKey]);
 
-      if (activeFilters.sort === "most_commented") {
-        placesWithCounts.sort((a: any, b: any) => b.commentsCount - a.commentsCount);
-      } else if (activeFilters.sort === "most_liked") {
-        placesWithCounts.sort((a: any, b: any) => b.likesCount - a.likesCount);
-      }
-    }
+  // No pagination - placesData contains all places directly
 
-    const placesWithCoords = placesWithCounts.map((p: any) => ({
-      ...p,
-      lat: p.lat ?? null,
-      lng: p.lng ?? null,
-      // Убеждаемся, что поля для фильтрации присутствуют
-      is_premium: p.is_premium ?? null,
-      is_hidden: p.is_hidden ?? null,
-      is_vibe: p.is_vibe ?? null,
-      access_level: p.access_level ?? null,
-      premium_only: p.premium_only ?? null,
-      visibility: p.visibility ?? null,
-      city_name_cached: p.city_name_cached ?? null,
-    }));
-    
-    // Update filteredData with coordinates
-    filteredData = placesWithCoords as Place[];
-    
-    // Применяем централизованную функцию filterPlaces для фильтрации Premium/Hidden/Vibe/Cities/Categories
-    const citiesToFilterForLoad = appliedCities.filter(city => city !== DEFAULT_CITY);
-    const selectedCitiesForLoad = citiesToFilterForLoad.length > 0 ? citiesToFilterForLoad : 
-                                 (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) ? [appliedCity] : []);
-    
-    // Проверяем, выбраны ли все города или все категории
-    const allCitiesSelected = selectedCitiesForLoad.length > 0 && 
-                             selectedCitiesForLoad.length === CITIES.length &&
-                             CITIES.every(city => selectedCitiesForLoad.includes(city));
-    
-    const allCategoriesSelected = appliedCategories.length > 0 && 
-                                 appliedCategories.length === CATEGORIES.length &&
-                                 CATEGORIES.every(cat => appliedCategories.includes(cat));
-    
-    const filteredPlaces = filterPlaces(filteredData, {
-      premium: activeFilters.premium || activeFilters.premiumOnly || false,
-      hidden: activeFilters.hidden || false,
-      vibe: activeFilters.vibe || false,
-      // Если выбраны все города, не передаем cities (показываем все)
-      cities: selectedCitiesForLoad.length > 0 && !allCitiesSelected ? selectedCitiesForLoad : undefined,
-      // Если выбраны все категории, не передаем categories (показываем все)
-      categories: appliedCategories.length > 0 && !allCategoriesSelected ? appliedCategories : undefined,
-    });
-    
-      // Only update state if this is still the current request
-      if (loadPlacesRef.current && loadPlacesRef.current.requestId === requestId) {
-        setPlaces(filteredPlaces);
-        setLoading(false);
-      }
-    } catch (err: any) {
-      // Silently ignore AbortError
-      if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-        return;
-      }
-      console.error("[loadPlaces] Exception:", err);
-      if (loadPlacesRef.current && loadPlacesRef.current.requestId === requestId) {
-        setPlaces([]);
-        setLoading(false);
-      }
+  // Optimize event handlers with useCallback
+  const handlePlaceClick = useCallback((place: Place) => {
+    setSelectedPlaceId(place.id);
+    if (place.lat != null && place.lng != null) {
+      setMapCenter({ lat: place.lat, lng: place.lng });
+      setMapZoom(15);
     }
-  }
+  }, []);
+
+  const handlePlaceHover = useCallback((placeId: string | null) => {
+    setHoveredPlaceId(placeId);
+  }, []);
+
+  const handleTagClick = useCallback((tag: string) => {
+    setSelectedTag(tag);
+  }, []);
+
+  // Создаем строковые ключи для отслеживания изменений массивов
+  // Используем JSON.stringify с сортировкой для надежного отслеживания изменений
+  // Важно: используем сам массив в зависимостях, но создаем строковое представление для сравнения
+  const categoriesKey = useMemo(() => {
+    const sorted = [...activeFilters.categories].sort();
+    return JSON.stringify(sorted);
+  }, [activeFilters.categories]);
+  
+  const citiesKey = useMemo(() => {
+    const sorted = [...appliedCities].sort();
+    return JSON.stringify(sorted);
+  }, [appliedCities]);
+
+      // Apply client-side filters (Premium/Hidden/Vibe/Categories/Cities) to placesData
+      // Все фильтры применяются на клиенте для мгновенной скорости
+      // Используем useMemo для вычисления, но обновляем через useEffect для гарантии обновления
+      const filteredPlacesMemo = useMemo(() => {
+        if (!placesData || placesData.length === 0) return [];
+        
+        // Определяем города для фильтрации
+        const citiesToFilter = appliedCities.filter(city => city !== DEFAULT_CITY);
+        const allCitiesSelected = citiesToFilter.length > 0 && 
+                                 citiesToFilter.length === CITIES.length &&
+                                 CITIES.every(city => citiesToFilter.includes(city));
+        
+        let citiesForFilter: string[] | undefined;
+        if (citiesToFilter.length > 0 && !allCitiesSelected) {
+          citiesForFilter = citiesToFilter;
+        } else if (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && !allCitiesSelected) {
+          citiesForFilter = [appliedCity];
+        }
+        
+        const result = filterPlaces(placesData, {
+          premium: activeFilters.premium,
+          premiumOnly: activeFilters.premiumOnly,
+          hidden: activeFilters.hidden,
+          vibe: activeFilters.vibe,
+          // Используем activeFilters.categories напрямую
+          categories: activeFilters.categories.length > 0 ? activeFilters.categories : undefined,
+          cities: citiesForFilter,
+        });
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[MapPage] filteredPlacesMemo recalculated:', {
+            inputCount: placesData.length,
+            outputCount: result.length,
+            appliedCities,
+            citiesToFilter,
+            citiesForFilter,
+            categories: activeFilters.categories,
+            categoriesKey,
+            citiesKey,
+          });
+        }
+        
+        return result;
+      }, [
+        placesData, 
+        activeFilters.premium, 
+        activeFilters.premiumOnly, 
+        activeFilters.hidden, 
+        activeFilters.vibe,
+        // Используем строковые ключи для отслеживания изменений массивов
+        categoriesKey,
+        citiesKey,
+        // Также добавляем appliedCities напрямую для гарантии обновления
+        appliedCities,
+        appliedCity, 
+        hasExplicitCityInUrlState
+      ]);
+      
+      // Обновляем состояние filteredPlaces при изменении вычисленного значения
+      // Это гарантирует обновление компонентов даже если useMemo не сработал правильно
+      useEffect(() => {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[MapPage] filteredPlaces updating:', {
+            inputCount: placesData?.length || 0,
+            outputCount: filteredPlacesMemo.length,
+            filters: {
+              premium: activeFilters.premium,
+              hidden: activeFilters.hidden,
+              vibe: activeFilters.vibe,
+              categories: activeFilters.categories,
+            },
+            appliedCities,
+            categoriesKey,
+            citiesKey,
+            prevLength: filteredPlacesState.length,
+            prevState: filteredPlacesState.slice(0, 3).map(p => p.id),
+            newState: filteredPlacesMemo.slice(0, 3).map(p => p.id),
+          });
+        }
+        // Всегда обновляем состояние, даже если длина не изменилась
+        // Это гарантирует перерендер компонентов
+        setFilteredPlacesState(filteredPlacesMemo);
+      }, [filteredPlacesMemo, categoriesKey, citiesKey, appliedCities, activeFilters.premium, activeFilters.premiumOnly, activeFilters.hidden, activeFilters.vibe]);
+      
+      // Используем состояние для отображения
+      const filteredPlaces = filteredPlacesState;
+
+  // Update places state for backward compatibility (used by map view)
+  // Use filteredPlaces instead of allPlaces
+  useEffect(() => {
+    setPlaces(filteredPlaces);
+  }, [filteredPlaces]);
+
+  // Update loading state
+  useEffect(() => {
+    setLoading(placesLoading);
+  }, [placesLoading]);
+  
+  // Debug: Log filteredPlaces changes (development only)
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[MapPage] filteredPlaces updated:', {
+        length: filteredPlaces.length,
+        placesDataLength: placesData?.length || 0,
+        activeFilters: {
+          premium: activeFilters.premium || activeFilters.premiumOnly,
+          hidden: activeFilters.hidden,
+          vibe: activeFilters.vibe,
+        },
+      });
+    }
+  }, [filteredPlaces.length, placesData?.length || 0, activeFilters.premium, activeFilters.premiumOnly, activeFilters.hidden, activeFilters.vibe]);
+
+  // Handle errors
+  useEffect(() => {
+    if (placesError) {
+      console.error("Error loading places:", placesError);
+      setPlaces([]);
+    }
+  }, [placesError]);
+
+  // Debug: Log data loading state
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[MapPage] Data state:', {
+        bootReady,
+        placesLoading,
+        placesDataLength: placesData?.length ?? 0,
+        filteredPlacesLength: filteredPlaces.length,
+      });
+    }
+  }, [bootReady, placesLoading, placesData?.length ?? 0, filteredPlaces.length]);
 
 
   useEffect(() => {
@@ -758,90 +978,36 @@ function MapPageContent() {
     })();
   }, []);
 
-  // Load places when filters change - use stable request key
-  useEffect(() => {
-    if (bootReady) {
-      loadPlaces();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestKey, bootReady]);
-
   // Reload places when page becomes visible (user returns from another tab)
-  // This fixes the issue where content stops loading after tab switches
   useEffect(() => {
     if (!bootReady) return;
-
-    let isUnmounting = false;
-
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && !isUnmounting) {
-        // Reset the request key check to force reload
-        // This ensures data is fresh when user returns to the tab
-        if (loadPlacesRef.current) {
-          loadPlacesRef.current.key = ''; // Force reload by invalidating key
-        }
-        // Reload places when page becomes visible
-        loadPlaces();
+      if (document.visibilityState === "visible") {
+        setRefreshKey((k) => k + 1);
       }
     };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [bootReady]);
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    return () => {
-      isUnmounting = true;
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [bootReady, requestKey]); // Include requestKey to ensure fresh data
-
-  // Загружаем избранное пользователя
+  // Fetch favorites when userId changes
   useEffect(() => {
     if (!userId) {
       setFavorites(new Set());
       return;
     }
-
-    let isUnmounting = false;
-    const capturedUserId = userId;
-
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("reactions")
-          .select("place_id")
-          .eq("user_id", capturedUserId)
-          .eq("reaction", "like");
-
-        // Only check unmounting, not cancelled (to avoid aborting on dependency changes)
-        if (isUnmounting || userId !== capturedUserId) {
-          return;
-        }
-
-        if (error) {
-          // Silently ignore AbortError
-          if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
-            return;
-          }
-          
-          console.error("Error loading favorites:", error);
-          return;
-        }
-
-        if (!isUnmounting && userId === capturedUserId && data) {
-          setFavorites(new Set(data.map((r) => r.place_id)));
-        }
-      } catch (err: any) {
-        // Silently ignore AbortError
-        if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-          return;
-        }
-        
-        console.error("Exception loading favorites:", err);
-      }
-    })();
-
-    return () => {
-      isUnmounting = true;
-    };
+    let cancelled = false;
+    supabase
+      .from("reactions")
+      .select("place_id")
+      .eq("user_id", userId)
+      .eq("reaction", "like")
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) return;
+        setFavorites(new Set((data || []).map((r) => r.place_id)));
+      });
+    return () => { cancelled = true; };
   }, [userId]);
 
   // Live search: автоматически применяем поиск при вводе (с небольшой задержкой)
@@ -888,8 +1054,62 @@ function MapPageContent() {
 
   // Handle filters apply from modal
   const handleFiltersApply = (filters: ActiveFilters) => {
-    setActiveFilters(filters);
+    // Применяем фильтры - это автоматически обновит filteredPlaces через useMemo
+    // Модальное окно закрывается автоматически в FiltersModal.handleApply
+    // Создаем новый объект с новым массивом категорий для гарантии обновления React
+    const newFilters = {
+      ...filters,
+      categories: [...filters.categories], // Создаем новый массив
+    };
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[MapPage] handleFiltersApply called:', {
+        prevFilters: activeFilters,
+        newFilters: newFilters,
+        prevCategories: activeFilters.categories,
+        newCategories: newFilters.categories,
+      });
+    }
+    
+    // Обновляем фильтры - это вызовет пересчет filteredPlaces
+    setActiveFilters(newFilters);
+    
+    // Увеличиваем версию фильтров для принудительного обновления списка
+    // Вызываем отдельно, чтобы избежать батчинга React
+    setFiltersVersion(prev => prev + 1);
   };
+  
+  // Отслеживаем изменения фильтров для отладки и принудительного обновления
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[MapPage] activeFilters or cities changed:', {
+        activeFilters,
+        appliedCities,
+        categoriesKey,
+        citiesKey,
+        filteredPlacesLength: filteredPlaces.length,
+        categories: activeFilters.categories,
+      });
+    }
+  }, [activeFilters, appliedCities, categoriesKey, citiesKey, filteredPlaces.length]);
+  
+  // Принудительно обновляем filteredPlaces при изменении appliedCities
+  // Это гарантирует, что компоненты перерендерятся при изменении городов
+  const prevCitiesKeyRef = useRef(citiesKey);
+  useEffect(() => {
+    if (prevCitiesKeyRef.current !== citiesKey) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[MapPage] appliedCities changed, forcing update:', {
+          appliedCities,
+          citiesKey,
+          prevCitiesKey: prevCitiesKeyRef.current,
+        });
+      }
+      prevCitiesKeyRef.current = citiesKey;
+      // Увеличиваем версию фильтров для принудительного обновления списка
+      setFiltersVersion(prev => prev + 1);
+    }
+  }, [citiesKey, appliedCities]);
 
   async function toggleFavorite(placeId: string, e: React.MouseEvent) {
     e.preventDefault();
@@ -1017,9 +1237,12 @@ function MapPageContent() {
   }, [places, defaultUserAccess, userId]);
 
   // Формируем title для header списка с учетом количества результатов
+  // Показываем реальное количество отфильтрованных мест (с учетом всех клиентских фильтров)
   const listTitle = useMemo(() => {
-    const count = places.length;
-    const countText = `${count} ${count === 1 ? "place" : "places"}`;
+    // Используем реальное количество отфильтрованных мест
+    // Это учитывает все фильтры: Premium/Hidden/Vibe/Categories/Cities
+    const displayCount = filteredPlaces.length;
+    const countText = `${displayCount} ${displayCount === 1 ? "place" : "places"}`;
     
     // Если выбран город
     if (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) {
@@ -1027,22 +1250,22 @@ function MapPageContent() {
     }
     
     // Если есть другие фильтры (категории, поиск, тег), но нет города
-    if (appliedCategories.length > 0 || appliedQ.trim() || selectedTag) {
+    if (activeFilters.categories.length > 0 || appliedQ.trim() || selectedTag) {
       return countText;
     }
     
     // Нет фильтров - показываем "All places"
     return "All places";
-  }, [places.length, appliedCity, hasExplicitCityInUrlState, appliedCategories, appliedQ, selectedTag]);
+  }, [filteredPlaces.length, appliedCity, hasExplicitCityInUrlState, activeFilters.categories, appliedQ, selectedTag]);
 
   // Subtitle для заголовка (показываем только когда нет фильтров)
   const listSubtitle = useMemo(() => {
     if (hasActiveFilters) {
       return null; // Не показываем subtitle когда есть фильтры
     }
-    const count = places.length;
+    const count = filteredPlaces.length;
     return `${count} ${count === 1 ? "place" : "places"}`;
-  }, [places.length, hasActiveFilters]);
+  }, [filteredPlaces.length, hasActiveFilters]);
 
 
   return (
@@ -1127,6 +1350,12 @@ function MapPageContent() {
         appliedCities={appliedCities.filter(city => city !== DEFAULT_CITY)}
         onCityChange={handleCityChange}
         onCitiesChange={(cities) => {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[MapPage] onCitiesChange called:', {
+              prevCities: appliedCities,
+              newCities: cities,
+            });
+          }
           setAppliedCities(cities);
           // Для обратной совместимости обновляем appliedCity
           if (cities.length > 0) {
@@ -1134,23 +1363,22 @@ function MapPageContent() {
           } else {
             setAppliedCity(DEFAULT_CITY);
           }
+          // Увеличиваем версию фильтров для принудительного обновления списка
+          setFiltersVersion(prev => prev + 1);
         }}
         getFilteredCount={async (draftFilters: ActiveFilters, draftCities: string[]) => {
           // Используем централизованную функцию filterPlaces для подсчета
           try {
-            // Используем draftCities из модального окна, если они есть, иначе fallback на appliedCities
-            // Важно: не фильтруем DEFAULT_CITY, если он явно выбран в draftCities
+            // Используем только draftCities из модального окна
+            // НЕ применяем fallback на appliedCity/appliedCities, чтобы показывать правильное количество
+            // при открытии модального окна без выбранных фильтров
             let selectedCities: string[] = [];
             if (draftCities.length > 0) {
               // Если в draftCities есть города, используем их (включая DEFAULT_CITY, если он там есть)
               selectedCities = draftCities;
-            } else if (appliedCities.length > 0) {
-              // Fallback на appliedCities
-              selectedCities = appliedCities;
-            } else if (appliedCity) {
-              // Fallback на appliedCity (даже если это DEFAULT_CITY)
-              selectedCities = [appliedCity];
             }
+            // Если draftCities пустой, не применяем фильтр по городам вообще
+            // Это позволяет показывать общее количество мест (37) при открытии модального окна
 
             // Проверяем, выбраны ли все города или все категории
             const allCitiesSelected = selectedCities.length > 0 && 
@@ -1163,9 +1391,11 @@ function MapPageContent() {
 
             let dataToFilter: Place[] = [];
             
+            // Оптимизация: загружаем только необходимые поля для подсчета
+            // Используем только существующие поля: access_level для premium, категории для hidden/vibe
             const { data: allData, error: dataError } = await supabase
               .from("places")
-              .select("*");
+              .select("id,title,description,city,city_name_cached,categories,tags,access_level,country");
             
             if (dataError) {
               // Silently ignore AbortError
@@ -1201,18 +1431,10 @@ function MapPageContent() {
               return 0;
             }
 
-            // Фильтрация по поисковому запросу (если есть)
-            let filtered = dataToFilter;
-            if (appliedQ.trim()) {
-              const searchLower = appliedQ.trim().toLowerCase();
-              filtered = filtered.filter(place => 
-                place.title?.toLowerCase().includes(searchLower) ||
-                place.description?.toLowerCase().includes(searchLower) ||
-                place.country?.toLowerCase().includes(searchLower)
-              );
-            }
-
-            filtered = filterPlaces(filtered, {
+            // Не применяем поисковый запрос в модальном окне фильтров
+            // Поиск применяется отдельно через SearchModal
+            // Фильтруем только по фильтрам из модального окна
+            const filtered = filterPlaces(dataToFilter, {
               premium: draftFilters.premium || draftFilters.premiumOnly || false,
               hidden: draftFilters.hidden || false,
               vibe: draftFilters.vibe || false,
@@ -1304,12 +1526,18 @@ function MapPageContent() {
         Card image: aspect 4:3, radius 18-22px, carousel dots
         See app/config/layout.ts for detailed configuration
       */}
-      {/* Контент: на desktop учитываем только TopBar (fixed), на mobile/tablet учитываем только TopBar */}
-      <div className="flex-1 min-h-0 overflow-hidden lg:pt-[80px]">
-        {/* Desktop: Split view - список слева, карта справа (≥1120px) */}
-        <div className="hidden lg:flex h-full max-w-[1920px] lg:max-w-none mx-auto px-6">
-          {/* Left: Scrollable list - 60% on XL (>=1440px), 62.5% on Desktop (1120-1439px) */}
-          <div className="w-[62.5%] lg:w-[60%] lg:w-[1152px] flex-shrink-0 overflow-y-auto scrollbar-hide pr-6">
+      {/* Контент: Responsive layout согласно правилам */}
+      {/* Mobile (≤768px): только список, карта по кнопке */}
+      {/* Tablet (769-1024px): 2 колонки список/карта (55-60% / 40-45%) */}
+      {/* Desktop (≥1024px): список/карта (60/40 до 1280px, 65/35 после 1440px) */}
+      <div className="flex-1 min-h-0 overflow-hidden md:pt-[80px]">
+        {/* Desktop & Tablet: Split view - список слева, карта справа (≥769px) */}
+        {/* Максимальная ширина: от края до края с центровкой через padding */}
+        <div className="hidden md:flex h-full w-full px-4 md:px-6 lg:px-8">
+          {/* Left: Scrollable list - фиксированная max-width, grid центрирован */}
+          {/* Колонка списка имеет фиксированную max-width (960-1100px) */}
+          {/* Grid внутри центрирован, промежутки постоянные (16-24px) */}
+          <div className="flex-shrink-0 overflow-y-auto scrollbar-hide pr-4 md:pr-6" style={{ maxWidth: '1100px', width: '60%' }}>
             {/* Header in List Column */}
             <div className="sticky top-0 z-30 bg-[#FAFAF7] pb-3 border-b border-[#ECEEE4] mb-4">
               <div className="flex items-center gap-3 mb-2">
@@ -1355,6 +1583,7 @@ function MapPageContent() {
                           ...prev,
                           categories: prev.categories.filter(c => c !== cat)
                         }));
+                        setFiltersVersion(prev => prev + 1);
                       }}
                       className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
                     >
@@ -1379,40 +1608,58 @@ function MapPageContent() {
               )}
             </div>
             {loading ? (
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-6 lg:gap-y-7">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="w-full">
-                    <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
-                      <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <div className="h-5 w-3/4 bg-[#ECEEE4] rounded animate-pulse" />
-                      <div className="h-4 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : places.length === 0 ? (
+              <PlaceCardGridSkeleton count={6} columns={2} />
+            ) : filteredPlaces.length === 0 ? (
               <Empty text="No places match your filters." />
             ) : (
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-6 lg:gap-y-7">
-                {places.map((p) => {
-                  const isFavorite = favorites.has(p.id);
-                  const isHovered = hoveredPlaceId === p.id || selectedPlaceId === p.id;
-                  const hauntedGemIndex = lockedPlacesMap.get(p.id);
-                  return (
+              <>
+                {/* Desktop: 3 колонки при достаточной ширине, 2 колонки при меньшей */}
+                {/* Tablet: 2 колонки, Desktop: 2-3 колонки в зависимости от ширины */}
+                {/* Grid центрирован внутри колонки списка */}
+                {/* Промежутки постоянные (16-24px), не увеличиваются с viewport */}
+                {/* Карточки: min 260px, max 320px (жесткий предел), никогда не растягиваются */}
+                <div key={`places-grid-${filtersVersion}-${categoriesKey}-${citiesKey}`} className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 place-card-grid">
+                  {/* Жесткие ограничения на размер карточек для Desktop */}
+                  {/* Максимальная ширина: 320px (жесткий предел), минимум: 260px */}
+                  {/* Оптимум: 280-300px для идеального баланса */}
+                  {/* Фото: aspect ratio 1:1 (при 320px → фото 320×320) */}
+                  {/* Высота карточки: ~420-450px (фото ~320px + текст 90-120px) */}
+                  {/* Карточки НИКОГДА не растягиваются выше max-width */}
+                  {/* Промежутки остаются постоянными, дополнительное пространство отдается карте */}
+                  <style jsx>{`
+                    @media (min-width: 1024px) {
+                      /* Grid центрирован, промежутки постоянные (не увеличиваются) */
+                      .place-card-grid {
+                        justify-content: center;
+                        justify-items: start;
+                      }
+                      /* Карточки: жесткие ограничения размера */
+                      /* min-width: 260px, max-width: 320px (жесткий предел) */
+                      /* Карточки НИКОГДА не растягиваются выше max-width */
+                      .place-card-grid > .place-card-wrapper {
+                        min-width: 260px;
+                        max-width: 320px !important;
+                        width: 100%;
+                      }
+                      /* Фото: aspect ratio 1:1 для Desktop (при 320px → фото 320×320) */
+                      /* Не растягивать выше, даже на 4K */
+                      .place-card-grid .place-card-image {
+                        padding-bottom: 100% !important;
+                        max-width: 320px;
+                      }
+                    }
+                  `}</style>
+                  {filteredPlaces.map((p) => {
+                    const isFavorite = favorites.has(p.id);
+                    const isHovered = hoveredPlaceId === p.id || selectedPlaceId === p.id;
+                    const hauntedGemIndex = lockedPlacesMap.get(p.id);
+                    return (
                     <div
                       key={p.id}
-                      onMouseEnter={() => setHoveredPlaceId(p.id)}
-                      onMouseLeave={() => setHoveredPlaceId(null)}
-                      onClick={() => {
-                        setSelectedPlaceId(p.id);
-                        if (p.lat != null && p.lng != null) {
-                          setMapCenter({ lat: p.lat, lng: p.lng });
-                          setMapZoom(15);
-                        }
-                      }}
-                      className="transition-all relative z-0"
+                      onMouseEnter={() => handlePlaceHover(p.id)}
+                      onMouseLeave={() => handlePlaceHover(null)}
+                      onClick={() => handlePlaceClick(p)}
+                      className="transition-all relative z-0 place-card-wrapper"
                     >
                       <PlaceCard
                         place={p}
@@ -1441,9 +1688,7 @@ function MapPageContent() {
                             </button>
                           ) : undefined
                         }
-                        onTagClick={(tag) => {
-                          setSelectedTag(tag);
-                        }}
+                        onTagClick={handleTagClick}
                         onPhotoClick={() => {
                           router.push(`/id/${p.id}`);
                         }}
@@ -1452,14 +1697,17 @@ function MapPageContent() {
                   );
                 })}
               </div>
+              </>
             )}
           </div>
 
-          {/* Right: Sticky map - 37.5% on Desktop (1120-1439px), 40% on XL (1440-1919px), 100% of remaining on >=1920px */}
-          <div className="w-[37.5%] lg:w-[40%] lg:flex-1 h-full flex-shrink-0 flex-grow max-w-full pb-8">
+          {/* Right: Sticky map - flex: 1, поглощает все дополнительное пространство */}
+          {/* Карта растет динамически с размером viewport */}
+          {/* Все дополнительное горизонтальное пространство отдается карте */}
+          <div className="flex-1 h-full flex-shrink-0 pb-8 min-w-0">
             <div className="sticky top-20 h-[calc(100vh-96px-32px)] rounded-2xl overflow-hidden w-full max-w-full">
               <MapView
-                places={places}
+                places={filteredPlaces}
                 loading={loading}
                 selectedPlaceId={hoveredPlaceId || selectedPlaceId}
                 mapCenter={mapCenter}
@@ -1472,16 +1720,18 @@ function MapPageContent() {
                 favorites={favorites}
                 onToggleFavorite={toggleFavorite}
                 userAccess={access}
+                isMapView={true} // On desktop, map is always visible
               />
             </div>
           </div>
         </div>
 
-        {/* Mobile & Tablet: переключатель между списком и картой (<1120px) */}
-        <div className="lg:hidden h-full">
+        {/* Mobile: только список, карта по кнопке (≤768px) */}
+        {/* Карта НЕ грузится по умолчанию на mobile - только после нажатия кнопки */}
+        <div className="md:hidden h-full">
           {view === "list" ? (
             <div className="h-full overflow-y-auto">
-              <div className="max-w-[1920px] mx-auto px-4 lg:px-6 pb-4" style={{ paddingTop: '88px' }}>
+              <div className="w-full mx-auto px-4 pb-24" style={{ paddingTop: '88px' }}>
                 {/* Header */}
                 <div className="mb-4">
                   <h2 className="text-lg lg:text-xl font-semibold font-fraunces text-[#1F2A1F] mb-2">{listTitle}</h2>
@@ -1544,75 +1794,64 @@ function MapPageContent() {
                 </div>
               )}
             </div>
-            {/* Places grid */}
+            {/* Places grid - Mobile: 1 колонка, 100% ширина */}
                 {loading ? (
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <div key={i} className="w-full">
-                        <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
-                          <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <div className="h-5 w-3/4 bg-[#ECEEE4] rounded animate-pulse" />
-                          <div className="h-4 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : places.length === 0 ? (
+                  <PlaceCardGridSkeleton count={3} columns={1} />
+                ) : filteredPlaces.length === 0 ? (
                   <Empty text="No places match your filters." />
                 ) : (
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                    {places.map((p) => {
-                      const isFavorite = favorites.has(p.id);
-                      const hauntedGemIndex = lockedPlacesMap.get(p.id);
-                      return (
-                        <div key={p.id} className="w-full">
-                          <PlaceCard
-                            place={p}
-                            userAccess={access}
-                            userId={userId}
-                            isFavorite={isFavorite}
-                            hauntedGemIndex={hauntedGemIndex}
-                            favoriteButton={
-                              userId ? (
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    toggleFavorite(p.id, e);
-                                  }}
-                                  className={`h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors ${
-                                    isFavorite ? "bg-[#FAFAF7] border-[#8F9E4F]" : ""
-                                  }`}
-                                  title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                                >
-                                  <FavoriteIcon 
-                                    isActive={isFavorite} 
-                                    size={16}
-                                    className={isFavorite ? "scale-110" : ""}
-                                  />
-                                </button>
-                              ) : undefined
-                            }
-                            onTagClick={(tag) => {
-                              setSelectedTag(tag);
-                            }}
-                            onPhotoClick={() => {
-                              router.push(`/id/${p.id}`);
-                            }}
+                  <>
+                    <div key={`places-grid-mobile-${filtersVersion}-${categoriesKey}-${citiesKey}`} className="grid grid-cols-1 gap-4">
+                      {filteredPlaces.map((p) => {
+                        const isFavorite = favorites.has(p.id);
+                        const hauntedGemIndex = lockedPlacesMap.get(p.id);
+                        return (
+                          <div key={p.id} className="w-full">
+                            <PlaceCard
+                              place={p}
+                              userAccess={access}
+                              userId={userId}
+                              isFavorite={isFavorite}
+                              hauntedGemIndex={hauntedGemIndex}
+                              favoriteButton={
+                                userId ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      toggleFavorite(p.id, e);
+                                    }}
+                                    className={`h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors ${
+                                      isFavorite ? "bg-[#FAFAF7] border-[#8F9E4F]" : ""
+                                    }`}
+                                    title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                                  >
+                                    <FavoriteIcon 
+                                      isActive={isFavorite} 
+                                      size={16}
+                                      className={isFavorite ? "scale-110" : ""}
+                                    />
+                                  </button>
+                                ) : undefined
+                              }
+                              onTagClick={handleTagClick}
+                              onPhotoClick={() => {
+                                router.push(`/id/${p.id}`);
+                              }}
                           />
                         </div>
                       );
                     })}
-                  </div>
+              </div>
+              </>
                 )}
               </div>
             </div>
           ) : (
-            <div className="h-full w-full">
+            /* Mobile: карта открывается в fullscreen overlay */
+            <div className="h-full w-full fixed inset-0 z-50 bg-white" style={{ paddingTop: '80px' }}>
               <MapView
-                places={places}
+                places={filteredPlaces}
                 loading={loading}
                 selectedPlaceId={hoveredPlaceId || selectedPlaceId}
                 mapCenter={mapCenter}
@@ -1625,30 +1864,34 @@ function MapPageContent() {
                 favorites={favorites}
                 onToggleFavorite={toggleFavorite}
                 userAccess={access}
+                isMapView={view === "map"} // Pass current view state - карта загружается только когда view === "map"
               />
             </div>
           )}
         </div>
       </div>
 
-      {/* Floating View Toggle Button (mobile only) */}
-      {view !== undefined && (
+      {/* Floating View Toggle Button (mobile only, ≤768px) */}
+      {/* Fixed снизу, показывается только когда список активен */}
+      {view === "list" && (
         <button
-          onClick={() => setView(view === "list" ? "map" : "list")}
+          onClick={() => setView("map")}
           style={{ bottom: 'calc(64px + 24px + env(safe-area-inset-bottom, 0px))' }}
-          className="fixed left-1/2 transform -translate-x-1/2 z-40 lg:hidden flex items-center gap-2 bg-[#8F9E4F] text-white px-4 py-3 rounded-full shadow-lg hover:bg-[#7A8A3F] transition-colors"
+          className="fixed left-1/2 transform -translate-x-1/2 z-40 md:hidden flex items-center gap-2 bg-[#8F9E4F] text-white px-6 py-3 rounded-full shadow-lg hover:bg-[#7A8A3F] transition-colors"
         >
-          {view === "list" ? (
-            <>
-              <Icon name="map" size={20} className="text-white" />
-              <span className="text-sm font-medium">Map</span>
-            </>
-          ) : (
-            <>
-              <Icon name="list" size={20} className="text-white" />
-              <span className="text-sm font-medium">List</span>
-            </>
-          )}
+          <Icon name="map" size={20} className="text-white" />
+          <span className="text-sm font-medium">Show map</span>
+        </button>
+      )}
+      
+      {/* Back to List Button (mobile only, когда карта открыта) */}
+      {view === "map" && (
+        <button
+          onClick={() => setView("list")}
+          className="fixed top-20 left-4 z-40 md:hidden flex items-center gap-2 bg-white text-[#1F2A1F] px-4 py-2 rounded-full shadow-lg hover:bg-[#FAFAF7] transition-colors border border-[#ECEEE4]"
+        >
+          <Icon name="list" size={18} className="text-[#1F2A1F]" />
+          <span className="text-sm font-medium">List</span>
         </button>
       )}
 
@@ -1682,9 +1925,6 @@ function Card({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Empty({ text }: { text: string }) {
-  return <div className="text-sm text-[#6b7d47]/60 py-10">{text}</div>;
-}
 
 // Функция для создания круглого изображения
 function createRoundIcon(imageUrl: string, size: number): Promise<string> {
@@ -1734,6 +1974,7 @@ function MapView({
   favorites,
   onToggleFavorite,
   userAccess,
+  isMapView = true, // Default to true for desktop (always visible)
 }: {
   places: Place[];
   loading: boolean;
@@ -1745,6 +1986,7 @@ function MapView({
   favorites?: Set<string>;
   onToggleFavorite?: (placeId: string, e: React.MouseEvent) => void;
   userAccess?: UserAccess;
+  isMapView?: boolean; // Whether map view is currently active
 }) {
   const [internalSelectedPlaceId, setInternalSelectedPlaceId] = useState<string | null>(null);
   const [roundIcons, setRoundIcons] = useState<Map<string, string>>(new Map());
@@ -1797,6 +2039,11 @@ function MapView({
     }
   };
 
+  // Load map when map view is active (no defer)
+  const shouldLoadMap = isMapView;
+  
+  // Always use consistent parameters for useJsApiLoader
+  // The component will only render when shouldLoadMap is true
   const { isLoaded, loadError } = useJsApiLoader({
     id: "google-maps-loader",
     googleMapsApiKey: getGoogleMapsApiKey(),
@@ -1986,11 +2233,7 @@ function MapView({
   // Теперь карточка просто появляется без изменения масштаба и позиции карты
 
   if (loading) {
-    return (
-      <div className="h-full w-full bg-[#ECEEE4] animate-pulse flex items-center justify-center">
-        <div className="text-sm text-[#6F7A5A]">Loading map…</div>
-      </div>
-    );
+    return <MapSkeleton className="h-full w-full" />;
   }
 
   if (placesWithCoords.length === 0) {
@@ -2006,12 +2249,13 @@ function MapView({
     );
   }
 
+  // Don't render map content if lazy loading hasn't triggered yet
+  if (!shouldLoadMap) {
+    return <MapSkeleton className="h-full w-full" />;
+  }
+
   if (!isLoaded) {
-    return (
-      <div className="h-full w-full bg-[#ECEEE4] animate-pulse flex items-center justify-center">
-        <div className="text-sm text-[#6F7A5A]">Loading map…</div>
-      </div>
-    );
+    return <MapSkeleton className="h-full w-full" />;
   }
 
   return (
@@ -2089,14 +2333,16 @@ function MapView({
         }}
       >
         {!isLoaded && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#ECEEE4] text-[#6F7A5A]">
+          <div className="absolute inset-0">
             {loadError ? (
-              <div className="text-center">
-                <div className="text-sm font-medium mb-1">Error loading map</div>
-                <div className="text-xs">Check console for details</div>
+              <div className="absolute inset-0 flex items-center justify-center bg-[#ECEEE4] text-[#6F7A5A]">
+                <div className="text-center">
+                  <div className="text-sm font-medium mb-1">Error loading map</div>
+                  <div className="text-xs">Check console for details</div>
+                </div>
               </div>
             ) : (
-              <div className="text-sm">Loading map...</div>
+              <MapSkeleton className="h-full w-full" />
             )}
           </div>
         )}

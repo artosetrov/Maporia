@@ -14,6 +14,7 @@ import { DEFAULT_CITY } from "../constants";
 import { useUserAccess } from "../hooks/useUserAccess";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import { useMemo } from "react";
+import { PlaceCardGridSkeleton } from "../components/Skeleton";
 
 type Place = {
   id: string;
@@ -245,19 +246,7 @@ export default function SavedPage() {
             </div>
           )}
           {loading ? (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-6 lg:gap-y-7">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="w-full">
-                  <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
-                    <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <div className="h-5 w-3/4 bg-[#ECEEE4] rounded animate-pulse" />
-                    <div className="h-4 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <PlaceCardGridSkeleton count={6} columns={2} />
           ) : places.length === 0 ? (
             <div className="text-center py-16">
               <div className="text-sm text-[#6F7A5A] mb-1">No saved places</div>

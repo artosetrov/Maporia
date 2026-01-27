@@ -17,7 +17,9 @@ if (typeof window !== 'undefined') {
     isProduction: process.env.NODE_ENV === 'production',
   };
   
-  console.log('[Supabase] Environment check:', envCheck);
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Supabase] Environment check:', envCheck);
+  }
   
   // In production, also log to help debug
   if (process.env.NODE_ENV === 'production') {
@@ -84,8 +86,8 @@ export const supabase = createClient<Database>(safeUrl, safeKey, {
   },
 });
 
-// Log Supabase client initialization in production
-if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
+// Log Supabase client initialization (dev only)
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   console.log('[Supabase] Client initialized:', {
     url: safeUrl.substring(0, 30) + '...',
     hasValidConfig: hasValidSupabaseConfig,
@@ -142,7 +144,7 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
                   duration: `${testDuration}ms`,
                 });
               }
-            } else {
+            } else if (process.env.NODE_ENV === 'development') {
               console.log('[Supabase] Test query success:', {
                 count: count || 0,
                 duration: `${testDuration}ms`,
@@ -216,8 +218,10 @@ export function getAuthRedirectUrl(path: string = "/"): string {
   
   const redirectUrl = `${origin}${normalizedPath}`;
   
-  // Debug logging - always log to help debug redirect issues
-  console.log('[Auth] Redirect URL:', redirectUrl, 'from origin:', origin, 'current URL:', window.location.href);
+  // Debug logging (dev only)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Auth] Redirect URL:', redirectUrl, 'from origin:', origin, 'current URL:', window.location.href);
+  }
   
   return redirectUrl;
 }

@@ -17,6 +17,7 @@ import { DEFAULT_CITY } from "../constants";
 import PremiumUpsellModal from "../components/PremiumUpsellModal";
 import PremiumBadge from "../components/PremiumBadge";
 import { getRecentlyViewedPlaceIds } from "../utils";
+import { ProfileSkeleton, PlaceCardGridSkeleton, SkeletonBase } from "../components/Skeleton";
 
 type Place = {
   id: string;
@@ -876,8 +877,12 @@ function ProfileInner() {
             }
             // For other sections, return 0 as we redirect to /map
             return 0;
-          } catch (error) {
-            console.error("Error in getFilteredCount:", error);
+          } catch (error: unknown) {
+            console.error("Error in getFilteredCount:", {
+              message: (error as Error)?.message,
+              name: (error as Error)?.name,
+              string: String(error),
+            });
             return 0;
           }
         }}
@@ -1116,25 +1121,7 @@ function ProfileInner() {
               }}
             >
               {loading ? (
-                <div className="space-y-4">
-                  <div className="bg-white rounded-[24px] p-6 border border-[#ECEEE4] shadow-sm">
-                    <div className="flex items-center gap-6">
-                      <div className="h-16 w-16 rounded-full bg-[#ECEEE4] animate-pulse" />
-                      <div className="flex-1 space-y-2">
-                        <div className="h-6 w-32 bg-[#ECEEE4] rounded animate-pulse" />
-                        <div className="h-4 w-24 bg-[#ECEEE4] rounded animate-pulse" />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    {Array.from({ length: 2 }).map((_, i) => (
-                      <div key={i} className="bg-white rounded-2xl border border-[#ECEEE4] p-4">
-                        <div className="aspect-[4/3] rounded-xl bg-[#ECEEE4] mb-3 animate-pulse" />
-                        <div className="h-4 w-24 bg-[#ECEEE4] rounded animate-pulse mx-auto" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <ProfileSkeleton />
               ) : (
                 <>
                   {/* Profile Hero Card */}
@@ -3125,10 +3112,16 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="bg-white border border-[#ECEEE4] rounded-2xl p-6">
               <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-full bg-[#ECEEE4] animate-pulse" />
+                <div className="relative h-12 w-12 rounded-full overflow-hidden">
+                  <SkeletonBase className="h-full w-full rounded-full" />
+                </div>
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 w-32 bg-[#ECEEE4] rounded animate-pulse" />
-                  <div className="h-3 w-24 bg-[#ECEEE4] rounded animate-pulse" />
+                  <div className="relative h-4 w-32 rounded overflow-hidden">
+                    <SkeletonBase className="h-full w-full" />
+                  </div>
+                  <div className="relative h-3 w-24 rounded overflow-hidden">
+                    <SkeletonBase className="h-full w-full" />
+                  </div>
                 </div>
               </div>
             </div>
