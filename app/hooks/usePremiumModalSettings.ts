@@ -69,26 +69,52 @@ export function usePremiumModalSettings() {
         if (error?.name === 'AbortError' || error?.message?.includes('abort') || (error as any)?.code === 'ECONNABORTED') {
           return;
         }
-        // Only log non-abort errors in production for debugging
-        if (process.env.NODE_ENV === 'production') {
-          console.warn("Premium modal settings not available, using defaults:", error?.message || error);
-        } else {
-          console.error("Error loading premium modal settings:", error);
+        // Check if error has useful information
+        const hasUsefulInfo = error?.message || error?.code || error?.details || error?.hint;
+        // Only log if error has useful information
+        if (hasUsefulInfo) {
+          if (process.env.NODE_ENV === 'production') {
+            console.warn("Premium modal settings not available, using defaults:", {
+              message: error?.message,
+              code: error?.code,
+              details: error?.details,
+            });
+          } else {
+            console.error("Error loading premium modal settings:", {
+              message: error?.message,
+              code: error?.code,
+              details: error?.details,
+              hint: error?.hint,
+            });
+          }
         }
-        // Use defaults on error
+        // Use defaults on error (silently if no useful info)
       }
     } catch (error: any) {
       // Silently ignore AbortError and connection errors
       if (error?.name === 'AbortError' || error?.message?.includes('abort') || error?.code === 'ECONNABORTED') {
         return;
       }
-      // Only log non-abort errors
-      if (process.env.NODE_ENV === 'production') {
-        console.warn("Premium modal settings not available, using defaults:", error?.message || String(error));
-      } else {
-        console.error("Error loading premium modal settings:", error);
+      // Check if error has useful information
+      const hasUsefulInfo = error?.message || error?.name || error?.code || (typeof error === 'string');
+      // Only log if error has useful information
+      if (hasUsefulInfo) {
+        if (process.env.NODE_ENV === 'production') {
+          console.warn("Premium modal settings not available, using defaults:", {
+            message: error?.message || String(error),
+            name: error?.name,
+            code: error?.code,
+          });
+        } else {
+          console.error("Error loading premium modal settings:", {
+            message: error?.message || String(error),
+            name: error?.name,
+            code: error?.code,
+            error: error,
+          });
+        }
       }
-      // Use defaults on error
+      // Use defaults on error (silently if no useful info)
     } finally {
       setLoading(false);
     }

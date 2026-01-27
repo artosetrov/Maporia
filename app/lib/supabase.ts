@@ -93,11 +93,19 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
   });
   
   // Test connection immediately with timeout and proper error handling
+  // Use a longer timeout (20 seconds) and make it non-blocking
+  // This is a diagnostic check only - it should not block or warn unnecessarily
+  let sessionCheckCompleted = false;
   const sessionCheckTimeout = setTimeout(() => {
-    console.warn('[Supabase] Initial session check timed out');
-  }, 5000);
+    if (!sessionCheckCompleted) {
+      // Only log as info (not warning) - this is expected in some network conditions
+      // The app will continue to work even if this check is slow
+      console.log('[Supabase] Initial session check still in progress (this is normal)');
+    }
+  }, 20000); // Increased to 20 seconds
   
   supabase.auth.getSession().then(({ data, error }) => {
+    sessionCheckCompleted = true;
     clearTimeout(sessionCheckTimeout);
     if (error) {
       // Silently ignore AbortError
@@ -154,15 +162,24 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
       }
     }
   }).catch((err) => {
+    sessionCheckCompleted = true;
     clearTimeout(sessionCheckTimeout);
     // Silently ignore AbortError
     if (err?.name === 'AbortError' || err?.message?.includes('abort') || err?.message?.includes('signal is aborted')) {
       return;
     }
-    console.error('[Supabase] Initial session check exception:', {
-      name: err?.name,
-      message: err?.message,
-    });
+    // Only log non-abort errors, and make them warnings in production
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('[Supabase] Initial session check exception (non-critical):', {
+        name: err?.name,
+        message: err?.message,
+      });
+    } else {
+      console.error('[Supabase] Initial session check exception:', {
+        name: err?.name,
+        message: err?.message,
+      });
+    }
   });
 }
 

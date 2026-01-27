@@ -2378,12 +2378,26 @@ function ElementsSection() {
           setIsLoading(false);
           return;
         }
-        // Only log non-abort errors
-        if (process.env.NODE_ENV === 'production') {
-          console.warn("Premium modal settings not available:", error?.message || String(error));
-        } else {
-          console.error("Error loading premium modal settings:", error);
+        // Check if error has useful information
+        const hasUsefulInfo = error?.message || error?.name || error?.code || (typeof error === 'string');
+        // Only log if error has useful information
+        if (hasUsefulInfo) {
+          if (process.env.NODE_ENV === 'production') {
+            console.warn("Premium modal settings not available:", {
+              message: error?.message || String(error),
+              name: error?.name,
+              code: error?.code,
+            });
+          } else {
+            console.error("Error loading premium modal settings:", {
+              message: error?.message || String(error),
+              name: error?.name,
+              code: error?.code,
+              error: error,
+            });
+          }
         }
+        // Silently use defaults if no useful info
       } finally {
         setIsLoading(false);
       }
