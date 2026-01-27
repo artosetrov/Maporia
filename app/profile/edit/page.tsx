@@ -123,12 +123,12 @@ export default function ProfileEditorHub() {
     return (
       <main className="min-h-screen bg-[#FAFAF7]">
         <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
-          <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
+          <div className="h-8 w-48 bg-[#ECEEE4] rounded animate-pulse" />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-white rounded-2xl p-6 border border-gray-200">
-                <div className="h-6 w-32 bg-gray-200 rounded mb-4 animate-pulse" />
-                <div className="h-10 w-full bg-gray-200 rounded animate-pulse" />
+              <div key={i} className="bg-white rounded-2xl p-6 border border-[#ECEEE4]">
+                <div className="h-6 w-32 bg-[#ECEEE4] rounded mb-4 animate-pulse" />
+                <div className="h-10 w-full bg-[#ECEEE4] rounded animate-pulse" />
               </div>
             ))}
           </div>

@@ -51,9 +51,14 @@ export default function PremiumUpsellModal({
   const slideIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Reload settings when modal opens to ensure we have the latest data
+  // Use a ref to prevent multiple simultaneous calls
+  const reloadingRef = useRef(false);
   useEffect(() => {
-    if (open && reloadSettings) {
-      reloadSettings();
+    if (open && reloadSettings && !reloadingRef.current) {
+      reloadingRef.current = true;
+      reloadSettings().finally(() => {
+        reloadingRef.current = false;
+      });
     }
   }, [open, reloadSettings]);
 

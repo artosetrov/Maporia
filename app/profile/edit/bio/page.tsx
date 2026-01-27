@@ -156,7 +156,7 @@ export default function BioEditorPage() {
       {/* Body */}
       <div className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-8 pt-[80px] lg:pt-8">
         {error && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50/50 p-3 text-sm text-red-700">
+          <div className="mb-4 rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 p-3 text-sm text-[#C96A5B]">
             {error}
           </div>
         )}
@@ -186,7 +186,7 @@ export default function BioEditorPage() {
                 "w-full rounded-xl border px-4 py-4 text-base text-[#1F2A1F] placeholder:text-[#A8B096] outline-none transition resize-none",
                 isValid || bio.length === 0
                   ? "border-[#ECEEE4] bg-[#FAFAF7] focus:bg-white focus:border-[#8F9E4F]"
-                  : "border-red-300 bg-red-50/50 focus:bg-white focus:border-red-400"
+                  : "border-[#C96A5B]/50 bg-[#C96A5B]/10 focus:bg-white focus:border-[#C96A5B]"
               )}
               maxLength={500}
               autoFocus
@@ -194,7 +194,7 @@ export default function BioEditorPage() {
             <div className="mt-2 flex items-center justify-between">
               <p className={cx(
                 "text-xs",
-                isValid || bio.length === 0 ? "text-[#6F7A5A]" : "text-red-600"
+                isValid || bio.length === 0 ? "text-[#6F7A5A]" : "text-[#C96A5B]"
               )}>
                 {bio.length > 500
                   ? "Bio must be 500 characters or less"

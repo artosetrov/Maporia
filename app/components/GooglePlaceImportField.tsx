@@ -138,7 +138,7 @@ export default function GooglePlaceImportField({
               disabled={importing}
             />
             {importError && (
-              <p className="text-xs text-red-600">{importError}</p>
+              <p className="text-xs text-[#C96A5B]">{importError}</p>
             )}
             {importSuccess && (
               <p className="text-xs text-green-600 flex items-center gap-1">
@@ -200,7 +200,7 @@ export default function GooglePlaceImportField({
           </div>
 
           {importError && (
-            <div className="rounded-xl border border-red-200 bg-red-50/50 p-3 text-sm text-red-700">
+            <div className="rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 p-3 text-sm text-[#C96A5B]">
               {importError}
             </div>
           )}

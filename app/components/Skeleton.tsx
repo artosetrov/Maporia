@@ -82,23 +82,23 @@ export function ActivityItemSkeleton() {
     <div className="py-4 px-4 border-b border-[#6b7d47]/10">
       <div className="flex items-start gap-3">
         {/* Icon skeleton */}
-        <div className="w-6 h-6 rounded-full bg-gray-200 flex-shrink-0">
+        <div className="w-6 h-6 rounded-full bg-[#ECEEE4] flex-shrink-0">
           <SkeletonShimmer />
         </div>
         
         <div className="flex-1 min-w-0">
           {/* Header skeleton */}
           <div className="flex items-center justify-between mb-2">
-            <div className="h-4 w-32 bg-gray-200 rounded">
+            <div className="h-4 w-32 bg-[#ECEEE4] rounded">
               <SkeletonShimmer />
             </div>
-            <div className="h-3 w-20 bg-gray-200 rounded">
+            <div className="h-3 w-20 bg-[#ECEEE4] rounded">
               <SkeletonShimmer />
             </div>
           </div>
           
           {/* Comment text skeleton (optional) */}
-          <div className="h-10 w-full bg-gray-100 rounded-xl mb-3">
+          <div className="h-10 w-full bg-[#ECEEE4] rounded-xl mb-3">
             <SkeletonShimmer />
           </div>
           
@@ -157,7 +157,7 @@ export function ProfileSkeleton() {
   return (
     <div className="space-y-6">
       {/* Hero card skeleton */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-6">
+      <div className="bg-white border border-[#ECEEE4] rounded-2xl p-6">
         <div className="flex items-start gap-6">
           {/* Avatar skeleton */}
           <div className="h-24 w-24 rounded-full bg-[#ECEEE4] flex-shrink-0">

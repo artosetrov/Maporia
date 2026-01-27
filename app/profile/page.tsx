@@ -1140,6 +1140,12 @@ function ProfileInner() {
                         <div className="text-[#6F7A5A] leading-tight m-0 text-center" style={{ fontSize: '14px', marginTop: '4px' }}>
                           {getUserStatus(userRole, profile?.subscription_status, userIsAdmin)}
                         </div>
+                        {/* Description for Artem Osetrov */}
+                        {displayName?.includes("Artem Osetrov") && (
+                          <div className="text-[#6F7A5A] leading-relaxed m-0 text-center mt-3 px-2" style={{ fontSize: '13px', lineHeight: '1.5' }}>
+                            Artem Osetrov is a designer specializing in UI/UX design. Their professional focus centers on creating user interfaces and user experiences for digital products. They are interested in design principles, user-centered design methodologies, and interface development.
+                          </div>
+                        )}
                       </div>
 
                       {/* Right: Stats (≈ 40%) */}
@@ -1472,6 +1478,12 @@ function AboutSection({
             <div className="text-[#6F7A5A] leading-tight m-0 text-center" style={{ fontSize: '14px', marginTop: '4px' }}>
               {getUserStatus(userRole, subscriptionStatus, isAdmin)}
             </div>
+            {/* Description for Artem Osetrov */}
+            {displayName?.includes("Artem Osetrov") && (
+              <div className="text-[#6F7A5A] leading-relaxed m-0 text-center mt-3 px-2" style={{ fontSize: '13px', lineHeight: '1.5' }}>
+                Artem Osetrov is a designer specializing in UI/UX design. Their professional focus centers on creating user interfaces and user experiences for digital products. They are interested in design principles, user-centered design methodologies, and interface development.
+              </div>
+            )}
           </div>
 
           {/* Right: Stats (≈ 40%) */}
@@ -2322,11 +2334,17 @@ function ElementsSection() {
           return;
         }
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
         const response = await fetch("/api/admin/premium-modal-settings", {
           headers: {
             Authorization: `Bearer ${session.access_token}`,
           },
+          signal: controller.signal,
         });
+        
+        clearTimeout(timeoutId);
 
         if (response.ok) {
           const contentType = response.headers.get("content-type");
@@ -2342,12 +2360,30 @@ function ElementsSection() {
           // If not OK, try to get error message
           const contentType = response.headers.get("content-type");
           if (contentType && contentType.includes("application/json")) {
-            const error = await response.json();
-            console.error("Error loading settings:", error.error || "Unknown error");
+            try {
+              const error = await response.json();
+              if (process.env.NODE_ENV === 'production') {
+                console.warn("Premium modal settings not available:", error.error || "Unknown error");
+              } else {
+                console.error("Error loading settings:", error.error || "Unknown error");
+              }
+            } catch (parseError) {
+              // Ignore JSON parse errors
+            }
           }
         }
-      } catch (error) {
-        console.error("Error loading premium modal settings:", error);
+      } catch (error: any) {
+        // Silently ignore AbortError and connection errors
+        if (error?.name === 'AbortError' || error?.message?.includes('abort') || error?.code === 'ECONNABORTED') {
+          setIsLoading(false);
+          return;
+        }
+        // Only log non-abort errors
+        if (process.env.NODE_ENV === 'production') {
+          console.warn("Premium modal settings not available:", error?.message || String(error));
+        } else {
+          console.error("Error loading premium modal settings:", error);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -2368,6 +2404,9 @@ function ElementsSection() {
         return;
       }
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout for save
+      
       const response = await fetch("/api/admin/premium-modal-settings", {
         method: "POST",
         headers: {
@@ -2375,7 +2414,10 @@ function ElementsSection() {
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ settings: modalContent }),
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const contentType = response.headers.get("content-type");
@@ -2417,8 +2459,17 @@ function ElementsSection() {
         alert(errorMessage);
       }
     } catch (error) {
-      console.error("Error saving premium modal settings:", error);
+      // Silently ignore AbortError
+      if (error instanceof Error && (error.name === 'AbortError' || error.message?.includes('abort'))) {
+        return;
+      }
+      // Only show error for non-abort errors
       const errorMessage = error instanceof Error ? error.message : "Failed to save settings. Please try again.";
+      if (process.env.NODE_ENV === 'production') {
+        console.warn("Error saving premium modal settings:", errorMessage);
+      } else {
+        console.error("Error saving premium modal settings:", error);
+      }
       alert(errorMessage);
     } finally {
       setIsSaving(false);
@@ -2942,7 +2993,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
       <h1 className="hidden lg:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Users</h1>
       
       {error && (
-        <div className="mb-4 p-4 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm">
+        <div className="mb-4 p-4 rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 text-[#C96A5B] text-sm">
           {error}
         </div>
       )}
@@ -3042,11 +3093,11 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
                     <button
                       onClick={() => deleteUser(user.id)}
                       disabled={deletingUserId === user.id}
-                      className="p-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="p-2 rounded-lg border border-[#C96A5B]/30 text-[#C96A5B] hover:bg-[#C96A5B]/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Delete user"
                     >
                       {deletingUserId === user.id ? (
-                        <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                        <div className="w-4 h-4 border-2 border-[#C96A5B] border-t-transparent rounded-full animate-spin" />
                       ) : (
                         <Icon name="delete" size={16} />
                       )}

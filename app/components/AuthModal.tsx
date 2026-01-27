@@ -160,7 +160,7 @@ export default function AuthModal({ isOpen, onClose, redirectPath }: AuthModalPr
             </p>
 
             {error && (
-              <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+              <div className="mb-4 p-3 rounded-lg bg-[#C96A5B]/10 border border-[#C96A5B]/30 text-[#C96A5B] text-sm">
                 {error}
               </div>
             )}

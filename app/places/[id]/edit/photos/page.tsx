@@ -424,7 +424,7 @@ export default function PhotosEditorPage() {
       {/* Body */}
       <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 pb-24">
         {error && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50/50 p-3 text-sm text-red-700">
+          <div className="mb-4 rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 p-3 text-sm text-[#C96A5B]">
             {error}
           </div>
         )}
@@ -475,7 +475,7 @@ export default function PhotosEditorPage() {
                   </div>
                 )}
                 {photo.error && (
-                  <div className="absolute inset-0 bg-red-500/40 flex items-center justify-center">
+                  <div className="absolute inset-0 bg-[#C96A5B]/40 flex items-center justify-center">
                     <div className="text-white text-xs px-2 text-center">{photo.error}</div>
                   </div>
                 )}
@@ -529,7 +529,7 @@ export default function PhotosEditorPage() {
                         removePhoto(photo.id);
                         setOpenMenuId(null);
                       }}
-                      className="w-full px-4 py-3 text-left text-sm text-[#C96A5B] hover:bg-red-50 transition-colors flex items-center gap-2"
+                      className="w-full px-4 py-3 text-left text-sm text-[#C96A5B] hover:bg-[#C96A5B]/10 transition-colors flex items-center gap-2"
                     >
                       <Icon name="delete" size={16} className="text-[#C96A5B]" />
                       Delete photo
@@ -551,7 +551,7 @@ export default function PhotosEditorPage() {
                   )}
                   <button
                     onClick={() => removePhoto(photo.id)}
-                    className="rounded-lg bg-red-500/90 backdrop-blur-sm px-2 py-1.5 text-xs font-medium text-white hover:bg-red-600 transition"
+                    className="rounded-lg bg-[#C96A5B] backdrop-blur-sm px-2 py-1.5 text-xs font-medium text-white hover:bg-[#B85A4B] transition"
                   >
                     Remove
                   </button>

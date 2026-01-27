@@ -539,8 +539,8 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
     return (
       <div className="mb-6 lg:mb-8 lg:mb-9">
         <div className="flex items-center justify-between mb-3 lg:mb-4 h-10 lg:h-12">
-          <div className="h-6 w-32 bg-gray-200 rounded animate-pulse" />
-          <div className="h-8 w-8 rounded-full bg-gray-200 animate-pulse" />
+          <div className="h-6 w-32 bg-[#ECEEE4] rounded animate-pulse" />
+          <div className="h-8 w-8 rounded-full bg-[#ECEEE4] animate-pulse" />
         </div>
         <div className="overflow-x-auto scrollbar-hide">
           <div className="flex gap-3 pb-2" style={{ width: "max-content" }}>
@@ -548,11 +548,11 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
               <div key={i} className="flex-shrink-0" style={{ width: 'var(--home-card-width, 220px)' }}>
                 <div className="w-full">
                   <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
-                    <div className="absolute inset-0 rounded-2xl bg-gray-200 animate-pulse" />
+                    <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <div className="h-5 w-3/4 bg-gray-200 rounded animate-pulse" />
-                    <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                    <div className="h-5 w-3/4 bg-[#ECEEE4] rounded animate-pulse" />
+                    <div className="h-4 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
                   </div>
                 </div>
               </div>
@@ -725,7 +725,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
                      style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
                   {/* Image collage section - aspect 1:1 */}
                   <div className="relative w-full aspect-square">
-                    <div className="absolute inset-0 bg-gray-100 p-2 flex flex-wrap gap-1">
+                    <div className="absolute inset-0 bg-[#ECEEE4] p-2 flex flex-wrap gap-1">
                       {places.slice(0, 3).map((place, idx) => (
                         place.cover_url ? (
                           <div 
@@ -741,7 +741,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
                         ) : null
                       ))}
                       {places.length < 3 && (
-                        <div className="w-full h-1/2 rounded-lg bg-gray-200 flex items-center justify-center">
+                        <div className="w-full h-1/2 rounded-lg bg-[#ECEEE4] flex items-center justify-center">
                           <Icon name="photo" size={24} className="text-[#A8B096]" />
                         </div>
                       )}

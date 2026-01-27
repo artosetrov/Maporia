@@ -384,8 +384,8 @@ export default function HomePage() {
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="mb-6 lg:mb-8 lg:mb-9">
                   <div className="flex items-center justify-between mb-3 lg:mb-4 h-10 lg:h-12">
-                    <div className="h-6 w-32 bg-gray-200 rounded animate-pulse" />
-                    <div className="h-8 w-8 rounded-full bg-gray-200 animate-pulse" />
+                    <div className="h-6 w-32 bg-[#ECEEE4] rounded animate-pulse" />
+                    <div className="h-8 w-8 rounded-full bg-[#ECEEE4] animate-pulse" />
                   </div>
                   <div className="overflow-x-auto scrollbar-hide">
                     <div className="flex gap-3 pb-2" style={{ width: "max-content" }}>
@@ -393,11 +393,11 @@ export default function HomePage() {
                         <div key={j} className="flex-shrink-0" style={{ width: 'var(--home-card-width, 220px)' }}>
                           <div className="w-full">
                             <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
-                              <div className="absolute inset-0 rounded-2xl bg-gray-200 animate-pulse" />
+                              <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
                             </div>
                             <div className="flex flex-col gap-1">
-                              <div className="h-5 w-3/4 bg-gray-200 rounded animate-pulse" />
-                              <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                              <div className="h-5 w-3/4 bg-[#ECEEE4] rounded animate-pulse" />
+                              <div className="h-4 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
                             </div>
                           </div>
                         </div>

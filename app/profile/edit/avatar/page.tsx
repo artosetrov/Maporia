@@ -225,7 +225,7 @@ export default function AvatarEditorPage() {
       {/* Body */}
       <div className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-8 pt-[80px] lg:pt-8">
         {error && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50/50 p-3 text-sm text-red-700">
+          <div className="mb-4 rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 p-3 text-sm text-[#C96A5B]">
             {error}
           </div>
         )}
@@ -271,7 +271,7 @@ export default function AvatarEditorPage() {
               <button
                 onClick={handleDelete}
                 disabled={uploading || saving}
-                className="w-full rounded-xl border border-red-200 bg-red-50/50 px-4 py-3 text-sm font-medium text-red-700 hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 px-4 py-3 text-sm font-medium text-[#C96A5B] hover:bg-[#C96A5B]/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Remove photo
               </button>

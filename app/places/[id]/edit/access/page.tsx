@@ -171,7 +171,7 @@ export default function AccessEditorPage() {
       {/* Body */}
       <div className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-8">
         {error && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50/50 p-3 text-sm text-red-700">
+          <div className="mb-4 rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 p-3 text-sm text-[#C96A5B]">
             {error}
           </div>
         )}

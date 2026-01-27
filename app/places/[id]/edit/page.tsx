@@ -769,7 +769,7 @@ export default function PlaceEditorHub() {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         {error && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50/50 p-4 text-sm text-red-700">
+          <div className="mb-4 rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 p-4 text-sm text-[#C96A5B]">
             {error}
           </div>
         )}

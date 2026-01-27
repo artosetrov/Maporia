@@ -1550,11 +1550,11 @@ function MapPageContent() {
                     {Array.from({ length: 6 }).map((_, i) => (
                       <div key={i} className="w-full">
                         <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
-                          <div className="absolute inset-0 rounded-2xl bg-gray-200 animate-pulse" />
+                          <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
                         </div>
                         <div className="flex flex-col gap-1">
-                          <div className="h-5 w-3/4 bg-gray-200 rounded animate-pulse" />
-                          <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                          <div className="h-5 w-3/4 bg-[#ECEEE4] rounded animate-pulse" />
+                          <div className="h-4 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
                         </div>
                       </div>
                     ))}
@@ -1663,8 +1663,8 @@ export default function MapPage() {
       <main className="min-h-screen bg-[#faf9f7] flex items-center justify-center">
         <div className="w-full max-w-md px-6">
           <div className="space-y-4">
-            <div className="h-8 w-3/4 bg-gray-200 rounded mx-auto animate-pulse" />
-            <div className="h-4 w-1/2 bg-gray-200 rounded mx-auto animate-pulse" />
+            <div className="h-8 w-3/4 bg-[#ECEEE4] rounded mx-auto animate-pulse" />
+            <div className="h-4 w-1/2 bg-[#ECEEE4] rounded mx-auto animate-pulse" />
           </div>
         </div>
       </main>
@@ -1987,8 +1987,8 @@ function MapView({
 
   if (loading) {
     return (
-      <div className="h-full w-full bg-gray-200 animate-pulse flex items-center justify-center">
-        <div className="text-sm text-gray-500">Loading map…</div>
+      <div className="h-full w-full bg-[#ECEEE4] animate-pulse flex items-center justify-center">
+        <div className="text-sm text-[#6F7A5A]">Loading map…</div>
       </div>
     );
   }
@@ -2008,8 +2008,8 @@ function MapView({
 
   if (!isLoaded) {
     return (
-      <div className="h-full w-full bg-gray-200 animate-pulse flex items-center justify-center">
-        <div className="text-sm text-gray-500">Loading map…</div>
+      <div className="h-full w-full bg-[#ECEEE4] animate-pulse flex items-center justify-center">
+        <div className="text-sm text-[#6F7A5A]">Loading map…</div>
       </div>
     );
   }
@@ -2048,7 +2048,7 @@ function MapView({
         {/* My Location Button */}
         <button
           onClick={handleMyLocation}
-          className="w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center hover:bg-gray-50 transition-colors"
+          className="w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center hover:bg-[#FAFAF7] transition-colors"
           aria-label="My Location"
           title="My Location"
         >
@@ -2385,7 +2385,7 @@ function MapView({
                           
                           {/* Description */}
                           {place.description && (
-                            <div className="text-sm text-gray-600 line-clamp-1 mb-2">
+                            <div className="text-sm text-[#6F7A5A] line-clamp-1 mb-2">
                               {place.description}
                             </div>
                           )}
@@ -2396,12 +2396,12 @@ function MapView({
                               <>
                                 <span>{place.city}</span>
                                 {place.tags && place.tags.length > 0 && (
-                                  <span className="text-gray-400">•</span>
+                                  <span className="text-[#A8B096]">•</span>
                                 )}
                               </>
                             )}
                             {place.tags && place.tags.length > 0 && (
-                              <span className="text-gray-600">
+                              <span className="text-[#6F7A5A]">
                                 {place.tags.slice(0, 2).join(', ')}
                                 {place.tags.length > 2 && ` +${place.tags.length - 2}`}
                               </span>

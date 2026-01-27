@@ -25,6 +25,17 @@ export function ProductionDiagnostics() {
         event.preventDefault();
         return;
       }
+      
+      // Silently ignore "message channel closed" errors (often from browser extensions)
+      if (event.reason && (
+        event.reason.message?.includes('message channel closed') ||
+        event.reason.message?.includes('asynchronous response') ||
+        event.reason.message?.includes('channel closed before a response')
+      )) {
+        event.preventDefault();
+        return;
+      }
+      
       // Log other unhandled rejections for debugging
       console.error('Unhandled promise rejection:', {
         reason: event.reason?.message || String(event.reason),

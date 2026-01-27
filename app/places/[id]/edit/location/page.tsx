@@ -358,7 +358,7 @@ export default function LocationEditorPage() {
       {/* Body */}
       <div className="flex-1 max-w-4xl mx-auto w-full">
         {error && (
-          <div className="mx-4 sm:mx-6 mt-4 rounded-xl border border-red-200 bg-red-50/50 p-3 text-sm text-red-700">
+          <div className="mx-4 sm:mx-6 mt-4 rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 p-3 text-sm text-[#C96A5B]">
             {error}
           </div>
         )}

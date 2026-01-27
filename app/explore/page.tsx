@@ -666,11 +666,11 @@ export default function ExplorePage() {
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="w-full">
                     <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
-                      <div className="absolute inset-0 rounded-2xl bg-gray-200 animate-pulse" />
+                      <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <div className="h-5 w-3/4 bg-gray-200 rounded animate-pulse" />
-                      <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                      <div className="h-5 w-3/4 bg-[#ECEEE4] rounded animate-pulse" />
+                      <div className="h-4 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
                     </div>
                   </div>
                 ))}
@@ -767,7 +767,7 @@ export default function ExplorePage() {
         <div className="hidden max-lg:block h-full">
           <div className="max-w-[1920px] mx-auto px-5">
             {/* Search and Filter Bar */}
-            <div className="sticky top-[64px] z-30 bg-[#faf9f7] pt-4 pb-3 border-b border-gray-200 mb-4">
+            <div className="sticky top-[64px] z-30 bg-[#FAFAF7] pt-4 pb-3 border-b border-[#ECEEE4] mb-4">
               <div className="flex items-center gap-2 mb-2">
                 <div className="flex-1 relative">
                   <input
@@ -776,13 +776,13 @@ export default function ExplorePage() {
                     onFocus={() => setSearchFocused(true)}
                     onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
                     placeholder="Search by vibe, mood, or place"
-                    className="w-full h-10 rounded-xl border border-gray-200 bg-white px-4 pl-10 text-sm text-[#2d2d2d] placeholder:text-gray-400 outline-none focus:border-gray-300 focus:bg-white transition"
+                    className="w-full h-10 rounded-xl border border-[#ECEEE4] bg-white px-4 pl-10 text-sm text-[#1F2A1F] placeholder:text-[#A8B096] outline-none focus:border-[#E5E8DB] focus:bg-white transition"
                   />
                   <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A8B096]" />
                 </div>
                 <button
                   onClick={() => setFilterOpen(true)}
-                  className="h-10 w-10 rounded-xl flex items-center justify-center text-gray-600 hover:bg-gray-100 transition relative border border-gray-200"
+                  className="h-10 w-10 rounded-xl flex items-center justify-center text-[#6F7A5A] hover:bg-[#FAFAF7] transition relative border border-[#ECEEE4]"
                   aria-label="Filters"
                 >
                   <Icon name="filter" size={20} />
@@ -805,11 +805,11 @@ export default function ExplorePage() {
                 {Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="w-full">
                     <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
-                      <div className="absolute inset-0 rounded-2xl bg-gray-200 animate-pulse" />
+                      <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <div className="h-5 w-3/4 bg-gray-200 rounded animate-pulse" />
-                      <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                      <div className="h-5 w-3/4 bg-[#ECEEE4] rounded animate-pulse" />
+                      <div className="h-4 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
                     </div>
                   </div>
                 ))}
@@ -869,20 +869,20 @@ export default function ExplorePage() {
         <div className="hidden max-lg:block h-full">
           <div className="max-w-[680px] mx-auto px-6">
             {/* Search and Filter Bar */}
-            <div className="sticky top-[64px] z-30 bg-[#faf9f7] pt-4 pb-3 border-b border-gray-200 mb-4">
+            <div className="sticky top-[64px] z-30 bg-[#FAFAF7] pt-4 pb-3 border-b border-[#ECEEE4] mb-4">
               <div className="flex items-center gap-2 mb-2">
                 <div className="flex-1 relative">
                   <input
                     value={searchDraft}
                     onChange={(e) => setSearchDraft(e.target.value)}
                     placeholder="Search by vibe, mood, or place"
-                    className="w-full h-10 rounded-xl border border-gray-200 bg-white px-4 pl-10 text-sm text-[#2d2d2d] placeholder:text-gray-400 outline-none focus:border-gray-300 transition"
+                    className="w-full h-10 rounded-xl border border-[#ECEEE4] bg-white px-4 pl-10 text-sm text-[#1F2A1F] placeholder:text-[#A8B096] outline-none focus:border-[#E5E8DB] transition"
                   />
                   <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A8B096]" />
                 </div>
                 <button
                   onClick={() => setFilterOpen(true)}
-                  className="h-10 w-10 rounded-xl flex items-center justify-center text-gray-600 hover:bg-gray-100 transition relative border border-gray-200"
+                  className="h-10 w-10 rounded-xl flex items-center justify-center text-[#6F7A5A] hover:bg-[#FAFAF7] transition relative border border-[#ECEEE4]"
                   aria-label="Filters"
                 >
                   <Icon name="filter" size={20} />
@@ -905,11 +905,11 @@ export default function ExplorePage() {
                 {Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="w-full">
                     <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
-                      <div className="absolute inset-0 rounded-2xl bg-gray-200 animate-pulse" />
+                      <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <div className="h-5 w-3/4 bg-gray-200 rounded animate-pulse" />
-                      <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                      <div className="h-5 w-3/4 bg-[#ECEEE4] rounded animate-pulse" />
+                      <div className="h-4 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
                     </div>
                   </div>
                 ))}
@@ -1072,7 +1072,7 @@ export default function ExplorePage() {
                       document.addEventListener('touchend', handleEnd);
                     }}
                   >
-                    <div className="w-12 h-1.5 bg-gray-300 rounded-full"></div>
+                    <div className="w-12 h-1.5 bg-[#ECEEE4] rounded-full"></div>
                   </div>
                   
                   {/* Sheet content */}
@@ -1096,7 +1096,7 @@ export default function ExplorePage() {
                                       e.preventDefault();
                                       toggleFavorite(selectedPlace.id, e);
                                     }}
-                                    className={`h-8 w-8 rounded-full bg-white border border-gray-200 hover:bg-gray-50 flex items-center justify-center transition shadow-sm ${
+                                    className={`h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] flex items-center justify-center transition shadow-sm ${
                                       isFavorite ? "bg-[#6b7d47]/10 border-[#6b7d47]/30" : ""
                                     }`}
                                     title={isFavorite ? "Remove from favorites" : "Add to favorites"}
@@ -1127,11 +1127,11 @@ export default function ExplorePage() {
                             {Array.from({ length: 3 }).map((_, i) => (
                               <div key={i} className="w-full">
                                 <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
-                                  <div className="absolute inset-0 rounded-2xl bg-gray-200 animate-pulse" />
+                                  <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
                                 </div>
                                 <div className="flex flex-col gap-1">
-                                  <div className="h-5 w-3/4 bg-gray-200 rounded animate-pulse" />
-                                  <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                                  <div className="h-5 w-3/4 bg-[#ECEEE4] rounded animate-pulse" />
+                                  <div className="h-4 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
                                 </div>
                               </div>
                             ))}
@@ -1204,11 +1204,11 @@ export default function ExplorePage() {
                   {Array.from({ length: 3 }).map((_, i) => (
                     <div key={i} className="w-full">
                       <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
-                        <div className="absolute inset-0 rounded-2xl bg-gray-200 animate-pulse" />
+                        <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
                       </div>
                       <div className="flex flex-col gap-1">
-                        <div className="h-5 w-3/4 bg-gray-200 rounded animate-pulse" />
-                        <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                        <div className="h-5 w-3/4 bg-[#ECEEE4] rounded animate-pulse" />
+                        <div className="h-4 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
                       </div>
                     </div>
                   ))}
@@ -1756,8 +1756,8 @@ function MapView({
 
   if (loading) {
     return (
-      <div className="h-full w-full bg-gray-200 animate-pulse flex items-center justify-center">
-        <div className="text-sm text-gray-500">Loading map…</div>
+      <div className="h-full w-full bg-[#ECEEE4] animate-pulse flex items-center justify-center">
+        <div className="text-sm text-[#6F7A5A]">Loading map…</div>
       </div>
     );
   }
@@ -1777,8 +1777,8 @@ function MapView({
 
   if (!isLoaded) {
     return (
-      <div className="h-full w-full bg-gray-200 animate-pulse flex items-center justify-center">
-        <div className="text-sm text-gray-500">Loading map…</div>
+      <div className="h-full w-full bg-[#ECEEE4] animate-pulse flex items-center justify-center">
+        <div className="text-sm text-[#6F7A5A]">Loading map…</div>
       </div>
     );
   }
@@ -1790,7 +1790,7 @@ function MapView({
         {/* My Location Button */}
         <button
           onClick={handleMyLocation}
-          className="w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center hover:bg-gray-50 transition-colors"
+          className="w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center hover:bg-[#FAFAF7] transition-colors"
           aria-label="My Location"
           title="My Location"
         >
@@ -1800,7 +1800,7 @@ function MapView({
         {/* Fullscreen Button */}
         <button
           onClick={handleFullscreen}
-          className="w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center hover:bg-gray-50 transition-colors"
+          className="w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center hover:bg-[#FAFAF7] transition-colors"
           aria-label="Fullscreen"
           title="Fullscreen"
         >
@@ -1815,21 +1815,21 @@ function MapView({
         <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
           <button
             onClick={handleZoomIn}
-            className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 transition-colors border-b border-gray-100"
+            className="w-10 h-10 flex items-center justify-center hover:bg-[#FAFAF7] transition-colors border-b border-[#ECEEE4]"
             aria-label="Zoom In"
             title="Zoom In"
           >
-            <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
           </button>
           <button
             onClick={handleZoomOut}
-            className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 transition-colors"
+            className="w-10 h-10 flex items-center justify-center hover:bg-[#FAFAF7] transition-colors"
             aria-label="Zoom Out"
             title="Zoom Out"
           >
-            <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
             </svg>
           </button>
@@ -2141,7 +2141,7 @@ function MapView({
                           
                           {/* Description */}
                           {place.description && (
-                            <div className="text-sm text-gray-600 line-clamp-1 mb-2">
+                            <div className="text-sm text-[#6F7A5A] line-clamp-1 mb-2">
                               {place.description}
                             </div>
                           )}
@@ -2152,12 +2152,12 @@ function MapView({
                               <>
                                 <span>{place.city}</span>
                                 {place.tags && place.tags.length > 0 && (
-                                  <span className="text-gray-400">•</span>
+                                  <span className="text-[#A8B096]">•</span>
                                 )}
                               </>
                             )}
                             {place.tags && place.tags.length > 0 && (
-                              <span className="text-gray-600">
+                              <span className="text-[#6F7A5A]">
                                 {place.tags.slice(0, 2).join(', ')}
                                 {place.tags.length > 2 && ` +${place.tags.length - 2}`}
                               </span>
