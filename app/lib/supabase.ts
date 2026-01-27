@@ -7,12 +7,28 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 // Log environment variable status (without values for security)
 if (typeof window !== 'undefined') {
-  console.log('[Supabase] Environment check:', {
+  const envCheck = {
     hasUrl: !!supabaseUrl,
     hasKey: !!supabaseAnonKey,
     urlLength: supabaseUrl?.length || 0,
     keyLength: supabaseAnonKey?.length || 0,
-  });
+    nodeEnv: process.env.NODE_ENV,
+    // Check if we're in production
+    isProduction: process.env.NODE_ENV === 'production',
+  };
+  
+  console.log('[Supabase] Environment check:', envCheck);
+  
+  // In production, also log to help debug
+  if (process.env.NODE_ENV === 'production') {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('[Supabase] ⚠️ CRITICAL: Environment variables missing in production!', {
+        hasUrl: !!supabaseUrl,
+        hasKey: !!supabaseAnonKey,
+        location: window.location.href,
+      });
+    }
+  }
 }
 
 if (!supabaseUrl) {
@@ -60,7 +76,36 @@ export const supabase = createClient<Database>(safeUrl, safeKey, {
     // This prevents Supabase from redirecting to production
     flowType: 'pkce', // Use PKCE flow for better security and control
   },
+  global: {
+    // Add headers for better debugging
+    headers: {
+      'x-client-info': 'maporia-web',
+    },
+  },
 });
+
+// Log Supabase client initialization in production
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
+  console.log('[Supabase] Client initialized:', {
+    url: safeUrl.substring(0, 30) + '...',
+    hasValidConfig: hasValidSupabaseConfig,
+    userAgent: navigator.userAgent.substring(0, 50),
+  });
+  
+  // Test connection immediately
+  supabase.auth.getSession().then(({ data, error }) => {
+    if (error) {
+      console.error('[Supabase] Initial session check failed:', error.message);
+    } else {
+      console.log('[Supabase] Initial session check:', {
+        hasSession: !!data.session,
+        userId: data.session?.user?.id?.substring(0, 8) || null,
+      });
+    }
+  }).catch((err) => {
+    console.error('[Supabase] Initial session check exception:', err);
+  });
+}
 
 /**
  * Получает URL для редиректа после аутентификации

@@ -25,10 +25,9 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased">
         <ErrorBoundary>
-          {process.env.NODE_ENV === "production" &&
-            process.env.NEXT_PUBLIC_ENABLE_PROD_DIAGNOSTICS === "true" && (
-              <ProductionDiagnostics />
-            )}
+          {process.env.NODE_ENV === "production" && (
+            <ProductionDiagnostics />
+          )}
           <GoogleMapsProvider>
             {children}
           </GoogleMapsProvider>

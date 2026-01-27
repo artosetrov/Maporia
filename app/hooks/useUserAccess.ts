@@ -56,7 +56,18 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
             return;
           }
           
-          console.error("Error getting session:", sessionError);
+          // Enhanced error logging for production
+          if (process.env.NODE_ENV === 'production') {
+            console.error('[useUserAccess] Session error:', {
+              message: sessionError.message,
+              name: sessionError.name,
+              status: (sessionError as any).status,
+              url: window.location.href,
+            });
+          } else {
+            console.error("Error getting session:", sessionError);
+          }
+          
           if (!isUnmounting && currentRequestId === requestId) {
             setLoading(false);
           }
@@ -108,7 +119,17 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
             return;
           }
           
-          console.error("Error loading profile:", profileError);
+          // Enhanced error logging for production
+          if (process.env.NODE_ENV === 'production') {
+            console.error('[useUserAccess] Profile error:', {
+              message: profileError.message,
+              code: profileError.code,
+              details: profileError.details,
+              hint: profileError.hint,
+            });
+          } else {
+            console.error("Error loading profile:", profileError);
+          }
         }
 
         const currentProfile = profileData ?? null;
