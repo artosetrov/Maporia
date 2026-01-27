@@ -2,7 +2,7 @@
 export const dynamic = "force-dynamic";
 import { useEffect, useMemo, useState, useRef, Suspense } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import FiltersModal, { ActiveFilters } from "../components/FiltersModal";
@@ -1004,6 +1004,7 @@ function ProfileInner() {
                     reviewsReceived={reviewsReceived}
                     reviewsWritten={reviewsWritten}
                     onEditClick={() => router.push("/profile/edit")}
+                    onLogout={handleLogout}
                     loading={loading}
                     userRole={userRole}
                     subscriptionStatus={profile?.subscription_status}
@@ -1137,10 +1138,10 @@ function ProfileInner() {
               ) : (
                 <>
                   {/* Profile Hero Card */}
-                  <div className="bg-white rounded-[24px] p-6 border border-[#ECEEE4] shadow-sm" style={{ minHeight: '140px' }}>
-                    <div className="flex items-center gap-6 h-full">
+                  <div className="bg-white rounded-[24px] p-6 border border-[#ECEEE4] shadow-sm">
+                    <div className="flex items-start gap-6">
                       {/* Left: Avatar, Name, Location (≈ 60%) */}
-                      <div className="flex-shrink-0" style={{ width: '60%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                      <div className="flex-shrink-0" style={{ width: '60%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start' }}>
                         {/* Avatar */}
                         <div className="h-16 w-16 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] flex items-center justify-center overflow-hidden" style={{ marginBottom: '10px' }}>
                           {profile?.avatar_url ? (
@@ -1156,12 +1157,6 @@ function ProfileInner() {
                         <div className="text-[#6F7A5A] leading-tight m-0 text-center" style={{ fontSize: '14px', marginTop: '4px' }}>
                           {getUserStatus(userRole, profile?.subscription_status, userIsAdmin)}
                         </div>
-                        {/* Description for Artem Osetrov */}
-                        {displayName?.includes("Artem Osetrov") && (
-                          <div className="text-[#6F7A5A] leading-relaxed m-0 text-center mt-3 px-2" style={{ fontSize: '13px', lineHeight: '1.5' }}>
-                            Artem Osetrov is a designer specializing in UI/UX design. Their professional focus centers on creating user interfaces and user experiences for digital products. They are interested in design principles, user-centered design methodologies, and interface development.
-                          </div>
-                        )}
                       </div>
 
                       {/* Right: Stats (≈ 40%) */}
@@ -1183,6 +1178,14 @@ function ProfileInner() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Bio Card */}
+                  {bioWithoutWork && (
+                    <div className="bg-white rounded-[24px] p-6 border border-[#ECEEE4] shadow-sm">
+                      <h2 className="text-lg font-semibold font-fraunces text-[#1F2A1F] mb-3">About</h2>
+                      <p className="text-sm text-[#1F2A1F] leading-relaxed whitespace-pre-line">{bioWithoutWork}</p>
+                    </div>
+                  )}
 
                   {/* Quick Access Cards */}
                   <div className="grid grid-cols-2 gap-4">
@@ -1394,27 +1397,21 @@ function ProfileInner() {
                       </button>
                     )}
                   </div>
+
+                  {/* Mobile Logout Button */}
+                  <div className="lg:hidden pt-4 border-t border-[#ECEEE4] mt-4">
+                    <button
+                      onClick={handleLogout}
+                      className="w-full rounded-lg bg-white border border-[#ECEEE4] text-[#C96A5B] px-4 py-2.5 text-sm font-medium hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Icon name="logout" size={16} className="text-[#C96A5B]" />
+                      Log out
+                    </button>
+                  </div>
                 </>
               )}
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Mobile Logout Button */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-[#ECEEE4]"
-        style={{
-          paddingBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))',
-        }}
-      >
-        <div className="mx-auto max-w-md px-6 py-4">
-          <button
-            onClick={handleLogout}
-            className="w-full rounded-xl bg-white border border-[#ECEEE4] text-[#C96A5B] px-5 py-3 text-sm font-medium hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2"
-          >
-            <Icon name="logout" size={18} className="text-[#C96A5B]" />
-            Log out
-          </button>
         </div>
       </div>
 
@@ -1432,6 +1429,7 @@ function AboutSection({
   reviewsReceived,
   reviewsWritten,
   onEditClick,
+  onLogout,
   loading,
   mobile = false,
   userRole,
@@ -1450,6 +1448,7 @@ function AboutSection({
   reviewsReceived: Review[];
   reviewsWritten: Review[];
   onEditClick: () => void;
+  onLogout?: () => void;
   loading: boolean;
   mobile?: boolean;
   userRole?: string | null;
@@ -1482,19 +1481,30 @@ function AboutSection({
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F]">About me</h1>
-        <button
-          onClick={onEditClick}
-          className="h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white text-sm font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] transition"
-        >
-          Edit
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onEditClick}
+            className="h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white text-sm font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] transition"
+          >
+            Edit
+          </button>
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white text-sm font-medium text-[#C96A5B] hover:bg-[#FAFAF7] transition flex items-center gap-2"
+            >
+              <Icon name="logout" size={16} className="text-[#C96A5B]" />
+              Log out
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Hero Card - Same as mobile */}
-      <div className="bg-white rounded-[24px] p-6 border border-[#ECEEE4] shadow-sm mb-8" style={{ minHeight: '140px' }}>
-        <div className="flex items-center gap-6 h-full">
+      {/* Hero Card */}
+      <div className="bg-white rounded-[24px] p-6 border border-[#ECEEE4] shadow-sm mb-8">
+        <div className="flex items-start gap-6">
           {/* Left: Avatar, Name, Location (≈ 60%) */}
-          <div className="flex-shrink-0" style={{ width: '60%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="flex-shrink-0" style={{ width: '60%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start' }}>
             {/* Avatar */}
             <div className="h-16 w-16 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] flex items-center justify-center overflow-hidden" style={{ marginBottom: '10px' }}>
               {profile?.avatar_url ? (
@@ -1510,12 +1520,6 @@ function AboutSection({
             <div className="text-[#6F7A5A] leading-tight m-0 text-center" style={{ fontSize: '14px', marginTop: '4px' }}>
               {getUserStatus(userRole, subscriptionStatus, isAdmin)}
             </div>
-            {/* Description for Artem Osetrov */}
-            {displayName?.includes("Artem Osetrov") && (
-              <div className="text-[#6F7A5A] leading-relaxed m-0 text-center mt-3 px-2" style={{ fontSize: '13px', lineHeight: '1.5' }}>
-                Artem Osetrov is a designer specializing in UI/UX design. Their professional focus centers on creating user interfaces and user experiences for digital products. They are interested in design principles, user-centered design methodologies, and interface development.
-              </div>
-            )}
           </div>
 
           {/* Right: Stats (≈ 40%) */}
@@ -1537,6 +1541,14 @@ function AboutSection({
           </div>
         </div>
       </div>
+
+      {/* Bio Card */}
+      {bio && (
+        <div className="bg-white rounded-[24px] p-6 border border-[#ECEEE4] shadow-sm mb-8">
+          <h2 className="text-lg font-semibold font-fraunces text-[#1F2A1F] mb-3">About</h2>
+          <p className="text-sm text-[#1F2A1F] leading-relaxed whitespace-pre-line">{bio}</p>
+        </div>
+      )}
 
       {/* Quick Access Cards - Desktop only, right after Hero Card */}
       {!mobile && savedPlaces !== undefined && addedPlaces !== undefined && recentlyViewedPlaces !== undefined && onSectionChange && (
@@ -1721,13 +1733,6 @@ function AboutSection({
             <Icon name="briefcase" size={20} className="text-[#6F7A5A]" />
             <span className="font-semibold text-[#1F2A1F]">My work: {myWork}</span>
           </div>
-        </div>
-      )}
-
-      {/* Bio */}
-      {bio && (
-        <div className="mb-8">
-          <p className="text-base text-[#1F2A1F] leading-relaxed whitespace-pre-line">{bio}</p>
         </div>
       )}
 

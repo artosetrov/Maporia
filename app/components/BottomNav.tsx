@@ -246,7 +246,13 @@ function SearchIcon({ active }: { active: boolean }) {
 }
 
 function SavedIcon({ active }: { active: boolean }) {
-  return <FavoriteIcon isActive={active} size={24} className="transition-colors" />;
+  return (
+    <FavoriteIcon 
+      isActive={active} 
+      size={24} 
+      className={`transition-colors ${active ? "text-[#8F9E4F]" : "text-[#A8B096]"}`}
+    />
+  );
 }
 
 function ProfileIcon({ active }: { active: boolean }) {
@@ -285,13 +291,13 @@ function ProfileAvatarIcon({
         <img
           src={avatarUrl}
           alt="Profile"
-          className="w-full h-full object-cover"
+          className={`w-full h-full object-cover ${active ? "opacity-100" : "opacity-70"}`}
         />
       ) : (
-        <div className={`w-full h-full flex items-center justify-center text-[11px] font-semibold border ${
+        <div className={`w-full h-full flex items-center justify-center text-[11px] font-semibold border transition-colors ${
           active 
             ? "bg-[#8F9E4F] text-white border-[#8F9E4F]" 
-            : "bg-[#FAFAF7] text-[#8F9E4F] border-[#ECEEE4]"
+            : "bg-[#FAFAF7] text-[#A8B096] border-[#ECEEE4]"
         }`}>
           {initials}
         </div>

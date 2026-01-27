@@ -169,7 +169,7 @@ export default function TopBar({
         {/* Mobile TopBar (default, < lg) */}
         <div className="lg:hidden relative">
           <div className="px-4 pt-safe-top pt-3 pb-3">
-            <div className="flex items-center gap-3">
+            <div className={`flex items-center ${pathname === "/" && showSearchBar && !shouldShowBackButton ? "" : "gap-3"}`}>
               {/* Left: Back button */}
               {shouldShowBackButton ? (
                 <button
