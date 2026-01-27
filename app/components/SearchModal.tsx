@@ -498,12 +498,14 @@ export default function SearchModal({
       // Reset tags only on vibe step
       setTempSelectedTags([]);
     } else {
-      // Reset everything on where step
+      // Reset everything on where step and close the modal
       setQuery("");
       setTempSelectedCity(null);
       setTempSelectedTags([]);
       setPlacesCount(null);
       setSearchResults([]);
+      // Close the search modal after clearing
+      onClose();
     }
   };
 

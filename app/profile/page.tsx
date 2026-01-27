@@ -123,6 +123,7 @@ function cx(...a: Array<string | false | undefined | null>) {
 
 function ProfileInner() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const [section, setSection] = useState<"about" | "trips" | "added" | "activity" | "users" | "elements" | "history">("about");
@@ -607,7 +608,7 @@ function ProfileInner() {
     return () => {
       mounted = false;
     };
-  }, [router]);
+  }, [router, pathname]); // Add pathname to re-trigger on route change
 
   async function uploadAvatar(file: File): Promise<{ url: string | null; error: string | null }> {
     try {
@@ -736,6 +737,11 @@ function ProfileInner() {
   const bioParts = profile?.bio?.split(/My work:/i) || [];
   const myWork = bioParts.length > 1 ? bioParts[1].trim() : null;
   const bioWithoutWork = bioParts[0]?.trim() || null;
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.push("/auth");
+  }
 
   return (
     <main className="min-h-screen bg-white">
@@ -1055,7 +1061,12 @@ function ProfileInner() {
         <div className="lg:hidden">
           {section === "trips" || section === "added" || section === "history" || section === "activity" || (section === "users" && isAdmin) || (section === "elements" && isAdmin) ? (
             // Show section content on mobile
-            <div className={`px-6 py-6 ${section === "activity" || section === "added" || (section === "users" && isAdmin) || (section === "elements" && isAdmin) ? "pt-[48px]" : "pt-[80px]"}`}>
+            <div 
+              className={`px-6 py-6 ${section === "activity" || section === "added" || (section === "users" && isAdmin) || (section === "elements" && isAdmin) ? "pt-[48px]" : "pt-[80px]"}`}
+              style={{
+                paddingBottom: 'calc(144px + env(safe-area-inset-bottom, 0px))',
+              }}
+            >
               {section === "trips" && (
                 <TripsSection 
                   places={filteredSaved} 
@@ -1097,7 +1108,12 @@ function ProfileInner() {
             </div>
           ) : (
             // Show main mobile dashboard
-            <div className="px-6 py-6 space-y-4">
+            <div 
+              className="px-6 py-6 space-y-4"
+              style={{
+                paddingBottom: 'calc(144px + env(safe-area-inset-bottom, 0px))',
+              }}
+            >
               {loading ? (
                 <div className="space-y-4">
                   <div className="bg-white rounded-[24px] p-6 border border-[#ECEEE4] shadow-sm">
@@ -1385,6 +1401,22 @@ function ProfileInner() {
         </div>
       </div>
 
+      {/* Mobile Logout Button */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-[#ECEEE4]"
+        style={{
+          paddingBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))',
+        }}
+      >
+        <div className="mx-auto max-w-md px-6 py-4">
+          <button
+            onClick={handleLogout}
+            className="w-full rounded-xl bg-white border border-[#ECEEE4] text-[#C96A5B] px-5 py-3 text-sm font-medium hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2"
+          >
+            <Icon name="logout" size={18} className="text-[#C96A5B]" />
+            Log out
+          </button>
+        </div>
+      </div>
 
       <BottomNav />
     </main>
@@ -1911,6 +1943,7 @@ function AddedPlacesSection({
   const router = useRouter();
   const { access, user } = useUserAccess();
   const [deletingPlaceId, setDeletingPlaceId] = useState<string | null>(null);
+  const [menuOpenPlaceId, setMenuOpenPlaceId] = useState<string | null>(null);
 
   async function handleDelete(placeId: string, placeTitle: string) {
     if (!user) return;
@@ -2072,6 +2105,7 @@ function AddedPlacesSection({
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         {places.map((place) => {
           const isPremium = isPlacePremium(place);
+          const isMenuOpen = menuOpenPlaceId === place.id;
           return (
             <div key={place.id} className="group relative">
               <Link href={`/id/${place.id}`}>
@@ -2096,8 +2130,20 @@ function AddedPlacesSection({
                       <PremiumBadge />
                     </div>
                   )}
-                  {/* Edit and Delete buttons - appear on hover */}
-                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-2 z-10">
+                  {/* Mobile 3-dots menu button */}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setMenuOpenPlaceId(isMenuOpen ? null : place.id);
+                    }}
+                    className="lg:hidden absolute top-2 right-2 z-30 bg-white/90 backdrop-blur-sm rounded-lg p-2 shadow-sm hover:bg-white transition-colors"
+                    aria-label="More options"
+                  >
+                    <Icon name="more-vertical" size={20} className="text-[#1F2A1F]" />
+                  </button>
+                  {/* Edit and Delete buttons - appear on hover (desktop only) */}
+                  <div className="hidden lg:flex absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 gap-2 z-10">
                     <button
                       onClick={(e) => {
                         e.preventDefault();
@@ -2132,6 +2178,91 @@ function AddedPlacesSection({
           );
         })}
       </div>
+
+      {/* Mobile Action Sheet */}
+      {menuOpenPlaceId && (
+        <div className="lg:hidden fixed inset-0 z-50 flex items-end justify-center">
+          {/* Overlay */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setMenuOpenPlaceId(null)}
+          />
+          
+          {/* Bottom Sheet */}
+          <div
+            className="relative w-full bg-white rounded-t-2xl shadow-xl flex flex-col border-t border-[#ECEEE4] animate-slide-up"
+            style={{
+              maxHeight: '50vh',
+              paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+            }}
+          >
+            {/* Drag handle */}
+            <div className="flex justify-center pt-3 pb-2">
+              <div className="w-12 h-1.5 bg-[#ECEEE4] rounded-full" />
+            </div>
+            
+            {/* Menu items */}
+            <div className="px-6 py-2">
+              {places.find(p => p.id === menuOpenPlaceId) && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const place = places.find(p => p.id === menuOpenPlaceId);
+                      if (place) {
+                        router.push(`/places/${place.id}/edit`);
+                        setMenuOpenPlaceId(null);
+                      }
+                    }}
+                    className="w-full text-left px-4 py-4 flex items-center gap-4 hover:bg-[#FAFAF7] rounded-xl transition-colors"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-[#F4F6EF] flex items-center justify-center flex-shrink-0">
+                      <Icon name="edit" size={20} className="text-[#8F9E4F]" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-base font-medium text-[#1F2A1F]">Edit place</div>
+                    </div>
+                  </button>
+                  
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const place = places.find(p => p.id === menuOpenPlaceId);
+                      if (place) {
+                        handleDelete(place.id, place.title);
+                        setMenuOpenPlaceId(null);
+                      }
+                    }}
+                    disabled={deletingPlaceId === menuOpenPlaceId}
+                    className="w-full text-left px-4 py-4 flex items-center gap-4 hover:bg-[#FAFAF7] rounded-xl transition-colors disabled:opacity-50"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-[#FEF2F0] flex items-center justify-center flex-shrink-0">
+                      <Icon name="delete" size={20} className="text-[#C96A5B]" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-base font-medium text-[#C96A5B]">
+                        {deletingPlaceId === menuOpenPlaceId ? "Deleting..." : "Delete place"}
+                      </div>
+                    </div>
+                  </button>
+                </>
+              )}
+            </div>
+            
+            {/* Cancel button */}
+            <div className="px-6 pb-4 pt-2 border-t border-[#ECEEE4]">
+              <button
+                onClick={() => setMenuOpenPlaceId(null)}
+                className="w-full py-3 text-base font-medium text-[#6F7A5A] hover:text-[#1F2A1F] transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -191,10 +191,13 @@ export default function FiltersModal({
   };
   
   const handleClearAll = () => {
-    const clearedFilters = {
+    const clearedFilters: ActiveFilters = {
       categories: [],
       sort: null,
-      premiumOnly: false,
+      premium: false,
+      hidden: false,
+      vibe: false,
+      premiumOnly: false, // For backward compatibility
     };
     setDraftFilters(clearedFilters);
     // Immediately apply cleared filters and close modal

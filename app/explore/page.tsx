@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
 import { CATEGORIES } from "../constants";
 import TopBar from "../components/TopBar";
@@ -65,6 +65,7 @@ function timeAgo(iso: string) {
 
 export default function ExplorePage() {
   const router = useRouter();
+  const pathname = usePathname();
   
   const [view, setView] = useState<"list" | "map">("list");
   const [showMapMobile, setShowMapMobile] = useState(false);
@@ -303,7 +304,7 @@ export default function ExplorePage() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [pathname]); // Add pathname to re-trigger on route change
 
   // Загружаем избранное пользователя
   useEffect(() => {
@@ -359,7 +360,7 @@ export default function ExplorePage() {
   useEffect(() => {
     loadPlaces();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, selectedCities, selectedCategories, selectedTag]);
+  }, [q, selectedCities, selectedCategories, selectedTag, pathname]); // Add pathname to re-trigger on route change
 
   // Live search: автоматически применяем поиск при вводе (с небольшой задержкой)
   useEffect(() => {

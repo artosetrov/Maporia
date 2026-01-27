@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import PlaceCard from "../components/PlaceCard";
@@ -33,6 +33,7 @@ type Place = {
 
 export default function SavedPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -64,7 +65,7 @@ export default function SavedPage() {
       // useUserAccess with requireAuth=true will handle redirect
       setLoading(false);
     }
-  }, [accessLoading, userId, user]);
+  }, [accessLoading, userId, user, pathname]); // Add pathname to re-trigger on route change
 
   // Calculate active filters count
   useEffect(() => {
@@ -230,7 +231,7 @@ export default function SavedPage() {
         getFilteredCount={() => 0}
       />
 
-      <div className="flex-1 max-lg:pt-[48px] lg:pt-[80px] pb-20">
+      <div className="flex-1 max-lg:pt-[88px] lg:pt-[80px] pb-20">
         <div className="px-6 lg:px-8">
           {/* Header */}
           {!loading && (

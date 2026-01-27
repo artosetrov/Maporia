@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import FiltersModal, { ActiveFilters } from "../components/FiltersModal";
@@ -131,6 +131,7 @@ function ActivityCard({ item }: { item: ActivityItem }) {
 
 export default function FeedPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
@@ -179,7 +180,7 @@ export default function FeedPage() {
   useEffect(() => {
     loadActivities();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [pathname]); // Add pathname to re-trigger on route change
 
   async function loadActivities() {
     setLoading(true);
