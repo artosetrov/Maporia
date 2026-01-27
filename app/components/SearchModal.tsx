@@ -207,7 +207,22 @@ export default function SearchModal({
 
       const { count, error } = await countQuery;
       if (error) {
-        console.error("Error counting places for tag:", error);
+        // Silently ignore AbortError
+        if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+          return 0;
+        }
+        // Enhanced logging for production
+        if (process.env.NODE_ENV === 'production') {
+          console.error("Error counting places for tag:", {
+            tag,
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint,
+          });
+        } else {
+          console.error("Error counting places for tag:", error);
+        }
         return 0;
       }
       return count || 0;
@@ -269,12 +284,41 @@ export default function SearchModal({
 
       const { count, error } = await countQuery;
       if (error) {
-        console.error("Error counting places:", error);
+        // Silently ignore AbortError
+        if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+          return 0;
+        }
+        // Enhanced logging for production
+        if (process.env.NODE_ENV === 'production') {
+          console.error("Error counting places:", {
+            city,
+            tags,
+            query: searchQuery,
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint,
+          });
+        } else {
+          console.error("Error counting places:", error);
+        }
         return 0;
       }
       return count || 0;
     } catch (err: any) {
-      if (err?.name !== 'AbortError' && !err?.message?.includes('abort')) {
+      // Silently ignore AbortError
+      if (err?.name === 'AbortError' || err?.message?.includes('abort') || (err as any).code === 'ECONNABORTED') {
+        return 0;
+      }
+      // Enhanced logging for production
+      if (process.env.NODE_ENV === 'production') {
+        console.error("Error in getFilteredPlacesCount:", {
+          city,
+          tags,
+          query: searchQuery,
+          error: err?.message || String(err),
+        });
+      } else {
         console.error("Error in getFilteredPlacesCount:", err);
       }
       return 0;

@@ -1168,11 +1168,30 @@ function MapPageContent() {
               .select("*");
             
             if (dataError) {
-              console.error("Error fetching places for count:", dataError);
-              if (places.length > 0) {
-                dataToFilter = places;
+              // Silently ignore AbortError
+              if (dataError.message?.includes('abort') || dataError.name === 'AbortError' || (dataError as any).code === 'ECONNABORTED') {
+                if (places.length > 0) {
+                  dataToFilter = places;
+                } else {
+                  return 0;
+                }
               } else {
-                return 0;
+                // Enhanced logging for production
+                if (process.env.NODE_ENV === 'production') {
+                  console.error("Error fetching places for count:", {
+                    message: dataError.message,
+                    code: dataError.code,
+                    details: dataError.details,
+                    hint: dataError.hint,
+                  });
+                } else {
+                  console.error("Error fetching places for count:", dataError);
+                }
+                if (places.length > 0) {
+                  dataToFilter = places;
+                } else {
+                  return 0;
+                }
               }
             } else {
               dataToFilter = (allData || []) as Place[];
@@ -1202,8 +1221,19 @@ function MapPageContent() {
             });
 
             return filtered.length;
-          } catch (error) {
-            console.error("Error in getFilteredCount:", error);
+          } catch (error: any) {
+            // Silently ignore AbortError
+            if (error?.name === 'AbortError' || error?.message?.includes('abort') || error?.code === 'ECONNABORTED') {
+              return 0;
+            }
+            // Enhanced logging for production
+            if (process.env.NODE_ENV === 'production') {
+              console.error("Error in getFilteredCount:", {
+                error: error?.message || String(error),
+              });
+            } else {
+              console.error("Error in getFilteredCount:", error);
+            }
             return 0;
           }
         }}
@@ -1212,8 +1242,26 @@ function MapPageContent() {
             let query = supabase.from("places").select("*", { count: 'exact', head: true });
             query = query.or(`city_name_cached.eq.${city},city.eq.${city}`);
             const { count, error } = await query;
+            if (error) {
+              // Silently ignore AbortError
+              if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+                return 0;
+              }
+              // Enhanced logging for production
+              if (process.env.NODE_ENV === 'production') {
+                console.error("Error counting places for city:", {
+                  city,
+                  message: error.message,
+                  code: error.code,
+                });
+              }
+            }
             return count || 0;
-          } catch {
+          } catch (err: any) {
+            // Silently ignore AbortError
+            if (err?.name === 'AbortError' || err?.message?.includes('abort') || err?.code === 'ECONNABORTED') {
+              return 0;
+            }
             return 0;
           }
         }}

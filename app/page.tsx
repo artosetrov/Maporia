@@ -320,12 +320,40 @@ export default function HomePage() {
 
             const { count, error } = await countQuery;
             if (error) {
-              console.error("Error counting filtered places:", error);
+              // Silently ignore AbortError
+              if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+                return 0;
+              }
+              // Enhanced logging for production
+              if (process.env.NODE_ENV === 'production') {
+                console.error("Error counting filtered places:", {
+                  selectedCity,
+                  categories: draftFilters.categories,
+                  searchValue,
+                  message: error.message,
+                  code: error.code,
+                  details: error.details,
+                  hint: error.hint,
+                });
+              } else {
+                console.error("Error counting filtered places:", error);
+              }
               return 0;
             }
             return count || 0;
-          } catch (error) {
-            console.error("Error in getFilteredCount:", error);
+          } catch (error: any) {
+            // Silently ignore AbortError
+            if (error?.name === 'AbortError' || error?.message?.includes('abort') || error?.code === 'ECONNABORTED') {
+              return 0;
+            }
+            // Enhanced logging for production
+            if (process.env.NODE_ENV === 'production') {
+              console.error("Error in getFilteredCount:", {
+                error: error?.message || String(error),
+              });
+            } else {
+              console.error("Error in getFilteredCount:", error);
+            }
             return 0;
           }
         }}
