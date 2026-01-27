@@ -77,19 +77,27 @@ export default function PhotosEditorPage() {
 
   // Load photos
   useEffect(() => {
-    if (!placeId || !user) return;
+    if (!placeId || !user || accessLoading) return;
 
     (async () => {
       setLoading(true);
 
-      // Check ownership
+      // Check ownership or admin status
       const { data: placeData } = await supabase
         .from("places")
         .select("created_by, cover_url")
         .eq("id", placeId)
         .single();
 
-      if (!placeData || placeData.created_by !== user.id) {
+      if (!placeData) {
+        router.push(`/id/${placeId}`);
+        return;
+      }
+
+      const currentIsAdmin = isUserAdmin(access);
+      const isOwner = placeData.created_by === user.id;
+      
+      if (!isOwner && !currentIsAdmin) {
         router.push(`/id/${placeId}`);
         return;
       }
@@ -130,7 +138,7 @@ export default function PhotosEditorPage() {
       setOriginalPhotos(loadedPhotos.map((p) => ({ ...p })));
       setLoading(false);
     })();
-  }, [placeId, user, router]);
+  }, [placeId, user, access, accessLoading, router]);
 
   async function uploadToSupabase(file: File): Promise<{ url: string | null; error: string | null }> {
     try {
