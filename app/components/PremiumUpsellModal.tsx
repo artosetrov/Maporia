@@ -184,7 +184,7 @@ export default function PremiumUpsellModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end lg:items-center justify-center p-0 lg:p-4 bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[80] flex items-end lg:items-center justify-center p-0 lg:p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full h-full lg:max-w-4xl lg:h-auto lg:max-h-[90vh] rounded-t-3xl lg:rounded-3xl bg-white overflow-hidden relative flex flex-col lg:flex-row animate-slide-up"
            style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
         
