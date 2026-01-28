@@ -60,6 +60,9 @@ export default function GoogleImportField({ userId, targetPlaceId }: GoogleImpor
   const [error, setError] = useState<string | null>(null);
   const [generatingDescription, setGeneratingDescription] = useState(false);
   const [descriptionHint, setDescriptionHint] = useState<string | null>(null);
+  const [duplicatePlace, setDuplicatePlace] = useState<{ id: string; title?: string | null } | null>(
+    null
+  );
 
   async function handleSearch() {
     if (!query.trim() || !userId) return;
@@ -281,6 +284,7 @@ export default function GoogleImportField({ userId, targetPlaceId }: GoogleImpor
 
     setImporting(true);
     setError(null);
+    setDuplicatePlace(null);
 
     try {
       // Get access token from Supabase session
@@ -357,39 +361,55 @@ export default function GoogleImportField({ userId, targetPlaceId }: GoogleImpor
         }),
       });
 
-      let data;
+      const responseText = await response.text();
+      let data: any;
       try {
-        const responseText = await response.text();
         if (!responseText) {
           throw new Error("Empty response from server");
         }
         data = JSON.parse(responseText);
       } catch (parseError) {
         console.error("Failed to parse import response:", parseError);
-        throw new Error("Invalid response from server. Please try again.");
+        console.error("Raw import response:", {
+          status: response.status,
+          statusText: response.statusText,
+          bodyPreview: responseText ? responseText.slice(0, 500) : "",
+        });
+        throw new Error(
+          responseText
+            ? `Import failed (${response.status}). Server returned non-JSON.`
+            : "Invalid response from server. Please try again."
+        );
       }
 
       if (!response.ok) {
+        // Special case: duplicate place → show modal instead of error
+        if (data?.code === "DUPLICATE_PLACE" && data?.existing_place_id) {
+          setDuplicatePlace({ id: String(data.existing_place_id), title: data?.existing_title || null });
+          setImporting(false);
+          return;
+        }
+
         console.error("Import API error:", {
           status: response.status,
           statusText: response.statusText,
           code: data?.code,
           error: data?.error,
+          message: data?.message,
           details: data?.details,
+          raw: typeof responseText === "string" ? responseText.slice(0, 800) : "",
         });
-
-        if (data.code === "DUPLICATE_PLACE") {
-        // If updating an existing place, and place_id already exists elsewhere, redirect there
-        router.push(`/places/${data.existing_place_id}/edit`);
-        return;
-        }
 
         if (response.status === 403 || data?.code === "PREMIUM_REQUIRED") {
           throw new Error("Premium required to create places. Please upgrade to Premium to import.");
         }
 
         // Show more detailed error message
-        let errorMessage = data?.error || "Failed to import place";
+        let errorMessage =
+          data?.error ||
+          data?.message ||
+          (responseText && responseText.trim() !== "{}" ? responseText.slice(0, 160) : "") ||
+          "Failed to import place";
         if (data?.details) {
           errorMessage += `: ${data.details}`;
         }
@@ -417,6 +437,66 @@ export default function GoogleImportField({ userId, targetPlaceId }: GoogleImpor
 
   return (
     <div className="space-y-6">
+      {/* Duplicate place modal */}
+      {duplicatePlace && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setDuplicatePlace(null)}
+          />
+          <div className="relative w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl border border-[#ECEEE4] shadow-xl p-5 sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="font-fraunces font-semibold text-[#1F2A1F] text-lg">
+                  Place already exists
+                </h3>
+                <p className="text-sm text-[#6F7A5A] mt-1">
+                  This place is already in your account.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDuplicatePlace(null)}
+                className="p-2 -mr-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition"
+                aria-label="Close"
+              >
+                <Icon name="close" size={18} />
+              </button>
+            </div>
+
+            {duplicatePlace.title ? (
+              <div className="mt-4 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] p-3">
+                <div className="text-xs text-[#6F7A5A] mb-1">Existing gem</div>
+                <div className="text-sm font-medium text-[#1F2A1F] line-clamp-2">
+                  {duplicatePlace.title}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-5 flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const id = duplicatePlace.id;
+                  setDuplicatePlace(null);
+                  window.location.href = `/places/${id}/edit`;
+                }}
+                className="flex-1 rounded-xl px-4 py-3 text-sm font-medium bg-[#8F9E4F] text-white hover:bg-[#556036] transition"
+              >
+                Open existing
+              </button>
+              <button
+                type="button"
+                onClick={() => setDuplicatePlace(null)}
+                className="flex-1 rounded-xl px-4 py-3 text-sm font-medium border border-[#ECEEE4] bg-white text-[#1F2A1F] hover:bg-[#FAFAF7] transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Search Input Card */}
       <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
         <div className="space-y-3">
