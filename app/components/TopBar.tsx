@@ -165,7 +165,7 @@ export default function TopBar({
         selectedCity={selectedCity}
       />
 
-      <div className={`fixed top-0 left-0 right-0 z-40 bg-white ${pathname === "/map" ? "" : "border-b border-[#ECEEE4]"}`}>
+      <div className={`fixed top-0 left-0 right-0 z-[60] bg-white pointer-events-auto ${pathname === "/map" ? "" : "border-b border-[#ECEEE4]"}`}>
         {/* Mobile TopBar (default, < lg) */}
         <div className="lg:hidden relative">
           <div className="px-4 pt-safe-top pt-3 pb-3">

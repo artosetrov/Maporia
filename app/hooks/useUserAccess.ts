@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "../lib/supabase";
+import { supabase, isRefreshTokenError, handleRefreshTokenError } from "../lib/supabase";
 import { getUserAccess, type UserAccess } from "../lib/access";
 import type { Profile } from "../types";
 
@@ -53,6 +53,22 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
         if (sessionError) {
           // Silently ignore AbortError
           if (sessionError.message?.includes('abort') || sessionError.name === 'AbortError') {
+            return;
+          }
+          
+          // Handle refresh token errors
+          if (isRefreshTokenError(sessionError)) {
+            await handleRefreshTokenError(sessionError);
+            if (!isUnmounting && currentRequestId === requestId) {
+              setUser(null);
+              setProfile(null);
+              setAccess({ 
+                role: "guest", 
+                hasPremium: false, 
+                isAdmin: false 
+              });
+              setLoading(false);
+            }
             return;
           }
           
@@ -174,6 +190,22 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
       } catch (err: any) {
         // Silently ignore AbortError
         if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+          return;
+        }
+        
+        // Handle refresh token errors
+        if (isRefreshTokenError(err)) {
+          await handleRefreshTokenError(err);
+          if (!isUnmounting && currentRequestId === requestId) {
+            setUser(null);
+            setProfile(null);
+            setAccess({ 
+              role: "guest", 
+              hasPremium: false, 
+              isAdmin: false 
+            });
+            setLoading(false);
+          }
           return;
         }
         

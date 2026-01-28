@@ -662,54 +662,12 @@ function MapPageContent() {
       }
 
       // Обрабатываем данные перед применением фильтров
+      // Фильтрация (поиск, города, категории) теперь применяется в filteredPlacesMemo для динамического обновления
+      // Не применяем фильтры здесь, чтобы они работали при изменении без перезагрузки данных
       let filteredData = data as Place[];
 
-      // Фильтрация по поисковому запросу (если есть) - делаем это раньше для сортировки
-      if (appliedQ.trim()) {
-        const searchLower = appliedQ.trim().toLowerCase();
-        filteredData = filteredData.filter(place => 
-          place.title?.toLowerCase().includes(searchLower) ||
-          place.description?.toLowerCase().includes(searchLower) ||
-          place.country?.toLowerCase().includes(searchLower)
-        );
-      }
-
-      // Фильтрация по городам применяется на клиенте для скорости
-      // (вместо медленного серверного запроса)
-      const citiesToFilter = appliedCities.filter(city => city !== DEFAULT_CITY);
-      const allCitiesSelected = citiesToFilter.length > 0 && 
-                               citiesToFilter.length === CITIES.length &&
-                               CITIES.every(city => citiesToFilter.includes(city));
-      
-      if (citiesToFilter.length > 0 && !allCitiesSelected) {
-        filteredData = filteredData.filter(place => {
-          const placeCity = normalizeCity(place.city || place.city_name_cached);
-          return citiesToFilter.some(city => normalizeCity(city) === placeCity);
-        });
-      } else if (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && !allCitiesSelected) {
-        // Fallback для обратной совместимости
-        const normalizedAppliedCity = normalizeCity(appliedCity);
-        filteredData = filteredData.filter(place => {
-          const placeCity = normalizeCity(place.city || place.city_name_cached);
-          return placeCity === normalizedAppliedCity;
-        });
-      }
-
-      // Фильтрация по категориям применяется на клиенте для скорости
-      // (вместо медленного серверного overlaps запроса)
-      // Используем activeFilters.categories напрямую для мгновенного обновления
-      if (activeFilters.categories.length > 0) {
-        const allCategoriesSelected = activeFilters.categories.length === CATEGORIES.length &&
-                                     CATEGORIES.every(cat => activeFilters.categories.includes(cat));
-        if (!allCategoriesSelected) {
-          filteredData = filteredData.filter(place => {
-            if (!place.categories || place.categories.length === 0) return false;
-            return activeFilters.categories.some(cat => place.categories!.includes(cat));
-          });
-        }
-      }
-
       // Если выбрана сортировка по комментариям или лайкам, нужно загрузить счетчики
+      // Сортировка применяется ко всем данным, а фильтрация - в filteredPlacesMemo
       let placesWithCounts = filteredData;
       if (activeFilters.sort === "most_commented" || activeFilters.sort === "most_liked") {
         const placeIds = filteredData.map((p: any) => p.id);
@@ -830,11 +788,23 @@ function MapPageContent() {
     return JSON.stringify(sorted);
   }, [appliedCities]);
 
-      // Apply client-side filters (Premium/Hidden/Vibe/Categories/Cities) to placesData
+      // Apply client-side filters (Premium/Hidden/Vibe/Categories/Cities/Search) to placesData
       // Все фильтры применяются на клиенте для мгновенной скорости
       // Используем useMemo для вычисления, но обновляем через useEffect для гарантии обновления
       const filteredPlacesMemo = useMemo(() => {
         if (!placesData || placesData.length === 0) return [];
+        
+        // Сначала применяем поиск (если есть)
+        let result = [...placesData];
+        if (appliedQ.trim()) {
+          const searchLower = appliedQ.trim().toLowerCase();
+          result = result.filter(place => 
+            place.title?.toLowerCase().includes(searchLower) ||
+            place.description?.toLowerCase().includes(searchLower) ||
+            place.country?.toLowerCase().includes(searchLower) ||
+            place.city?.toLowerCase().includes(searchLower)
+          );
+        }
         
         // Определяем города для фильтрации
         const citiesToFilter = appliedCities.filter(city => city !== DEFAULT_CITY);
@@ -849,7 +819,8 @@ function MapPageContent() {
           citiesForFilter = [appliedCity];
         }
         
-        const result = filterPlaces(placesData, {
+        // Затем применяем остальные фильтры
+        result = filterPlaces(result, {
           premium: activeFilters.premium,
           premiumOnly: activeFilters.premiumOnly,
           hidden: activeFilters.hidden,
@@ -859,14 +830,25 @@ function MapPageContent() {
           cities: citiesForFilter,
         });
         
+        // Применяем сортировку (только для простых случаев, без счетчиков)
+        // Сортировка по комментариям и лайкам применяется в useEffect при загрузке данных
+        if (activeFilters.sort === "newest") {
+          result = [...result].sort((a, b) => {
+            if (!a.created_at || !b.created_at) return 0;
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          });
+        }
+        
         if (process.env.NODE_ENV === 'development') {
           console.log('[MapPage] filteredPlacesMemo recalculated:', {
             inputCount: placesData.length,
             outputCount: result.length,
+            appliedQ: appliedQ.trim(),
             appliedCities,
             citiesToFilter,
             citiesForFilter,
             categories: activeFilters.categories,
+            sort: activeFilters.sort,
             categoriesKey,
             citiesKey,
           });
@@ -875,10 +857,12 @@ function MapPageContent() {
         return result;
       }, [
         placesData, 
+        appliedQ, // Добавляем поиск в зависимости
         activeFilters.premium, 
         activeFilters.premiumOnly, 
         activeFilters.hidden, 
         activeFilters.vibe,
+        activeFilters.sort, // Добавляем сортировку в зависимости
         // Используем строковые ключи для отслеживания изменений массивов
         categoriesKey,
         citiesKey,
@@ -1848,24 +1832,31 @@ function MapPageContent() {
               </div>
             </div>
           ) : (
-            /* Mobile: карта открывается в fullscreen overlay */
-            <div className="h-full w-full fixed inset-0 z-50 bg-white" style={{ paddingTop: '80px' }}>
-              <MapView
-                places={filteredPlaces}
-                loading={loading}
-                selectedPlaceId={hoveredPlaceId || selectedPlaceId}
-                mapCenter={mapCenter}
-                mapZoom={mapZoom}
-                onMapStateChange={(center, zoom) => {
-                  setMapCenter(center);
-                  setMapZoom(zoom);
-                }}
-                userId={userId}
-                favorites={favorites}
-                onToggleFavorite={toggleFavorite}
-                userAccess={access}
-                isMapView={view === "map"} // Pass current view state - карта загружается только когда view === "map"
-              />
+            /* Mobile: карта открывается в fullscreen overlay под TopBar и модалками */
+            <div 
+              className="fixed left-0 right-0 bottom-0 z-30 bg-white" 
+              style={{ 
+                top: '80px', // начинается под TopBar
+              }}
+            >
+              <div className="h-full w-full">
+                <MapView
+                  places={filteredPlaces}
+                  loading={loading}
+                  selectedPlaceId={hoveredPlaceId || selectedPlaceId}
+                  mapCenter={mapCenter}
+                  mapZoom={mapZoom}
+                  onMapStateChange={(center, zoom) => {
+                    setMapCenter(center);
+                    setMapZoom(zoom);
+                  }}
+                  userId={userId}
+                  favorites={favorites}
+                  onToggleFavorite={toggleFavorite}
+                  userAccess={access}
+                  isMapView={view === "map"} // Pass current view state - карта загружается только когда view === "map"
+                />
+              </div>
             </div>
           )}
         </div>
@@ -1877,7 +1868,7 @@ function MapPageContent() {
         <button
           onClick={() => setView("map")}
           style={{ bottom: 'calc(64px + 24px + env(safe-area-inset-bottom, 0px))' }}
-          className="fixed left-1/2 transform -translate-x-1/2 z-40 md:hidden flex items-center gap-2 bg-[#8F9E4F] text-white px-6 py-3 rounded-full shadow-lg hover:bg-[#7A8A3F] transition-colors"
+          className="fixed left-1/2 transform -translate-x-1/2 z-[60] md:hidden flex items-center gap-2 bg-[#8F9E4F] text-white px-6 py-3 rounded-full shadow-lg hover:bg-[#7A8A3F] transition-colors"
         >
           <Icon name="map" size={20} className="text-white" />
           <span className="text-sm font-medium">Show map</span>
@@ -1888,9 +1879,10 @@ function MapPageContent() {
       {view === "map" && (
         <button
           onClick={() => setView("list")}
-          className="fixed top-20 left-4 z-40 md:hidden flex items-center gap-2 bg-white text-[#1F2A1F] px-4 py-2 rounded-full shadow-lg hover:bg-[#FAFAF7] transition-colors border border-[#ECEEE4]"
+          style={{ bottom: 'calc(64px + 24px + env(safe-area-inset-bottom, 0px))' }}
+          className="fixed left-1/2 transform -translate-x-1/2 z-[60] md:hidden flex items-center gap-2 bg-[#8F9E4F] text-white px-6 py-3 rounded-full shadow-lg hover:bg-[#7A8A3F] transition-colors"
         >
-          <Icon name="list" size={18} className="text-[#1F2A1F]" />
+          <Icon name="list" size={20} className="text-white" />
           <span className="text-sm font-medium">List</span>
         </button>
       )}
@@ -2268,10 +2260,18 @@ function MapView({
       }}
       onTouchStart={(e) => {
         // Предотвращаем скролл страницы при начале взаимодействия с картой
+        // НЕ блокируем события для маркеров и InfoWindow - они должны работать
         if (e.touches.length === 1) {
           const target = e.target as HTMLElement;
-          // Проверяем, что тап не на кнопках управления
-          if (!target.closest('button') && !target.closest('[role="button"]')) {
+          // Проверяем, что тап не на кнопках управления, маркерах или InfoWindow
+          const isMarker = target.closest('[class*="gm-"]') || 
+                          target.closest('[data-marker]') ||
+                          target.closest('.gm-style') ||
+                          target.closest('[role="button"]');
+          const isInfoWindow = target.closest('.gm-style-iw') || 
+                              target.closest('[class*="infoWindow"]');
+          // Блокируем только если это не интерактивный элемент
+          if (!target.closest('button') && !isMarker && !isInfoWindow) {
             // Разрешаем обработку жестов картой
             e.stopPropagation();
           }
@@ -2279,16 +2279,22 @@ function MapView({
       }}
       onTouchMove={(e) => {
         // Предотвращаем скролл страницы при перемещении по карте
+        // НЕ блокируем события для маркеров и InfoWindow
         if (e.touches.length === 1) {
           const target = e.target as HTMLElement;
-          if (!target.closest('button') && !target.closest('[role="button"]')) {
+          const isMarker = target.closest('[class*="gm-"]') || 
+                          target.closest('[data-marker]') ||
+                          target.closest('.gm-style');
+          const isInfoWindow = target.closest('.gm-style-iw') || 
+                              target.closest('[class*="infoWindow"]');
+          if (!target.closest('button') && !isMarker && !isInfoWindow) {
             e.stopPropagation();
           }
         }
       }}
     >
       {/* Custom Map Controls - Top Right Corner */}
-      <div className="absolute top-[72px] lg:top-3 right-3 z-10 flex flex-col gap-2">
+      <div className="absolute top-[72px] lg:top-3 right-3 z-20 flex flex-col gap-2">
         {/* My Location Button */}
         <button
           onClick={handleMyLocation}

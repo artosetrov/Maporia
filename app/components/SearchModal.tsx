@@ -550,7 +550,7 @@ export default function SearchModal({
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-white lg:bg-black/50 lg:flex lg:items-center lg:justify-center"
+      className="fixed inset-0 z-[70] bg-white lg:bg-black/50 lg:flex lg:items-center lg:justify-center"
       style={{ height: dynamicHeight }}
     >
       <div

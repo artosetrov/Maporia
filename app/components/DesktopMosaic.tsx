@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Icon from "./Icon";
 
 interface DesktopMosaicProps {
@@ -24,8 +23,6 @@ export default function DesktopMosaic({
   onShowAll,
   onPhotoClick,
 }: DesktopMosaicProps) {
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-
   // Airbnb-style photo mosaic
   // Layout: 2:1 aspect ratio container, 2 columns grid
   // Left: 1 hero image (1:1 aspect ratio)
@@ -121,17 +118,12 @@ export default function DesktopMosaic({
       <button
         className="relative overflow-hidden aspect-square cursor-pointer"
         style={{ borderRadius: `${radius}px` }}
-        onMouseEnter={() => setHoveredIndex(0)}
-        onMouseLeave={() => setHoveredIndex(null)}
         onClick={() => onPhotoClick?.(0)}
       >
         <img
           src={photos[0]}
           alt={title}
-          className="w-full h-full object-cover transition-transform duration-300"
-          style={{
-            transform: hoveredIndex === 0 ? 'scale(1.02)' : 'scale(1)',
-          }}
+          className="w-full h-full object-cover"
         />
       </button>
 
@@ -149,8 +141,6 @@ export default function DesktopMosaic({
               key={index}
               className="relative overflow-hidden aspect-square"
               style={{ borderRadius: `${radius}px` }}
-              onMouseEnter={() => setHoveredIndex(photoIndex)}
-              onMouseLeave={() => setHoveredIndex(null)}
             >
               <button
                 className="w-full h-full"
@@ -159,10 +149,7 @@ export default function DesktopMosaic({
                 <img
                   src={photo}
                   alt={`${title} - Photo ${index + 2}`}
-                  className="w-full h-full object-cover transition-transform duration-300"
-                  style={{
-                    transform: hoveredIndex === photoIndex ? 'scale(1.02)' : 'scale(1)',
-                  }}
+                  className="w-full h-full object-cover"
                 />
               </button>
               {shouldShowButton && (

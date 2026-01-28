@@ -188,7 +188,7 @@ export default function BottomNav() {
 
   return (
     <div 
-      className={`fixed left-0 right-0 z-40 bg-white lg:hidden transition-transform duration-300 ease-in-out ${
+      className={`fixed left-0 right-0 z-[60] bg-white lg:hidden transition-transform duration-300 ease-in-out ${
         isVisible ? 'translate-y-0' : 'translate-y-full'
       }`}
       style={{

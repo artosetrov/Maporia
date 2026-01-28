@@ -1346,7 +1346,7 @@ export default function PlacePage() {
                     <img
                       src={photo}
                       alt={`${place.title} - Photo ${index + 1}`}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                      className="w-full h-full object-cover"
                     />
                   </button>
                 ))}
@@ -1844,7 +1844,7 @@ export default function PlacePage() {
                     <img
                       src={photo}
                       alt={`${place.title} - Photo ${index + 1}`}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                      className="w-full h-full object-cover"
                     />
                   </button>
                 ))}

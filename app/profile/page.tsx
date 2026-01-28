@@ -2107,7 +2107,7 @@ function AddedPlacesSection({
                     <img
                       src={place.cover_url}
                       alt={place.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="w-full h-full object-cover"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">

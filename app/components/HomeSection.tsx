@@ -366,7 +366,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
                     scrollSnapAlign: 'start'
                   }}
                 >
-                <div className="flex flex-col h-full rounded-2xl bg-white border border-[#ECEEE4] overflow-hidden transition-all duration-200 relative z-0 hover:scale-[1.02] cursor-pointer"
+                <div className="flex flex-col h-full rounded-2xl bg-white border border-[#ECEEE4] overflow-hidden transition-all duration-200 relative z-0 cursor-pointer"
                      style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
                   {/* Image collage section - aspect 1:1 */}
                   <div className="relative w-full aspect-square">
