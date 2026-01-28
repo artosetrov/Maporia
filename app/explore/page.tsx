@@ -1703,8 +1703,13 @@ function MapView({
 
   return (
     <div className="relative h-full w-full transition-all duration-300 overflow-hidden" data-map-container>
-      {/* Custom Map Controls - Top Right Corner */}
-      <div className="absolute top-3 right-3 z-10 flex flex-col gap-2">
+      {/* Custom Map Controls - Bottom Right Corner on Mobile, Top Right on Desktop */}
+      <div 
+        className="absolute lg:top-3 lg:bottom-auto right-3 z-10 flex flex-col gap-2"
+        style={{
+          bottom: 'calc(64px + 24px + env(safe-area-inset-bottom, 0px))',
+        }}
+      >
         {/* My Location Button */}
         <button
           onClick={handleMyLocation}

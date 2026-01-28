@@ -447,7 +447,7 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
         ref={cardRef}
         href={isLocked ? "#" : `/id/${place.id}`}
         onClick={handleCardClick}
-        className={`block group relative w-full ${isLocked ? "cursor-pointer" : "cursor-pointer"}`}
+        className={`block group relative w-full min-w-0 ${isLocked ? "cursor-pointer" : "cursor-pointer"}`}
       >
       {/* Photo with rounded corners */}
       <div 
@@ -469,7 +469,7 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
               alt={displayTitle}
               className={cx(
                 "absolute inset-0 w-full h-full object-cover",
-                isLocked && !isOwner && "blur-md brightness-75"
+                isLocked && !isOwner && "blur-sm brightness-75"
               )}
               style={{ objectFit: 'cover', width: '100%', height: '100%' }}
             />
@@ -533,8 +533,9 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
 
             {/* Locked overlay - shown when user doesn't have premium access */}
             {isLocked && (
-              <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-30 rounded-2xl">
-                <div className="text-center p-4">
+              <div className="absolute inset-0 bg-black/30 z-30 rounded-2xl">
+                {/* Premium badge - top left, same position as unlocked cards */}
+                <div className="absolute top-2 left-2 z-20">
                   <PremiumBadge />
                 </div>
               </div>
@@ -548,9 +549,9 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
           </div>
         )}
         
-        {/* Favorite button - visible always */}
-        {favoriteButton && (
-          <div className="absolute top-2 right-2 z-10 opacity-100">
+        {/* Favorite button - hidden on locked cards */}
+        {favoriteButton && !isLocked && (
+          <div className="absolute top-2 right-2 z-40 opacity-100">
             {favoriteButton}
           </div>
         )}

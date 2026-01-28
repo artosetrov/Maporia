@@ -5,6 +5,7 @@
 import { useState, useEffect, useRef } from "react";
 import { CATEGORIES } from "../constants";
 import Icon from "./Icon";
+import { type UserAccess } from "../lib/access";
 
 export type ActiveFilters = {
   categories: string[];
@@ -40,6 +41,9 @@ type FiltersModalProps = {
   
   // Optional: get count for each category
   getCategoryCount?: (category: string) => number | Promise<number>;
+  
+  // Optional: user access level - used to determine if Premium filter should be shown
+  userAccess?: UserAccess;
 };
 
 export default function FiltersModal({
@@ -54,6 +58,7 @@ export default function FiltersModal({
   getFilteredCount,
   getCityCount: _getCityCount,
   getCategoryCount,
+  userAccess,
 }: FiltersModalProps) {
   // Ensure appliedFilters is always defined
   const safeAppliedFilters: ActiveFilters = appliedFilters || {
@@ -92,10 +97,19 @@ export default function FiltersModal({
   appliedCitiesRef.current = safeAppliedCities;
   useEffect(() => {
     if (isOpen) {
-      setDraftFilters(appliedFiltersRef.current);
+      let filtersToSet = appliedFiltersRef.current;
+      // If user doesn't have premium access, remove premium filter
+      if (!userAccess?.hasPremium && !userAccess?.isAdmin) {
+        filtersToSet = {
+          ...filtersToSet,
+          premium: false,
+          premiumOnly: false,
+        };
+      }
+      setDraftFilters(filtersToSet);
       setDraftCities(appliedCitiesRef.current);
     }
-  }, [isOpen]);
+  }, [isOpen, userAccess]);
 
   
   // Load category counts
@@ -341,20 +355,22 @@ export default function FiltersModal({
           {/* Quick Filters Block */}
           <div>
             <div className="flex gap-3">
-              {/* Premium Card */}
-              <button
-                onClick={() => handleTogglePremium()}
-                className={`flex-1 flex flex-col items-center justify-center px-4 py-5 rounded-xl border-2 transition-all ${
-                  draftFilters.premium
-                    ? "border-[#8F9E4F] bg-[#F4F6EF]"
-                    : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
-                }`}
-              >
-                <span className="text-3xl mb-2">⭐</span>
-                <span className={`text-sm font-medium text-center ${draftFilters.premium ? "text-[#1F2A1F]" : "text-[#1F2A1F]"}`}>
-                  Premium
-                </span>
-              </button>
+              {/* Premium Card - Only visible for admin and premium users */}
+              {(userAccess?.hasPremium || userAccess?.isAdmin) && (
+                <button
+                  onClick={() => handleTogglePremium()}
+                  className={`flex-1 flex flex-col items-center justify-center px-4 py-5 rounded-xl border-2 transition-all ${
+                    draftFilters.premium
+                      ? "border-[#8F9E4F] bg-[#F4F6EF]"
+                      : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
+                  }`}
+                >
+                  <span className="text-3xl mb-2">⭐</span>
+                  <span className={`text-sm font-medium text-center ${draftFilters.premium ? "text-[#1F2A1F]" : "text-[#1F2A1F]"}`}>
+                    Premium
+                  </span>
+                </button>
+              )}
 
               {/* Hidden Card */}
               <button

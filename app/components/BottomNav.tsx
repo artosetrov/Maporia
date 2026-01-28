@@ -188,12 +188,14 @@ export default function BottomNav() {
 
   return (
     <div 
-      className={`fixed left-0 right-0 z-[60] bg-white lg:hidden transition-transform duration-300 ease-in-out ${
-        isVisible ? 'translate-y-0' : 'translate-y-full'
-      }`}
+      className="fixed left-0 right-0 z-[60] bg-white lg:hidden transition-transform duration-300 ease-in-out"
       style={{
-        bottom: 'env(safe-area-inset-bottom, 0px)',
+        bottom: 0,
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        transform: isVisible 
+          ? `translateY(0)` 
+          : `translateY(calc(100% + env(safe-area-inset-bottom, 0px)))`,
+        willChange: 'transform',
       }}
     >
       <div className="mx-auto max-w-md">

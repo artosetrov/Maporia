@@ -10,6 +10,7 @@ import SearchModal from "../components/SearchModal";
 import { supabase } from "../lib/supabase";
 import { DEFAULT_CITY } from "../constants";
 import Icon from "../components/Icon";
+import { useUserAccess } from "../hooks/useUserAccess";
 
 type ActivityItem =
   | { type: "liked"; created_at: string; placeId: string; placeTitle?: string | null; coverUrl?: string | null; address?: string | null; userId: string; userName: string; userAvatar: string | null }
@@ -138,6 +139,9 @@ export default function FeedPage() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
+  
+  // User access
+  const { access } = useUserAccess();
   
   // Search and filter state
   const [searchValue, setSearchValue] = useState("");
@@ -421,6 +425,7 @@ export default function FeedPage() {
       <FiltersModal
         isOpen={filterOpen}
         onClose={() => setFilterOpen(false)}
+        userAccess={access}
         onApply={(filters) => {
           setActiveFilters(filters);
           // Always redirect to /map with applied filters

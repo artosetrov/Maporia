@@ -214,6 +214,7 @@ export default function SavedPage() {
       <FiltersModal
         isOpen={filterOpen}
         onClose={() => setFilterOpen(false)}
+        userAccess={access}
         onApply={(filters) => {
           setActiveFilters(filters);
           // Always redirect to /map with applied filters

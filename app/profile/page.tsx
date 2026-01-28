@@ -839,6 +839,7 @@ function ProfileInner() {
         onApply={handleFiltersApply}
         appliedFilters={activeFilters}
         appliedCity={selectedCity}
+        userAccess={access}
         onCityChange={handleCityChange}
         getFilteredCount={async (draftFilters: ActiveFilters) => {
           // Since we redirect to /map, we don't need to count filtered places here

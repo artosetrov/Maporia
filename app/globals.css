@@ -56,6 +56,13 @@
   --font-serif: var(--font-fraunces);
 }
 
+html {
+  /* Use small viewport height (svh) for mobile Chrome compatibility */
+  /* svh accounts for browser UI (address bar, etc.) */
+  height: 100svh;
+  height: 100vh; /* Fallback for browsers that don't support svh */
+}
+
 body {
   background: var(--warm-white);
   color: var(--text-primary);
@@ -64,6 +71,8 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  min-height: 100svh;
+  min-height: 100vh; /* Fallback for browsers that don't support svh */
 }
 
 /* Typography - Fraunces for headings and place titles */

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { usePremiumModalSettings } from "../hooks/usePremiumModalSettings";
 import Icon from "./Icon";
 import Link from "next/link";
@@ -206,7 +207,8 @@ export default function PremiumUpsellModal({
 
   if (!open) return null;
 
-  return (
+  // Render modal in a portal to ensure it's on top of everything
+  const modalContent = (
     <div 
       className="fixed inset-0 z-[80] flex items-end lg:items-center justify-center p-0 lg:p-4 bg-black/60 backdrop-blur-sm"
       style={{ height: dynamicHeight }}
@@ -369,25 +371,6 @@ export default function PremiumUpsellModal({
                   </div>
                 </div>
               )}
-
-              {content.benefit3Title && (
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center">
-                    {/* Map/Route icon for Custom Routes */}
-                    <Icon name="map" size={24} className="text-[#6F7A5A]" />
-                  </div>
-                  <div>
-                    <div className="font-semibold text-[#1F2A1F] text-base mb-1">
-                      {content.benefit3Title}
-                    </div>
-                    {content.benefit3Desc && (
-                      <div className="text-sm text-[#6F7A5A] leading-relaxed">
-                        {content.benefit3Desc}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Social Proof */}
@@ -413,21 +396,11 @@ export default function PremiumUpsellModal({
                       </span>
                     )}
                   </div>
-                  {content.priceSubtext && (
-                    <div className="text-sm text-[#6F7A5A] mt-1.5">
-                      {content.priceSubtext}
-                    </div>
-                  )}
                 </div>
                 <div className="text-right">
                   {content.priceRightTitle && (
                     <div className="font-semibold text-[#1F2A1F] text-base">
                       {content.priceRightTitle}
-                    </div>
-                  )}
-                  {content.priceRightDesc && (
-                    <div className="text-sm text-[#6F7A5A] mt-1">
-                      {content.priceRightDesc}
                     </div>
                   )}
                 </div>
@@ -501,4 +474,9 @@ export default function PremiumUpsellModal({
       </div>
     </div>
   );
+
+  // Use portal to render modal at document body level, ensuring it's above all content
+  if (typeof window === 'undefined') return null;
+  
+  return createPortal(modalContent, document.body);
 }

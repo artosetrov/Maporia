@@ -2022,6 +2022,7 @@ export default function PlacePage() {
         onClose={() => setFilterOpen(false)}
         onApply={handleFiltersApply}
         appliedFilters={activeFilters}
+        userAccess={access}
         getFilteredCount={async (draftFilters: ActiveFilters) => {
           // Подсчитываем количество мест с учетом фильтров
           try {

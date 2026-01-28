@@ -24,6 +24,7 @@ import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../config/googleMaps
 import { supabase } from "../lib/supabase";
 import { DEFAULT_CITY, CATEGORIES, CITIES } from "../constants";
 import { useUserAccess } from "../hooks/useUserAccess";
+import { useBottomNavVisibility } from "../hooks/useBottomNavVisibility";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import Icon from "../components/Icon";
 import { PlaceCardGridSkeleton, MapSkeleton, Empty } from "../components/Skeleton";
@@ -172,6 +173,9 @@ function MapPageContent() {
 
   // User access for premium filtering
   const { loading: accessLoading, access } = useUserAccess();
+  
+  // Track BottomNav visibility for button positioning
+  const bottomNavVisible = useBottomNavVisibility();
   
   // Bootstrap ready state - wait for auth/profile before loading places
   const [bootReady, setBootReady] = useState(false);
@@ -1332,6 +1336,7 @@ function MapPageContent() {
         appliedFilters={activeFilters}
         appliedCity={appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) ? appliedCity : null}
         appliedCities={appliedCities.filter(city => city !== DEFAULT_CITY)}
+        userAccess={access}
         onCityChange={handleCityChange}
         onCitiesChange={(cities) => {
           if (process.env.NODE_ENV === 'development') {
@@ -1602,7 +1607,7 @@ function MapPageContent() {
                 {/* Grid центрирован внутри колонки списка */}
                 {/* Промежутки постоянные (16-24px), не увеличиваются с viewport */}
                 {/* Карточки: min 260px, max 320px (жесткий предел), никогда не растягиваются */}
-                <div key={`places-grid-${filtersVersion}-${categoriesKey}-${citiesKey}`} className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 place-card-grid">
+                <div key={`places-grid-${filtersVersion}-${categoriesKey}-${citiesKey}`} className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 place-card-grid min-w-0">
                   {/* Жесткие ограничения на размер карточек для Desktop */}
                   {/* Максимальная ширина: 320px (жесткий предел), минимум: 260px */}
                   {/* Оптимум: 280-300px для идеального баланса */}
@@ -1611,6 +1616,24 @@ function MapPageContent() {
                   {/* Карточки НИКОГДА не растягиваются выше max-width */}
                   {/* Промежутки остаются постоянными, дополнительное пространство отдается карте */}
                   <style jsx>{`
+                    /* Общие стили для всех разрешений - предотвращаем перекрытие */
+                    .place-card-grid {
+                      width: 100%;
+                      box-sizing: border-box;
+                    }
+                    .place-card-grid > .place-card-wrapper {
+                      width: 100%;
+                      max-width: 100%;
+                      box-sizing: border-box;
+                      overflow: hidden;
+                    }
+                    @media (min-width: 768px) {
+                      /* Tablet: 2 колонки - убеждаемся что карточки не перекрываются */
+                      .place-card-grid > .place-card-wrapper {
+                        min-width: 0;
+                        max-width: 100%;
+                      }
+                    }
                     @media (min-width: 1024px) {
                       /* Grid центрирован, промежутки постоянные (не увеличиваются) */
                       .place-card-grid {
@@ -1643,7 +1666,7 @@ function MapPageContent() {
                       onMouseEnter={() => handlePlaceHover(p.id)}
                       onMouseLeave={() => handlePlaceHover(null)}
                       onClick={() => handlePlaceClick(p)}
-                      className="transition-all relative z-0 place-card-wrapper"
+                      className="transition-all relative z-0 place-card-wrapper min-w-0"
                     >
                       <PlaceCard
                         place={p}
@@ -1863,12 +1886,18 @@ function MapPageContent() {
       </div>
 
       {/* Floating View Toggle Button (mobile only, ≤768px) */}
-      {/* Fixed снизу, показывается только когда список активен */}
+      {/* Fixed снизу, позиционируется относительно BottomNav с учетом его видимости */}
+      {/* BottomNav высота: ~64px (pt-2.5 + pb-2.5 + py-2 + иконка + текст + gap) + safe-area-inset-bottom */}
       {view === "list" && (
         <button
           onClick={() => setView("map")}
-          style={{ bottom: 'calc(64px + 24px + env(safe-area-inset-bottom, 0px))' }}
-          className="fixed left-1/2 transform -translate-x-1/2 z-[60] md:hidden flex items-center gap-2 bg-[#8F9E4F] text-white px-6 py-3 rounded-full shadow-lg hover:bg-[#7A8A3F] transition-colors"
+          style={{ 
+            bottom: bottomNavVisible 
+              ? 'calc(64px + 24px + env(safe-area-inset-bottom, 0px))' 
+              : 'calc(24px + env(safe-area-inset-bottom, 0px))',
+            transition: 'bottom 0.3s ease-in-out', // Синхронизировано с BottomNav transition
+          }}
+          className="fixed left-1/2 transform -translate-x-1/2 z-[60] md:hidden flex items-center gap-2 bg-[#8F9E4F] text-white px-6 py-3 rounded-full shadow-lg hover:bg-[#7A8A3F] transition-all"
         >
           <Icon name="map" size={20} className="text-white" />
           <span className="text-sm font-medium">Show map</span>
@@ -1876,11 +1905,17 @@ function MapPageContent() {
       )}
       
       {/* Back to List Button (mobile only, когда карта открыта) */}
+      {/* Позиционируется относительно BottomNav с учетом его видимости */}
       {view === "map" && (
         <button
           onClick={() => setView("list")}
-          style={{ bottom: 'calc(64px + 24px + env(safe-area-inset-bottom, 0px))' }}
-          className="fixed left-1/2 transform -translate-x-1/2 z-[60] md:hidden flex items-center gap-2 bg-[#8F9E4F] text-white px-6 py-3 rounded-full shadow-lg hover:bg-[#7A8A3F] transition-colors"
+          style={{ 
+            bottom: bottomNavVisible 
+              ? 'calc(64px + 24px + env(safe-area-inset-bottom, 0px))' 
+              : 'calc(24px + env(safe-area-inset-bottom, 0px))',
+            transition: 'bottom 0.3s ease-in-out', // Синхронизировано с BottomNav transition
+          }}
+          className="fixed left-1/2 transform -translate-x-1/2 z-[60] md:hidden flex items-center gap-2 bg-[#8F9E4F] text-white px-6 py-3 rounded-full shadow-lg hover:bg-[#7A8A3F] transition-all"
         >
           <Icon name="list" size={20} className="text-white" />
           <span className="text-sm font-medium">List</span>
@@ -2293,8 +2328,13 @@ function MapView({
         }
       }}
     >
-      {/* Custom Map Controls - Top Right Corner */}
-      <div className="absolute top-[72px] lg:top-3 right-3 z-20 flex flex-col gap-2">
+      {/* Custom Map Controls - Bottom Right Corner on Mobile, Top Right on Desktop */}
+      <div 
+        className="absolute lg:top-3 lg:bottom-auto right-3 z-20 flex flex-col gap-2"
+        style={{
+          bottom: 'calc(64px + 24px + env(safe-area-inset-bottom, 0px))',
+        }}
+      >
         {/* My Location Button */}
         <button
           onClick={handleMyLocation}
