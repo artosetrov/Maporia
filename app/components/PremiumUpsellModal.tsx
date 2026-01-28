@@ -49,7 +49,30 @@ export default function PremiumUpsellModal({
   const [premiumPlaces, setPremiumPlaces] = useState<{ id: string; cover_url: string | null }[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const slideIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [dynamicHeight, setDynamicHeight] = useState<string>("100dvh");
   
+  // Handle dynamic viewport height for mobile Chrome and safe areas
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const updateHeight = () => {
+      if (window.visualViewport) {
+        setDynamicHeight(`${window.visualViewport.height}px`);
+      } else {
+        setDynamicHeight("100dvh");
+      }
+    };
+
+    updateHeight();
+    window.visualViewport?.addEventListener("resize", updateHeight);
+    window.addEventListener("resize", updateHeight);
+
+    return () => {
+      window.visualViewport?.removeEventListener("resize", updateHeight);
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, []);
+
   // Reload settings when modal opens to ensure we have the latest data
   // Use a ref to prevent multiple simultaneous calls
   const reloadingRef = useRef(false);
@@ -184,9 +207,18 @@ export default function PremiumUpsellModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end lg:items-center justify-center p-0 lg:p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full h-full lg:max-w-4xl lg:h-auto lg:max-h-[90vh] rounded-t-3xl lg:rounded-3xl bg-white overflow-hidden relative flex flex-col lg:flex-row animate-slide-up"
-           style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
+    <div 
+      className="fixed inset-0 z-[80] flex items-end lg:items-center justify-center p-0 lg:p-4 bg-black/60 backdrop-blur-sm"
+      style={{ height: dynamicHeight }}
+    >
+      <div 
+        className="w-full lg:max-w-4xl lg:h-auto lg:max-h-[90vh] rounded-t-3xl lg:rounded-3xl bg-white overflow-hidden relative flex flex-col lg:flex-row animate-slide-up"
+        style={{ 
+          height: typeof window !== 'undefined' && window.innerWidth >= 1024 ? 'auto' : dynamicHeight,
+          maxHeight: typeof window !== 'undefined' && window.innerWidth >= 1024 ? '90vh' : '100%',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+        }}
+      >
         
         {/* Left Pane - Image Slider with Badge and Quote (1/3 width) */}
         <div className="relative w-full lg:w-1/3 h-64 lg:h-auto bg-gradient-to-br from-[#8F9E4F] to-[#6F7A5A] flex flex-col p-6 overflow-hidden">
@@ -275,7 +307,14 @@ export default function PremiumUpsellModal({
           </button>
 
           {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto p-8 pb-0 lg:pb-8">
+          <div 
+            className="flex-1 overflow-y-auto p-8 pb-0 lg:pb-8"
+            style={{ 
+              paddingBottom: typeof window !== 'undefined' && window.innerWidth < 1024 
+                ? 'env(safe-area-inset-bottom, 0px)' 
+                : undefined 
+            }}
+          >
             <div className="space-y-6 pr-4 pb-24 lg:pb-0">
             {/* Title */}
             {content.title && (
@@ -413,7 +452,14 @@ export default function PremiumUpsellModal({
           </div>
 
           {/* Fixed Buttons at Bottom - Mobile only */}
-          <div className="sticky bottom-0 bg-white border-t border-[#ECEEE4] p-4 lg:border-0 lg:bg-transparent lg:p-0 lg:px-8 lg:pb-8 lg:static">
+          <div 
+            className="sticky bottom-0 bg-white border-t border-[#ECEEE4] p-4 lg:border-0 lg:bg-transparent lg:p-0 lg:px-8 lg:pb-8 lg:static"
+            style={{ 
+              paddingBottom: typeof window !== 'undefined' && window.innerWidth < 1024 
+                ? `max(16px, env(safe-area-inset-bottom, 0px))` 
+                : undefined 
+            }}
+          >
             {/* Primary Button */}
             {content.primaryButtonText && (
               <div className="mb-3 lg:mb-0">
