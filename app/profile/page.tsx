@@ -2052,9 +2052,23 @@ function AddedPlacesSection({
     const hasFilters = searchValue || (selectedCity && selectedCity !== DEFAULT_CITY) || (activeFilters?.categories && activeFilters.categories.length > 0);
     return (
       <div>
-        <h1 className="hidden lg:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Added places</h1>
+        {/* Header with title and Add place button */}
+        <div className="hidden lg:flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F]">Added places</h1>
+          {canAddPlace && (
+            <Link
+              href="/add"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#7A8A42] transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span>Add place</span>
+            </Link>
+          )}
+        </div>
         
-        {/* Add new place button - mobile only (only for Premium and Admin) */}
+        {/* Mobile: Add new place button */}
         {canAddPlace && (
           <div className="lg:hidden mb-6">
             <Link
@@ -2078,9 +2092,23 @@ function AddedPlacesSection({
 
   return (
     <div>
-      <h1 className="hidden lg:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Added places</h1>
+      {/* Header with title and Add place button */}
+      <div className="hidden lg:flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F]">Added places</h1>
+        {canAddPlace && (
+          <Link
+            href="/add"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#7A8A42] transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Add place</span>
+          </Link>
+        )}
+      </div>
       
-      {/* Add new place button - mobile only (only for Premium and Admin) */}
+      {/* Mobile: Add new place button */}
       {canAddPlace && (
         <div className="lg:hidden mb-6">
           <Link

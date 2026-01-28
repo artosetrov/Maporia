@@ -66,6 +66,13 @@ export default function UnifiedGoogleImportField({
         throw new Error("Not authenticated");
       }
 
+      const trimmedQuery = query.trim();
+      console.log("Importing place:", {
+        query: trimmedQuery.substring(0, 100),
+        isUrl: trimmedQuery.startsWith("http"),
+        userId,
+      });
+
       // Call import API
       const response = await fetch("/api/google/place-import", {
         method: "POST",
@@ -73,32 +80,85 @@ export default function UnifiedGoogleImportField({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          query: query.trim(),
+          query: trimmedQuery,
           access_token: session.access_token,
         }),
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        const text = await response.text();
+        if (!text) {
+          throw new Error("Empty response from server");
+        }
+        data = JSON.parse(text);
+      } catch (parseError) {
+        console.error("Failed to parse API response:", {
+          status: response.status,
+          statusText: response.statusText,
+          parseError: parseError instanceof Error ? parseError.message : String(parseError),
+          query: trimmedQuery.substring(0, 100),
+        });
+        throw new Error(`Server error (${response.status}): ${response.statusText || "Unknown error"}`);
+      }
 
       if (!response.ok) {
+        const errorDetails = {
+          status: response.status,
+          statusText: response.statusText,
+          code: data?.code || "UNKNOWN_ERROR",
+          error: data?.error || "Unknown error",
+          message: data?.message || data?.error || "Failed to import from Google",
+          query: trimmedQuery.substring(0, 100),
+        };
+        
+        console.error("Import API error:", JSON.stringify(errorDetails, null, 2));
+        
         // Provide more helpful error messages
-        let errorMessage = data.error || "Failed to import from Google";
-        if (data.code === "MISSING_API_KEY") {
+        let errorMessage = data?.error || data?.message || "Failed to import from Google";
+        if (data?.code === "MISSING_API_KEY") {
           errorMessage = "Google Maps API key is not configured. Please contact the administrator.";
-        } else if (response.status === 404 || data.code === "PLACE_NOT_FOUND") {
-          errorMessage = "Place not found. Make sure the Google Maps link or address is correct. Try copying the link directly from Google Maps or enter the full address.";
+        } else if (response.status === 404 || data?.code === "PLACE_NOT_FOUND") {
+          // Provide more specific guidance based on input type
+          if (trimmedQuery.startsWith("http")) {
+            errorMessage = "Place not found from this Google Maps link. Please try:\n• Copying the link directly from Google Maps (right-click → Copy link)\n• Using a different Google Maps link\n• Or enter the full address instead";
+          } else {
+            errorMessage = "Place not found. Please try:\n• Entering the full address with city name\n• Using a Google Maps link instead\n• Checking the spelling";
+          }
         } else if (response.status === 429) {
           errorMessage = "Too many requests. Please try again later.";
         } else if (response.status === 401) {
           errorMessage = "Authentication required. Please sign in again.";
+        } else if (response.status >= 500) {
+          errorMessage = "Server error. Please try again later.";
         }
         throw new Error(errorMessage);
       }
 
+      if (!data || typeof data !== 'object') {
+        console.error("Invalid import data received:", data);
+        throw new Error("Invalid data received from server");
+      }
+
+      console.log("Import successful:", {
+        placeId: data.place_id,
+        name: data.name,
+        address: data.formatted_address,
+      });
+
       const importData: GoogleImportData = data;
 
-      // Call success callback
-      await onImportSuccess(importData);
+      // Call success callback - catch errors from callback
+      try {
+        await onImportSuccess(importData);
+      } catch (callbackError: any) {
+        // If callback throws an error, show it to the user
+        console.error("Callback error:", {
+          error: callbackError instanceof Error ? callbackError.message : String(callbackError),
+          stack: callbackError instanceof Error ? callbackError.stack : undefined,
+        });
+        throw new Error(callbackError?.message || "Failed to save imported data");
+      }
 
       setImportSuccess(true);
       setQuery("");
@@ -109,8 +169,39 @@ export default function UnifiedGoogleImportField({
         }
       }, 3000);
     } catch (error: any) {
-      console.error("Import error:", error);
-      setImportError(error.message || "Failed to import from Google");
+      let errorMessage = "Failed to import from Google";
+      
+      if (error instanceof Error) {
+        errorMessage = error.message || errorMessage;
+        console.error("Import error:", {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+          query: query.trim().substring(0, 100),
+        });
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+        console.error("Import error (string):", error, {
+          query: query.trim().substring(0, 100),
+        });
+      } else {
+        // Try to extract message from error object
+        try {
+          const errorObj = error as Record<string, unknown>;
+          errorMessage = String(errorObj?.message || errorObj?.error || errorMessage);
+          console.error("Import error (object):", JSON.stringify({
+            error: errorObj,
+            query: query.trim().substring(0, 100),
+          }, null, 2));
+        } catch (stringifyError) {
+          console.error("Import error (unserializable):", String(error), {
+            query: query.trim().substring(0, 100),
+            stringifyError: stringifyError instanceof Error ? stringifyError.message : String(stringifyError),
+          });
+        }
+      }
+      
+      setImportError(errorMessage);
     } finally {
       setImporting(false);
     }

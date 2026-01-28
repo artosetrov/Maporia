@@ -11,10 +11,10 @@ import { isUserAdmin } from "../../../../lib/access";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../../../../config/googleMaps";
 import dynamicImport from "next/dynamic";
 import Icon from "../../../../components/Icon";
-import UnifiedGoogleImportField from "../../../../components/UnifiedGoogleImportField";
 import { resolveCity, extractCityFromAddressComponents } from "../../../../lib/cityResolver";
 import { getCitiesWithPlaces, type City } from "../../../../lib/cities";
 import Pill from "../../../../components/Pill";
+import UnifiedGoogleImportField from "../../../../components/UnifiedGoogleImportField";
 
 const AddressAutocomplete = dynamicImport(
   () => import("../../../../components/AddressAutocomplete"),
@@ -58,65 +58,10 @@ export default function LocationEditorPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [googlePlaceData, setGooglePlaceData] = useState<any>(null);
+  const [loadingGoogleData, setLoadingGoogleData] = useState(false);
   const autocompleteRef = useRef<any>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
-
-  async function handleGoogleImport(data: any) {
-    if (data.formatted_address || data.address) {
-      setAddress(data.formatted_address || data.address);
-    }
-    if (data.city) {
-      setCity(data.city);
-    }
-    if (data.lat || data.latitude) {
-      setLat(data.lat || data.latitude);
-    }
-    if (data.lng || data.longitude) {
-      setLng(data.lng || data.longitude);
-    }
-    if (data.place_id || data.google_place_id) {
-      setGooglePlaceId(data.place_id || data.google_place_id);
-    }
-    // Also save other fields to place
-    if (user && placeId) {
-      // Resolve city to city_id (use state and country if available)
-      let cityId: string | null = null;
-      const cityName = data.city || null;
-      if (cityName) {
-        const cityData = await resolveCity(
-          cityName,
-          data.city_state || null,
-          data.city_country || null,
-          data.lat || data.latitude || null,
-          data.lng || data.longitude || null
-        );
-        if (cityData) {
-          cityId = cityData.city_id;
-          // Update selected city if resolved
-          const { data: cityRecord } = await supabase
-            .from("cities")
-            .select("*")
-            .eq("id", cityData.city_id)
-            .single();
-          if (cityRecord) {
-            setSelectedCity(cityRecord as City);
-          }
-        }
-      }
-
-      const updates: any = {
-        address: data.formatted_address || data.address || null,
-        city: cityName || null, // Keep for backward compatibility
-        city_id: cityId,
-        city_name_cached: cityName || null,
-        google_place_id: data.place_id || data.google_place_id || null,
-        lat: data.lat || data.latitude || null,
-        lng: data.lng || data.longitude || null,
-        link: data.website || null,
-      };
-      await supabase.from("places").update(updates).eq("id", placeId);
-    }
-  }
 
   // Load available cities
   useEffect(() => {
@@ -339,18 +284,8 @@ export default function LocationEditorPage() {
             >
               <Icon name="back" size={20} />
             </button>
-            <h1 className="font-semibold font-fraunces text-[#1F2A1F]" style={{ fontSize: '24px' }}>Location</h1>
-            <button
-              onClick={() => setIsDragging(!isDragging)}
-              className={cx(
-                "px-3 py-1.5 rounded-lg text-xs font-medium transition",
-                isDragging
-                  ? "bg-[#8F9E4F] text-white"
-                  : "bg-[#FAFAF7] text-[#1F2A1F] hover:bg-[#ECEEE4]"
-              )}
-            >
-              {isDragging ? "Done" : "Adjust"}
-            </button>
+            <h1 className="font-semibold font-fraunces text-[#1F2A1F] flex-1 text-center" style={{ fontSize: '24px' }}>Location</h1>
+            <div className="w-10" /> {/* Spacer для центрирования */}
           </div>
         </div>
       </div>
@@ -414,14 +349,6 @@ export default function LocationEditorPage() {
 
         {/* Address Fields */}
         <div className="px-4 sm:px-6 py-6 space-y-4">
-          {user && placeId && (
-            <UnifiedGoogleImportField
-              userId={user.id}
-              context="place"
-              onImportSuccess={handleGoogleImport}
-              compact={true}
-            />
-          )}
           <div>
             <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Address</label>
             {isLoaded ? (
@@ -438,6 +365,8 @@ export default function LocationEditorPage() {
                   setGooglePlaceId(place.googlePlaceId);
                   setLat(place.lat);
                   setLng(place.lng);
+                  setGooglePlaceData(null); // Reset previous data
+                  
                   // Auto-fill city from address
                   if (place.city) {
                     setCity(place.city);
@@ -461,6 +390,77 @@ export default function LocationEditorPage() {
                       }
                     }
                   }
+
+                  // Fetch Google Places data if we have a place_id
+                  if (place.googlePlaceId && user) {
+                    setLoadingGoogleData(true);
+                    setGooglePlaceData(null); // Clear previous data
+                    try {
+                      const { data: { session } } = await supabase.auth.getSession();
+                      if (session?.access_token) {
+                        // Use place_id format that API recognizes
+                        const response = await fetch("/api/google/place-import", {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
+                          body: JSON.stringify({
+                            query: `place_id:${place.googlePlaceId}`,
+                            access_token: session.access_token,
+                          }),
+                        });
+
+                        if (response.ok) {
+                          const data = await response.json();
+                          setGooglePlaceData(data);
+                        } else {
+                          let errorMessage = "Failed to load Google Places data";
+                          let errorCode = null;
+                          try {
+                            const errorText = await response.text();
+                            let errorData;
+                            try {
+                              errorData = JSON.parse(errorText);
+                            } catch {
+                              errorData = { error: errorText };
+                            }
+                            
+                            errorCode = errorData.code;
+                            
+                            if (errorCode === "API_PERMISSION_ERROR" || 
+                                errorData.error?.includes("permission") || 
+                                errorData.error?.includes("Places API") ||
+                                response.status === 403) {
+                              errorMessage = "Google Maps API key doesn't have Places API access. Please configure API key permissions in Google Cloud Console.";
+                            } else if (errorData.error) {
+                              errorMessage = errorData.error;
+                            }
+                            
+                            console.error("Failed to fetch Google Places data:", {
+                              status: response.status,
+                              code: errorCode,
+                              error: errorData,
+                            });
+                          } catch (parseErr) {
+                            console.error("Failed to parse error response:", parseErr);
+                          }
+                          
+                          // Show error message in UI
+                          if (errorCode === "API_PERMISSION_ERROR" || response.status === 403) {
+                            setError("Google Places API access is not configured. Additional place data will not be available.");
+                          } else {
+                            // For other errors, just log - don't show to user as this is optional
+                            console.warn("Google Places data unavailable:", errorMessage);
+                          }
+                        }
+                      }
+                    } catch (err) {
+                      console.error("Failed to fetch Google Places data:", err);
+                      // Don't show error to user - this is optional data
+                    } finally {
+                      setLoadingGoogleData(false);
+                    }
+                  }
                 }}
                 onAutocompleteRef={(ref) => {
                   autocompleteRef.current = ref;
@@ -476,6 +476,66 @@ export default function LocationEditorPage() {
               />
             )}
           </div>
+
+          {/* Import from Google */}
+          {user && (
+            <div className="rounded-xl border border-[#ECEEE4] bg-white p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-[#1F2A1F]">Import from Google</h3>
+              </div>
+              <p className="text-xs text-[#6F7A5A]">
+                Search for a place using a Google Maps URL or address to automatically fill address, coordinates, and city.
+              </p>
+              <UnifiedGoogleImportField
+                userId={user.id}
+                context="place"
+                compact={true}
+                onImportSuccess={async (data) => {
+                  // Update address
+                  if (data.formatted_address || data.address) {
+                    setAddress(data.formatted_address || data.address || "");
+                  }
+
+                  // Update coordinates
+                  if (data.lat || data.latitude) {
+                    setLat(data.lat || data.latitude || null);
+                  }
+                  if (data.lng || data.longitude) {
+                    setLng(data.lng || data.longitude || null);
+                  }
+
+                  // Update Google Place ID
+                  if (data.google_place_id || data.place_id) {
+                    setGooglePlaceId(data.google_place_id || data.place_id || null);
+                  }
+
+                  // Update city
+                  if (data.city) {
+                    setCity(data.city);
+                    // Resolve city to city_id
+                    const cityData = await resolveCity(
+                      data.city,
+                      data.city_state || null,
+                      data.city_country || null,
+                      data.lat || data.latitude || null,
+                      data.lng || data.longitude || null
+                    );
+                    if (cityData) {
+                      // Find matching city from database
+                      const { data: cityRecord } = await supabase
+                        .from("cities")
+                        .select("*")
+                        .eq("id", cityData.city_id)
+                        .single();
+                      if (cityRecord) {
+                        setSelectedCity(cityRecord as City);
+                      }
+                    }
+                  }
+                }}
+              />
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-[#1F2A1F] mb-2">
@@ -554,6 +614,110 @@ export default function LocationEditorPage() {
           {lat && lng && (
             <div className="text-xs text-[#6F7A5A]">
               Coordinates: {lat.toFixed(6)}, {lng.toFixed(6)}
+            </div>
+          )}
+
+          {/* Available Google Places Data */}
+          {googlePlaceId && (
+            <div className="rounded-xl border border-[#ECEEE4] bg-white p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-[#1F2A1F]">
+                Available data from Google Places
+              </h3>
+              
+              {loadingGoogleData ? (
+                <div className="text-xs text-[#6F7A5A]">Loading available data...</div>
+              ) : googlePlaceData ? (
+                <div className="space-y-2 text-xs">
+                  <div className="grid grid-cols-1 gap-2">
+                    {googlePlaceData.name && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6F7A5A] min-w-[80px]">Name:</span>
+                        <span className="text-[#1F2A1F] font-medium">{googlePlaceData.name}</span>
+                      </div>
+                    )}
+                    {googlePlaceData.formatted_address && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6F7A5A] min-w-[80px]">Address:</span>
+                        <span className="text-[#1F2A1F]">{googlePlaceData.formatted_address}</span>
+                      </div>
+                    )}
+                    {googlePlaceData.phone && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6F7A5A] min-w-[80px]">Phone:</span>
+                        <a href={`tel:${googlePlaceData.phone}`} className="text-[#8F9E4F] hover:underline">
+                          {googlePlaceData.phone}
+                        </a>
+                      </div>
+                    )}
+                    {googlePlaceData.website && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6F7A5A] min-w-[80px]">Website:</span>
+                        <a 
+                          href={googlePlaceData.website} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-[#8F9E4F] hover:underline break-all"
+                        >
+                          {googlePlaceData.website}
+                        </a>
+                      </div>
+                    )}
+                    {googlePlaceData.rating && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6F7A5A] min-w-[80px]">Rating:</span>
+                        <span className="text-[#1F2A1F]">
+                          {googlePlaceData.rating.toFixed(1)} ⭐
+                          {googlePlaceData.reviews_count && (
+                            <span className="text-[#6F7A5A] ml-1">
+                              ({googlePlaceData.reviews_count} reviews)
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    )}
+                    {googlePlaceData.category && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6F7A5A] min-w-[80px]">Category:</span>
+                        <span className="text-[#1F2A1F]">{googlePlaceData.category}</span>
+                      </div>
+                    )}
+                    {googlePlaceData.types && googlePlaceData.types.length > 0 && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6F7A5A] min-w-[80px]">Types:</span>
+                        <span className="text-[#1F2A1F]">
+                          {googlePlaceData.types.slice(0, 5).map((t: string) => t.replace(/_/g, ' ')).join(', ')}
+                        </span>
+                      </div>
+                    )}
+                    {googlePlaceData.photos && googlePlaceData.photos.length > 0 && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6F7A5A] min-w-[80px]">Photos:</span>
+                        <span className="text-[#1F2A1F]">{googlePlaceData.photos.length} available</span>
+                      </div>
+                    )}
+                    {googlePlaceData.opening_hours && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6F7A5A] min-w-[80px]">Hours:</span>
+                        <span className="text-[#1F2A1F]">Available</span>
+                      </div>
+                    )}
+                    {googlePlaceData.price_level !== null && googlePlaceData.price_level !== undefined && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6F7A5A] min-w-[80px]">Price:</span>
+                        <span className="text-[#1F2A1F]">
+                          {googlePlaceData.price_level === 0 ? 'Free' : '$'.repeat(googlePlaceData.price_level)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="pt-2 border-t border-[#ECEEE4]">
+                    <p className="text-[#6F7A5A] text-xs">
+                      💡 Use "Import from Google" above to import these fields into your place.
+                    </p>
+                  </div>
+                </div>
+              ) : null}
             </div>
           )}
         </div>

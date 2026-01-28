@@ -24,6 +24,7 @@ export default function DescriptionEditorPage() {
   const [description, setDescription] = useState("");
   const [originalDescription, setOriginalDescription] = useState("");
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasLinks, setHasLinks] = useState(false);
 
@@ -68,6 +69,47 @@ export default function DescriptionEditorPage() {
   const hasChanges = description.trim() !== originalDescription.trim();
   const isValid = !hasLinks;
   const canSave = hasChanges && isValid && !saving;
+
+  async function handleGenerateWithAi() {
+    if (!user || !placeId || generating) return;
+
+    setGenerating(true);
+    setError(null);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error("Not authenticated");
+      }
+
+      const res = await fetch("/api/ai/generate-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // For manual generation: let user review/edit, then press Save.
+        body: JSON.stringify({ place_id: placeId, access_token: session.access_token, save: false }),
+      });
+
+      const text = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { error: text };
+      }
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to generate description");
+      }
+
+      const newDescription = String(data?.description || "").trim();
+      setDescription(newDescription);
+      if (navigator.vibrate) navigator.vibrate(10);
+    } catch (e: any) {
+      setError(e?.message || "Failed to generate description");
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   async function handleSave() {
     if (!canSave || !user || !placeId) return;
@@ -168,6 +210,23 @@ export default function DescriptionEditorPage() {
             <label className="block text-sm font-medium text-[#1F2A1F] mb-2">
               Describe your place
             </label>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-[#6F7A5A]">
+                Or let AI draft a first version based on Google data.
+              </p>
+              <button
+                onClick={handleGenerateWithAi}
+                disabled={generating || saving}
+                className={cx(
+                  "rounded-xl px-3 py-2 text-xs font-medium transition",
+                  generating || saving
+                    ? "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
+                    : "bg-[#8F9E4F] text-white hover:bg-[#556036]"
+                )}
+              >
+                {generating ? "Generating…" : "Generate with AI"}
+              </button>
+            </div>
             <textarea
               value={description}
               onChange={(e) => {

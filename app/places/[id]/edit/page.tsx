@@ -54,6 +54,7 @@ import { isUserAdmin } from "../../../lib/access";
 import { CATEGORIES } from "../../../constants";
 import Icon from "../../../components/Icon";
 import UnifiedGoogleImportField from "../../../components/UnifiedGoogleImportField";
+import GoogleImportField from "../../../components/GoogleImportField";
 import { resolveCity } from "../../../lib/cityResolver";
 
 type Place = {
@@ -133,7 +134,7 @@ export default function PlaceEditorHub() {
       setLoading(true);
       setError(null);
 
-      // Load place
+      // Load place with all fields including photos count
       const { data: placeData, error: placeError } = await supabase
         .from("places")
         .select("*")
@@ -210,22 +211,44 @@ export default function PlaceEditorHub() {
 
       if (!mounted) return;
 
-      if (!photosError && photosData) {
+      if (!photosError && photosData && photosData.length > 0) {
         const photoUrls = photosData
           .map((p) => p.url)
           .filter((u: string | null): u is string => typeof u === "string" && u.length > 0);
         
-        setPhotos(
-          photoUrls.map((url, i) => ({
-            url,
-            sort: i,
-            is_cover: i === 0,
-          }))
-        );
-      } else if (placeItem.cover_url) {
-        // Fallback to legacy cover_url
-        setPhotos([{ url: placeItem.cover_url, sort: 0, is_cover: true }]);
+        if (photoUrls.length > 0) {
+          setPhotos(
+            photoUrls.map((url, i) => ({
+              url,
+              sort: i,
+              is_cover: i === 0,
+            }))
+          );
+        } else {
+          // No valid photo URLs, check legacy cover_url
+          if (placeItem.cover_url) {
+            setPhotos([{ url: placeItem.cover_url, sort: 0, is_cover: true }]);
+          } else {
+            setPhotos([]);
+          }
+        }
+      } else {
+        // No photos in place_photos table, check legacy cover_url
+        if (placeItem.cover_url) {
+          setPhotos([{ url: placeItem.cover_url, sort: 0, is_cover: true }]);
+        } else {
+          setPhotos([]);
+        }
       }
+
+      console.log("Loaded place data:", {
+        placeId,
+        title: placeItem.title,
+        description: placeItem.description,
+        address: placeItem.address,
+        photosCount: photos?.length || 0,
+        photosDataCount: photosData?.length || 0,
+      });
 
       setLoading(false);
     })();
@@ -704,6 +727,8 @@ export default function PlaceEditorHub() {
   // Determine if this is a new place (no title or empty title)
   const isNewPlace = !place || !place.title || place.title.trim().length === 0;
 
+  // NOTE: keep editor minimal (as before)
+
   if (accessLoading || loading) {
     return (
       <main className="min-h-screen bg-[#FAFAF7]">
@@ -774,6 +799,23 @@ export default function PlaceEditorHub() {
           </div>
         )}
         <div className="space-y-4">
+            {/* Import from Google Maps (Preview flow) — show at top for Add Gem */}
+            {isNewPlace && user && placeId && (
+              <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-4 mb-2">
+                  <div className="flex-1">
+                    <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">
+                      Import from Google Maps
+                    </h3>
+                    <p className="text-sm text-[#6F7A5A]">
+                      Paste a Google Maps link or type a place name, preview the data, and import it directly into this Gem.
+                    </p>
+                  </div>
+                </div>
+                <GoogleImportField userId={user.id} targetPlaceId={placeId} />
+              </div>
+            )}
+
             {/* Required Steps Card */}
             {incompleteSteps.length > 0 && (
               <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition">
@@ -1063,6 +1105,16 @@ export default function PlaceEditorHub() {
             {/* Google Import Card (moved below Visibility) */}
             {user && placeId && (
               <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold font-fraunces text-[#1F2A1F]">Import from Google</h3>
+                  <Link
+                    href="/add/google"
+                    className="text-sm text-[#8F9E4F] hover:text-[#556036] underline flex items-center gap-1 transition-colors"
+                  >
+                    <span>Import with preview</span>
+                    <Icon name="external-link" size={14} />
+                  </Link>
+                </div>
                 <UnifiedGoogleImportField
                   userId={user.id}
                   context="place"
@@ -1115,15 +1167,29 @@ export default function PlaceEditorHub() {
                         updates.categories = mappedCategories.slice(0, 3);
                       }
                     }
-                    await supabase.from("places").update(updates).eq("id", placeId);
-                    // Reload place data
-                    const { data: placeData } = await supabase
+                    const { error: updateError } = await supabase.from("places").update(updates).eq("id", placeId);
+                    
+                    if (updateError) {
+                      console.error("Error updating place after import:", updateError);
+                      throw new Error(updateError.message || "Failed to update place");
+                    }
+                    
+                    // Reload place data to reflect changes
+                    const { data: placeData, error: reloadError } = await supabase
                       .from("places")
                       .select("*")
                       .eq("id", placeId)
                       .single();
-                    if (placeData) {
+                    
+                    if (reloadError) {
+                      console.error("Error reloading place after import:", reloadError);
+                    } else if (placeData) {
                       setPlace(placeData as Place);
+                      // Update hidden state if needed
+                      const hiddenState = placeData.is_hidden === true ||
+                                        placeData.visibility === "hidden" ||
+                                        placeData.visibility === "private";
+                      setIsHidden(hiddenState);
                     }
                   }}
                 />

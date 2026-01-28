@@ -1208,6 +1208,7 @@ export default function PlacePage() {
               )}
             </div>
           )}
+
         </div>
 
         {/* Statistics Block */}

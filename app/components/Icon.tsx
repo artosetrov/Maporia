@@ -96,7 +96,8 @@ export type IconName =
   | "minimize"
   | "briefcase"
   | "calendar-days"
-  | "mail";
+  | "mail"
+  | "alert-circle";
 
 type IconProps = {
   name: IconName;
@@ -542,6 +543,12 @@ export default function Icon({
         strokeWidth={strokeWidth}
         d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
       />
+    ),
+    "alert-circle": (
+      <>
+        <circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth} />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth} d="M12 8v4M12 16h.01" />
+      </>
     ),
   };
 
