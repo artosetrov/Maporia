@@ -6,6 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import FavoriteIcon from "./FavoriteIcon";
 import Icon from "./Icon";
+import { usePremiumModalContext } from "../contexts/PremiumModalContext";
 
 function initialsFromEmail(email?: string | null) {
   if (!email) return "U";
@@ -26,6 +27,7 @@ function initialsFromName(name?: string | null) {
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const { isPremiumModalOpen } = usePremiumModalContext();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -33,6 +35,11 @@ export default function BottomNav() {
   const [isVisible, setIsVisible] = useState(true);
   const lastScrollByTarget = useRef<WeakMap<EventTarget, number>>(new WeakMap());
   const rafId = useRef<number | null>(null);
+
+  // Don't render BottomNav when Premium Purchase Modal is open (mobile)
+  if (isPremiumModalOpen) {
+    return null;
+  }
 
   useEffect(() => {
     (async () => {

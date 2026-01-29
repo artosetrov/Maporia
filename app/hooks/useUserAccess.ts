@@ -117,10 +117,12 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
           setUser(currentUser);
         }
 
-        // Load profile with role and subscription fields
+        // Load profile with role, subscription, and interests fields
+        // Use select("*") to get all fields including favorite_categories/favorite_tags if they exist
+        // This is safe even if the fields don't exist yet (migration not run)
         const { data: profileData, error: profileError } = await supabase
           .from("profiles")
-          .select("*, is_admin, subscription_status, role")
+          .select("*")
           .eq("id", currentUser.id)
           .maybeSingle();
 
@@ -161,7 +163,11 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
               if (profileError.hint) errorObj.hint = profileError.hint;
               console.error('[useUserAccess] Profile error:', errorObj);
             } else {
-              console.error("Error loading profile:", profileError);
+              // Only log if error has meaningful content (not empty object)
+              const hasContent = profileError.message || profileError.code || profileError.details || profileError.hint;
+              if (hasContent) {
+                console.error("Error loading profile:", profileError);
+              }
             }
           }
           // Silently ignore empty error objects

@@ -2509,19 +2509,22 @@ function ElementsSection() {
             console.error("API returned non-JSON response");
           }
         } else {
-          // If not OK, try to get error message
+          // If not OK (e.g. 401/403), try to get error message
           const contentType = response.headers.get("content-type");
           if (contentType && contentType.includes("application/json")) {
             try {
-              const error = await response.json();
+              const errBody = await response.json();
+              const msg = errBody?.error || response.statusText || "Unknown error";
               if (process.env.NODE_ENV === 'production') {
-                console.warn("Premium modal settings not available:", error.error || "Unknown error");
+                console.warn("Premium modal settings not available:", msg);
               } else {
-                console.error("Error loading settings:", error.error || "Unknown error");
+                console.error("Error loading premium modal settings:", msg);
               }
             } catch (parseError) {
-              // Ignore JSON parse errors
+              console.error("Error loading premium modal settings:", response.status, response.statusText);
             }
+          } else {
+            console.error("Error loading premium modal settings:", response.status, response.statusText);
           }
         }
       } catch (error: any) {
@@ -2530,26 +2533,13 @@ function ElementsSection() {
           setIsLoading(false);
           return;
         }
-        // Check if error has useful information
-        const hasUsefulInfo = error?.message || error?.name || error?.code || (typeof error === 'string');
-        // Only log if error has useful information
-        if (hasUsefulInfo) {
-          if (process.env.NODE_ENV === 'production') {
-            console.warn("Premium modal settings not available:", {
-              message: error?.message || String(error),
-              name: error?.name,
-              code: error?.code,
-            });
-          } else {
-            console.error("Error loading premium modal settings:", {
-              message: error?.message || String(error),
-              name: error?.name,
-              code: error?.code,
-              error: error,
-            });
-          }
+        // Log with a guaranteed non-empty message so we never log "{}"
+        const msg = error?.message || error?.name || error?.code || (typeof error === 'object' ? 'Unknown error' : String(error));
+        if (process.env.NODE_ENV === 'production') {
+          console.warn("Premium modal settings not available:", msg);
+        } else {
+          console.error("Error loading premium modal settings:", msg);
         }
-        // Silently use defaults if no useful info
       } finally {
         setIsLoading(false);
       }

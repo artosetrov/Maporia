@@ -27,6 +27,9 @@ export type Profile = {
   website?: string | null;
   phone?: string | null;
   address?: string | null;
+  // User interests for recommendations
+  favorite_categories?: string[] | null;
+  favorite_tags?: string[] | null;
 };
 
 /**

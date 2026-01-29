@@ -1177,19 +1177,34 @@ function MapPageContent() {
     );
   }, [appliedCity, hasExplicitCityInUrlState, appliedCategories, appliedQ, selectedTag]);
 
-  // Функция для очистки всех фильтров
+  // Функция для очистки всех фильтров (Reset all)
   const handleClearAllFilters = () => {
+    // Reset cities
     setAppliedCity(DEFAULT_CITY);
     setHasExplicitCityInUrlState(false);
+    setSelectedCity(null);
+    setAppliedCities([]);
+    
+    // Reset search query
     setAppliedQ("");
     setSearchDraft("");
+    
+    // Reset tags
     setSelectedTag("");
+    setSelectedTags([]);
+    
+    // Reset categories and premium/hidden/vibe toggles
     setActiveFilters({
       categories: [],
       sort: null,
+      premium: false,
+      hidden: false,
+      vibe: false,
+      premiumOnly: false,
     });
-    // Очищаем URL параметры
-    window.history.replaceState({}, '', window.location.pathname);
+    
+    // Очищаем URL параметры и перезапускаем query без параметров
+    router.push('/map');
   };
 
   // Calculate locked premium places for Haunted Gem indexing
@@ -1333,6 +1348,7 @@ function MapPageContent() {
         isOpen={filterOpen}
         onClose={() => setFilterOpen(false)}
         onApply={handleFiltersApply}
+        onResetAll={handleClearAllFilters}
         appliedFilters={activeFilters}
         appliedCity={appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) ? appliedCity : null}
         appliedCities={appliedCities.filter(city => city !== DEFAULT_CITY)}
@@ -1738,7 +1754,13 @@ function MapPageContent() {
         <div className="md:hidden h-full">
           {view === "list" ? (
             <div className="h-full overflow-y-auto">
-              <div className="w-full mx-auto px-4 pb-24" style={{ paddingTop: '88px' }}>
+              <div 
+                className="w-full mx-auto px-4" 
+                style={{ 
+                  paddingTop: '88px',
+                  paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' // Bottom Bar height (~64px) + safe-area + extra spacing
+                }}
+              >
                 {/* Header */}
                 <div className="mb-4">
                   <h2 className="text-lg lg:text-xl font-semibold font-fraunces text-[#1F2A1F] mb-2">{listTitle}</h2>

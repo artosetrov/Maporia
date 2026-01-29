@@ -10,6 +10,7 @@ import SearchModal from "../components/SearchModal";
 import { supabase } from "../lib/supabase";
 import { DEFAULT_CITY } from "../constants";
 import Icon from "../components/Icon";
+import { ActivityItemSkeleton } from "../components/Skeleton";
 import { useUserAccess } from "../hooks/useUserAccess";
 
 type ActivityItem =

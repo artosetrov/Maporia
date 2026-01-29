@@ -3,6 +3,7 @@ import "./globals.css";
 import GoogleMapsProvider from "./providers/GoogleMapsProvider";
 import { ProductionDiagnostics } from "./components/ProductionDiagnostics";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { PremiumModalProvider } from "./contexts/PremiumModalContext";
 
 export const metadata: Metadata = {
   title: "Maporia",
@@ -28,9 +29,11 @@ export default function RootLayout({
           {process.env.NODE_ENV === "production" && (
             <ProductionDiagnostics />
           )}
-          <GoogleMapsProvider>
-            {children}
-          </GoogleMapsProvider>
+          <PremiumModalProvider>
+            <GoogleMapsProvider>
+              {children}
+            </GoogleMapsProvider>
+          </PremiumModalProvider>
         </ErrorBoundary>
       </body>
     </html>

@@ -44,6 +44,9 @@ type FiltersModalProps = {
   
   // Optional: user access level - used to determine if Premium filter should be shown
   userAccess?: UserAccess;
+  
+  // Optional: callback to reset all filters (cities, categories, tags, search query, premium/hidden/vibe toggles)
+  onResetAll?: () => void;
 };
 
 export default function FiltersModal({
@@ -59,6 +62,7 @@ export default function FiltersModal({
   getCityCount: _getCityCount,
   getCategoryCount,
   userAccess,
+  onResetAll,
 }: FiltersModalProps) {
   // Ensure appliedFilters is always defined
   const safeAppliedFilters: ActiveFilters = appliedFilters || {
@@ -218,6 +222,14 @@ export default function FiltersModal({
   };
   
   const handleClearAll = () => {
+    // If onResetAll callback is provided, use it to reset everything (cities, search, tags, filters)
+    if (onResetAll) {
+      onResetAll();
+      onClose();
+      return;
+    }
+    
+    // Otherwise, just reset filters in modal (backward compatibility)
     const clearedFilters: ActiveFilters = {
       categories: [],
       sort: null,

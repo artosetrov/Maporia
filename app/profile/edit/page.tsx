@@ -73,7 +73,7 @@ export default function ProfileEditorHub() {
       // Load profile
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
-        .select("id, username, display_name, bio, avatar_url, role, subscription_status, is_admin")
+        .select("id, username, display_name, bio, avatar_url, role, subscription_status, is_admin, favorite_categories, favorite_tags")
         .eq("id", user.id)
         .single();
 
@@ -104,7 +104,7 @@ export default function ProfileEditorHub() {
         (async () => {
           const { data: profileData } = await supabase
             .from("profiles")
-            .select("id, username, display_name, bio, avatar_url, role, subscription_status, is_admin")
+            .select("id, username, display_name, bio, avatar_url, role, subscription_status, is_admin, favorite_categories, favorite_tags")
             .eq("id", user.id)
             .single();
 
@@ -274,6 +274,24 @@ export default function ProfileEditorHub() {
                 <h3 className="font-semibold text-[#1F2A1F] mb-1">Bio</h3>
                 <p className="text-sm text-[#6F7A5A] line-clamp-2">
                   {profile.bio || "No bio yet"}
+                </p>
+              </div>
+              <Icon name="forward" size={20} className="text-[#6F7A5A]" />
+            </div>
+          </Link>
+
+          {/* Interests Card */}
+          <Link
+            href={`/profile/edit/interests`}
+            className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <h3 className="font-semibold text-[#1F2A1F] mb-1">Interests</h3>
+                <p className="text-sm text-[#6F7A5A] line-clamp-1">
+                  {profile.favorite_categories && profile.favorite_categories.length > 0
+                    ? `${profile.favorite_categories.length} categories, ${(profile.favorite_tags || []).length} tags`
+                    : "No interests set"}
                 </p>
               </div>
               <Icon name="forward" size={20} className="text-[#6F7A5A]" />

@@ -44,6 +44,29 @@ export default function HomePage() {
   const userDisplayName = profile?.display_name ?? (userEmail ? userEmail.split("@")[0] : null);
   const userAvatar = profile?.avatar_url ?? null;
 
+  // Check if user has interests for Recommended section
+  const hasInterests = useMemo(() => {
+    if (!profile) return false;
+    const hasCategories = profile.favorite_categories && profile.favorite_categories.length > 0;
+    const hasTags = profile.favorite_tags && profile.favorite_tags.length > 0;
+    return hasCategories || hasTags;
+  }, [profile]);
+
+  // Build sections list with conditional Recommended section
+  const sectionsToRender = useMemo(() => {
+    const sections = [...HOME_SECTIONS];
+    
+    // Add Recommended section at the beginning if user has interests
+    if (hasInterests) {
+      sections.unshift({
+        title: "Recommended for you",
+        recommended: true,
+      });
+    }
+    
+    return sections;
+  }, [hasInterests]);
+
   // Check Supabase configuration
   useEffect(() => {
     if (!hasValidSupabaseConfig) {
@@ -382,7 +405,7 @@ export default function HomePage() {
             </div>
           ) : (
             // Render sections only after bootstrap is ready
-            HOME_SECTIONS.map((section, index) => (
+            sectionsToRender.map((section, index) => (
               <HomeSection
                 key={section.title}
                 section={section}

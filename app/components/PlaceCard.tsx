@@ -8,6 +8,7 @@ import PremiumBadge from "./PremiumBadge";
 import Icon from "./Icon";
 import { usePremiumGate } from "../hooks/usePremiumGate";
 import PremiumUpsellModal from "./PremiumUpsellModal";
+import AuthModal from "./AuthModal";
 
 type PlaceCardProps = {
   place: {
@@ -59,8 +60,8 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
   const cardRef = useRef<HTMLAnchorElement>(null);
   const [isSmallCard, setIsSmallCard] = useState(false);
   
-  // Premium gate hook
-  const { canAccessPlace, openPremiumModal, closePremiumModal, modalOpen } = usePremiumGate();
+  // Premium gate hook (guest → Auth Modal, free → Premium Modal, premium → open place)
+  const { canAccessPlace, openPremiumLocation, closePremiumModal, closeAuthModal, modalOpen, authModalOpen, authRedirectPath } = usePremiumGate();
 
   useEffect(() => {
     const userId = place.created_by;
@@ -378,9 +379,9 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
     e.preventDefault();
     e.stopPropagation();
     
-    // If locked, open premium modal instead of navigating
+    // If locked: guest → Auth Modal, free → Premium Modal
     if (isLocked) {
-      openPremiumModal("place", place.title);
+      openPremiumLocation("place", place.title, place.id);
       return;
     }
     
@@ -393,11 +394,11 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
   };
 
   const handleCardClick = (e: React.MouseEvent) => {
-    // If locked, open premium modal instead of navigating
+    // If locked: guest → Auth Modal, free → Premium Modal
     if (isLocked) {
       e.preventDefault();
       e.stopPropagation();
-      openPremiumModal("place", place.title);
+      openPremiumLocation("place", place.title, place.id);
       return;
     }
     if (onClick) {
@@ -584,7 +585,13 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
       </div>
     </Link>
 
-    {/* Premium Upsell Modal - rendered outside Link */}
+    {/* Auth Modal - for guests clicking premium location */}
+    <AuthModal
+      isOpen={authModalOpen}
+      onClose={closeAuthModal}
+      redirectPath={authRedirectPath}
+    />
+    {/* Premium Upsell Modal - for logged-in free users clicking premium location */}
     <PremiumUpsellModal
       open={modalOpen}
       onClose={closePremiumModal}

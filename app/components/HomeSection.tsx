@@ -83,6 +83,109 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
           return;
         }
 
+        // Recommended section - based on user interests
+        if (section.recommended && userId) {
+          // Load user profile with interests
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("favorite_categories, favorite_tags")
+            .eq("id", userId)
+            .maybeSingle();
+
+          if (!profileData) {
+            if (!cancelled) {
+              setPlaces([]);
+              setLoading(false);
+            }
+            return;
+          }
+
+          const favoriteCategories = (profileData.favorite_categories || []) as string[];
+          const favoriteTags = (profileData.favorite_tags || []) as string[];
+
+          // If user has no interests, don't show recommended section
+          if (favoriteCategories.length === 0 && favoriteTags.length === 0) {
+            if (!cancelled) {
+              setPlaces([]);
+              setLoading(false);
+            }
+            return;
+          }
+
+          // Fetch all places (we'll filter client-side for better control)
+          let query = supabase
+            .from("places")
+            .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility")
+            .limit(100); // Get more to filter and sort
+
+          const { data: allPlaces, error } = await query;
+          if (error) throw error;
+
+          if (!allPlaces) {
+            if (!cancelled) {
+              setPlaces([]);
+              setLoading(false);
+            }
+            return;
+          }
+
+          // Filter places based on interests
+          const recommendedPlaces = (allPlaces as Place[]).filter((place) => {
+            // Check if place matches user interests
+            const matchesCategory = favoriteCategories.length > 0 &&
+              place.categories &&
+              place.categories.some((cat) => favoriteCategories.includes(cat));
+
+            const matchesTag = favoriteTags.length > 0 &&
+              place.tags &&
+              place.tags.some((tag) => favoriteTags.includes(tag));
+
+            if (!matchesCategory && !matchesTag) return false;
+
+            // Exclude hidden places (if not allowed)
+            const isHidden = place.categories?.includes("🤫 Hidden & Unique");
+            if (isHidden && !userAccess?.hasPremium) return false;
+
+            // Exclude premium places (if user is not premium)
+            const placeIsPremium = isPlacePremium(place);
+            if (placeIsPremium && !canUserViewPlace(userAccess || defaultUserAccess, place)) {
+              // Allow if user is owner
+              if (userId && place.created_by === userId) return true;
+              return false;
+            }
+
+            return true;
+          });
+
+          // Sort by relevance → newest → random
+          recommendedPlaces.sort((a, b) => {
+            // Calculate relevance score
+            const scoreA = calculateRelevanceScore(a, favoriteCategories, favoriteTags);
+            const scoreB = calculateRelevanceScore(b, favoriteCategories, favoriteTags);
+            
+            if (scoreA !== scoreB) {
+              return scoreB - scoreA; // Higher score first
+            }
+
+            // If same relevance, sort by newest
+            if (a.created_at && b.created_at) {
+              return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+            }
+
+            // Random tie-breaker (consistent based on place id)
+            return a.id.localeCompare(b.id);
+          });
+
+          // Limit to 8 places
+          const result = recommendedPlaces.slice(0, 8);
+
+          if (!cancelled) {
+            setPlaces(result);
+            setLoading(false);
+          }
+          return;
+        }
+
         let query = supabase.from("places").select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility");
         if (section.city) {
           query = query.or(`city_name_cached.eq.${section.city},city.eq.${section.city}`);
@@ -116,7 +219,26 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
     })();
 
     return () => { cancelled = true; };
-  }, [section.title, section.city, section.tag, categoriesKey, section.daysAgo, section.sort, section.recentlyViewed, refreshKey]);
+  }, [section.title, section.city, section.tag, categoriesKey, section.daysAgo, section.sort, section.recentlyViewed, section.recommended, userId, userAccess, refreshKey]);
+
+  // Helper function to calculate relevance score
+  function calculateRelevanceScore(place: Place, favoriteCategories: string[], favoriteTags: string[]): number {
+    let score = 0;
+    
+    // Count matching categories (weight: 2 points each)
+    if (place.categories && favoriteCategories.length > 0) {
+      const matchingCategories = place.categories.filter(cat => favoriteCategories.includes(cat));
+      score += matchingCategories.length * 2;
+    }
+    
+    // Count matching tags (weight: 1 point each)
+    if (place.tags && favoriteTags.length > 0) {
+      const matchingTags = place.tags.filter(tag => favoriteTags.includes(tag));
+      score += matchingTags.length;
+    }
+    
+    return score;
+  }
 
   // Reload when page becomes visible
   useEffect(() => {
@@ -209,14 +331,14 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
   }
 
   // Don't hide section if places are empty - let it show empty state or just return null silently
-  // Only hide if it's not a critical section (like "Recently viewed" can be empty)
-  if (places.length === 0 && !section.recentlyViewed) {
+  // Only hide if it's not a critical section (like "Recently viewed" or "Recommended" can be empty)
+  if (places.length === 0 && !section.recentlyViewed && !section.recommended) {
     return null;
   }
   
-  // For "Recently viewed", show empty state if no places
-  if (places.length === 0 && section.recentlyViewed) {
-    return null; // Hide "Recently viewed" if empty
+  // For "Recently viewed" or "Recommended", hide if empty
+  if (places.length === 0 && (section.recentlyViewed || section.recommended)) {
+    return null;
   }
 
   return (
