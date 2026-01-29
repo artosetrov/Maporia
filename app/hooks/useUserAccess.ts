@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { supabase, isRefreshTokenError, handleRefreshTokenError } from "../lib/supabase";
 import { getUserAccess, type UserAccess } from "../lib/access";
+import { getAuthUrl } from "../lib/authRedirect";
 import type { Profile } from "../types";
 
 export type UseUserAccessResult = {
@@ -16,9 +17,14 @@ export type UseUserAccessResult = {
 /**
  * Hook to load user session, profile, and access level
  * Handles redirects for unauthenticated users or missing profiles
+ *
+ * DIAGNOSTIC: This hook is used in multiple components per page (e.g. TopBar, page, BottomNav).
+ * Each call runs its own effect → separate getSession() + profiles.select() per component.
+ * SUGGESTION: Consider a single AuthContext so session/profile are fetched once and consumed everywhere.
  */
 export function useUserAccess(requireAuth: boolean = false, requireProfile: boolean = false): UseUserAccessResult {
   const router = useRouter();
+  const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<{ id: string; email: string | null } | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -92,7 +98,7 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
 
         if (!session?.user) {
           if (requireAuth && !isUnmounting && currentRequestId === requestId) {
-            router.replace("/auth");
+            router.replace(getAuthUrl(pathname ?? undefined));
             return;
           }
           if (!isUnmounting && currentRequestId === requestId) {

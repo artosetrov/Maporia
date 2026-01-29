@@ -3,7 +3,17 @@
 import Link from "next/link";
 import { ReactNode, useEffect, useState, useRef, memo } from "react";
 import { supabase } from "../lib/supabase";
+import type { Database } from "../types/supabase";
+import type { PostgrestError } from "@supabase/supabase-js";
 import { isPlacePremium, type UserAccess } from "../lib/access";
+
+type ProfilesRow = Database["public"]["Tables"]["profiles"]["Row"];
+type ProfileSelect = Pick<ProfilesRow, "display_name" | "username" | "avatar_url">;
+type ProfileResult = { data: ProfileSelect | null; error: PostgrestError | null };
+
+type PlacePhotoRow = Database["public"]["Tables"]["place_photos"]["Row"];
+type PlacePhotoSelect = Pick<PlacePhotoRow, "url">;
+type PlacePhotosResult = { data: PlacePhotoSelect[] | null; error: PostgrestError | null };
 import PremiumBadge from "./PremiumBadge";
 import Icon from "./Icon";
 import { usePremiumGate } from "../hooks/usePremiumGate";
@@ -59,11 +69,30 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
   const touchEndX = useRef<number | null>(null);
   const cardRef = useRef<HTMLAnchorElement>(null);
   const [isSmallCard, setIsSmallCard] = useState(false);
+  const [isInView, setIsInView] = useState(false);
+  
+  // Load profile and photos only when card is in viewport to avoid ERR_INSUFFICIENT_RESOURCES
+  // DIAGNOSTIC: If card never enters viewport, creator profile and photos requests never run (expected for lazy load).
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) setIsInView(true);
+        }
+      },
+      { rootMargin: "100px", threshold: 0.01 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
   
   // Premium gate hook (guest → Auth Modal, free → Premium Modal, premium → open place)
   const { canAccessPlace, openPremiumLocation, closePremiumModal, closeAuthModal, modalOpen, authModalOpen, authRedirectPath } = usePremiumGate();
 
   useEffect(() => {
+    if (!isInView) return;
     const userId = place.created_by;
     
     if (!userId) {
@@ -88,11 +117,11 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
     
     (async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = (await supabase
           .from("profiles")
           .select("display_name, username, avatar_url")
           .eq("id", capturedUserId)
-          .maybeSingle();
+          .maybeSingle()) as ProfileResult;
         
         // Only check unmounting, not cancelled (to avoid aborting on dependency changes)
         if (isUnmounting || loadedUserIdRef.current !== capturedUserId) {
@@ -136,12 +165,19 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
       // Only mark as unmounting on actual unmount, not on dependency change
       isUnmounting = true;
     };
-  }, [place.created_by]);
+  }, [place.created_by, isInView]);
 
-  // Загружаем все фото места
+  // Загружаем все фото места только когда карточка в viewport
   useEffect(() => {
     let isUnmounting = false;
     const placeId = place.id; // Capture place.id to check if it changed
+
+    if (!isInView) {
+      if (place.cover_url) setPhotos([place.cover_url]);
+      else setPhotos([]);
+      setCurrentPhotoIndex(0);
+      return;
+    }
 
     // Skip database query if placeId is not a valid UUID (e.g., test/demo IDs)
     if (!isValidUUID(placeId)) {
@@ -159,11 +195,11 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
 
     (async () => {
       try {
-        const { data: photosData, error } = await supabase
+        const { data: photosData, error } = (await supabase
           .from("place_photos")
           .select("url")
           .eq("place_id", placeId)
-          .order("sort", { ascending: true });
+          .order("sort", { ascending: true })) as PlacePhotosResult;
 
         // Only check unmounting, not cancelled (to avoid aborting on dependency changes)
         if (isUnmounting || place.id !== placeId) {
@@ -218,7 +254,7 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
         if (!isUnmounting && place.id === placeId) {
           if (photosData && photosData.length > 0) {
             const urls = photosData
-              .map((p: any) => p.url)
+              .map((p) => p.url)
               .filter((u: string | null): u is string => typeof u === "string" && u.length > 0);
             
             // Если есть cover_url и его нет в списке фотографий, добавляем его в начало
@@ -284,7 +320,7 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
       // Only mark as unmounting on actual unmount, not on dependency change
       isUnmounting = true;
     };
-  }, [place.id, place.cover_url]);
+  }, [place.id, place.cover_url, isInView]);
 
   // Unused - kept for potential future use
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
+import { useAuthRedirect } from "../hooks/useAuthRedirect";
 import { ActiveFilters } from "../components/FiltersModal";
 import SearchModal from "../components/SearchModal";
 
 export default function SettingsPage() {
   const router = useRouter();
+  const { redirectToAuth } = useAuthRedirect();
   const [userId, setUserId] = useState<string | null>(null);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
@@ -40,7 +42,7 @@ export default function SettingsPage() {
     (async () => {
       const { data } = await supabase.auth.getUser();
       if (!data.user) {
-        router.push("/auth");
+        redirectToAuth();
         return;
       }
       setUserId(data.user.id);

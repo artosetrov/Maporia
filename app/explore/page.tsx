@@ -13,8 +13,11 @@ import PremiumBadge from "../components/PremiumBadge";
 import SearchModal from "../components/SearchModal";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../config/googleMaps";
 import { supabase } from "../lib/supabase";
+import type { Database } from "../types/supabase";
+import type { PostgrestError } from "@supabase/supabase-js";
 import { DEFAULT_CITY } from "../constants";
-import { useUserAccess } from "../hooks/useUserAccess";
+import { useUserAccessContext } from "../contexts/UserAccessContext";
+import { useAuthRedirect } from "../hooks/useAuthRedirect";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import Icon from "../components/Icon";
 import { PlaceCardGridSkeleton, MapSkeleton, Empty } from "../components/Skeleton";
@@ -24,6 +27,7 @@ type Place = {
   title: string;
   description: string | null;
   city: string | null;
+  city_name_cached?: string | null;
   country: string | null;
   address: string | null;
   cover_url: string | null;
@@ -38,6 +42,23 @@ type Place = {
   premium_only?: boolean | null;
   visibility?: string | null;
 };
+
+// Result types for Supabase (Database['public']['Tables'][table]['Row'] + Pick)
+type ProfilesRow = Database["public"]["Tables"]["profiles"]["Row"];
+type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
+type ReactionsRow = Database["public"]["Tables"]["reactions"]["Row"];
+type PlacePhotosRow = Database["public"]["Tables"]["place_photos"]["Row"];
+
+type ProfileDisplay = Pick<ProfilesRow, "display_name" | "avatar_url">;
+type ProfileResult = { data: ProfileDisplay | null; error: PostgrestError | null };
+
+type PlacesResult = { data: PlacesRow[] | null; error: PostgrestError | null };
+
+type ReactionPlaceId = Pick<ReactionsRow, "place_id">;
+type ReactionsPlaceIdResult = { data: ReactionPlaceId[] | null; error: PostgrestError | null };
+
+type PlacePhotoUrl = Pick<PlacePhotosRow, "url">;
+type PlacePhotosUrlResult = { data: PlacePhotoUrl[] | null; error: PostgrestError | null };
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
@@ -67,6 +88,7 @@ function timeAgo(iso: string) {
 export default function ExplorePage() {
   const router = useRouter();
   const pathname = usePathname();
+  const { redirectToAuth } = useAuthRedirect();
   
   const [view, setView] = useState<"list" | "map">("list");
   
@@ -89,8 +111,8 @@ export default function ExplorePage() {
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
-  // User access for premium filtering
-  const { loading: accessLoading, access } = useUserAccess();
+  // User access for premium filtering (from context — single session/profile request)
+  const { loading: accessLoading, access } = useUserAccessContext();
 
   // Calculate locked premium places for Haunted Gem indexing
   const defaultUserAccess: UserAccess = access ?? { 
@@ -154,7 +176,7 @@ export default function ExplorePage() {
   const cities = useMemo(() => {
     // Get unique cities from places (use city_name_cached if available, fallback to city)
     const cityNames = places
-      .map((p) => (p as any).city_name_cached || p.city)
+      .map((p) => p.city_name_cached || p.city)
       .filter(Boolean) as string[];
     const list = Array.from(new Set(cityNames));
     list.sort((a, b) => a.localeCompare(b));
@@ -191,11 +213,12 @@ export default function ExplorePage() {
     setUserId(u.id);
 
     // Загружаем профиль для получения display_name и avatar_url
-    const { data: profile, error: profileError } = await supabase
+    const profileResult = (await supabase
       .from("profiles")
       .select("display_name, avatar_url")
       .eq("id", u.id)
-      .maybeSingle();
+      .maybeSingle()) as ProfileResult;
+    const { data: profile, error: profileError } = profileResult;
     
     if (profileError) {
       console.error("Error loading user profile:", profileError);
@@ -213,6 +236,7 @@ export default function ExplorePage() {
   }
 
   // Fetch places when filters change
+  // DIAGNOSTIC: Does not wait for accessLoading; places request runs on mount alongside useUserAccess.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -236,14 +260,15 @@ export default function ExplorePage() {
         if (selectedTag) {
           query = query.contains("tags", [selectedTag]);
         }
-        const { data, error } = await query;
+        const queryResult = (await query) as PlacesResult;
+        const { data, error } = queryResult;
         if (cancelled) return;
         if (error) {
           console.error("Error loading places:", error);
           setPlaces([]);
           return;
         }
-        setPlaces((data ?? []).map((p: any) => ({
+        setPlaces((data ?? []).map((p) => ({
           ...p,
           lat: p.lat ?? null,
           lng: p.lng ?? null,
@@ -260,6 +285,8 @@ export default function ExplorePage() {
     return () => { cancelled = true; };
   }, [selectedCities, selectedCategories, q, selectedTag]);
 
+  // DIAGNOSTIC: loadUser() duplicates useUserAccess (session + profile). Also re-runs on every pathname change.
+  // SUGGESTION: Use userId/profile from useUserAccess only; remove loadUser() if not needed for local state.
   useEffect(() => {
     (async () => {
       try {
@@ -287,7 +314,8 @@ export default function ExplorePage() {
       .select("place_id")
       .eq("user_id", userId)
       .eq("reaction", "like")
-      .then(({ data, error }) => {
+      .then((res) => {
+        const { data, error } = res as ReactionsPlaceIdResult;
         if (cancelled) return;
         if (error) return;
         setFavorites(new Set((data || []).map((r) => r.place_id)));
@@ -333,7 +361,7 @@ export default function ExplorePage() {
     e.stopPropagation();
 
     if (!userId) {
-      router.push("/auth");
+      redirectToAuth();
       return;
     }
 
@@ -363,6 +391,7 @@ export default function ExplorePage() {
         // Добавляем в избранное
         const { error } = await supabase
           .from("reactions")
+          // @ts-expect-error — Insert inferred as never when client not typed with Database; payload is valid
           .insert({
             place_id: placeId,
             user_id: userId,
@@ -680,6 +709,7 @@ export default function ExplorePage() {
           <div className="w-[37.5%] lg:w-[40%] lg:flex-1 h-full flex-shrink-0 max-w-full pb-8">
             <div className="sticky top-20 h-[calc(100vh-96px-32px)] rounded-2xl overflow-hidden w-full max-w-full">
               <MapView
+                shouldLoadMap={shouldLoadMap}
                 places={places}
                 loading={loading}
                 selectedPlaceId={hoveredPlaceId || selectedPlaceId}
@@ -956,6 +986,7 @@ export default function ExplorePage() {
                 {/* Map takes 50vh */}
                 <div className="h-[50vh] flex-shrink-0">
                   <MapView
+                    shouldLoadMap={shouldLoadMap}
                     places={places}
                     loading={loading}
                     selectedPlaceId={selectedPlaceId}
@@ -1386,6 +1417,7 @@ function createRoundIcon(imageUrl: string, size: number): Promise<string> {
 }
 
 function MapView({
+  shouldLoadMap = true,
   places,
   loading,
   selectedPlaceId: externalSelectedPlaceId,
@@ -1396,6 +1428,7 @@ function MapView({
   favorites,
   onToggleFavorite,
 }: {
+  shouldLoadMap?: boolean;
   places: Place[];
   loading: boolean;
   selectedPlaceId?: string | null;
@@ -1599,33 +1632,30 @@ function MapView({
     const loadPhotos = async () => {
       for (const place of placesWithCoords) {
         if (placePhotos.has(place.id)) continue;
-        
         try {
-          const { data: photosData, error } = await supabase
+          const photosResult = (await supabase
             .from("place_photos")
             .select("url")
             .eq("place_id", place.id)
-            .order("sort", { ascending: true });
-          
+            .order("sort", { ascending: true })) as PlacePhotosUrlResult;
+          const { data: photosData, error } = photosResult;
           if (error) {
-            console.error("Error loading photos for place:", place.id, error);
             if (place.cover_url) {
-              setPlacePhotos(prev => new Map(prev).set(place.id, [place.cover_url!]));
+              setPlacePhotos((prev) => new Map(prev).set(place.id, [place.cover_url!]));
             }
           } else if (photosData && photosData.length > 0) {
-            const urls = photosData.map(p => p.url).filter(Boolean);
+            const urls = photosData.map((p) => p.url).filter(Boolean);
             if (urls.length > 0) {
-              setPlacePhotos(prev => new Map(prev).set(place.id, urls));
+              setPlacePhotos((prev) => new Map(prev).set(place.id, urls));
             } else if (place.cover_url) {
-              setPlacePhotos(prev => new Map(prev).set(place.id, [place.cover_url!]));
+              setPlacePhotos((prev) => new Map(prev).set(place.id, [place.cover_url!]));
             }
           } else if (place.cover_url) {
-            setPlacePhotos(prev => new Map(prev).set(place.id, [place.cover_url!]));
+            setPlacePhotos((prev) => new Map(prev).set(place.id, [place.cover_url!]));
           }
-        } catch (error) {
-          console.error("Exception loading photos:", error);
+        } catch {
           if (place.cover_url) {
-            setPlacePhotos(prev => new Map(prev).set(place.id, [place.cover_url!]));
+            setPlacePhotos((prev) => new Map(prev).set(place.id, [place.cover_url!]));
           }
         }
       }

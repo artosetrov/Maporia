@@ -14,7 +14,9 @@ import FavoriteIcon from "../../components/FavoriteIcon";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../../config/googleMaps";
 import { supabase } from "../../lib/supabase";
 import { PLACE_LAYOUT_CONFIG } from "../../config/placeLayout";
-import { useUserAccess } from "../../hooks/useUserAccess";
+import { useUserAccessContext } from "../../contexts/UserAccessContext";
+import { useAuthRedirect } from "../../hooks/useAuthRedirect";
+import AuthCTA from "../../components/AuthCTA";
 import { isPlacePremium, canUserViewPlace, isUserAdmin } from "../../lib/access";
 import LockedPlaceOverlay from "../../components/LockedPlaceOverlay";
 import PremiumBadge from "../../components/PremiumBadge";
@@ -109,6 +111,7 @@ export default function PlacePage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = params?.id;
+  const { redirectToAuth } = useAuthRedirect();
 
   const [activeSection, setActiveSection] = useState<"overview" | "photos" | "map" | "comments">("overview");
   const [place, setPlace] = useState<Place | null>(null);
@@ -150,8 +153,8 @@ export default function PlacePage() {
   const [pinchStartDistance, setPinchStartDistance] = useState<number | null>(null);
   const galleryImageRef = useRef<HTMLImageElement>(null);
 
-  // User access for premium checks
-  const { loading: accessLoading, access } = useUserAccess();
+  // User access for premium checks and render gate (from context — single session/profile request)
+  const { loading: accessLoading, access } = useUserAccessContext();
   const isAdmin = isUserAdmin(access);
 
   // Close modal on ESC key and prevent body scroll when gallery is open
@@ -399,6 +402,8 @@ export default function PlacePage() {
         setUserEmail(data.user.email ?? null);
 
         // Загружаем профиль пользователя
+        // DIAGNOSTIC: Duplicates useUserAccess (same profile). Page also calls useUserAccess().
+        // SUGGESTION: Derive user/displayName/avatar from useUserAccess and remove this profile fetch.
         const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("display_name, avatar_url")
@@ -588,7 +593,7 @@ export default function PlacePage() {
 
   async function toggleFavorite() {
     if (!userId || !id) {
-      router.push("/auth");
+      redirectToAuth("place_toggle_favorite");
       return;
     }
 
@@ -698,7 +703,7 @@ export default function PlacePage() {
         setSending(false);
         setCommentError("You need to sign in to post comments.");
         setTimeout(() => {
-          router.push("/auth");
+          redirectToAuth("place_comment_auth_required");
         }, 2000);
         return;
       }
@@ -709,7 +714,7 @@ export default function PlacePage() {
         setSending(false);
         setCommentError("User ID is missing. Please sign in again.");
         setTimeout(() => {
-          router.push("/auth");
+          redirectToAuth("place_comment_user_missing");
         }, 2000);
         return;
       }
@@ -1044,14 +1049,15 @@ export default function PlacePage() {
                   Add to favorites
                 </button>
               ) : (
-                <button
-                  onClick={() => router.push("/auth")}
-                  className="h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-sm font-medium text-[#1F2A1F]"
-                  aria-label="Add to favorites"
+                <AuthCTA
+                  variant="sign-in"
+                  appearance="secondary"
+                  trigger="place_favorites_hero"
+                  className="gap-2"
                 >
                   <FavoriteIcon isActive={false} size={16} />
                   Add to favorites
-                </button>
+                </AuthCTA>
               )}
             </div>
           </div>
@@ -1496,12 +1502,9 @@ export default function PlacePage() {
           ) : (
             <div className="mb-6 rounded-xl border border-[#ECEEE4] bg-white p-4 text-center">
               <div className="text-sm text-[#8F9E4F]/60 mb-2">Sign in to post comments</div>
-              <button
-                onClick={() => router.push("/auth")}
-                className="px-4 py-2 rounded-xl bg-[#6b7d47] text-white text-sm font-medium hover:bg-[#556036] transition"
-              >
+              <AuthCTA variant="sign-in" trigger="place_comments_desktop">
                 Sign In
-              </button>
+              </AuthCTA>
             </div>
           )}
 
@@ -1623,13 +1626,15 @@ export default function PlacePage() {
                   {isFavorite ? "Remove from favorites" : "Add to favorites"}
                 </button>
               ) : (
-                <button
-                  onClick={() => router.push("/auth")}
-                  className="w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-[#1F2A1F] font-medium"
+                <AuthCTA
+                  variant="sign-in"
+                  appearance="secondary"
+                  trigger="place_favorites_sidebar"
+                  className="w-full gap-2 font-medium"
                 >
                   <FavoriteIcon isActive={false} size={20} />
                   Add to favorites
-                </button>
+                </AuthCTA>
               )}
 
               {/* Show on Map (Google Link) */}
@@ -1841,13 +1846,15 @@ export default function PlacePage() {
                     {isFavorite ? "Remove from favorites" : "Add to favorites"}
                   </button>
                 ) : (
-                  <button
-                    onClick={() => router.push("/auth")}
-                    className="w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-[#1F2A1F] font-medium"
+                  <AuthCTA
+                    variant="sign-in"
+                    appearance="secondary"
+                    trigger="place_favorites_mobile"
+                    className="w-full gap-2 font-medium"
                   >
                     <FavoriteIcon isActive={false} size={20} />
                     Add to favorites
-                  </button>
+                  </AuthCTA>
                 )}
 
                 {/* Show on Map (Google Link) */}
@@ -1983,12 +1990,9 @@ export default function PlacePage() {
             ) : (
               <div className="mb-6 rounded-xl border border-[#ECEEE4] bg-white p-4 text-center">
                 <div className="text-sm text-[#8F9E4F]/60 mb-2">Sign in to post comments</div>
-                <button
-                  onClick={() => router.push("/auth")}
-                  className="px-4 py-2 rounded-xl bg-[#6b7d47] text-white text-sm font-medium hover:bg-[#556036] transition"
-                >
+                <AuthCTA variant="sign-in" trigger="place_comments_mobile">
                   Sign In
-                </button>
+                </AuthCTA>
               </div>
             )}
 

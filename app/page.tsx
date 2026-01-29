@@ -3,21 +3,22 @@
 import Link from "next/link";
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { useAuthRedirect } from "./hooks/useAuthRedirect";
 import TopBar from "./components/TopBar";
 import BottomNav from "./components/BottomNav";
 import HomeSection from "./components/HomeSection";
-import { ActiveFilters } from "./components/FiltersModal";
 import { ActiveFilters } from "./components/FiltersModal";
 import SearchModal from "./components/SearchModal";
 import FiltersModal from "./components/FiltersModal";
 import { HOME_SECTIONS } from "./constants/homeSections";
 import { supabase, hasValidSupabaseConfig } from "./lib/supabase";
 import { DEFAULT_CITY } from "./constants";
-import { useUserAccess } from "./hooks/useUserAccess";
+import { useUserAccessContext } from "./contexts/UserAccessContext";
 import { HomeSectionSkeleton } from "./components/Skeleton";
 
 export default function HomePage() {
   const router = useRouter();
+  const { redirectToAuth } = useAuthRedirect();
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   
   // Search and filter state
@@ -32,8 +33,8 @@ export default function HomePage() {
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
-  // User access and profile data
-  const { loading: accessLoading, access, user, profile } = useUserAccess();
+  // User access and profile data (from context — single session/profile request)
+  const { loading: accessLoading, access, user, profile } = useUserAccessContext();
   
   // Bootstrap ready state - wait for auth/profile before rendering sections
   const [bootReady, setBootReady] = useState(false);
@@ -150,7 +151,7 @@ export default function HomePage() {
     e.stopPropagation();
 
     if (!userId) {
-      router.push("/auth");
+      redirectToAuth();
       return;
     }
 

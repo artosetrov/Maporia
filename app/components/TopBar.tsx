@@ -9,8 +9,10 @@ import SearchBar from "./SearchBar";
 import SearchModal from "./SearchModal";
 import FavoriteIcon from "./FavoriteIcon";
 import Icon from "./Icon";
-import { useUserAccess } from "../hooks/useUserAccess";
+import { useUserAccessContext } from "../contexts/UserAccessContext";
 import { canUserAddPlace } from "../lib/access";
+import { useAuthRedirect } from "../hooks/useAuthRedirect";
+import AuthCTA from "./AuthCTA";
 
 type TopBarProps = {
   // Search bar props (only for /map page) - Airbnb style
@@ -92,8 +94,8 @@ export default function TopBar({
   const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Получаем права пользователя
-  const { access } = useUserAccess();
+  // Получаем права пользователя (from context — single session/profile request)
+  const { access } = useUserAccessContext();
 
   // Проверяем авторизацию
   useEffect(() => {
@@ -135,9 +137,11 @@ export default function TopBar({
     }
   }, [menuOpen]);
 
+  const { redirectToAuth } = useAuthRedirect();
+
   async function handleLogout() {
     await supabase.auth.signOut();
-    router.push("/auth");
+    redirectToAuth("topbar_logout");
   }
 
   const isActive = (href: string) => {
@@ -357,12 +361,7 @@ export default function TopBar({
               <div className="flex-shrink-0 flex items-center gap-4 ml-auto">
                 {/* Login Button - visible for unauthenticated users */}
                 {!isAuthenticated && (
-                  <Link
-                    href="/auth"
-                    className="flex items-center gap-2 px-5 py-2.5 h-11 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:brightness-110 active:brightness-90 transition-all"
-                  >
-                    Login
-                  </Link>
+                  <AuthCTA variant="sign-in" as="link" trigger="topbar_login">Login</AuthCTA>
                 )}
                 {/* Authenticated: Switch to hosting + Avatar + Hamburger menu */}
                 {isAuthenticated && (userAvatar || userDisplayName || userEmail) && (

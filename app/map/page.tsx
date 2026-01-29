@@ -22,8 +22,11 @@ import FavoriteIcon from "../components/FavoriteIcon";
 import PremiumBadge from "../components/PremiumBadge";
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../config/googleMaps";
 import { supabase } from "../lib/supabase";
+import type { Database } from "../types/supabase";
+import type { PostgrestError } from "@supabase/supabase-js";
 import { DEFAULT_CITY, CATEGORIES, CITIES } from "../constants";
-import { useUserAccess } from "../hooks/useUserAccess";
+import { useUserAccessContext } from "../contexts/UserAccessContext";
+import { useAuthRedirect } from "../hooks/useAuthRedirect";
 import { useBottomNavVisibility } from "../hooks/useBottomNavVisibility";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import Icon from "../components/Icon";
@@ -48,16 +51,42 @@ type Place = {
   // Premium определяется через access_level === 'premium'
   // Hidden/Vibe определяются через категории
   access_level?: string | null;
+  // Добавляются при сортировке по лайкам/комментариям
+  commentsCount?: number;
+  likesCount?: number;
 };
 
 // Тип для фильтров
 type PlaceFilters = {
   premium?: boolean;
+  premiumOnly?: boolean;
   hidden?: boolean;
   vibe?: boolean;
   cities?: string[];
   categories?: string[];
 };
+
+// Result types for Supabase queries (Database['public']['Tables'][table]['Row'] + Pick)
+type ProfilesRow = Database["public"]["Tables"]["profiles"]["Row"];
+type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
+type ReactionsRow = Database["public"]["Tables"]["reactions"]["Row"];
+type CommentsRow = Database["public"]["Tables"]["comments"]["Row"];
+type PlacePhotosRow = Database["public"]["Tables"]["place_photos"]["Row"];
+
+type ProfileDisplay = Pick<ProfilesRow, "display_name" | "avatar_url">;
+type ProfileResult = { data: ProfileDisplay | null; error: PostgrestError | null };
+
+type PlacesSelectRow = Pick<PlacesRow, "id" | "title" | "description" | "city" | "city_name_cached" | "lat" | "lng" | "cover_url" | "categories" | "tags" | "created_at" | "created_by" | "access_level" | "country">;
+type PlacesResult = { data: PlacesSelectRow[] | null; error: PostgrestError | null; count?: number | null };
+
+type ReactionPlaceId = Pick<ReactionsRow, "place_id">;
+type ReactionsPlaceIdResult = { data: ReactionPlaceId[] | null; error: PostgrestError | null };
+
+type CommentPlaceId = Pick<CommentsRow, "place_id">;
+type CommentsPlaceIdResult = { data: CommentPlaceId[] | null; error: PostgrestError | null };
+
+type PlacePhotoUrl = Pick<PlacePhotosRow, "url">;
+type PlacePhotosUrlResult = { data: PlacePhotoUrl[] | null; error: PostgrestError | null };
 
 // Нормализация города для сравнения
 function normalizeCity(city: string | null | undefined): string {
@@ -142,6 +171,7 @@ function timeAgo(iso: string) {
 function MapPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { redirectToAuth } = useAuthRedirect();
   
   // На странице /map по умолчанию показываем list view (включая мобильные)
   // Всегда начинаем с "list", независимо от устройства
@@ -171,8 +201,8 @@ function MapPageContent() {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [filteredPlacesState, setFilteredPlacesState] = useState<Place[]>([]);
 
-  // User access for premium filtering
-  const { loading: accessLoading, access } = useUserAccess();
+  // User access for premium filtering and bootReady gate (from context — single session/profile request)
+  const { loading: accessLoading, access } = useUserAccessContext();
   
   // Track BottomNav visibility for button positioning
   const bottomNavVisible = useBottomNavVisibility();
@@ -495,11 +525,12 @@ function MapPageContent() {
     setUserId(u.id);
 
     // Загружаем профиль для получения display_name и avatar_url
-    const { data: profile, error: profileError } = await supabase
+    const profileResult = (await supabase
       .from("profiles")
       .select("display_name, avatar_url")
       .eq("id", u.id)
-      .maybeSingle();
+      .maybeSingle()) as ProfileResult;
+    const { data: profile, error: profileError } = profileResult;
     
     if (profileError) {
       console.error("Error loading user profile:", profileError);
@@ -569,7 +600,8 @@ function MapPageContent() {
       }
 
       // No pagination - load all places at once
-      const { data, error, count } = await query;
+      const queryResult = (await query) as PlacesResult;
+      const { data, error, count } = queryResult;
       
       if (error) {
         // Enhanced error logging with full error details
@@ -611,10 +643,10 @@ function MapPageContent() {
           
           fallbackQuery = fallbackQuery.order("created_at", { ascending: false });
           
-          const fallbackResult = await fallbackQuery;
+          const fallbackResult = (await fallbackQuery) as PlacesResult;
           if (!fallbackResult.error) {
             // Fallback успешен
-            return fallbackResult.data?.map((p: any) => ({
+            return (fallbackResult.data?.map((p) => ({
               ...p,
               // Ensure all required fields exist (используем только существующие поля)
               id: p.id,
@@ -622,16 +654,16 @@ function MapPageContent() {
               description: p.description || null,
               city: p.city || null,
               city_name_cached: p.city_name_cached || null,
-              lat: p.lat || null,
-              lng: p.lng || null,
+              lat: p.lat ?? null,
+              lng: p.lng ?? null,
               cover_url: p.cover_url || null,
-              categories: p.categories || [],
-              tags: p.tags || [],
+              categories: p.categories || null,
+              tags: p.tags || null,
               created_at: p.created_at || new Date().toISOString(),
               created_by: p.created_by || null,
               access_level: p.access_level || null,
               country: p.country || null,
-            })) || [];
+            })) || []) as Place[];
           }
         }
         
@@ -647,7 +679,7 @@ function MapPageContent() {
       if (!data || data.length === 0) {
         if (process.env.NODE_ENV === 'development') {
           console.log('[MapPage] No places found for query:', {
-            citiesToFilter,
+            appliedCities,
             appliedCategories,
             appliedQ,
             selectedTag,
@@ -674,7 +706,7 @@ function MapPageContent() {
       // Сортировка применяется ко всем данным, а фильтрация - в filteredPlacesMemo
       let placesWithCounts = filteredData;
       if (activeFilters.sort === "most_commented" || activeFilters.sort === "most_liked") {
-        const placeIds = filteredData.map((p: any) => p.id);
+        const placeIds = filteredData.map((p) => p.id);
         
         // Оптимизация: используем count вместо загрузки всех записей
         // Разбиваем на батчи по 100 мест для избежания превышения лимита запроса
@@ -686,7 +718,7 @@ function MapPageContent() {
         for (let i = 0; i < placeIds.length; i += batchSize) {
           const batch = placeIds.slice(i, i + batchSize);
           
-          const [commentsResult, likesResult] = await Promise.all([
+          const [commentsResult, likesResult] = (await Promise.all([
             supabase
               .from("comments")
               .select("place_id")
@@ -696,7 +728,7 @@ function MapPageContent() {
               .select("place_id")
               .eq("reaction", "like")
               .in("place_id", batch),
-          ]);
+          ])) as [CommentsPlaceIdResult, ReactionsPlaceIdResult];
           
           // Check for errors in batch requests (log but don't fail the whole request)
           if (commentsResult.error) {
@@ -715,30 +747,30 @@ function MapPageContent() {
           }
 
           // Подсчитываем количество комментариев и лайков для каждого места в батче
-          (commentsResult.data || []).forEach((c: any) => {
+          (commentsResult.data || []).forEach((c) => {
             commentsCount.set(c.place_id, (commentsCount.get(c.place_id) || 0) + 1);
           });
 
-          (likesResult.data || []).forEach((r: any) => {
+          (likesResult.data || []).forEach((r) => {
             likesCount.set(r.place_id, (likesCount.get(r.place_id) || 0) + 1);
           });
         }
 
         // Добавляем счетчики к местам и сортируем
-        placesWithCounts = filteredData.map((p: any) => ({
+        placesWithCounts = filteredData.map((p) => ({
           ...p,
           commentsCount: commentsCount.get(p.id) || 0,
           likesCount: likesCount.get(p.id) || 0,
         }));
 
         if (activeFilters.sort === "most_commented") {
-          placesWithCounts.sort((a: any, b: any) => b.commentsCount - a.commentsCount);
+          placesWithCounts.sort((a, b) => (b.commentsCount ?? 0) - (a.commentsCount ?? 0));
         } else if (activeFilters.sort === "most_liked") {
-          placesWithCounts.sort((a: any, b: any) => b.likesCount - a.likesCount);
+          placesWithCounts.sort((a, b) => (b.likesCount ?? 0) - (a.likesCount ?? 0));
         }
       }
 
-      return placesWithCounts.map((p: any) => ({
+      return placesWithCounts.map((p) => ({
         ...p,
         lat: p.lat ?? null,
         lng: p.lng ?? null,
@@ -758,6 +790,7 @@ function MapPageContent() {
       }
     })();
     return () => { cancelled = true; };
+  // SUGGESTION (deps only, do not change code): Keep refetch tied to server-affecting params as now. Do not add filteredPlaces.length or placesData?.length — would cause refetch on client-only filter changes. Optional: single filterKey = JSON.stringify({ appliedCity, appliedCities, appliedQ, appliedCategories, selectedTag, sort: activeFilters.sort }) in deps instead of listing each. See docs/SUGGESTION-USER-ACCESS-PROVIDER.md §3.
   }, [appliedCity, appliedCities, appliedQ, appliedCategories, selectedTag, activeFilters.sort, hasExplicitCityInUrlState, userId, bootReady, refreshKey]);
 
   // No pagination - placesData contains all places directly
@@ -952,6 +985,8 @@ function MapPageContent() {
   }, [bootReady, placesLoading, placesData?.length ?? 0, filteredPlaces.length]);
 
 
+  // DIAGNOSTIC: loadUser() duplicates useUserAccess (same session + profile). Both run on mount.
+  // SUGGESTION: Rely on useUserAccess for user/profile and derive userId from it; remove loadUser() if not needed for other state.
   useEffect(() => {
     (async () => {
       try {
@@ -990,7 +1025,8 @@ function MapPageContent() {
       .select("place_id")
       .eq("user_id", userId)
       .eq("reaction", "like")
-      .then(({ data, error }) => {
+      .then((res) => {
+        const { data, error } = res as ReactionsPlaceIdResult;
         if (cancelled) return;
         if (error) return;
         setFavorites(new Set((data || []).map((r) => r.place_id)));
@@ -1104,7 +1140,7 @@ function MapPageContent() {
     e.stopPropagation();
 
     if (!userId) {
-      router.push("/auth");
+      redirectToAuth();
       return;
     }
 
@@ -1134,6 +1170,7 @@ function MapPageContent() {
         // Добавляем в избранное
         const { error } = await supabase
           .from("reactions")
+          // @ts-expect-error — Insert inferred as never when client not typed with Database; payload is valid
           .insert({
             place_id: placeId,
             user_id: userId,
@@ -1398,10 +1435,11 @@ function MapPageContent() {
             
             // Оптимизация: загружаем только необходимые поля для подсчета
             // Используем только существующие поля: access_level для premium, категории для hidden/vibe
-            const { data: allData, error: dataError } = await supabase
+            const placesCountResult = (await supabase
               .from("places")
-              .select("id,title,description,city,city_name_cached,categories,tags,access_level,country");
-            
+              .select("id,title,description,city,city_name_cached,categories,tags,access_level,country")) as { data: PlacesSelectRow[] | null; error: PostgrestError | null };
+            const { data: allData, error: dataError } = placesCountResult;
+
             if (dataError) {
               // Silently ignore AbortError
               if (dataError.message?.includes('abort') || dataError.name === 'AbortError' || (dataError as any).code === 'ECONNABORTED') {
@@ -2205,33 +2243,30 @@ function MapView({
     const loadPhotos = async () => {
       for (const place of placesWithCoords) {
         if (placePhotos.has(place.id)) continue;
-        
         try {
-          const { data: photosData, error } = await supabase
+          const photosResult = (await supabase
             .from("place_photos")
             .select("url")
             .eq("place_id", place.id)
-            .order("sort", { ascending: true });
-          
+            .order("sort", { ascending: true })) as PlacePhotosUrlResult;
+          const { data: photosData, error } = photosResult;
           if (error) {
-            console.error("Error loading photos for place:", place.id, error);
             if (place.cover_url) {
-              setPlacePhotos(prev => new Map(prev).set(place.id, [place.cover_url!]));
+              setPlacePhotos((prev) => new Map(prev).set(place.id, [place.cover_url!]));
             }
           } else if (photosData && photosData.length > 0) {
-            const urls = photosData.map(p => p.url).filter(Boolean);
+            const urls = photosData.map((p) => p.url).filter(Boolean);
             if (urls.length > 0) {
-              setPlacePhotos(prev => new Map(prev).set(place.id, urls));
+              setPlacePhotos((prev) => new Map(prev).set(place.id, urls));
             } else if (place.cover_url) {
-              setPlacePhotos(prev => new Map(prev).set(place.id, [place.cover_url!]));
+              setPlacePhotos((prev) => new Map(prev).set(place.id, [place.cover_url!]));
             }
           } else if (place.cover_url) {
-            setPlacePhotos(prev => new Map(prev).set(place.id, [place.cover_url!]));
+            setPlacePhotos((prev) => new Map(prev).set(place.id, [place.cover_url!]));
           }
-        } catch (error) {
-          console.error("Exception loading photos:", error);
+        } catch {
           if (place.cover_url) {
-            setPlacePhotos(prev => new Map(prev).set(place.id, [place.cover_url!]));
+            setPlacePhotos((prev) => new Map(prev).set(place.id, [place.cover_url!]));
           }
         }
       }

@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase, getAuthRedirectUrl } from "../lib/supabase";
+import { getSafeRedirectFrom, getAuthUrl } from "../lib/authRedirect";
 import Icon from "../components/Icon";
-
 
 export default function AuthPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const originalOriginRef = useRef<string | null>(null);
+  const redirectBack = getSafeRedirectFrom(searchParams.get("from"));
 
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -100,9 +102,8 @@ export default function AuthPage() {
       const { data } = await supabase.auth.getUser();
       if (data.user) {
         setIsAuthed(true);
-        // CRITICAL: Use relative path to stay on current host
-        // Never use absolute URL that could redirect to production
-        router.replace("/");
+        const target = getSafeRedirectFrom(new URLSearchParams(window.location.search).get("from")) || "/";
+        router.replace(target);
       }
     };
 
@@ -132,12 +133,10 @@ export default function AuthPage() {
         // Small delay to ensure session is fully set
         setTimeout(() => {
           if (currentPath === '/auth' || currentPath.startsWith('/auth')) {
-            // Use relative path, not absolute URL
-            console.log('[Auth] Redirecting to / from /auth');
-            router.replace("/");
+            const fromParam = new URLSearchParams(window.location.search).get("from");
+            const target = getSafeRedirectFrom(fromParam) || "/";
+            router.replace(target);
           } else {
-            // If we're already on a page, just refresh to update auth state
-            console.log('[Auth] Refreshing current page');
             router.refresh();
           }
         }, 100);
@@ -152,11 +151,11 @@ export default function AuthPage() {
   async function signInWithEmail() {
     setError(null);
     setLoading(true);
-
+    const authReturnPath = getAuthUrl(redirectBack ?? undefined);
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: getAuthRedirectUrl("/"),
+        emailRedirectTo: getAuthRedirectUrl(authReturnPath),
       },
     });
 
@@ -171,11 +170,11 @@ export default function AuthPage() {
   async function signInWithGoogle() {
     setError(null);
     setGoogleLoading(true);
-
+    const authReturnPath = getAuthUrl(redirectBack ?? undefined);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: getAuthRedirectUrl("/"),
+        redirectTo: getAuthRedirectUrl(authReturnPath),
       },
     });
 
@@ -197,7 +196,7 @@ export default function AuthPage() {
            style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
         {/* Close Button */}
         <button
-          onClick={() => router.push("/")}
+          onClick={() => router.replace(redirectBack || "/")}
           className="absolute top-4 right-4 h-8 w-8 rounded-full flex items-center justify-center text-[#A8B096] hover:bg-[#FAFAF7] hover:text-[#8F9E4F] transition-colors"
           aria-label="Close"
         >

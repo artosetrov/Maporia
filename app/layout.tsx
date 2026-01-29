@@ -4,6 +4,7 @@ import GoogleMapsProvider from "./providers/GoogleMapsProvider";
 import { ProductionDiagnostics } from "./components/ProductionDiagnostics";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { PremiumModalProvider } from "./contexts/PremiumModalContext";
+import { UserAccessProvider } from "./contexts/UserAccessContext";
 
 export const metadata: Metadata = {
   title: "Maporia",
@@ -30,9 +31,11 @@ export default function RootLayout({
             <ProductionDiagnostics />
           )}
           <PremiumModalProvider>
-            <GoogleMapsProvider>
-              {children}
-            </GoogleMapsProvider>
+            <UserAccessProvider requireAuth={false}>
+              <GoogleMapsProvider>
+                {children}
+              </GoogleMapsProvider>
+            </UserAccessProvider>
           </PremiumModalProvider>
         </ErrorBoundary>
       </body>

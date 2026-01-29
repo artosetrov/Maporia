@@ -96,6 +96,7 @@ export interface Database {
           visibility: string | null
           comments_enabled: boolean | null
           google_place_id: string | null
+          is_hidden: boolean | null
         }
         Insert: {
           id?: string
@@ -123,6 +124,7 @@ export interface Database {
           visibility?: string | null
           comments_enabled?: boolean | null
           google_place_id?: string | null
+          is_hidden?: boolean | null
         }
         Update: {
           id?: string
@@ -150,9 +152,39 @@ export interface Database {
           visibility?: string | null
           comments_enabled?: boolean | null
           google_place_id?: string | null
+          is_hidden?: boolean | null
         }
       }
-      // Add other tables: cities, comments, reactions, place_photos, app_settings, etc.
+      reactions: {
+        Row: { id?: string; place_id: string; user_id: string; reaction: string; created_at?: string }
+        Insert: { place_id: string; user_id: string; reaction: string }
+        Update: { place_id?: string; user_id?: string; reaction?: string }
+      }
+      comments: {
+        Row: { id: string; place_id: string; user_id: string; text: string; created_at: string; user_display_name?: string | null; user_username?: string | null; user_avatar_url?: string | null }
+        Insert: { place_id: string; user_id: string; text: string }
+        Update: { place_id?: string; user_id?: string; text?: string }
+      }
+      place_photos: {
+        Row: { id: string; place_id: string; user_id: string; url: string; sort: number; is_cover: boolean; created_at?: string }
+        Insert: { place_id: string; user_id: string; url: string; sort: number; is_cover: boolean }
+        Update: { place_id?: string; user_id?: string; url?: string; sort?: number; is_cover?: boolean }
+      }
+      app_settings: {
+        Row: { id: string; settings: Json | null }
+        Insert: { id: string; settings?: Json | null }
+        Update: { id?: string; settings?: Json | null }
+      }
+      cities: {
+        Row: { id: string; name: string | null }
+        Insert: { id?: string; name?: string | null }
+        Update: { id?: string; name?: string | null }
+      }
+      tags: {
+        Row: { id: string; name?: string | null }
+        Insert: { id?: string; name?: string | null }
+        Update: { id?: string; name?: string | null }
+      }
     }
     Views: {
       [_ in never]: never

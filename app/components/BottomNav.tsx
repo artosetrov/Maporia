@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
-import { supabase } from "../lib/supabase";
 import FavoriteIcon from "./FavoriteIcon";
 import Icon from "./Icon";
 import { usePremiumModalContext } from "../contexts/PremiumModalContext";
+import { useUserAccessContext } from "../contexts/UserAccessContext";
 
 function initialsFromEmail(email?: string | null) {
   if (!email) return "U";
@@ -28,70 +28,15 @@ function initialsFromName(name?: string | null) {
 export default function BottomNav() {
   const pathname = usePathname();
   const { isPremiumModalOpen } = usePremiumModalContext();
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [displayName, setDisplayName] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { user, profile } = useUserAccessContext();
   const [isVisible, setIsVisible] = useState(true);
   const lastScrollByTarget = useRef<WeakMap<EventTarget, number>>(new WeakMap());
   const rafId = useRef<number | null>(null);
 
-  // Don't render BottomNav when Premium Purchase Modal is open (mobile)
-  if (isPremiumModalOpen) {
-    return null;
-  }
-
-  useEffect(() => {
-    (async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData.session;
-
-      if (session?.user) {
-        setIsAuthenticated(true);
-        setUserEmail(session.user.email ?? null);
-
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("avatar_url, display_name")
-          .eq("id", session.user.id)
-          .maybeSingle();
-
-        if (profile) {
-          setAvatarUrl(profile.avatar_url);
-          setDisplayName(profile.display_name);
-        }
-      } else {
-        setIsAuthenticated(false);
-      }
-
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-        if (session?.user) {
-          setIsAuthenticated(true);
-          setUserEmail(session.user.email ?? null);
-
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("avatar_url, display_name")
-            .eq("id", session.user.id)
-            .maybeSingle();
-
-          if (profile) {
-            setAvatarUrl(profile.avatar_url);
-            setDisplayName(profile.display_name);
-          }
-        } else {
-          setIsAuthenticated(false);
-          setAvatarUrl(null);
-          setDisplayName(null);
-          setUserEmail(null);
-        }
-      });
-
-      return () => {
-        subscription.unsubscribe();
-      };
-    })();
-  }, []);
+  const avatarUrl = profile?.avatar_url ?? null;
+  const displayName = profile?.display_name ?? null;
+  const userEmail = user?.email ?? null;
+  const isAuthenticated = !!user;
 
   // Hide/show bottom nav on scroll (mobile only)
   useEffect(() => {
@@ -186,6 +131,11 @@ export default function BottomNav() {
       }
     };
   }, [pathname]);
+
+  // Don't render BottomNav when Premium Purchase Modal is open (mobile)
+  if (isPremiumModalOpen) {
+    return null;
+  }
 
   const navItems = [
     { href: "/", label: "Explore", icon: SearchIcon },

@@ -2,7 +2,7 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { CATEGORIES } from "../constants";
 import Icon from "./Icon";
 import { type UserAccess } from "../lib/access";
@@ -97,8 +97,10 @@ export default function FiltersModal({
   // Reset draft to applied only when modal opens (avoid deps that change every render)
   const appliedFiltersRef = useRef(safeAppliedFilters);
   const appliedCitiesRef = useRef(safeAppliedCities);
-  appliedFiltersRef.current = safeAppliedFilters;
-  appliedCitiesRef.current = safeAppliedCities;
+  useLayoutEffect(() => {
+    appliedFiltersRef.current = safeAppliedFilters;
+    appliedCitiesRef.current = safeAppliedCities;
+  }, [safeAppliedFilters, safeAppliedCities]);
   useEffect(() => {
     if (isOpen) {
       let filtersToSet = appliedFiltersRef.current;

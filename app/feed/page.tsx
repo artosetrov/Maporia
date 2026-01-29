@@ -8,10 +8,35 @@ import BottomNav from "../components/BottomNav";
 import FiltersModal, { ActiveFilters } from "../components/FiltersModal";
 import SearchModal from "../components/SearchModal";
 import { supabase } from "../lib/supabase";
+import type { Database } from "../types/supabase";
+import type { PostgrestError } from "@supabase/supabase-js";
 import { DEFAULT_CITY } from "../constants";
 import Icon from "../components/Icon";
 import { ActivityItemSkeleton } from "../components/Skeleton";
-import { useUserAccess } from "../hooks/useUserAccess";
+import { useUserAccessContext } from "../contexts/UserAccessContext";
+
+type ProfilesRow = Database["public"]["Tables"]["profiles"]["Row"];
+type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
+type ReactionsRow = Database["public"]["Tables"]["reactions"]["Row"];
+type CommentsRow = Database["public"]["Tables"]["comments"]["Row"];
+
+type ProfileDisplayAvatar = Pick<ProfilesRow, "display_name" | "avatar_url">;
+type ProfileDisplayResult = { data: ProfileDisplayAvatar | null; error: PostgrestError | null };
+
+type ProfileBatch = Pick<ProfilesRow, "id" | "display_name" | "username" | "avatar_url">;
+type ProfilesBatchResult = { data: ProfileBatch[] | null; error: PostgrestError | null };
+
+type PlacesFeed = Pick<PlacesRow, "id" | "title" | "cover_url" | "address" | "created_at" | "created_by">;
+type PlacesFeedResult = { data: PlacesFeed[] | null; error: PostgrestError | null };
+
+type ReactionFeed = Pick<ReactionsRow, "place_id" | "created_at" | "user_id">;
+type ReactionsFeedResult = { data: ReactionFeed[] | null; error: PostgrestError | null };
+
+type CommentFeed = Pick<CommentsRow, "place_id" | "text" | "created_at" | "user_id">;
+type CommentsFeedResult = { data: CommentFeed[] | null; error: PostgrestError | null };
+
+type PlacesBatch = Pick<PlacesRow, "id" | "title" | "cover_url" | "address">;
+type PlacesBatchResult = { data: PlacesBatch[] | null; error: PostgrestError | null };
 
 type ActivityItem =
   | { type: "liked"; created_at: string; placeId: string; placeTitle?: string | null; coverUrl?: string | null; address?: string | null; userId: string; userName: string; userAvatar: string | null }
@@ -141,8 +166,8 @@ export default function FeedPage() {
   const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   
-  // User access
-  const { access } = useUserAccess();
+  // User access (from context — single session/profile request)
+  const { access } = useUserAccessContext();
   
   // Search and filter state
   const [searchValue, setSearchValue] = useState("");
@@ -156,6 +181,8 @@ export default function FeedPage() {
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
+  // DIAGNOSTIC: Duplicates useUserAccess (getUser + profiles). loadActivities below does not wait for auth.
+  // SUGGESTION: Use useUserAccess for user/profile and pass to state; remove this effect to avoid duplicate requests.
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getUser();
@@ -164,11 +191,12 @@ export default function FeedPage() {
         setUserEmail(data.user.email || null);
 
         // Загружаем профиль пользователя
-        const { data: profile, error: profileError } = await supabase
+        const profileResult = (await supabase
           .from("profiles")
           .select("display_name, avatar_url")
           .eq("id", data.user.id)
-          .maybeSingle();
+          .maybeSingle()) as ProfileDisplayResult;
+        const { data: profile, error: profileError } = profileResult;
 
         if (profileError) {
           console.error("Error loading user profile:", profileError);
@@ -182,6 +210,7 @@ export default function FeedPage() {
     })();
   }, []);
 
+  // DIAGNOSTIC: loadActivities runs on mount and on pathname change without checking userId/accessLoading.
   useEffect(() => {
     loadActivities();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -191,7 +220,7 @@ export default function FeedPage() {
     setLoading(true);
 
     // Загружаем все активности: добавленные места, лайки, комментарии
-    const [placesResult, likesResult, commentsResult] = await Promise.all([
+    const [placesResult, likesResult, commentsResult] = (await Promise.all([
       supabase
         .from("places")
         .select("id, title, cover_url, address, created_at, created_by")
@@ -208,7 +237,7 @@ export default function FeedPage() {
         .select("place_id, text, created_at, user_id")
         .order("created_at", { ascending: false })
         .limit(50),
-    ]);
+    ])) as [PlacesFeedResult, ReactionsFeedResult, CommentsFeedResult];
 
     // Собираем все уникальные ID пользователей и мест для batch-загрузки
     const userIds = new Set<string>();
@@ -234,20 +263,20 @@ export default function FeedPage() {
     }
 
     // Загружаем все профили и места одним запросом
-    const [profilesResult, placesDataResult] = await Promise.all([
+    const [profilesResult, placesDataResult] = (await Promise.all([
       userIds.size > 0
         ? supabase
             .from("profiles")
             .select("id, display_name, username, avatar_url")
             .in("id", Array.from(userIds))
-        : { data: [], error: null },
+        : Promise.resolve({ data: [], error: null }),
       placeIds.size > 0
         ? supabase
             .from("places")
             .select("id, title, cover_url, address")
             .in("id", Array.from(placeIds))
-        : { data: [], error: null },
-    ]);
+        : Promise.resolve({ data: [], error: null }),
+    ])) as [ProfilesBatchResult, PlacesBatchResult];
 
     // Создаем кэш для быстрого доступа
     const profilesCache = new Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>();
@@ -301,7 +330,7 @@ export default function FeedPage() {
         const userName = profile?.display_name || profile?.username || "Unknown";
         allActivities.push({
           type: "liked",
-          created_at: like.created_at,
+          created_at: like.created_at ?? "",
           placeId: like.place_id,
           placeTitle: place?.title || null,
           coverUrl: place?.cover_url || null,
