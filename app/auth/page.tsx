@@ -1,12 +1,26 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase, getAuthRedirectUrl } from "../lib/supabase";
 import { getSafeRedirectFrom, getAuthUrl } from "../lib/authRedirect";
 import Icon from "../components/Icon";
 
-export default function AuthPage() {
+function AuthPageFallback() {
+  return (
+    <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center p-6">
+      <div className="w-full max-w-md rounded-3xl bg-white border border-[#ECEEE4] p-8 animate-pulse" style={{ boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}>
+        <div className="h-8 w-8 rounded-full bg-[#ECEEE4] ml-auto mb-6" />
+        <div className="h-6 bg-[#ECEEE4] rounded w-32 mb-2" />
+        <div className="h-4 bg-[#ECEEE4] rounded w-48 mb-6" />
+        <div className="h-11 bg-[#ECEEE4] rounded-full mb-4" />
+        <div className="h-11 bg-[#ECEEE4] rounded-xl mb-4" />
+      </div>
+    </main>
+  );
+}
+
+function AuthPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const originalOriginRef = useRef<string | null>(null);
@@ -315,5 +329,13 @@ export default function AuthPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense fallback={<AuthPageFallback />}>
+      <AuthPageContent />
+    </Suspense>
   );
 }
