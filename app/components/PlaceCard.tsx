@@ -581,24 +581,6 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
         {place.city && (
           <div className="text-sm text-[#6F7A5A] line-clamp-1">{place.city}</div>
         )}
-
-        {/* Tags - hide for locked places */}
-        {!isLocked && place.tags && place.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-0.5">
-            {place.tags.slice(0, 3).map((tag, index) => (
-              <button
-                key={index}
-                onClick={(e) => handleTagClick(e, tag)}
-                className="text-xs text-[#6F7A5A] bg-[#FAFAF7] px-2 py-0.5 rounded-full hover:bg-[#ECEEE4] transition-colors"
-              >
-                #{tag}
-              </button>
-            ))}
-            {place.tags.length > 3 && (
-              <span className="text-xs text-[#A8B096] px-2 py-0.5">+{place.tags.length - 3}</span>
-            )}
-          </div>
-        )}
       </div>
     </Link>
 

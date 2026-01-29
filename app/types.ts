@@ -43,6 +43,7 @@ export type Place = {
   country?: string | null;
   cover_url?: string | null;
   photo_urls?: string[] | null;
+  video_url?: string | null;
   categories?: string[] | null;
   tags?: string[] | null;
   link?: string | null;

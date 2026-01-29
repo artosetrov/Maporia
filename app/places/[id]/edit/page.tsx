@@ -1105,16 +1105,6 @@ export default function PlaceEditorHub() {
             {/* Google Import Card (moved below Visibility) */}
             {user && placeId && (
               <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold font-fraunces text-[#1F2A1F]">Import from Google</h3>
-                  <Link
-                    href="/add/google"
-                    className="text-sm text-[#8F9E4F] hover:text-[#556036] underline flex items-center gap-1 transition-colors"
-                  >
-                    <span>Import with preview</span>
-                    <Icon name="external-link" size={14} />
-                  </Link>
-                </div>
                 <UnifiedGoogleImportField
                   userId={user.id}
                   context="place"
@@ -1193,6 +1183,15 @@ export default function PlaceEditorHub() {
                     }
                   }}
                 />
+                <div className="mt-4 pt-4 border-t border-[#ECEEE4]">
+                  <Link
+                    href="/add/google"
+                    className="text-sm text-[#8F9E4F] hover:text-[#556036] underline flex items-center gap-1 transition-colors"
+                  >
+                    <span>Import with preview</span>
+                    <Icon name="external-link" size={14} />
+                  </Link>
+                </div>
               </div>
             )}
 

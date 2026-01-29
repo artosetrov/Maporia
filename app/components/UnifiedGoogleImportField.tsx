@@ -275,69 +275,57 @@ export default function UnifiedGoogleImportField({
         <p className="text-sm text-[#6F7A5A]">
           Paste a Google Maps link or enter an address for automatic filling
         </p>
-        <button
-          onClick={() => {
-            setShowForm(!showForm);
-            setImportError(null);
-            setImportSuccess(false);
-          }}
-          className="mt-2 text-sm font-medium text-[#8F9E4F] hover:text-[#556036] underline transition"
-        >
-          {showForm ? "Cancel" : "Import"}
-        </button>
       </div>
 
-      {showForm && (
-        <div className="space-y-2">
-          <div>
-            <label className="block text-xs font-medium text-[#1F2A1F] mb-1.5">
-              Google link or address
-            </label>
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setImportError(null);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && query.trim() && !importing) {
-                  handleImport();
-                }
-              }}
-              placeholder="Paste a Google Maps link or type an address"
-              className="w-full rounded-xl border border-[#ECEEE4] px-4 py-3 text-sm text-[#1F2A1F] placeholder:text-[#A8B096] outline-none focus:border-[#8F9E4F] focus:bg-white bg-white transition"
-              disabled={importing}
-            />
-          </div>
-
-          {importError && (
-            <div className="rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 p-3 text-sm text-[#C96A5B]">
-              {importError}
-            </div>
-          )}
-
-          {importSuccess && (
-            <div className="rounded-xl border border-green-200 bg-green-50/50 p-3 text-sm text-green-700 flex items-center gap-2">
-              <Icon name="check" size={16} />
-              <span>Imported from Google</span>
-            </div>
-          )}
-
-          <button
-            onClick={handleImport}
-            disabled={!query.trim() || importing}
-            className={cx(
-              "w-full rounded-xl px-4 py-3 text-sm font-medium transition",
-              query.trim() && !importing
-                ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
-                : "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
-            )}
-          >
-            {importing ? "Importing..." : "Import"}
-          </button>
+      <div className="space-y-2">
+        <div>
+          <label className="block text-xs font-medium text-[#1F2A1F] mb-1.5">
+            Google link or address
+          </label>
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setImportError(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && query.trim() && !importing) {
+                handleImport();
+              }
+            }}
+            placeholder="Paste a Google Maps link or type an address"
+            className="w-full rounded-xl border border-[#ECEEE4] px-4 py-3 text-sm text-[#1F2A1F] placeholder:text-[#A8B096] outline-none focus:border-[#8F9E4F] focus:bg-white bg-white transition"
+            disabled={importing}
+          />
         </div>
-      )}
+
+        {importError && (
+          <div className="rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 p-3 text-sm text-[#C96A5B]">
+            {importError}
+          </div>
+        )}
+
+        {importSuccess && (
+          <div className="rounded-xl border border-green-200 bg-green-50/50 p-3 text-sm text-green-700 flex items-center gap-2">
+            <Icon name="check" size={16} />
+            <span>Imported from Google</span>
+          </div>
+        )}
+
+        <button
+          onClick={handleImport}
+          disabled={!query.trim() || importing}
+          className={cx(
+            "w-full rounded-xl px-4 py-3 text-sm font-medium transition",
+            query.trim() && !importing
+              ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
+              : "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
+          )}
+        >
+          {importing ? "Importing..." : "Import"}
+        </button>
+      </div>
     </div>
   );
 }

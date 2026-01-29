@@ -2682,23 +2682,12 @@ function MapView({
                             </div>
                           )}
                           
-                          {/* City and Tags */}
-                          <div className="flex items-center gap-1.5 text-sm text-[#2d2d2d]">
-                            {place.city && (
-                              <>
-                                <span>{place.city}</span>
-                                {place.tags && place.tags.length > 0 && (
-                                  <span className="text-[#A8B096]">•</span>
-                                )}
-                              </>
-                            )}
-                            {place.tags && place.tags.length > 0 && (
-                              <span className="text-[#6F7A5A]">
-                                {place.tags.slice(0, 2).join(', ')}
-                                {place.tags.length > 2 && ` +${place.tags.length - 2}`}
-                              </span>
-                            )}
-                          </div>
+                          {/* City */}
+                          {place.city && (
+                            <div className="text-sm text-[#2d2d2d]">
+                              <span>{place.city}</span>
+                            </div>
+                          )}
                         </Link>
                       </div>
                     </InfoWindow>

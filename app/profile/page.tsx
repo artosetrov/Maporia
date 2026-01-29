@@ -2933,6 +2933,9 @@ function ElementsSection() {
           )}
         </div>
 
+        {/* Edit Tags */}
+        <TagsSection />
+
         {/* Brand Guide */}
         <Link
           href="/brand-guide"
@@ -2959,6 +2962,331 @@ function ElementsSection() {
         onClose={() => setIsModalOpen(false)}
         customContent={modalContent}
       />
+    </div>
+  );
+}
+
+function TagsSection() {
+  const [tags, setTags] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [editingTag, setEditingTag] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState("");
+  const [addingTag, setAddingTag] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deletingTag, setDeletingTag] = useState<string | null>(null);
+
+  // Load tags function
+  const loadTags = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setError("Not authenticated");
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch("/api/admin/tags", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to load tags");
+      }
+
+      const data = await response.json();
+      setTags(data.tags || []);
+    } catch (err: any) {
+      console.error("Error loading tags:", err);
+      setError(err.message || "Failed to load tags");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load tags on mount
+  useEffect(() => {
+    loadTags();
+  }, []);
+
+  async function handleAddTag() {
+    if (!newTagName.trim()) return;
+
+    const tagName = newTagName.trim();
+    if (tags.some((t) => t.toLowerCase() === tagName.toLowerCase())) {
+      setError("Tag already exists");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError(null);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error("Not authenticated");
+      }
+
+      const response = await fetch("/api/admin/tags", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ name: tagName }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to add tag");
+      }
+
+      // Tag successfully created in tags table
+      await response.json();
+      // Reload tags from server to ensure consistency
+      await loadTags();
+      setNewTagName("");
+      setAddingTag(false);
+    } catch (err: any) {
+      console.error("Error adding tag:", err);
+      setError(err.message || "Failed to add tag");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleUpdateTag(oldName: string, newName: string) {
+    if (!newName.trim() || oldName === newName.trim()) {
+      setEditingTag(null);
+      setEditingValue("");
+      return;
+    }
+
+    const tagName = newName.trim();
+    if (tags.some((t) => t !== oldName && t.toLowerCase() === tagName.toLowerCase())) {
+      setError("Tag already exists");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError(null);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error("Not authenticated");
+      }
+
+      const response = await fetch("/api/admin/tags", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ oldName, newName: tagName }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to update tag");
+      }
+
+      // Update local state
+      setTags(tags.map((t) => (t === oldName ? tagName : t)).sort((a, b) => a.localeCompare(b)));
+      setEditingTag(null);
+      setEditingValue("");
+    } catch (err: any) {
+      console.error("Error updating tag:", err);
+      setError(err.message || "Failed to update tag");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteTag(tagName: string) {
+    if (!confirm(`Delete tag "${tagName}"? This will remove it from all places.`)) {
+      return;
+    }
+
+    try {
+      setDeletingTag(tagName);
+      setError(null);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error("Not authenticated");
+      }
+
+      const response = await fetch(`/api/admin/tags?name=${encodeURIComponent(tagName)}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to delete tag");
+      }
+
+      // Remove from local state
+      setTags(tags.filter((t) => t !== tagName));
+    } catch (err: any) {
+      console.error("Error deleting tag:", err);
+      setError(err.message || "Failed to delete tag");
+    } finally {
+      setDeletingTag(null);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="font-semibold text-[#1F2A1F] mb-1">Edit Tags</h3>
+          <p className="text-sm text-[#6F7A5A]">Manage tags used across all places</p>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-4 rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 p-3 text-sm text-[#C96A5B]">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-sm text-[#6F7A5A]">Loading tags...</div>
+      ) : (
+        <div className="space-y-3">
+          {/* Add new tag */}
+          {addingTag ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newTagName}
+                onChange={(e) => {
+                  setNewTagName(e.target.value);
+                  setError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleAddTag();
+                  } else if (e.key === "Escape") {
+                    setAddingTag(false);
+                    setNewTagName("");
+                  }
+                }}
+                placeholder="Tag name"
+                autoFocus
+                className="flex-1 px-3 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                disabled={saving}
+              />
+              <button
+                onClick={handleAddTag}
+                disabled={saving || !newTagName.trim()}
+                className="px-4 py-2 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? "..." : "Add"}
+              </button>
+              <button
+                onClick={() => {
+                  setAddingTag(false);
+                  setNewTagName("");
+                }}
+                className="px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] text-sm font-medium hover:bg-[#FAFAF7] transition"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setAddingTag(true)}
+              className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] text-[#1F2A1F] text-sm font-medium hover:bg-white transition flex items-center justify-center gap-2"
+            >
+              <Icon name="add" size={16} />
+              Add new tag
+            </button>
+          )}
+
+          {/* Tags list */}
+          {tags.length === 0 ? (
+            <div className="text-sm text-[#6F7A5A] text-center py-4">No tags yet</div>
+          ) : (
+            <div className="space-y-2">
+              {tags.map((tag) => (
+                <div
+                  key={tag}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition"
+                >
+                  {editingTag === tag ? (
+                    <>
+                      <input
+                        type="text"
+                        value={editingValue}
+                        onChange={(e) => setEditingValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            handleUpdateTag(tag, editingValue);
+                          } else if (e.key === "Escape") {
+                            setEditingTag(null);
+                            setEditingValue("");
+                          }
+                        }}
+                        autoFocus
+                        className="flex-1 px-2 py-1 rounded border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                        disabled={saving}
+                      />
+                      <button
+                        onClick={() => handleUpdateTag(tag, editingValue)}
+                        disabled={saving}
+                        className="p-1.5 rounded-lg bg-[#8F9E4F] text-white hover:bg-[#556036] transition disabled:opacity-50"
+                        aria-label="Save"
+                      >
+                        <Icon name="check" size={14} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingTag(null);
+                          setEditingValue("");
+                        }}
+                        className="p-1.5 rounded-lg border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition"
+                        aria-label="Cancel"
+                      >
+                        <Icon name="close" size={14} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1 text-sm text-[#1F2A1F]">{tag}</span>
+                      <button
+                        onClick={() => {
+                          setEditingTag(tag);
+                          setEditingValue(tag);
+                        }}
+                        className="p-1.5 rounded-lg border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition"
+                        aria-label="Edit"
+                      >
+                        <Icon name="edit" size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTag(tag)}
+                        disabled={deletingTag === tag}
+                        className="p-1.5 rounded-lg border border-[#C96A5B]/30 bg-[#C96A5B]/10 hover:bg-[#C96A5B]/20 text-[#C96A5B] transition disabled:opacity-50"
+                        aria-label="Delete"
+                      >
+                        <Icon name="delete" size={14} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

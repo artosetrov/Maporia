@@ -42,6 +42,9 @@ export default function PhotosEditorPage() {
   const [loading, setLoading] = useState(true);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [originalPhotos, setOriginalPhotos] = useState<Photo[]>([]);
+  const [videoUrl, setVideoUrl] = useState<string>("");
+  const [originalVideoUrl, setOriginalVideoUrl] = useState<string>("");
+  const [videoError, setVideoError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -85,7 +88,7 @@ export default function PhotosEditorPage() {
       // Check ownership or admin status
       const { data: placeData } = await supabase
         .from("places")
-        .select("created_by, cover_url")
+        .select("created_by, cover_url, video_url")
         .eq("id", placeId)
         .single();
 
@@ -136,6 +139,12 @@ export default function PhotosEditorPage() {
 
       setPhotos(loadedPhotos);
       setOriginalPhotos(loadedPhotos.map((p) => ({ ...p })));
+      
+      // Load video_url
+      const videoUrlValue = placeData.video_url || "";
+      setVideoUrl(videoUrlValue);
+      setOriginalVideoUrl(videoUrlValue);
+      
       setLoading(false);
     })();
   }, [placeId, user, access, accessLoading, router]);
@@ -276,15 +285,32 @@ export default function PhotosEditorPage() {
     );
   }
 
-  const hasChanges = JSON.stringify(photos.map((p) => ({ url: p.url, is_cover: p.is_cover, sort: p.sort }))) !==
+  const hasPhotoChanges = JSON.stringify(photos.map((p) => ({ url: p.url, is_cover: p.is_cover, sort: p.sort }))) !==
     JSON.stringify(originalPhotos.map((p) => ({ url: p.url, is_cover: p.is_cover, sort: p.sort })));
-  const canSave = hasChanges && photos.length > 0 && !photos.some((p) => p.uploading) && !saving;
+  const hasVideoChanges = videoUrl !== originalVideoUrl;
+  const hasChanges = hasPhotoChanges || hasVideoChanges;
+  const canSave = hasChanges && photos.length > 0 && !photos.some((p) => p.uploading) && !saving && !videoError;
+
+  function validateVideoUrl(url: string): boolean {
+    if (!url.trim()) return true; // Empty is valid (optional field)
+    const trimmed = url.trim();
+    // Must contain instagram.com/reel
+    return trimmed.includes("instagram.com/reel");
+  }
 
   async function handleSave() {
     if (!canSave || !user || !placeId) return;
 
     setSaving(true);
     setError(null);
+    setVideoError(null);
+
+    // Validate video URL
+    if (videoUrl.trim() && !validateVideoUrl(videoUrl)) {
+      setVideoError("Please enter a valid Instagram Reel URL (must contain instagram.com/reel)");
+      setSaving(false);
+      return;
+    }
 
     const photoUrls = photos.map((p) => p.url).filter(Boolean) as string[];
     if (photoUrls.length === 0) {
@@ -297,12 +323,15 @@ export default function PhotosEditorPage() {
     const coverPhoto = photos.find((p) => p.is_cover);
     const coverUrl = coverPhoto?.url || photoUrls[0]; // Fallback to first photo if no cover set
 
-    // Update cover_url in places table (legacy)
+    // Update cover_url and video_url in places table
     // Admin can update any place, owner can update their own
     const currentIsAdmin = isUserAdmin(access);
     const updateQuery = supabase
       .from("places")
-      .update({ cover_url: coverUrl })
+      .update({ 
+        cover_url: coverUrl,
+        video_url: videoUrl.trim() || null
+      })
       .eq("id", placeId);
     
     // If not admin, add ownership check
@@ -432,7 +461,7 @@ export default function PhotosEditorPage() {
       </div>
 
       {/* Body */}
-      <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 pb-24">
+      <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 pb-32">
         {error && (
           <div className="mb-4 rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 p-3 text-sm text-[#C96A5B]">
             {error}
@@ -570,10 +599,51 @@ export default function PhotosEditorPage() {
             </div>
           ))}
         </div>
+
+        {/* Instagram Reel Video Section */}
+        <div className="mt-8 pt-8 border-t border-[#ECEEE4]">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-[#1F2A1F] mb-2">
+                Instagram Reel
+              </label>
+              <input
+                type="url"
+                value={videoUrl}
+                onChange={(e) => {
+                  setVideoUrl(e.target.value);
+                  setVideoError(null);
+                }}
+                onBlur={() => {
+                  if (videoUrl.trim() && !validateVideoUrl(videoUrl)) {
+                    setVideoError("Please enter a valid Instagram Reel URL (must contain instagram.com/reel)");
+                  } else {
+                    setVideoError(null);
+                  }
+                }}
+                placeholder="Paste Instagram Reel link"
+                className={cx(
+                  "w-full rounded-xl border px-4 py-3 text-sm text-[#1F2A1F] placeholder:text-[#A8B096] outline-none transition",
+                  videoError
+                    ? "border-[#C96A5B]/50 bg-[#C96A5B]/10 focus:bg-white focus:border-[#C96A5B]"
+                    : "border-[#ECEEE4] bg-white focus:border-[#8F9E4F] focus:bg-white"
+                )}
+              />
+              {videoError && (
+                <p className="mt-2 text-xs text-[#C96A5B]">{videoError}</p>
+              )}
+              {!videoError && videoUrl.trim() && (
+                <p className="mt-2 text-xs text-[#6F7A5A]">
+                  Video will be displayed on the place details page
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Sticky Footer */}
-      <div className="sticky bottom-0 bg-white border-t border-[#ECEEE4]">
+      {/* Fixed Footer */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#ECEEE4] pb-safe-bottom">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex gap-3">
             <button

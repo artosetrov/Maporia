@@ -81,6 +81,7 @@ export interface Database {
           country: string | null
           cover_url: string | null
           photo_urls: string[] | null
+          video_url: string | null
           categories: string[] | null
           tags: string[] | null
           link: string | null
@@ -107,6 +108,7 @@ export interface Database {
           country?: string | null
           cover_url?: string | null
           photo_urls?: string[] | null
+          video_url?: string | null
           categories?: string[] | null
           tags?: string[] | null
           link?: string | null
@@ -133,6 +135,7 @@ export interface Database {
           country?: string | null
           cover_url?: string | null
           photo_urls?: string[] | null
+          video_url?: string | null
           categories?: string[] | null
           tags?: string[] | null
           link?: string | null

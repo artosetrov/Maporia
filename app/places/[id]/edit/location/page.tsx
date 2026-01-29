@@ -710,12 +710,6 @@ export default function LocationEditorPage() {
                       </div>
                     )}
                   </div>
-                  
-                  <div className="pt-2 border-t border-[#ECEEE4]">
-                    <p className="text-[#6F7A5A] text-xs">
-                      💡 Use "Import from Google" above to import these fields into your place.
-                    </p>
-                  </div>
                 </div>
               ) : null}
             </div>

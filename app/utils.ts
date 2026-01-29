@@ -83,3 +83,28 @@ export function saveToRecentlyViewed(placeId: string, maxItems: number = 20): vo
     console.error('Error saving recently viewed place:', error);
   }
 }
+
+/**
+ * Converts an Instagram Reel URL to embed format
+ * Supports formats:
+ * - https://www.instagram.com/reel/{id}/
+ * - https://www.instagram.com/reel/{id}
+ * - https://instagram.com/reel/{id}/
+ * - https://instagram.com/reel/{id}
+ * 
+ * @param url - Instagram Reel URL
+ * @returns Embed URL or null if invalid
+ */
+export function convertInstagramReelToEmbed(url: string | null | undefined): string | null {
+  if (!url || !url.trim()) return null;
+  
+  const trimmed = url.trim();
+  
+  // Extract reel ID from various URL formats
+  const reelMatch = trimmed.match(/instagram\.com\/reel\/([A-Za-z0-9_-]+)/);
+  if (!reelMatch || !reelMatch[1]) return null;
+  
+  const reelId = reelMatch[1];
+  // Add parameters to minimize Instagram UI elements (best-effort; Instagram may ignore some)
+  return `https://www.instagram.com/reel/${reelId}/embed/?hidecaption=1&autoplay=1&muted=1&embed_source=iframe`;
+}

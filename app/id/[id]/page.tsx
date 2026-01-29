@@ -20,6 +20,7 @@ import LockedPlaceOverlay from "../../components/LockedPlaceOverlay";
 import PremiumBadge from "../../components/PremiumBadge";
 import Icon from "../../components/Icon";
 import { MapSkeleton } from "../../components/Skeleton";
+import { convertInstagramReelToEmbed } from "../../utils";
 
 type Place = {
   id: string;
@@ -33,6 +34,7 @@ type Place = {
   categories: string[] | null;
   cover_url: string | null;
   photo_urls: string[] | null;
+  video_url?: string | null;
   created_by: string | null;
   lat: number | null;
   lng: number | null;
@@ -1363,6 +1365,65 @@ export default function PlacePage() {
             </>
           )}
         </section>
+
+        {/* Video Section */}
+        {place.video_url && (() => {
+          const embedUrl = convertInstagramReelToEmbed(place.video_url);
+          if (!embedUrl) return null;
+
+          // Crop Instagram embed UI (best-effort)
+          const CROP_TOP_PX = 56;
+          const CROP_BOTTOM_PX = 160;
+          
+          return (
+            <section className="mb-16">
+              <h2 className="text-2xl font-semibold text-[#1F2A1F] mb-6">Video</h2>
+              <div className="w-full max-w-full">
+                <div 
+                  className="relative w-full rounded-xl overflow-hidden bg-[#FAFAF7] border border-[#ECEEE4]"
+                  style={{ 
+                    aspectRatio: '9/16',
+                    maxWidth: '100%'
+                  }}
+                >
+                  {/* Covers to hide Instagram chrome (top/bottom UI) */}
+                  <div
+                    className="absolute top-0 left-0 right-0 z-10 pointer-events-none"
+                    style={{
+                      height: `${CROP_TOP_PX}px`,
+                      background:
+                        "linear-gradient(to bottom, rgba(250, 250, 247, 1) 70%, rgba(250, 250, 247, 0) 100%)",
+                    }}
+                  />
+                  <div
+                    className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none"
+                    style={{
+                      height: `${CROP_BOTTOM_PX}px`,
+                      background:
+                        "linear-gradient(to top, rgba(250, 250, 247, 1) 70%, rgba(250, 250, 247, 0) 100%)",
+                    }}
+                  />
+                  <iframe
+                    src={embedUrl}
+                    title={`Instagram Reel for ${place.title}`}
+                    className="absolute inset-0 w-full h-full"
+                    frameBorder="0"
+                    scrolling="no"
+                    allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+                    allowFullScreen
+                    loading="lazy"
+                    style={{
+                      marginTop: `-${CROP_TOP_PX}px`,
+                      marginBottom: `-${CROP_BOTTOM_PX}px`,
+                      height: `calc(100% + ${CROP_TOP_PX + CROP_BOTTOM_PX}px)`,
+                      pointerEvents: 'auto',
+                    }}
+                  />
+                </div>
+              </div>
+            </section>
+          );
+        })()}
 
         {/* Map Section */}
         <section ref={mapRef} id="map" className="mb-16">

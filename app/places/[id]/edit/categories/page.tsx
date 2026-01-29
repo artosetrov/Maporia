@@ -25,8 +25,33 @@ export default function CategoriesEditorPage() {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<string[]>([]);
   const [originalCategories, setOriginalCategories] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [originalTags, setOriginalTags] = useState<string[]>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [loadingTags, setLoadingTags] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [newTagName, setNewTagName] = useState("");
+  const [addingTag, setAddingTag] = useState(false);
+
+  // Load available tags
+  useEffect(() => {
+    async function loadTags() {
+      try {
+        setLoadingTags(true);
+        const response = await fetch("/api/tags");
+        if (response.ok) {
+          const data = await response.json();
+          setAvailableTags(data.tags || []);
+        }
+      } catch (err) {
+        console.error("Error loading tags:", err);
+      } finally {
+        setLoadingTags(false);
+      }
+    }
+    loadTags();
+  }, []);
 
   // Load place
   useEffect(() => {
@@ -36,7 +61,7 @@ export default function CategoriesEditorPage() {
       setLoading(true);
       const { data, error: placeError } = await supabase
         .from("places")
-        .select("categories, created_by")
+        .select("categories, tags, created_by")
         .eq("id", placeId)
         .single();
 
@@ -53,14 +78,18 @@ export default function CategoriesEditorPage() {
       }
 
       const currentCategories = Array.isArray(data.categories) ? data.categories : [];
+      const currentTags = Array.isArray(data.tags) ? data.tags : [];
       setCategories(currentCategories);
       setOriginalCategories([...currentCategories]);
+      setTags(currentTags);
+      setOriginalTags([...currentTags]);
       setLoading(false);
     })();
   }, [placeId, user, router, access, accessLoading]);
 
   const hasChanges =
-    categories.sort().join(",") !== originalCategories.sort().join(",");
+    categories.sort().join(",") !== originalCategories.sort().join(",") ||
+    tags.sort().join(",") !== originalTags.sort().join(",");
   const canSave = hasChanges && !saving;
 
   async function handleSave() {
@@ -70,14 +99,56 @@ export default function CategoriesEditorPage() {
     setError(null);
 
     const validCategories = categories.filter((cat) => CATEGORIES.includes(cat as any));
+    const validTags = tags
+      .filter((tag) => typeof tag === "string" && tag.trim().length > 0)
+      .map((tag) => tag.trim()); // Trim whitespace from tags
 
-    console.log("Saving categories:", { placeId, userId: user.id, categories: validCategories });
+    console.log("Saving categories and tags:", { 
+      placeId, 
+      userId: user.id, 
+      categories: validCategories,
+      tags: validTags,
+      originalTags,
+    });
+
+    // If user is admin, ensure all tags are synced to tags table
+    const currentIsAdmin = isUserAdmin(access);
+    if (currentIsAdmin && validTags.length > 0) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          // Sync each tag to tags table (API handles duplicates gracefully)
+          await Promise.all(
+            validTags.map(async (tagName) => {
+              try {
+                await fetch("/api/admin/tags", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${session.access_token}`,
+                  },
+                  body: JSON.stringify({ name: tagName }),
+                });
+                // Ignore errors - tag might already exist or table might not exist
+              } catch (err) {
+                console.warn(`Failed to sync tag "${tagName}" to tags table:`, err);
+              }
+            })
+          );
+        }
+      } catch (err) {
+        console.warn("Error syncing tags to tags table:", err);
+        // Continue anyway - tags will still be saved to place
+      }
+    }
 
     // Admin can update any place, owner can update their own
-    const currentIsAdmin = isUserAdmin(access);
     const updateQuery = supabase
       .from("places")
-      .update({ categories: validCategories.length > 0 ? validCategories : null })
+      .update({ 
+        categories: validCategories.length > 0 ? validCategories : null,
+        tags: validTags.length > 0 ? validTags : null,
+      })
       .eq("id", placeId);
     
     // If not admin, add ownership check
@@ -89,19 +160,29 @@ export default function CategoriesEditorPage() {
 
     console.log("Update result:", { data, error: updateError });
 
-    setSaving(false);
-
     if (updateError) {
       console.error("Update error:", updateError);
-      setError(updateError.message || "Failed to save categories");
+      setSaving(false);
+      setError(updateError.message || "Failed to save categories and tags");
       return;
     }
 
-    // If no data returned but no error, the update likely succeeded
-    if (!data || data.length === 0) {
+    // Verify the update succeeded by checking returned data
+    if (data && data.length > 0) {
+      const updatedPlace = data[0];
+      console.log("Successfully updated place:", {
+        categories: updatedPlace.categories,
+        tags: updatedPlace.tags,
+      });
+      
+      // Update original state to reflect saved values
+      setOriginalCategories(validCategories);
+      setOriginalTags(validTags);
+    } else {
       console.warn("No data returned from update, but no error occurred. Update likely succeeded.");
-      // Don't show error - just proceed with navigation
     }
+
+    setSaving(false);
 
     if (navigator.vibrate) navigator.vibrate(10);
     // Force reload by using window.location to ensure fresh data
@@ -110,6 +191,75 @@ export default function CategoriesEditorPage() {
 
   function handleCancel() {
     router.push(`/places/${placeId}/edit`);
+  }
+
+  async function handleAddNewTag() {
+    const tagName = newTagName.trim();
+    if (!tagName) {
+      setError("Tag name cannot be empty");
+      return;
+    }
+
+    // Check for duplicates (case-insensitive)
+    const tagLower = tagName.toLowerCase();
+    if (availableTags.some((t) => t.toLowerCase() === tagLower)) {
+      setError("Tag already exists");
+      return;
+    }
+
+    if (tags.some((t) => t.toLowerCase() === tagLower)) {
+      setError("Tag is already selected");
+      return;
+    }
+
+    // If user is admin, try to create tag in tags table via API
+    if (isAdmin) {
+      try {
+        // Get session token for authorization
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          setError("Not authenticated");
+          return;
+        }
+
+        const response = await fetch("/api/admin/tags", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ name: tagName }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          if (errorData.code === "DUPLICATE_TAG") {
+            setError("Tag already exists");
+            return;
+          }
+          // If tag creation fails (e.g., table doesn't exist), continue anyway
+          console.warn("Failed to create tag in tags table:", errorData);
+        } else {
+          // Tag successfully created in tags table
+          console.log("Tag created in tags table:", tagName);
+        }
+      } catch (err) {
+        console.error("Error creating tag:", err);
+        // Continue anyway - tag will be saved when place is saved
+      }
+    }
+
+    // Add to available tags and select it
+    const updatedAvailableTags = [...availableTags, tagName].sort((a, b) => a.localeCompare(b));
+    const updatedTags = [...tags, tagName];
+    
+    setAvailableTags(updatedAvailableTags);
+    setTags(updatedTags);
+    setNewTagName("");
+    setAddingTag(false);
+    setError(null);
+    
+    console.log("Tag added:", { tagName, updatedTags });
   }
 
   if (accessLoading || loading) {
@@ -143,7 +293,7 @@ export default function CategoriesEditorPage() {
             >
               <Icon name="back" size={20} />
             </button>
-            <h1 className="font-semibold font-fraunces text-[#1F2A1F]" style={{ fontSize: '24px' }}>Categories</h1>
+            <h1 className="font-semibold font-fraunces text-[#1F2A1F]" style={{ fontSize: '24px' }}>Categories & Tags</h1>
             <div className="w-9" />
           </div>
         </div>
@@ -185,6 +335,122 @@ export default function CategoriesEditorPage() {
             </div>
             {categories.length === 0 && (
               <p className="mt-3 text-xs text-[#6F7A5A]">Pick what best describes the vibe</p>
+            )}
+          </div>
+
+          {/* Tags Section */}
+          <div>
+            <h2 className="text-sm font-semibold text-[#1F2A1F] mb-3">Tags</h2>
+            <p className="text-xs text-[#6F7A5A] mb-4">
+              Add tags to help others discover this place. Tags are optional.
+            </p>
+            {loadingTags ? (
+              <div className="text-xs text-[#6F7A5A]">Loading tags...</div>
+            ) : (
+              <>
+                {/* Add new tag */}
+                {addingTag ? (
+                  <div className="flex items-center gap-2 mb-4">
+                    <input
+                      type="text"
+                      value={newTagName}
+                      onChange={(e) => {
+                        setNewTagName(e.target.value);
+                        setError(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddNewTag();
+                        } else if (e.key === "Escape") {
+                          setAddingTag(false);
+                          setNewTagName("");
+                          setError(null);
+                        }
+                      }}
+                      placeholder="New tag name"
+                      autoFocus
+                      className="flex-1 px-3 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                    />
+                    <button
+                      onClick={handleAddNewTag}
+                      disabled={!newTagName.trim()}
+                      className="px-4 py-2 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Add
+                    </button>
+                    <button
+                      onClick={() => {
+                        setAddingTag(false);
+                        setNewTagName("");
+                        setError(null);
+                      }}
+                      className="px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] text-sm font-medium hover:bg-[#FAFAF7] transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setAddingTag(true)}
+                    className="mb-4 px-4 py-2 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] text-[#1F2A1F] text-sm font-medium hover:bg-white transition flex items-center gap-2"
+                  >
+                    <Icon name="add" size={16} />
+                    Add new tag
+                  </button>
+                )}
+
+                {/* Selected tags */}
+                {tags.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs text-[#6F7A5A] mb-2">Selected tags:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {tags.map((tag) => (
+                        <Pill
+                          key={tag}
+                          active={true}
+                          onClick={() => {
+                            setTags((prev) => prev.filter((t) => t !== tag));
+                          }}
+                        >
+                          {tag}
+                        </Pill>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Available tags */}
+                {availableTags.length > 0 && (
+                  <div>
+                    <p className="text-xs text-[#6F7A5A] mb-2">Available tags:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {availableTags.map((tag) => {
+                        const isSelected = tags.includes(tag);
+                        return (
+                          <Pill
+                            key={tag}
+                            active={isSelected}
+                            onClick={() => {
+                              if (isSelected) {
+                                setTags((prev) => prev.filter((t) => t !== tag));
+                              } else {
+                                setTags((prev) => [...prev, tag]);
+                              }
+                            }}
+                          >
+                            {tag}
+                          </Pill>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {availableTags.length === 0 && tags.length === 0 && !addingTag && (
+                  <p className="text-xs text-[#6F7A5A]">No tags available yet. Create your first tag above.</p>
+                )}
+              </>
             )}
           </div>
         </div>
