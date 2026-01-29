@@ -20,7 +20,7 @@
 - **SUPABASE-SYNC-SUMMARY.md** — синхронизация
 
 ### Прочее
-- **BRAND-GUIDE-WORDMARK.md** — бренд и слово «Maporia»
+- **BRAND-GUIDE.md** — бренд, логотип, Wordmark, цвета (актуальная версия)
 - **TOPBAR-STATES-DOCUMENTATION.md** — состояния TopBar
 - **ADMIN-EDIT-PLACES-SUMMARY.md** — админ-редактирование мест
 - **ПРАВА-ПОЛЬЗОВАТЕЛЕЙ.md** — права пользователей

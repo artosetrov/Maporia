@@ -473,6 +473,9 @@ export default function BrandGuidePage() {
               <strong className="text-[#1F2A1F]">Access:</strong> This guide is available in the Profile → Elements section (admin only) 
               or directly at <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">/brand-guide</code>
             </p>
+            <p className="text-sm text-[#6F7A5A] mt-2">
+              <strong className="text-[#1F2A1F]">Canonical doc:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">docs/BRAND-GUIDE.md</code> — актуальная версия в одном файле.
+            </p>
           </div>
 
           {/* Colors Section */}
@@ -530,11 +533,11 @@ export default function BrandGuidePage() {
               <div className="space-y-2 text-sm text-[#1F2A1F]">
                 <div className="flex items-start gap-2">
                   <span className="font-semibold">• Primary logo:</span>
-                  <span>the <strong>Pin.svg</strong> icon (used in desktop TopBar)</span>
+                  <span>the <strong>Logo_maporia1.svg</strong> icon (used in desktop TopBar)</span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="font-semibold">• File location:</span>
-                  <span><code className="text-xs bg-[#FAFAF7] px-1 py-0.5 rounded">/public/Pin.svg</code></span>
+                  <span><code className="text-xs bg-[#FAFAF7] px-1 py-0.5 rounded">/public/Logo_maporia1.svg</code></span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="font-semibold">• Brand lockup:</span>
@@ -544,7 +547,7 @@ export default function BrandGuidePage() {
               <div className="mt-4 p-4 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7]">
                 <p className="text-sm text-[#1F2A1F] font-medium mb-2">Rule of thumb:</p>
                 <div className="space-y-1 text-sm text-[#6F7A5A]">
-                  <div>• <strong className="text-[#1F2A1F]">Pin.svg = desktop TopBar</strong> (primary logo)</div>
+                  <div>• <strong className="text-[#1F2A1F]">Logo_maporia1.svg = desktop TopBar</strong> (primary logo)</div>
                   <div>• <strong className="text-[#1F2A1F]">Wordmark component = brand presence</strong> (with icon + text option)</div>
                 </div>
               </div>
@@ -552,21 +555,21 @@ export default function BrandGuidePage() {
 
             {/* Primary Logo */}
             <div className="space-y-4 mb-6">
-              <h3 className="text-lg font-semibold text-[#1F2A1F]">Primary Logo (Pin.svg)</h3>
+              <h3 className="text-lg font-semibold text-[#1F2A1F]">Primary Logo (Logo_maporia1.svg)</h3>
               <p className="text-sm text-[#6F7A5A] mb-4">
-                The primary logo used in desktop TopBar. File: <code className="text-xs bg-[#FAFAF7] px-1 py-0.5 rounded">/public/Pin.svg</code>
+                The primary logo used in desktop TopBar. File: <code className="text-xs bg-[#FAFAF7] px-1 py-0.5 rounded">/public/Logo_maporia1.svg</code>
               </p>
               <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
                 <div className="flex items-center gap-4 mb-4">
                   <div className="w-16 h-16 rounded-lg bg-white flex items-center justify-center border border-[#ECEEE4]">
                     <img
-                      src="/Pin.svg"
+                      src="/Logo_maporia1.svg"
                       alt="Maporia Pin Logo"
                       className="h-10 w-auto"
                     />
                   </div>
                   <div className="flex-1">
-                    <div className="font-semibold text-[#1F2A1F] mb-1">Pin.svg Logo</div>
+                    <div className="font-semibold text-[#1F2A1F] mb-1">Logo_maporia1.svg Logo</div>
                     <div className="text-sm text-[#6F7A5A]">Background: white • Color: #81904C (fixed in SVG)</div>
                     <div className="text-xs text-[#A8B096] mt-1">Size in TopBar: h-10 (40px height)</div>
                   </div>
@@ -577,7 +580,7 @@ export default function BrandGuidePage() {
                 <div className="mt-4 p-3 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4]">
                   <div className="text-xs font-semibold text-[#1F2A1F] mb-2">Usage in code:</div>
                   <code className="text-xs text-[#6F7A5A] block">
-                    {`<img src="/Pin.svg" alt="Maporia" className="h-10 w-auto" />`}
+                    {`<img src="/Logo_maporia1.svg" alt="Maporia" className="h-10 w-auto" />`}
                   </code>
                 </div>
               </div>
@@ -587,13 +590,13 @@ export default function BrandGuidePage() {
             <div className="space-y-4 mb-6">
               <h3 className="text-lg font-semibold text-[#1F2A1F]">Wordmark Component</h3>
               <p className="text-sm text-[#6F7A5A] mb-4">
-                The Wordmark component can display text with optional icon. For icon, it uses Pin.svg when <code className="text-xs bg-[#FAFAF7] px-1 py-0.5 rounded">withIcon={true}</code>.
+                The Wordmark component can display text with optional icon. For icon, it uses Logo_maporia1.svg when <code className="text-xs bg-[#FAFAF7] px-1 py-0.5 rounded">withIcon={true}</code>.
               </p>
               <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
                 <div className="flex items-center gap-4 mb-4">
                   <div className="w-16 h-16 rounded-lg bg-white flex items-center justify-center border border-[#ECEEE4]">
                     <img
-                      src="/Pin.svg"
+                      src="/Logo_maporia1.svg"
                       alt="Maporia Pin"
                       className="h-5 w-auto"
                     />
@@ -603,7 +606,7 @@ export default function BrandGuidePage() {
                   </div>
                   <div className="flex-1">
                     <div className="font-semibold text-[#1F2A1F] mb-1">Pin + Wordmark</div>
-                    <div className="text-sm text-[#6F7A5A]">Icon: Pin.svg • Text: Manrope SemiBold • Color: #8F9E4F</div>
+                    <div className="text-sm text-[#6F7A5A]">Icon: Logo_maporia1.svg • Text: Manrope Extrabold • Color: #8F9E4F</div>
                   </div>
                 </div>
                 <div className="text-xs text-[#A8B096]">
@@ -630,7 +633,7 @@ export default function BrandGuidePage() {
                   <div>
                     <div className="text-sm font-semibold text-[#1F2A1F] mb-1">Recommended weights</div>
                     <div className="text-xs text-[#6F7A5A] space-y-1">
-                      <div>• <strong>Desktop:</strong> Medium (500) / SemiBold (600)</div>
+                      <div>• <strong>Desktop:</strong> Medium (500) / Extrabold (800)</div>
                       <div>• <strong>Mobile:</strong> Medium (500)</div>
                     </div>
                   </div>
@@ -683,9 +686,9 @@ export default function BrandGuidePage() {
                 <div className="rounded-xl border border-[#ECEEE4] bg-white p-4">
                   <h4 className="text-sm font-semibold text-[#1F2A1F] mb-3">Minimum Sizes</h4>
                   <div className="text-xs text-[#6F7A5A] space-y-1">
-                    <div>• <strong className="text-[#1F2A1F]">Pin.svg (desktop TopBar):</strong> <strong>h-10</strong> (40px height)</div>
+                    <div>• <strong className="text-[#1F2A1F]">Logo_maporia1.svg (desktop TopBar):</strong> <strong>h-10</strong> (40px height)</div>
                     <div>• <strong className="text-[#1F2A1F]">Icon-only (mobile):</strong> minimum <strong>24px</strong></div>
-                    <div>• <strong className="text-[#1F2A1F]">Full lockup (icon + wordmark):</strong> minimum <strong>120px width</strong></div>
+                    <div>• <strong className="text-[#1F2A1F]">Full lockup (icon + wordmark):</strong> icon 16/20/24px, text text-base / text-lg / text-xl</div>
                     <div className="text-[#A8B096] mt-2">(If smaller → switch to icon-only.)</div>
                   </div>
                 </div>
@@ -696,9 +699,9 @@ export default function BrandGuidePage() {
             <div className="rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] p-4">
               <h4 className="text-sm font-semibold text-[#1F2A1F] mb-3">Quick Rules for Product UI</h4>
               <div className="space-y-2 text-sm text-[#6F7A5A]">
-                <div>• <strong className="text-[#1F2A1F]">Desktop TopBar:</strong> Pin.svg (h-10, 40px height)</div>
+                <div>• <strong className="text-[#1F2A1F]">Desktop TopBar:</strong> Logo_maporia1.svg (h-10, 40px height)</div>
                 <div>• <strong className="text-[#1F2A1F]">Mobile header:</strong> icon-only (varies by page)</div>
-                <div>• <strong className="text-[#1F2A1F]">Wordmark component:</strong> Pin.svg + "Maporia" text (when withIcon={true})</div>
+                <div>• <strong className="text-[#1F2A1F]">Wordmark component:</strong> Logo_maporia1.svg + "Maporia" text (when withIcon={true})</div>
                 <div>• <strong className="text-[#1F2A1F]">App icon / favicon:</strong> icon-only</div>
               </div>
             </div>
@@ -1465,10 +1468,10 @@ export default function BrandGuidePage() {
                   <div>
                     <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Desktop Version (≥ 1024px)</h4>
                     <div className="bg-[#FAFAF7] rounded-lg p-4 mb-3 font-mono text-xs">
-                      [Pin.svg Logo] [SearchBar (Airbnb-style)] [Add Gem] [Avatar] [Hamburger Menu]
+                      [Logo_maporia1.svg Logo] [SearchBar (Airbnb-style)] [Add Gem] [Avatar] [Hamburger Menu]
                     </div>
                     <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Pin.svg Logo:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">h-10 w-auto</code> (40px height), ссылка на `/`</li>
+                      <li><strong>Logo_maporia1.svg Logo:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">h-10 w-auto</code> (40px height), ссылка на `/`</li>
                       <li><strong>SearchBar:</strong> Полнофункциональный Airbnb-style pill с City Selector, Search Input, Filters</li>
                       <li><strong>Avatar:</strong> Прямая ссылка на `/profile`, без chevron-down иконки</li>
                       <li><strong>Hamburger Menu:</strong> Отдельная кнопка с иконкой меню, открывает dropdown с Profile, Feed, Saved, Settings, Logout</li>
@@ -1502,10 +1505,10 @@ export default function BrandGuidePage() {
                   <div>
                     <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Desktop Version (≥ 1024px)</h4>
                     <div className="bg-[#FAFAF7] rounded-lg p-4 mb-3 font-mono text-xs">
-                      [Pin.svg Logo] [SearchBar (Airbnb-style)] [Add Gem] [Avatar] [Hamburger Menu]
+                      [Logo_maporia1.svg Logo] [SearchBar (Airbnb-style)] [Add Gem] [Avatar] [Hamburger Menu]
                     </div>
                     <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Pin.svg Logo:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">h-10 w-auto</code> (40px height)</li>
+                      <li><strong>Logo_maporia1.svg Logo:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">h-10 w-auto</code> (40px height)</li>
                       <li><strong>SearchBar:</strong> Встроенный компонент с live search (не модальное окно)</li>
                       <li><strong>Avatar:</strong> Прямая ссылка на `/profile`</li>
                       <li><strong>Hamburger Menu:</strong> Открывает dropdown меню</li>
@@ -1533,7 +1536,7 @@ export default function BrandGuidePage() {
                     <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Profile Page (`/profile`)</h4>
                     <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
                       <li><strong>Mobile:</strong> Custom fixed header с "Profile" слева и "Edit" справа (ссылка на `/profile/edit`), без стандартного TopBar</li>
-                      <li><strong>Desktop:</strong> Стандартный TopBar с Pin.svg, SearchBar, Auth</li>
+                      <li><strong>Desktop:</strong> Стандартный TopBar с Logo_maporia1.svg, SearchBar, Auth</li>
                       <li><strong>Mobile Header:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">fixed top-0 left-0 right-0 z-40 bg-white</code>, высота <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">h-[64px]</code></li>
                       <li><strong>Content Padding:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">pt-[64px]</code> для мобильной версии</li>
                     </ul>

@@ -37,7 +37,7 @@ type WordmarkProps = {
  * Maporia® Wordmark Component
  * 
  * Brand Guidelines:
- * - Font: Manrope, SemiBold (600)
+ * - Font: Manrope, Extrabold (800)
  * - Letter-spacing: -0.02em
  * - Case: Title Case — "Maporia"
  * - Color: Maporia Brand Green (#8F9E4F) or White (inverted)
@@ -81,7 +81,7 @@ export default function Wordmark({
 
   const iconContent = withIcon ? (
     <img
-      src="/Pin.svg"
+      src="/Logo_maporia1.svg"
       alt="Maporia Pin"
       className={`${size === "small" ? "h-4 w-4" : size === "large" ? "h-6 w-6" : "h-5 w-5"}`}
       style={{

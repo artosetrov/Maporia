@@ -333,10 +333,10 @@ export default function TopBar({
           <div className="px-8 pt-safe-top pt-3 pb-3">
             {/* Main row: Logo + SearchBar + Auth */}
             <div className="flex items-center gap-6">
-              {/* Left: Logo - Pin.svg */}
+              {/* Left: Logo - Logo_maporia1.svg */}
               <Link href="/" className="flex-shrink-0">
                 <img
-                  src="/Pin.svg"
+                  src="/Logo_maporia1.svg"
                   alt="Maporia"
                   className="h-10 w-auto"
                 />

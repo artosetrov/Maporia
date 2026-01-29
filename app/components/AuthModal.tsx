@@ -109,21 +109,7 @@ export default function AuthModal({ isOpen, onClose, redirectPath }: AuthModalPr
         {/* Logo */}
         <div className="flex justify-start mb-6">
           <div className="h-10 flex items-center justify-center">
-            <svg width="159" height="36" viewBox="0 0 159 36" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-8 w-auto">
-              <g clipPath="url(#clip0_288_14)">
-                <mask id="mask0_288_14" style={{ maskType: "luminance" }} maskUnits="userSpaceOnUse" x="0" y="0" width="159" height="36">
-                  <path d="M0 0H159V36H0V0Z" fill="white"/>
-                </mask>
-                <g mask="url(#mask0_288_14)">
-                  <path d="M8.5 8.5H150.5V27.5H8.5V8.5Z" fill="#1F2A1F"/>
-                </g>
-              </g>
-              <defs>
-                <clipPath id="clip0_288_14">
-                  <rect width="159" height="36" fill="white"/>
-                </clipPath>
-              </defs>
-            </svg>
+            <img src="/Logo_maporia1.svg" alt="Maporia" className="h-8 w-auto" />
           </div>
         </div>
 
