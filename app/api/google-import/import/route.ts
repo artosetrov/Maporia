@@ -27,7 +27,7 @@ function hasPremiumAccessFromProfile(profile: {
 }
 
 async function resolveCityId(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   args: {
     name: string;
     state?: string | null;
@@ -556,7 +556,7 @@ export async function POST(request: NextRequest) {
 
       console.log("Photo inserts prepared:", {
         count: photoInserts.length,
-        urls: photoInserts.map(p => p.url.substring(0, 50)),
+        urls: photoInserts.map((p: { url: string }) => p.url.substring(0, 50)),
       });
 
       if (photoInserts.length > 0) {

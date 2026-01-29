@@ -5,9 +5,12 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../../../lib/supabase";
+import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../../lib/access";
-import { CATEGORIES } from "../../../../../constants";
+
+type PlaceCategoriesRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "categories" | "tags">;
+import { CATEGORIES, getTagEmoji } from "../../../../../constants";
 import Pill from "../../../../../components/Pill";
 import Icon from "../../../../../components/Icon";
 
@@ -59,12 +62,13 @@ export default function CategoriesEditorPage() {
 
     (async () => {
       setLoading(true);
-      const { data, error: placeError } = await supabase
+      const { data: rawData, error: placeError } = await supabase
         .from("places")
         .select("categories, tags, created_by")
         .eq("id", placeId)
         .single();
 
+      const data = rawData as PlaceCategoriesRow | null;
       if (placeError || !data) {
         router.push(`/places/${placeId}/edit`);
         return;
@@ -145,6 +149,7 @@ export default function CategoriesEditorPage() {
     // Admin can update any place, owner can update their own
     const updateQuery = supabase
       .from("places")
+      // @ts-expect-error Supabase generated types infer update payload as never
       .update({ 
         categories: validCategories.length > 0 ? validCategories : null,
         tags: validTags.length > 0 ? validTags : null,
@@ -169,7 +174,7 @@ export default function CategoriesEditorPage() {
 
     // Verify the update succeeded by checking returned data
     if (data && data.length > 0) {
-      const updatedPlace = data[0];
+      const updatedPlace = data[0] as PlaceCategoriesRow;
       console.log("Successfully updated place:", {
         categories: updatedPlace.categories,
         tags: updatedPlace.tags,
@@ -413,7 +418,8 @@ export default function CategoriesEditorPage() {
                             setTags((prev) => prev.filter((t) => t !== tag));
                           }}
                         >
-                          {tag}
+                          <span className="leading-none">{getTagEmoji(tag)}</span>
+                          <span className="ml-1">{tag}</span>
                         </Pill>
                       ))}
                     </div>
@@ -439,7 +445,8 @@ export default function CategoriesEditorPage() {
                               }
                             }}
                           >
-                            {tag}
+                            <span className="leading-none">{getTagEmoji(tag)}</span>
+                            <span className="ml-1">{tag}</span>
                           </Pill>
                         );
                       })}

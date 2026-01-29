@@ -42,7 +42,8 @@ export interface Database {
           is_admin: boolean | null
           created_at: string
           updated_at: string | null
-          // Add other fields as needed
+          favorite_categories: string[] | null
+          favorite_tags: string[] | null
         }
         Insert: {
           id: string
@@ -55,6 +56,8 @@ export interface Database {
           is_admin?: boolean | null
           created_at?: string
           updated_at?: string | null
+          favorite_categories?: string[] | null
+          favorite_tags?: string[] | null
         }
         Update: {
           id?: string
@@ -67,6 +70,8 @@ export interface Database {
           is_admin?: boolean | null
           created_at?: string
           updated_at?: string | null
+          favorite_categories?: string[] | null
+          favorite_tags?: string[] | null
         }
       }
       places: {

@@ -5,8 +5,11 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../../../lib/supabase";
+import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../../lib/access";
+
+type PlaceDescriptionRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "description">;
 import Icon from "../../../../../components/Icon";
 
 function cx(...a: Array<string | false | undefined | null>) {
@@ -40,12 +43,13 @@ export default function DescriptionEditorPage() {
 
     (async () => {
       setLoading(true);
-      const { data, error: placeError } = await supabase
+      const { data: rawData, error: placeError } = await supabase
         .from("places")
         .select("description, created_by")
         .eq("id", placeId)
         .single();
 
+      const data = rawData as PlaceDescriptionRow | null;
       if (placeError || !data) {
         router.push(`/places/${placeId}/edit`);
         return;
@@ -123,6 +127,7 @@ export default function DescriptionEditorPage() {
     const currentIsAdmin = isUserAdmin(access);
     const updateQuery = supabase
       .from("places")
+      // @ts-expect-error Supabase generated types infer update payload as never
       .update({ description: description.trim() || null })
       .eq("id", placeId);
     

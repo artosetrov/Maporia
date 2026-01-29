@@ -24,7 +24,7 @@ import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../config/googleMaps
 import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
-import { DEFAULT_CITY, CATEGORIES, CITIES } from "../constants";
+import { DEFAULT_CITY, CATEGORIES, CITIES, getTagEmoji } from "../constants";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
 import { useAuthRedirect } from "../hooks/useAuthRedirect";
 import { useBottomNavVisibility } from "../hooks/useBottomNavVisibility";
@@ -64,6 +64,7 @@ type PlaceFilters = {
   vibe?: boolean;
   cities?: string[];
   categories?: string[];
+  tags?: string[];
 };
 
 // Result types for Supabase queries (Database['public']['Tables'][table]['Row'] + Pick)
@@ -137,6 +138,14 @@ function filterPlaces(places: Place[], filters: PlaceFilters): Place[] {
     filtered = filtered.filter(place => {
       if (!place.categories || place.categories.length === 0) return false;
       return filters.categories!.some(cat => place.categories!.includes(cat));
+    });
+  }
+
+  // Фильтрация по тегам - OR (место имеет любой из выбранных тегов)
+  if (filters.tags && filters.tags.length > 0) {
+    filtered = filtered.filter(place => {
+      if (!place.tags || place.tags.length === 0) return false;
+      return filters.tags!.some(tag => place.tags!.includes(tag));
     });
   }
 
@@ -229,6 +238,7 @@ function MapPageContent() {
           initialCity: null, // null для "Anywhere"
           initialQ: "",
           initialCategories: [] as string[],
+          initialTags: [] as string[],
           hasCityInUrl: false,
         };
       }
@@ -236,6 +246,7 @@ function MapPageContent() {
       const cityParam = searchParams.get('city');
       const qParam = searchParams.get('q');
       const categoriesParam = searchParams.get('categories');
+      const tagsParam = searchParams.get('tags');
       
       let initialCity: string | null = null; // По умолчанию null для "Anywhere"
       let hasCityInUrl = false;
@@ -266,7 +277,17 @@ function MapPageContent() {
           }).filter(Boolean)
         : [];
       
-      return { initialCity, initialQ, initialCategories, hasCityInUrl };
+      const initialTags = tagsParam && tagsParam.trim()
+        ? tagsParam.split(',').map(t => {
+            try {
+              return decodeURIComponent(t.trim());
+            } catch {
+              return t.trim();
+            }
+          }).filter(Boolean)
+        : [];
+      
+      return { initialCity, initialQ, initialCategories, initialTags, hasCityInUrl };
     } catch (e) {
       console.error('[MapPage] Error in getInitialValues:', e);
       // Fallback при ошибке парсинга
@@ -274,12 +295,13 @@ function MapPageContent() {
           initialCity: null, // null для "Anywhere"
           initialQ: "",
           initialCategories: [] as string[],
+          initialTags: [] as string[],
           hasCityInUrl: false,
         };
     }
   };
   
-  const { initialCity, initialQ, initialCategories, hasCityInUrl: initialHasCityInUrl } = getInitialValues();
+  const { initialCity, initialQ, initialCategories, initialTags, hasCityInUrl: initialHasCityInUrl } = getInitialValues();
   
   // appliedCity всегда должен быть строкой (для фильтрации), используем DEFAULT_CITY если нет города
   const [appliedCity, setAppliedCity] = useState<string | null>(initialCity || DEFAULT_CITY);
@@ -287,6 +309,7 @@ function MapPageContent() {
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
     categories: initialCategories,
     sort: null,
+    tags: initialTags,
     premium: false,
     hidden: false,
     vibe: false,
@@ -333,6 +356,7 @@ function MapPageContent() {
     try {
       const city = searchParams.get('city');
       const categoriesParam = searchParams.get('categories');
+      const tagsParam = searchParams.get('tags');
       const qParam = searchParams.get('q');
       const ref = searchParams.get('ref');
       
@@ -400,8 +424,28 @@ function MapPageContent() {
         setFiltersVersion(prev => prev + 1);
       }
       
+      if (tagsParam && tagsParam.trim()) {
+        try {
+          const tags = tagsParam.split(',').map(t => {
+            try {
+              return decodeURIComponent(t.trim());
+            } catch {
+              return t.trim();
+            }
+          }).filter(Boolean);
+          setActiveFilters(prev => ({ ...prev, tags }));
+          setFiltersVersion(prev => prev + 1);
+        } catch {
+          setActiveFilters(prev => ({ ...prev, tags: [] }));
+          setFiltersVersion(prev => prev + 1);
+        }
+      } else {
+        setActiveFilters(prev => ({ ...prev, tags: [] }));
+        setFiltersVersion(prev => prev + 1);
+      }
+      
       // Проверяем, пришли ли с Home
-      if (categoriesParam || ref === 'home') {
+      if (categoriesParam || tagsParam || ref === 'home') {
         setCameFromHome(true);
       } else {
         setCameFromHome(false);
@@ -409,7 +453,7 @@ function MapPageContent() {
     } catch (error) {
       console.error("Error parsing search params:", error);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [searchParams]);
 
   // Обновляем URL при изменении applied filters (но только если они отличаются от текущих в URL)
@@ -420,6 +464,7 @@ function MapPageContent() {
       const currentCity = searchParams.get('city');
       const currentQ = searchParams.get('q');
       const currentCategories = searchParams.get('categories');
+      const currentTags = searchParams.get('tags');
       const currentSort = searchParams.get('sort');
     
     // Сравниваем текущие значения в URL с applied filters
@@ -427,6 +472,7 @@ function MapPageContent() {
     const expectedCity = appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) ? appliedCity : null;
     const expectedQ = appliedQ.trim() || null;
     const expectedCategories = appliedCategories.length > 0 ? appliedCategories : null;
+    const expectedTags = (activeFilters.tags ?? []).length > 0 ? (activeFilters.tags ?? []) : null;
     const expectedSort = activeFilters.sort || null;
     
     const currentCityDecoded = currentCity ? (() => {
@@ -453,15 +499,26 @@ function MapPageContent() {
         }).filter(Boolean).sort()
       : null;
     const expectedCategoriesSorted = expectedCategories ? [...expectedCategories].sort() : null;
+    const currentTagsDecoded = currentTags
+      ? currentTags.split(',').map(t => {
+          try {
+            return decodeURIComponent(t.trim());
+          } catch {
+            return t.trim();
+          }
+        }).filter(Boolean).sort()
+      : null;
+    const expectedTagsSorted = expectedTags ? [...expectedTags].sort() : null;
     
     // Проверяем, нужно ли обновлять URL
     const cityChanged = expectedCity !== currentCityDecoded;
     const qChanged = expectedQ !== currentQDecoded;
     const categoriesChanged = JSON.stringify(expectedCategoriesSorted) !== JSON.stringify(currentCategoriesDecoded);
+    const tagsChanged = JSON.stringify(expectedTagsSorted) !== JSON.stringify(currentTagsDecoded);
     const sortChanged = expectedSort !== currentSort;
     
     // Если ничего не изменилось, не обновляем URL
-    if (!cityChanged && !qChanged && !categoriesChanged && !sortChanged) {
+    if (!cityChanged && !qChanged && !categoriesChanged && !tagsChanged && !sortChanged) {
       return;
     }
     
@@ -479,6 +536,10 @@ function MapPageContent() {
       params.set('categories', expectedCategories.map(c => encodeURIComponent(c)).join(','));
     }
     
+    if (expectedTags) {
+      params.set('tags', expectedTags.map(t => encodeURIComponent(t)).join(','));
+    }
+    
     if (expectedSort) {
       params.set('sort', expectedSort);
     }
@@ -491,7 +552,7 @@ function MapPageContent() {
     } catch (error) {
       console.error("Error updating URL:", error);
     }
-  }, [appliedCity, appliedQ, appliedCategories, activeFilters.sort, searchParams, hasExplicitCityInUrlState]);
+  }, [appliedCity, appliedQ, appliedCategories, activeFilters.tags, activeFilters.sort, searchParams, hasExplicitCityInUrlState]);
 
   // Cities are now fixed from constants, no need to compute from places
 
@@ -553,6 +614,14 @@ function MapPageContent() {
   const [placesLoading, setPlacesLoading] = useState(true);
   const [placesError, setPlacesError] = useState<any>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Уникальные теги из загруженных мест (для фильтра) — после объявления placesData
+  const availableTags = useMemo(() => {
+    if (!placesData || placesData.length === 0) return [];
+    const set = new Set<string>();
+    placesData.forEach((p: Place) => { (p.tags ?? []).forEach((t: string) => set.add(t)); });
+    return Array.from(set).sort();
+  }, [placesData]);
 
   // Fetch places when filters or refreshKey change
   useEffect(() => {
@@ -700,7 +769,7 @@ function MapPageContent() {
       // Обрабатываем данные перед применением фильтров
       // Фильтрация (поиск, города, категории) теперь применяется в filteredPlacesMemo для динамического обновления
       // Не применяем фильтры здесь, чтобы они работали при изменении без перезагрузки данных
-      let filteredData = data as Place[];
+      const filteredData = data as Place[];
 
       // Если выбрана сортировка по комментариям или лайкам, нужно загрузить счетчики
       // Сортировка применяется ко всем данным, а фильтрация - в filteredPlacesMemo
@@ -825,6 +894,11 @@ function MapPageContent() {
     return JSON.stringify(sorted);
   }, [appliedCities]);
 
+  const tagsKey = useMemo(() => {
+    const sorted = [...(activeFilters.tags ?? [])].sort();
+    return JSON.stringify(sorted);
+  }, [activeFilters.tags]);
+
       // Apply client-side filters (Premium/Hidden/Vibe/Categories/Cities/Search) to placesData
       // Все фильтры применяются на клиенте для мгновенной скорости
       // Используем useMemo для вычисления, но обновляем через useEffect для гарантии обновления
@@ -862,8 +936,8 @@ function MapPageContent() {
           premiumOnly: activeFilters.premiumOnly,
           hidden: activeFilters.hidden,
           vibe: activeFilters.vibe,
-          // Используем activeFilters.categories напрямую
           categories: activeFilters.categories.length > 0 ? activeFilters.categories : undefined,
+          tags: (activeFilters.tags ?? []).length > 0 ? (activeFilters.tags ?? []) : undefined,
           cities: citiesForFilter,
         });
         
@@ -903,7 +977,7 @@ function MapPageContent() {
         // Используем строковые ключи для отслеживания изменений массивов
         categoriesKey,
         citiesKey,
-        // Также добавляем appliedCities напрямую для гарантии обновления
+        tagsKey,
         appliedCities,
         appliedCity, 
         hasExplicitCityInUrlState
@@ -967,7 +1041,12 @@ function MapPageContent() {
   // Handle errors
   useEffect(() => {
     if (placesError) {
-      console.error("Error loading places:", placesError);
+      const msg = placesError?.message ?? (placesError as any)?.code ?? '';
+      const isTransient = !msg || placesError?.name === 'AbortError' || (msg && (String(msg).includes('fetch') || String(msg).includes('network') || String(msg).includes('abort')));
+      if (!isTransient) {
+        const logMsg = msg || (placesError as any)?.details || (placesError as any)?.hint || 'Unknown error';
+        console.error("Error loading places:", logMsg);
+      }
       setPlaces([]);
     }
   }, [placesError]);
@@ -1209,10 +1288,11 @@ function MapPageContent() {
     return (
       (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) ||
       appliedCategories.length > 0 ||
+      (activeFilters.tags ?? []).length > 0 ||
       appliedQ.trim().length > 0 ||
       selectedTag.length > 0
     );
-  }, [appliedCity, hasExplicitCityInUrlState, appliedCategories, appliedQ, selectedTag]);
+  }, [appliedCity, hasExplicitCityInUrlState, appliedCategories, activeFilters.tags, appliedQ, selectedTag]);
 
   // Функция для очистки всех фильтров (Reset all)
   const handleClearAllFilters = () => {
@@ -1230,10 +1310,11 @@ function MapPageContent() {
     setSelectedTag("");
     setSelectedTags([]);
     
-    // Reset categories and premium/hidden/vibe toggles
+    // Reset categories, tags and premium/hidden/vibe toggles
     setActiveFilters({
       categories: [],
       sort: null,
+      tags: [],
       premium: false,
       hidden: false,
       vibe: false,
@@ -1290,13 +1371,13 @@ function MapPageContent() {
     }
     
     // Если есть другие фильтры (категории, поиск, тег), но нет города
-    if (activeFilters.categories.length > 0 || appliedQ.trim() || selectedTag) {
+    if (activeFilters.categories.length > 0 || (activeFilters.tags ?? []).length > 0 || appliedQ.trim() || selectedTag) {
       return countText;
     }
     
     // Нет фильтров - показываем "All places"
     return "All places";
-  }, [filteredPlaces.length, appliedCity, hasExplicitCityInUrlState, activeFilters.categories, appliedQ, selectedTag]);
+  }, [filteredPlaces.length, appliedCity, hasExplicitCityInUrlState, activeFilters.categories, activeFilters.tags, appliedQ, selectedTag]);
 
   // Subtitle для заголовка (показываем только когда нет фильтров)
   const listSubtitle = useMemo(() => {
@@ -1390,6 +1471,8 @@ function MapPageContent() {
         appliedCity={appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) ? appliedCity : null}
         appliedCities={appliedCities.filter(city => city !== DEFAULT_CITY)}
         userAccess={access}
+        getAvailableTags={() => availableTags}
+        getTagCount={(tag: string) => (placesData?.filter((p: Place) => p.tags?.includes(tag)).length ?? 0)}
         onCityChange={handleCityChange}
         onCitiesChange={(cities) => {
           if (process.env.NODE_ENV === 'development') {
@@ -1477,12 +1560,16 @@ function MapPageContent() {
             // Не применяем поисковый запрос в модальном окне фильтров
             // Поиск применяется отдельно через SearchModal
             // Фильтруем только по фильтрам из модального окна
+            const draftTags = draftFilters.tags ?? [];
+            const availableTagsFromData = Array.from(new Set(dataToFilter.flatMap((p: Place) => p.tags ?? [])));
+            const allTagsSelected = draftTags.length > 0 && availableTagsFromData.length > 0 && draftTags.length >= availableTagsFromData.length;
             const filtered = filterPlaces(dataToFilter, {
               premium: draftFilters.premium || draftFilters.premiumOnly || false,
               hidden: draftFilters.hidden || false,
               vibe: draftFilters.vibe || false,
               cities: selectedCities.length > 0 && !allCitiesSelected ? selectedCities : undefined,
               categories: draftFilters.categories.length > 0 && !allCategoriesSelected ? draftFilters.categories : undefined,
+              tags: draftTags.length > 0 && !allTagsSelected ? draftTags : undefined,
             });
 
             return filtered.length;
@@ -1594,8 +1681,14 @@ function MapPageContent() {
                 </div>
               </div>
               {/* Active filter chips */}
-              {((appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) || appliedCategories.length > 0) && (
-                <div className="mt-2 flex gap-2 flex-wrap">
+              {((appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) || appliedCategories.length > 0 || (activeFilters.tags ?? []).length > 0) && (
+                <div className="mt-2 flex gap-2 flex-wrap items-center">
+                  <button
+                    onClick={handleClearAllFilters}
+                    className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6F7A5A] bg-[#ECEEE4] border border-[#ECEEE4] hover:bg-[#E2E5DA] transition whitespace-nowrap"
+                  >
+                    Clear all
+                  </button>
                   {appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && (
                     <button
                       onClick={() => handleCityChange(null)}
@@ -1631,6 +1724,36 @@ function MapPageContent() {
                       className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
                     >
                       {cat.replace(/^[^\s]+\s/, "")}
+                      <svg
+                        className="w-3.5 h-3.5 text-[#8F9E4F] flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  ))}
+                  {(activeFilters.tags ?? []).map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() => {
+                        setActiveFilters(prev => ({
+                          ...prev,
+                          tags: (prev.tags ?? []).filter(t => t !== tag)
+                        }));
+                        setFiltersVersion(prev => prev + 1);
+                      }}
+                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
+                    >
+                      <span className="leading-none">{getTagEmoji(tag)}</span>
+                      {tag}
                       <svg
                         className="w-3.5 h-3.5 text-[#8F9E4F] flex-shrink-0"
                         fill="none"
@@ -1806,8 +1929,14 @@ function MapPageContent() {
                     <div className="text-sm text-[#6F7A5A]">{listSubtitle}</div>
                   )}
                   {/* Active filter chips */}
-                  {((appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) || appliedCategories.length > 0) && (
-                    <div className="mt-2 flex gap-2 flex-wrap">
+                  {((appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) || appliedCategories.length > 0 || (activeFilters.tags ?? []).length > 0) && (
+                    <div className="mt-2 flex gap-2 flex-wrap items-center">
+                      <button
+                        onClick={handleClearAllFilters}
+                        className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#6F7A5A] bg-[#ECEEE4] border border-[#ECEEE4] hover:bg-[#E2E5DA] transition whitespace-nowrap"
+                      >
+                        Clear all
+                      </button>
                       {appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && (
                         <button
                           onClick={() => handleCityChange(null)}
@@ -1838,30 +1967,61 @@ function MapPageContent() {
                               ...prev,
                               categories: prev.categories.filter(c => c !== cat)
                             }));
+                            setFiltersVersion(prev => prev + 1);
                           }}
-                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
-                    >
-                      {cat.replace(/^[^\s]+\s/, "")}
-                      <svg
-                        className="w-3.5 h-3.5 text-[#8F9E4F] flex-shrink-0"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
-                  ))}
+                          className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
+                        >
+                          {cat.replace(/^[^\s]+\s/, "")}
+                          <svg
+                            className="w-3.5 h-3.5 text-[#8F9E4F] flex-shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      ))}
+                      {(activeFilters.tags ?? []).map((tag) => (
+                        <button
+                          key={tag}
+                          onClick={() => {
+                            setActiveFilters(prev => ({
+                              ...prev,
+                              tags: (prev.tags ?? []).filter(t => t !== tag)
+                            }));
+                            setFiltersVersion(prev => prev + 1);
+                          }}
+                          className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
+                        >
+                          <span className="leading-none">{getTagEmoji(tag)}</span>
+                          {tag}
+                          <svg
+                            className="w-3.5 h-3.5 text-[#8F9E4F] flex-shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            {/* Places grid - Mobile: 1 колонка, 100% ширина */}
+                {/* Places grid - Mobile: 1 колонка, 100% ширина */}
                 {loading ? (
                   <PlaceCardGridSkeleton count={3} columns={1} />
                 ) : filteredPlaces.length === 0 ? (
@@ -2213,7 +2373,7 @@ function MapView({
                   return current;
                 });
               })
-              .catch(err => console.error("Error creating small round icon:", err));
+              .catch(() => { /* Image load failed (CORS/broken URL) — skip icon silently */ });
           }
           
           if (needsLarge) {
@@ -2226,7 +2386,7 @@ function MapView({
                   return current;
                 });
               })
-              .catch(err => console.error("Error creating large round icon:", err));
+              .catch(() => { /* Image load failed (CORS/broken URL) — skip icon silently */ });
           }
           
           return prev;
@@ -2310,7 +2470,7 @@ function MapView({
         isUpdatingFromPropsRef.current = false;
       }, 100);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [externalMapCenter, externalMapZoom, mapInstance]);
 
   // Убрали автоматическое перемещение и увеличение карты при выборе места

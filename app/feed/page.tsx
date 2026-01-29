@@ -213,7 +213,7 @@ export default function FeedPage() {
   // DIAGNOSTIC: loadActivities runs on mount and on pathname change without checking userId/accessLoading.
   useEffect(() => {
     loadActivities();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [pathname]); // Add pathname to re-trigger on route change
 
   async function loadActivities() {

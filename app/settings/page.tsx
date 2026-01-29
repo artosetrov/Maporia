@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
+import type { Database } from "../types/supabase";
+import type { PostgrestError } from "@supabase/supabase-js";
 import { useAuthRedirect } from "../hooks/useAuthRedirect";
+
+type ProfileDisplay = Pick<Database["public"]["Tables"]["profiles"]["Row"], "display_name" | "avatar_url">;
+type ProfileResult = { data: ProfileDisplay | null; error: PostgrestError | null };
 import { ActiveFilters } from "../components/FiltersModal";
 import SearchModal from "../components/SearchModal";
 
@@ -49,11 +54,12 @@ export default function SettingsPage() {
       setUserEmail(data.user.email ?? null);
 
       // Load profile
-      const { data: profile } = await supabase
+      const profileRes = (await supabase
         .from("profiles")
         .select("display_name, avatar_url")
         .eq("id", data.user.id)
-        .maybeSingle();
+        .maybeSingle()) as ProfileResult;
+      const { data: profile } = profileRes;
       
       if (profile?.display_name) {
         setUserDisplayName(profile.display_name);

@@ -5,9 +5,12 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
+import type { Database } from "../../../../types/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
+
+type ProfileInterestsRow = Pick<Database["public"]["Tables"]["profiles"]["Row"], "favorite_categories" | "favorite_tags">;
 import Icon from "../../../../components/Icon";
-import { CATEGORIES } from "../../../../constants";
+import { CATEGORIES, getTagEmoji } from "../../../../constants";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
@@ -34,12 +37,13 @@ export default function InterestsEditorPage() {
 
     (async () => {
       setLoading(true);
-      const { data, error: profileError } = await supabase
+      const { data: rawData, error: profileError } = await supabase
         .from("profiles")
         .select("favorite_categories, favorite_tags")
         .eq("id", user.id)
         .single();
 
+      const data = rawData as ProfileInterestsRow | null;
       if (profileError || !data) {
         router.push(`/profile/edit`);
         return;
@@ -104,6 +108,7 @@ export default function InterestsEditorPage() {
 
     const { error: updateError } = await supabase
       .from("profiles")
+      // @ts-expect-error Supabase generated types infer update payload as never
       .update({
         favorite_categories: selectedCategories.length > 0 ? selectedCategories : null,
         favorite_tags: selectedTags.length > 0 ? selectedTags : null,
@@ -241,7 +246,8 @@ export default function InterestsEditorPage() {
                           : "bg-[#FAFAF7] text-[#1F2A1F] border border-[#ECEEE4] hover:border-[#8F9E4F]"
                       )}
                     >
-                      #{tag}
+                      <span className="leading-none">{getTagEmoji(tag)}</span>
+                      <span className="ml-1">{tag}</span>
                     </button>
                   );
                 })}

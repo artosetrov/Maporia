@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { DEFAULT_CITY, CATEGORIES } from "../constants";
 import { getCitiesWithPlaces } from "../lib/cities";
@@ -548,10 +549,12 @@ export default function SearchModal({
 
   if (!isOpen) return null;
 
-  return (
+  const modalEl = (
     <div 
-      className="fixed inset-0 z-[70] bg-white lg:bg-black/50 lg:flex lg:items-center lg:justify-center"
+      className="fixed inset-0 z-[9999] bg-white lg:bg-black/50 lg:flex lg:items-center lg:justify-center"
       style={{ height: dynamicHeight }}
+      aria-modal="true"
+      role="dialog"
     >
       <div
         ref={modalRef}
@@ -906,4 +909,5 @@ export default function SearchModal({
       </div>
     </div>
   );
+  return typeof document !== "undefined" ? createPortal(modalEl, document.body) : null;
 }

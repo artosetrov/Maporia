@@ -12,7 +12,12 @@ import SearchModal from "./components/SearchModal";
 import FiltersModal from "./components/FiltersModal";
 import { HOME_SECTIONS } from "./constants/homeSections";
 import { supabase, hasValidSupabaseConfig } from "./lib/supabase";
+import type { Database } from "./types/supabase";
+import type { PostgrestError } from "@supabase/supabase-js";
 import { DEFAULT_CITY } from "./constants";
+
+type ReactionPlaceId = Pick<Database["public"]["Tables"]["reactions"]["Row"], "place_id">;
+type ReactionsPlaceIdResult = { data: ReactionPlaceId[] | null; error: PostgrestError | null };
 import { useUserAccessContext } from "./contexts/UserAccessContext";
 import { HomeSectionSkeleton } from "./components/Skeleton";
 
@@ -28,8 +33,11 @@ export default function HomePage() {
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
     categories: [],
     sort: null,
+    tags: [],
   });
   const [filterOpen, setFilterOpen] = useState(false);
+  // Places with tags for filter modal (id + tags only)
+  const [placesForTags, setPlacesForTags] = useState<{ id: string; tags: string[] | null }[]>([]);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
@@ -94,6 +102,26 @@ export default function HomePage() {
     }
   }, [accessLoading, user, profile, access]);
 
+  // Загружаем места с тегами для модалки фильтров (теги на главной)
+  useEffect(() => {
+    if (!bootReady || !hasValidSupabaseConfig) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.from("places").select("id,tags");
+      if (cancelled) return;
+      if (error) return;
+      setPlacesForTags((data ?? []).map((r: { id: string; tags: string[] | null }) => ({ id: r.id, tags: r.tags ?? null })));
+    })();
+    return () => { cancelled = true; };
+  }, [bootReady]);
+
+  const availableTags = useMemo(() => {
+    if (!placesForTags.length) return [];
+    const set = new Set<string>();
+    placesForTags.forEach((p) => { (p.tags ?? []).forEach((t) => set.add(t)); });
+    return Array.from(set).sort();
+  }, [placesForTags]);
+
   // Загружаем избранное пользователя
   useEffect(() => {
     if (!userId) {
@@ -106,11 +134,12 @@ export default function HomePage() {
 
     (async () => {
       try {
-        const { data, error } = await supabase
+        const res = (await supabase
           .from("reactions")
           .select("place_id")
           .eq("user_id", capturedUserId)
-          .eq("reaction", "like");
+          .eq("reaction", "like")) as ReactionsPlaceIdResult;
+        const { data, error } = res;
 
         if (isUnmounting || userId !== capturedUserId) {
           return;
@@ -178,6 +207,7 @@ export default function HomePage() {
       } else {
         const { error } = await supabase
           .from("reactions")
+          // @ts-expect-error — Insert inferred as never when client not typed with Database; payload is valid
           .insert({
             place_id: placeId,
             user_id: userId,
@@ -265,6 +295,9 @@ export default function HomePage() {
     if (filters.categories.length > 0) {
       params.set("categories", filters.categories.map(c => encodeURIComponent(c)).join(','));
     }
+    if ((filters.tags ?? []).length > 0) {
+      params.set("tags", (filters.tags ?? []).map(t => encodeURIComponent(t)).join(','));
+    }
     if (filters.sort) {
       params.set("sort", filters.sort);
     }
@@ -297,6 +330,7 @@ export default function HomePage() {
     if (selectedCity && selectedCity !== DEFAULT_CITY) count++;
     if (searchValue) count++;
     if (activeFilters.categories.length > 0) count += activeFilters.categories.length;
+    if ((activeFilters.tags ?? []).length > 0) count += (activeFilters.tags ?? []).length;
     if (activeFilters.sort) count++;
     setActiveFiltersCount(count);
   }, [selectedCity, searchValue, activeFilters]);
@@ -336,6 +370,8 @@ export default function HomePage() {
         onApply={handleFiltersApply}
         appliedFilters={activeFilters}
         userAccess={access}
+        getAvailableTags={() => availableTags}
+        getTagCount={(tag: string) => placesForTags.filter((p) => p.tags?.includes(tag)).length}
         getFilteredCount={async (draftFilters: ActiveFilters) => {
           // Подсчитываем количество мест с учетом фильтров
           try {
@@ -349,6 +385,11 @@ export default function HomePage() {
             // Фильтрация по категориям
             if (draftFilters.categories.length > 0) {
               countQuery = countQuery.overlaps("categories", draftFilters.categories);
+            }
+
+            // Фильтрация по тегам
+            if ((draftFilters.tags ?? []).length > 0) {
+              countQuery = countQuery.overlaps("tags", draftFilters.tags ?? []);
             }
 
             // Фильтрация по поисковому запросу

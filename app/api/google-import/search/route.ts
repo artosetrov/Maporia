@@ -200,7 +200,7 @@ async function findPlaceFromText(apiKey: string, query: string): Promise<string 
     let lat: number | null = null;
     let lng: number | null = null;
     let isUrl = false;
-    let originalUrl = query;
+    const originalUrl = query;
     
     // Check if query is a URL
     try {

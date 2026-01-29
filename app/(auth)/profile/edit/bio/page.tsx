@@ -5,7 +5,10 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
+import type { Database } from "../../../../types/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
+
+type ProfileBioRow = Pick<Database["public"]["Tables"]["profiles"]["Row"], "bio">;
 import Icon from "../../../../components/Icon";
 import UnifiedGoogleImportField from "../../../../components/UnifiedGoogleImportField";
 
@@ -47,6 +50,7 @@ export default function BioEditorPage() {
         const category = data.category || data.types[0] || "";
         updates.bio = `${category}${city ? ` in ${city}` : ""}`;
       }
+      // @ts-expect-error Supabase generated types infer update payload as never
       await supabase.from("profiles").update(updates).eq("id", user.id);
     }
   }
@@ -57,12 +61,13 @@ export default function BioEditorPage() {
 
     (async () => {
       setLoading(true);
-      const { data, error: profileError } = await supabase
+      const { data: rawData, error: profileError } = await supabase
         .from("profiles")
         .select("bio")
         .eq("id", user.id)
         .single();
 
+      const data = rawData as ProfileBioRow | null;
       if (profileError || !data) {
         router.push(`/profile/edit`);
         return;
@@ -87,6 +92,7 @@ export default function BioEditorPage() {
 
     const { error: updateError } = await supabase
       .from("profiles")
+      // @ts-expect-error Supabase generated types infer update payload as never
       .update({ bio: bio.trim() || null })
       .eq("id", user.id);
 

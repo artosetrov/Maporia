@@ -6,8 +6,12 @@ import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../../../lib/supabase";
+import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../../lib/access";
+
+type PlaceRequiredRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "cover_url" | "title">;
+type PlacePhotoRow = Pick<Database["public"]["Tables"]["place_photos"]["Row"], "url">;
 import Icon from "../../../../../components/Icon";
 
 type RequiredStep = {
@@ -34,12 +38,13 @@ export default function RequiredStepsPage() {
     (async () => {
       setLoading(true);
 
-      const { data: placeData, error: placeError } = await supabase
+      const { data: rawPlace, error: placeError } = await supabase
         .from("places")
         .select("*")
         .eq("id", placeId)
         .single();
 
+      const placeData = rawPlace as PlaceRequiredRow | null;
       if (placeError || !placeData) {
         router.push(`/places/${placeId}/edit`);
         return;
@@ -55,12 +60,13 @@ export default function RequiredStepsPage() {
       setPlace(placeData);
 
       // Load photos
-      const { data: photosData } = await supabase
+      const { data: rawPhotos } = await supabase
         .from("place_photos")
         .select("url")
         .eq("place_id", placeId)
         .order("sort", { ascending: true });
 
+      const photosData = rawPhotos as PlacePhotoRow[] | null;
       if (photosData) {
         const photoUrls = photosData
           .map((p) => p.url)

@@ -80,11 +80,14 @@ export default function SavedPage() {
 
   async function loadSavedPlaces(userId: string) {
     setLoading(true);
-    const { data: reactions } = await supabase
+    type ReactionPlaceId = { place_id: string };
+    type ReactionsResult = { data: ReactionPlaceId[] | null };
+    const reactionsRes = (await supabase
       .from("reactions")
       .select("place_id")
       .eq("user_id", userId)
-      .eq("reaction", "like");
+      .eq("reaction", "like")) as ReactionsResult;
+    const reactions = reactionsRes.data;
 
     if (reactions && reactions.length > 0) {
       const placeIds = reactions.map((r) => r.place_id);

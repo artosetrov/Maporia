@@ -6,8 +6,11 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
 import { supabase } from "../../../../../lib/supabase";
+import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../../lib/access";
+
+type PlaceLocationRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "address" | "city" | "city_id" | "city_name_cached" | "google_place_id" | "lat" | "lng">;
 import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../../../../../config/googleMaps";
 import dynamicImport from "next/dynamic";
 import Icon from "../../../../../components/Icon";
@@ -77,12 +80,13 @@ export default function LocationEditorPage() {
 
     (async () => {
       setLoading(true);
-      const { data, error: placeError } = await supabase
+      const { data: rawData, error: placeError } = await supabase
         .from("places")
         .select("address, city, city_id, city_name_cached, google_place_id, lat, lng, created_by")
         .eq("id", placeId)
         .single();
 
+      const data = rawData as PlaceLocationRow | null;
       if (placeError || !data) {
         router.push(`/places/${placeId}/edit`);
         return;
@@ -136,14 +140,15 @@ export default function LocationEditorPage() {
     if (!placeId || availableCities.length === 0) return;
 
     (async () => {
-      const { data } = await supabase
+      const { data: rawCity } = await supabase
         .from("places")
         .select("city_id, city_name_cached, city")
         .eq("id", placeId)
         .single();
 
+      const data = rawCity as Pick<PlaceLocationRow, "city_id" | "city_name_cached" | "city"> | null;
       if (data?.city_id) {
-        const foundCity = availableCities.find(c => c.id === data.city_id);
+        const foundCity = availableCities.find(c => c.id === data!.city_id);
         if (foundCity) {
           setSelectedCity(foundCity);
         }
@@ -211,6 +216,7 @@ export default function LocationEditorPage() {
     const currentIsAdmin = isUserAdmin(access);
     const updateQuery = supabase
       .from("places")
+      // @ts-expect-error Supabase generated types infer update payload as never
       .update({
         address: address.trim() || null,
         city: finalCity || null, // Keep for backward compatibility

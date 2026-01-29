@@ -49,8 +49,11 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../../lib/supabase";
+import type { Database } from "../../../../types/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../lib/access";
+
+type PlacePhotoUrlRow = Pick<Database["public"]["Tables"]["place_photos"]["Row"], "url">;
 import { CATEGORIES } from "../../../../constants";
 import Icon from "../../../../components/Icon";
 import UnifiedGoogleImportField from "../../../../components/UnifiedGoogleImportField";
@@ -135,12 +138,13 @@ export default function PlaceEditorHub() {
       setError(null);
 
       // Load place with all fields including photos count
-      const { data: placeData, error: placeError } = await supabase
+      const { data: rawPlace, error: placeError } = await supabase
         .from("places")
         .select("*")
         .eq("id", placeId)
         .single();
 
+      const placeData = rawPlace as Place | null;
       if (!mounted) return;
 
       if (placeError || !placeData) {
@@ -203,12 +207,13 @@ export default function PlaceEditorHub() {
       });
 
       // Load photos
-      const { data: photosData, error: photosError } = await supabase
+      const { data: rawPhotos, error: photosError } = await supabase
         .from("place_photos")
         .select("url, sort, is_cover")
         .eq("place_id", placeId)
         .order("sort", { ascending: true });
 
+      const photosData = rawPhotos as PlacePhotoUrlRow[] | null;
       if (!mounted) return;
 
       if (!photosError && photosData && photosData.length > 0) {
@@ -266,16 +271,17 @@ export default function PlaceEditorHub() {
       if (document.visibilityState === 'visible' && !isUpdatingRef.current) {
         // Reload data when page becomes visible (but not if we're currently updating)
         (async () => {
-          const { data: placeData } = await supabase
+          const { data: rawPlace } = await supabase
             .from("places")
             .select("*")
             .eq("id", placeId)
             .single();
 
+          const placeData = rawPlace as Place | null;
           if (placeData) {
-            setPlace(placeData as Place);
+            setPlace(placeData);
             // Update state from reloaded data
-            const placeItem = placeData as Place;
+            const placeItem = placeData;
             setIsHidden(
               placeItem.is_hidden === true ||
                 placeItem.visibility === "hidden" ||
@@ -314,6 +320,7 @@ export default function PlaceEditorHub() {
     const currentIsAdmin = isUserAdmin(access);
     console.log("User info:", { userId: user.id, isAdmin: currentIsAdmin, placeCreatedBy: place?.created_by });
     
+    // @ts-expect-error Supabase generated types infer update payload as never
     const updateQuery = supabase.from("places").update(payload).eq("id", placeId);
 
     // If not admin, add ownership check
@@ -442,6 +449,7 @@ export default function PlaceEditorHub() {
     
     const updateQuery = supabase
       .from("places")
+      // @ts-expect-error Supabase generated types infer update payload as never
       .update({ comments_enabled: newCommentsState })
       .eq("id", placeId);
 
@@ -542,11 +550,12 @@ export default function PlaceEditorHub() {
 
     try {
       // Step 1: Get all photos to delete from storage
-      const { data: photosData } = await supabase
+      const { data: rawPhotos } = await supabase
         .from("place_photos")
         .select("url")
         .eq("place_id", placeId);
 
+      const photosData = rawPhotos as PlacePhotoUrlRow[] | null;
       // Step 2: Delete photos from storage (if they exist in storage bucket)
       if (photosData && photosData.length > 0) {
         const photoUrls = photosData.map((p) => p.url).filter(Boolean) as string[];
@@ -697,6 +706,7 @@ export default function PlaceEditorHub() {
       const currentIsAdmin = isUserAdmin(access);
       const updateQuery = supabase
         .from("places")
+        // @ts-expect-error Supabase generated types infer update payload as never
         .update({ is_hidden: false, visibility: "public" })
         .eq("id", placeId);
 
@@ -1157,6 +1167,7 @@ export default function PlaceEditorHub() {
                         updates.categories = mappedCategories.slice(0, 3);
                       }
                     }
+                    // @ts-expect-error Supabase generated types infer update payload as never
                     const { error: updateError } = await supabase.from("places").update(updates).eq("id", placeId);
                     
                     if (updateError) {
@@ -1165,16 +1176,17 @@ export default function PlaceEditorHub() {
                     }
                     
                     // Reload place data to reflect changes
-                    const { data: placeData, error: reloadError } = await supabase
+                    const { data: rawReload, error: reloadError } = await supabase
                       .from("places")
                       .select("*")
                       .eq("id", placeId)
                       .single();
-                    
+
+                    const placeData = rawReload as Place | null;
                     if (reloadError) {
                       console.error("Error reloading place after import:", reloadError);
                     } else if (placeData) {
-                      setPlace(placeData as Place);
+                      setPlace(placeData);
                       // Update hidden state if needed
                       const hiddenState = placeData.is_hidden === true ||
                                         placeData.visibility === "hidden" ||

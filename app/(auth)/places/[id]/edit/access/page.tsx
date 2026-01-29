@@ -5,8 +5,11 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../../../lib/supabase";
+import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
 import { isPlacePremium, type AccessLevel, canUserCreatePremiumPlace, isUserAdmin } from "../../../../../lib/access";
+
+type PlaceAccessRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "access_level">;
 import Icon from "../../../../../components/Icon";
 import UpgradeCTA from "../../../../../components/UpgradeCTA";
 
@@ -35,12 +38,13 @@ export default function AccessEditorPage() {
 
     (async () => {
       setLoading(true);
-      const { data, error: placeError } = await supabase
+      const { data: rawData, error: placeError } = await supabase
         .from("places")
         .select("*")
         .eq("id", placeId)
         .single();
 
+      const data = rawData as PlaceAccessRow | null;
       if (placeError || !data) {
         router.push(`/places/${placeId}/edit`);
         return;
@@ -93,6 +97,7 @@ export default function AccessEditorPage() {
       // Admin can update any place, owner can update their own
       const updateQuery = supabase
         .from("places")
+        // @ts-expect-error Supabase generated types infer update payload as never
         .update(payload)
         .eq("id", placeId);
       

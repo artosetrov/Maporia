@@ -5,7 +5,10 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
+import type { Database } from "../../../../types/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
+
+type ProfileUsernameRow = Pick<Database["public"]["Tables"]["profiles"]["Row"], "username">;
 import Icon from "../../../../components/Icon";
 
 function cx(...a: Array<string | false | undefined | null>) {
@@ -28,12 +31,13 @@ export default function UsernameEditorPage() {
 
     (async () => {
       setLoading(true);
-      const { data, error: profileError } = await supabase
+      const { data: rawData, error: profileError } = await supabase
         .from("profiles")
         .select("username")
         .eq("id", user.id)
         .single();
 
+      const data = rawData as ProfileUsernameRow | null;
       if (profileError || !data) {
         router.push(`/profile/edit`);
         return;
@@ -89,6 +93,7 @@ export default function UsernameEditorPage() {
 
     const { error: updateError } = await supabase
       .from("profiles")
+      // @ts-expect-error Supabase generated types infer update payload as never
       .update({ username: username.trim() || null })
       .eq("id", user.id);
 

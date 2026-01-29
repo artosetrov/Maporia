@@ -5,11 +5,14 @@ import Link from "next/link";
 import PlaceCard from "./PlaceCard";
 import FavoriteIcon from "./FavoriteIcon";
 import { supabase } from "../lib/supabase";
+import type { Database } from "../types/supabase";
 import { HomeSectionFilter } from "../constants/homeSections";
 import { type UserAccess, isPlacePremium, canUserViewPlace } from "../lib/access";
 import Icon from "./Icon";
 import { HomeSectionSkeleton } from "./Skeleton";
 import { getRecentlyViewedPlaceIds } from "../utils";
+
+type ProfileInterests = Pick<Database["public"]["Tables"]["profiles"]["Row"], "favorite_categories" | "favorite_tags">;
 
 type Place = {
   id: string;
@@ -86,12 +89,13 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
         // Recommended section - based on user interests
         if (section.recommended && userId) {
           // Load user profile with interests
-          const { data: profileData } = await supabase
+          const { data: profileRaw } = await supabase
             .from("profiles")
             .select("favorite_categories, favorite_tags")
             .eq("id", userId)
             .maybeSingle();
 
+          const profileData = profileRaw as ProfileInterests | null;
           if (!profileData) {
             if (!cancelled) {
               setPlaces([]);
@@ -113,7 +117,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
           }
 
           // Fetch all places (we'll filter client-side for better control)
-          let query = supabase
+          const query = supabase
             .from("places")
             .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility")
             .limit(100); // Get more to filter and sort

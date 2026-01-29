@@ -2,7 +2,10 @@
  * Cities utility functions
  */
 
+import type { Database } from "../types/supabase";
 import { supabase } from "./supabase";
+
+type CityNameRow = Pick<Database["public"]["Tables"]["cities"]["Row"], "name">;
 
 export type City = {
   id: string;
@@ -110,7 +113,8 @@ export async function getCityName(cityId: string | null): Promise<string | null>
       return null;
     }
 
-    return data.name;
+    const row = data as CityNameRow | null;
+    return row?.name ?? null;
   } catch (error) {
     console.error("Exception getting city name:", error);
     return null;

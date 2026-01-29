@@ -8,13 +8,17 @@ import BottomNav from "../../components/BottomNav";
 import FiltersModal, { ActiveFilters } from "../../components/FiltersModal";
 import SearchModal from "../../components/SearchModal";
 import { supabase } from "../../lib/supabase";
+import type { Database } from "../../types/supabase";
 import Icon from "../../components/Icon";
+
+type ProfileRow = Pick<Database["public"]["Tables"]["profiles"]["Row"], "id" | "username" | "display_name" | "avatar_url" | "role" | "is_admin" | "subscription_status" | "created_at">;
+type PlacePhotoUrlRow = Pick<Database["public"]["Tables"]["place_photos"]["Row"], "url">;
 import PlaceCard from "../../components/PlaceCard";
 import FavoriteIcon from "../../components/FavoriteIcon";
 import { useUserAccessContext } from "../../contexts/UserAccessContext";
 import { useAuthRedirect } from "../../hooks/useAuthRedirect";
 import { isUserAdmin, isPlacePremium, canUserViewPlace, canUserAddPlace, type UserAccess } from "../../lib/access";
-import { DEFAULT_CITY } from "../../constants";
+import { DEFAULT_CITY, getTagEmoji } from "../../constants";
 import PremiumUpsellModal from "../../components/PremiumUpsellModal";
 import PremiumBadge from "../../components/PremiumBadge";
 import { getRecentlyViewedPlaceIds } from "../../utils";
@@ -377,11 +381,15 @@ function ProfileInner() {
         .maybeSingle();
       
       if (profError) {
-        console.error("Error loading profile:", profError);
+        const msg = profError.message ?? "";
+        const code = profError.code ?? "";
+        if (msg || code) {
+          console.error("Error loading profile:", { message: msg, code });
+        }
       }
 
       if (mounted) {
-        setProfile((prof as Profile) ?? null);
+        setProfile((prof as unknown as Profile | null) ?? null);
         setDisplayNameDraft((prof as any)?.display_name ?? (user.email ?? ""));
         setBioDraft((prof as any)?.bio ?? "");
         setAvatarDraft((prof as any)?.avatar_url ?? null);
@@ -668,6 +676,7 @@ function ProfileInner() {
       setAvatarDraft(result.url);
       const { error } = await supabase
         .from("profiles")
+        // @ts-expect-error Supabase generated types infer upsert payload as never
         .upsert({ id: userId, avatar_url: result.url }, { onConflict: "id" });
 
       if (!error) {
@@ -693,6 +702,7 @@ function ProfileInner() {
 
     const { error } = await supabase
       .from("profiles")
+      // @ts-expect-error Supabase generated types infer upsert payload as never
       .upsert({ id: userId, avatar_url: null }, { onConflict: "id" });
 
     if (!error) {
@@ -707,6 +717,7 @@ function ProfileInner() {
 
     const { error } = await supabase
       .from("profiles")
+      // @ts-expect-error Supabase generated types infer upsert payload as never
       .upsert(
         {
           id: userId,
@@ -1051,7 +1062,7 @@ function ProfileInner() {
                 />
               )}
               {section === "history" && (
-                <HistorySection places={recentlyViewed} loading={loading} />
+                <HistorySection places={recentlyViewed} loading={loading} userId={userId} />
               )}
               {section === "activity" && (
                 <ActivitySection activity={activity} loading={loading} profile={profile} displayName={displayName} />
@@ -1103,7 +1114,7 @@ function ProfileInner() {
                 />
               )}
               {section === "history" && (
-                <HistorySection places={recentlyViewed} loading={loading} />
+                <HistorySection places={recentlyViewed} loading={loading} userId={userId} />
               )}
               {section === "activity" && (
                 <ActivitySection activity={activity} loading={loading} profile={profile} displayName={displayName} />
@@ -1953,11 +1964,12 @@ function AddedPlacesSection({
 
     try {
       // Step 1: Get all photos to delete from storage
-      const { data: photosData } = await supabase
+      const { data: rawPhotos } = await supabase
         .from("place_photos")
         .select("url")
         .eq("place_id", placeId);
 
+      const photosData = rawPhotos as PlacePhotoUrlRow[] | null;
       // Step 2: Delete photos from storage (if they exist in storage bucket)
       if (photosData && photosData.length > 0) {
         const photoUrls = photosData.map((p) => p.url).filter(Boolean) as string[];
@@ -2346,10 +2358,12 @@ function ActivitySection({
 
 function HistorySection({ 
   places, 
-  loading
+  loading,
+  userId
 }: { 
   places: Place[]; 
   loading: boolean;
+  userId?: string | null;
 }) {
   const { access } = useUserAccessContext();
 
@@ -2365,7 +2379,7 @@ function HistorySection({
       .filter((p) => {
         const pIsPremium = isPlacePremium(p);
         const pCanView = canUserViewPlace(defaultUserAccess, p);
-        const pIsOwner = false; // History places are not owned by user
+        const pIsOwner = userId != null && p.created_by === userId;
         return pIsPremium && !pCanView && !pIsOwner;
       })
       .sort((a, b) => {
@@ -2382,7 +2396,7 @@ function HistorySection({
       map.set(p.id, idx + 1);
     });
     return map;
-  }, [places, defaultUserAccess]);
+  }, [places, defaultUserAccess, userId]);
 
   if (loading) {
     return (
@@ -2421,7 +2435,7 @@ function HistorySection({
               key={place.id}
               place={place}
               userAccess={access}
-              userId={null}
+              userId={userId ?? undefined}
               hauntedGemIndex={hauntedGemIndex}
             />
           );
@@ -2530,17 +2544,20 @@ function ElementsSection() {
           }
         }
       } catch (error: any) {
-        // Silently ignore AbortError and connection errors
-        if (error?.name === 'AbortError' || error?.message?.includes('abort') || error?.code === 'ECONNABORTED') {
+        // Silently ignore AbortError, network/connection errors (Failed to fetch, offline, CORS)
+        const msg = String(error?.message ?? '');
+        const isNetwork = error?.name === 'AbortError' || msg.includes('abort') || error?.code === 'ECONNABORTED' ||
+          msg.includes('Failed to fetch') || msg.includes('NetworkError') || (error?.name === 'TypeError' && msg.toLowerCase().includes('fetch'));
+        if (isNetwork) {
           setIsLoading(false);
           return;
         }
         // Log with a guaranteed non-empty message so we never log "{}"
-        const msg = error?.message || error?.name || error?.code || (typeof error === 'object' ? 'Unknown error' : String(error));
+        const logMsg = msg || error?.name || error?.code || (typeof error === 'object' ? 'Unknown error' : String(error));
         if (process.env.NODE_ENV === 'production') {
-          console.warn("Premium modal settings not available:", msg);
+          console.warn("Premium modal settings not available:", logMsg);
         } else {
-          console.error("Error loading premium modal settings:", msg);
+          console.error("Error loading premium modal settings:", logMsg);
         }
       } finally {
         setIsLoading(false);
@@ -3252,6 +3269,7 @@ function TagsSection() {
                     </>
                   ) : (
                     <>
+                      <span className="text-base leading-none">{getTagEmoji(tag)}</span>
                       <span className="flex-1 text-sm text-[#1F2A1F]">{tag}</span>
                       <button
                         onClick={() => {
@@ -3315,7 +3333,8 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
 
       // Try to get emails from auth.users via RPC or use profiles data
       // Note: Email might not be available on client-side without admin API
-      const usersWithData: User[] = (profiles || []).map(profile => ({
+      const profilesList = (profiles || []) as ProfileRow[];
+      const usersWithData: User[] = profilesList.map(profile => ({
         id: profile.id,
         email: null, // Email requires server-side admin API access
         username: profile.username,
@@ -3374,6 +3393,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
 
       const { data, error } = await supabase
         .from("profiles")
+        // @ts-expect-error Supabase generated types infer update payload as never
         .update(updates)
         .eq("id", userId)
         .select();

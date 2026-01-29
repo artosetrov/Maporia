@@ -5,7 +5,10 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
+import type { Database } from "../../../../types/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
+
+type ProfileDisplayNameRow = Pick<Database["public"]["Tables"]["profiles"]["Row"], "display_name">;
 import Icon from "../../../../components/Icon";
 import UnifiedGoogleImportField from "../../../../components/UnifiedGoogleImportField";
 
@@ -39,6 +42,7 @@ export default function NameEditorPage() {
         google_reviews_count: data.reviews_count || data.user_ratings_total || null,
         google_opening_hours: data.opening_hours || null,
       };
+      // @ts-expect-error Supabase generated types infer update payload as never
       await supabase.from("profiles").update(updates).eq("id", user.id);
     }
   }
@@ -49,12 +53,13 @@ export default function NameEditorPage() {
 
     (async () => {
       setLoading(true);
-      const { data, error: profileError } = await supabase
+      const { data: rawData, error: profileError } = await supabase
         .from("profiles")
         .select("display_name")
         .eq("id", user.id)
         .single();
 
+      const data = rawData as ProfileDisplayNameRow | null;
       if (profileError || !data) {
         router.push(`/profile/edit`);
         return;
@@ -79,6 +84,7 @@ export default function NameEditorPage() {
 
     const { error: updateError } = await supabase
       .from("profiles")
+      // @ts-expect-error Supabase generated types infer update payload as never
       .update({ display_name: displayName.trim() || null })
       .eq("id", user.id);
 

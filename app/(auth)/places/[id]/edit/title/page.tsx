@@ -5,8 +5,11 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../../../lib/supabase";
+import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../../lib/access";
+
+type PlaceTitleRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "title">;
 import Icon from "../../../../../components/Icon";
 import UnifiedGoogleImportField from "../../../../../components/UnifiedGoogleImportField";
 import { resolveCity } from "../../../../../lib/cityResolver";
@@ -82,6 +85,7 @@ export default function TitleEditorPage() {
           updates.categories = mappedCategories.slice(0, 3); // Limit to 3 categories
         }
       }
+      // @ts-expect-error Supabase generated types infer update payload as never
       await supabase.from("places").update(updates).eq("id", placeId);
     }
   }
@@ -92,12 +96,13 @@ export default function TitleEditorPage() {
 
     (async () => {
       setLoading(true);
-      const { data, error: placeError } = await supabase
+      const { data: rawData, error: placeError } = await supabase
         .from("places")
         .select("title, created_by")
         .eq("id", placeId)
         .single();
 
+      const data = rawData as PlaceTitleRow | null;
       if (placeError || !data) {
         router.push(`/places/${placeId}/edit`);
         return;
@@ -133,6 +138,7 @@ export default function TitleEditorPage() {
     const currentIsAdmin = isUserAdmin(access);
     const updateQuery = supabase
       .from("places")
+      // @ts-expect-error Supabase generated types infer update payload as never
       .update({ title: title.trim() })
       .eq("id", placeId);
     

@@ -185,7 +185,7 @@ export default function GoogleImportField({ userId, targetPlaceId }: GoogleImpor
           url: photoUrl, // Use full path for URL generation
           reference: photoReference, // Store just the reference part
         };
-      }).filter((p): p is { id: string; url: string; reference: string } => p !== null);
+      }).filter((p: { id: string; url: string; reference: string } | null): p is { id: string; url: string; reference: string } => p !== null);
 
       const searchResult: SearchResult = {
         title: data.name || data.business_name || null,

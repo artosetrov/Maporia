@@ -129,13 +129,23 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
         }
         
         if (error) {
-          // Silently ignore AbortError
-          if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+          const errMsg = String((error as { message?: string }).message ?? "").trim();
+          const code = String((error as { code?: string }).code ?? "").trim();
+          // Silently ignore AbortError and network/connection errors (Failed to fetch, offline, CORS)
+          if (
+            errMsg.includes("abort") ||
+            error.name === "AbortError" ||
+            (error as { code?: string }).code === "ECONNABORTED" ||
+            errMsg.includes("Failed to fetch") ||
+            errMsg.includes("NetworkError") ||
+            (error.name === "TypeError" && errMsg.toLowerCase().includes("fetch"))
+          ) {
             return;
           }
-          
           if (!isUnmounting && loadedUserIdRef.current === capturedUserId) {
-            console.error("Error loading creator profile:", error);
+            if (errMsg || code) {
+              console.error("Error loading creator profile:", [errMsg, code].filter(Boolean).join(" ") || "Unknown error");
+            }
             loadedUserIdRef.current = null;
           }
           return;
@@ -148,14 +158,20 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
             avatar_url: data.avatar_url,
           });
         }
-      } catch (error) {
-        // Silently ignore AbortError
-        if (error instanceof Error && (error.name === 'AbortError' || error.message?.includes('abort'))) {
-          return;
-        }
-        
+      } catch (error: unknown) {
+        // Silently ignore AbortError and network/connection errors (Failed to fetch, offline, CORS)
+        const msg = error instanceof Error ? error.message : String(error);
+        const isNetwork =
+          (error instanceof Error && (error.name === "AbortError" || error.message?.includes("abort"))) ||
+          (error as { code?: string })?.code === "ECONNABORTED" ||
+          msg.includes("Failed to fetch") ||
+          msg.includes("NetworkError") ||
+          (error instanceof Error && error.name === "TypeError" && msg.toLowerCase().includes("fetch"));
+        if (isNetwork) return;
         if (!isUnmounting && loadedUserIdRef.current === capturedUserId) {
-          console.error("Exception loading creator profile:", error);
+          if (msg && msg !== "[object Object]") {
+            console.error("Exception loading creator profile:", msg);
+          }
           loadedUserIdRef.current = null;
         }
       }
@@ -511,8 +527,8 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
               style={{ objectFit: 'cover', width: '100%', height: '100%' }}
             />
             
-            {/* Navigation arrows - показываем только если есть несколько фото */}
-            {hasMultiplePhotos && (
+            {/* Navigation arrows - показываем только если есть несколько фото и карточка не заблокирована */}
+            {hasMultiplePhotos && !isLocked && (
               <>
                 {/* Left arrow */}
                 <button
@@ -542,8 +558,8 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
               </>
             )}
 
-            {/* Pagination dots - показываем только если есть несколько фото */}
-            {hasMultiplePhotos && (
+            {/* Pagination dots - показываем только если есть несколько фото и карточка не заблокирована */}
+            {hasMultiplePhotos && !isLocked && (
               <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
                 {photos.map((_, index) => (
                   <button

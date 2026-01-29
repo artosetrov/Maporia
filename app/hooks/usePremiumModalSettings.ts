@@ -62,11 +62,15 @@ export function usePremiumModalSettings() {
         .eq("id", "premium_modal")
         .single();
 
-      if (!error && data?.settings) {
-        setSettings({ ...defaultSettings, ...data.settings });
+      // Supabase return type can narrow to 'never'; use explicit row type for the success path
+      type AppSettingsRow = { settings: Partial<PremiumModalSettings> | null };
+      const row = data as AppSettingsRow | null;
+      if (!error && row && typeof row === "object" && row.settings) {
+        setSettings({ ...defaultSettings, ...row.settings });
       } else if (error) {
-        // Silently ignore AbortError and connection errors
-        if (error?.name === 'AbortError' || error?.message?.includes('abort') || (error as any)?.code === 'ECONNABORTED') {
+        const errMsg = String(error?.message ?? '');
+        // Silently ignore AbortError, connection errors, and network failures
+        if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || (error?.name === 'TypeError' && errMsg.toLowerCase().includes('fetch'))) {
           return;
         }
         // PGRST116 = no rows (table empty or row missing) — use defaults silently
@@ -74,7 +78,7 @@ export function usePremiumModalSettings() {
           return;
         }
         // Log with a guaranteed non-empty message so we never log "{}"
-        const msg = error?.message || (error as any)?.code || 'Unknown error';
+        const msg = errMsg || (error as any)?.code || 'Unknown error';
         if (process.env.NODE_ENV === 'production') {
           console.warn("Premium modal settings not available, using defaults:", msg);
         } else {
@@ -82,16 +86,17 @@ export function usePremiumModalSettings() {
         }
       }
     } catch (error: any) {
-      // Silently ignore AbortError and connection errors
-      if (error?.name === 'AbortError' || error?.message?.includes('abort') || error?.code === 'ECONNABORTED') {
-        return;
-      }
+      // Silently ignore AbortError, network/connection errors (Failed to fetch, offline, CORS)
+      const msg = String(error?.message ?? '');
+      const isNetwork = error?.name === 'AbortError' || msg.includes('abort') || error?.code === 'ECONNABORTED' ||
+        msg.includes('Failed to fetch') || msg.includes('NetworkError') || (error?.name === 'TypeError' && msg.toLowerCase().includes('fetch'));
+      if (isNetwork) return;
       // Log with a guaranteed non-empty message so we never log "{}"
-      const msg = error?.message || error?.name || error?.code || (typeof error === 'object' ? 'Unknown error' : String(error));
+      const logMsg = msg || error?.name || error?.code || (typeof error === 'object' ? 'Unknown error' : String(error));
       if (process.env.NODE_ENV === 'production') {
-        console.warn("Premium modal settings not available, using defaults:", msg);
+        console.warn("Premium modal settings not available, using defaults:", logMsg);
       } else {
-        console.error("Error loading premium modal settings:", msg);
+        console.error("Error loading premium modal settings:", logMsg);
       }
     } finally {
       setLoading(false);

@@ -142,41 +142,23 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
           if (profileError.message?.includes('abort') || profileError.name === 'AbortError' || (profileError as any).code === 'ECONNABORTED') {
             return;
           }
-          
-          // Check if error object is empty or has no meaningful content
-          // First check if error object is empty by stringifying
-          let isEmpty = false;
-          try {
-            const errorStr = JSON.stringify(profileError);
-            isEmpty = errorStr === '{}';
-          } catch {
-            // If stringify fails, check fields
-            const msg = profileError.message ? String(profileError.message).trim() : '';
-            const code = profileError.code ? String(profileError.code).trim() : '';
-            const details = profileError.details ? String(profileError.details).trim() : '';
-            const hint = profileError.hint ? String(profileError.hint).trim() : '';
-            isEmpty = !(msg.length > 0 || code.length > 0 || details.length > 0 || hint.length > 0);
-          }
-          
-          // Only log if error has meaningful content
-          if (!isEmpty) {
-            // Enhanced error logging for production
+          // Build a plain object so we never log "{}" (Supabase errors can stringify as empty)
+          const errMsg = profileError.message ? String(profileError.message).trim() : '';
+          const errCode = profileError.code ? String(profileError.code).trim() : '';
+          const errDetails = profileError.details ? String(profileError.details).trim() : '';
+          const errHint = profileError.hint ? String(profileError.hint).trim() : '';
+          const errorObj: Record<string, string> = {};
+          if (errMsg) errorObj.message = errMsg;
+          if (errCode) errorObj.code = errCode;
+          if (errDetails) errorObj.details = errDetails;
+          if (errHint) errorObj.hint = errHint;
+          if (Object.keys(errorObj).length > 0) {
             if (process.env.NODE_ENV === 'production') {
-              const errorObj: Record<string, any> = {};
-              if (profileError.message) errorObj.message = profileError.message;
-              if (profileError.code) errorObj.code = profileError.code;
-              if (profileError.details) errorObj.details = profileError.details;
-              if (profileError.hint) errorObj.hint = profileError.hint;
               console.error('[useUserAccess] Profile error:', errorObj);
             } else {
-              // Only log if error has meaningful content (not empty object)
-              const hasContent = profileError.message || profileError.code || profileError.details || profileError.hint;
-              if (hasContent) {
-                console.error("Error loading profile:", profileError);
-              }
+              console.error("Error loading profile:", errorObj);
             }
           }
-          // Silently ignore empty error objects
         }
 
         const currentProfile = profileData ?? null;

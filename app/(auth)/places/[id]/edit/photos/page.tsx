@@ -5,8 +5,12 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../../../lib/supabase";
+import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../../lib/access";
+
+type PlacePhotosPlaceRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "cover_url" | "video_url">;
+type PlacePhotoSelectRow = Pick<Database["public"]["Tables"]["place_photos"]["Row"], "id" | "url" | "sort" | "is_cover">;
 import Icon from "../../../../../components/Icon";
 
 type Photo = {
@@ -86,12 +90,13 @@ export default function PhotosEditorPage() {
       setLoading(true);
 
       // Check ownership or admin status
-      const { data: placeData } = await supabase
+      const { data: rawPlace } = await supabase
         .from("places")
         .select("created_by, cover_url, video_url")
         .eq("id", placeId)
         .single();
 
+      const placeData = rawPlace as PlacePhotosPlaceRow | null;
       if (!placeData) {
         router.push(`/id/${placeId}`);
         return;
@@ -106,12 +111,13 @@ export default function PhotosEditorPage() {
       }
 
       // Load photos from place_photos table
-      const { data: photosData } = await supabase
+      const { data: rawPhotos } = await supabase
         .from("place_photos")
         .select("id, url, sort, is_cover")
         .eq("place_id", placeId)
         .order("sort", { ascending: true });
 
+      const photosData = rawPhotos as PlacePhotoSelectRow[] | null;
       let loadedPhotos: Photo[] = [];
 
       if (photosData && photosData.length > 0) {
@@ -328,6 +334,7 @@ export default function PhotosEditorPage() {
     const currentIsAdmin = isUserAdmin(access);
     const updateQuery = supabase
       .from("places")
+      // @ts-expect-error Supabase generated types infer update payload as never
       .update({ 
         cover_url: coverUrl,
         video_url: videoUrl.trim() || null
@@ -395,6 +402,7 @@ export default function PhotosEditorPage() {
 
     const { data: insertData, error: photosError } = await supabase
       .from("place_photos")
+      // @ts-expect-error Supabase generated types infer insert payload as never
       .insert(rows)
       .select();
 

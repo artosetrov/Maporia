@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
 
     // If place_id provided — enforce ownership/admin & fetch google_place_id from DB
     let effectiveGooglePlaceId: string | null = hasGooglePlaceId ? google_place_id! : null;
-    let effectivePlaceId: string | null = hasPlaceId ? place_id! : null;
+    const effectivePlaceId: string | null = hasPlaceId ? place_id! : null;
 
     if (hasPlaceId) {
       const { data: placeRow, error: placeError } = await supabase

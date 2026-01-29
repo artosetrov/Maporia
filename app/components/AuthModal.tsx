@@ -1,8 +1,9 @@
 "use client";
 
-/* eslint-disable react-hooks/set-state-in-effect */
+ 
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { supabase, getAuthRedirectUrl } from "../lib/supabase";
 import Icon from "./Icon";
@@ -93,8 +94,8 @@ export default function AuthModal({ isOpen, onClose, redirectPath }: AuthModalPr
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+  const modalEl = (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" aria-modal="true" role="dialog">
       <div className="w-full max-w-md rounded-3xl bg-white border border-[#ECEEE4] p-8 relative"
            style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
         {/* Close Button */}
@@ -227,4 +228,5 @@ export default function AuthModal({ isOpen, onClose, redirectPath }: AuthModalPr
       </div>
     </div>
   );
+  return typeof document !== "undefined" ? createPortal(modalEl, document.body) : null;
 }

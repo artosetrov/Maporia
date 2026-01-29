@@ -299,7 +299,7 @@ export default function ExplorePage() {
         console.error("[ExplorePage] Error in initial load:", err);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [pathname]); // Add pathname to re-trigger on route change
 
   // Fetch favorites when userId changes
@@ -1120,6 +1120,8 @@ export default function ExplorePage() {
                                 >
                                   <PlaceCard
                                     place={p}
+                                    userAccess={access}
+                                    userId={userId}
                                     isFavorite={isFavorite}
                                     hauntedGemIndex={lockedPlacesMap.get(p.id)}
                                     favoriteButton={
@@ -1602,7 +1604,7 @@ function MapView({
                   return current;
                 });
               })
-              .catch(err => console.error("Error creating small round icon:", err));
+              .catch(() => { /* Image load failed (CORS/broken URL) — skip icon silently */ });
           }
           
           if (needsLarge) {
@@ -1615,7 +1617,7 @@ function MapView({
                   return current;
                 });
               })
-              .catch(err => console.error("Error creating large round icon:", err));
+              .catch(() => { /* Image load failed (CORS/broken URL) — skip icon silently */ });
           }
           
           return prev;
@@ -1699,7 +1701,7 @@ function MapView({
         isUpdatingFromPropsRef.current = false;
       }, 100);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [externalMapCenter, externalMapZoom, mapInstance]);
 
   // Убрали автоматическое перемещение и увеличение карты при выборе места

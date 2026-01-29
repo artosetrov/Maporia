@@ -473,7 +473,11 @@ export default function PlacePage() {
           .maybeSingle() as { data: ProfileData | null; error: any };
 
         if (profileError) {
-          console.error("Error loading creator profile:", profileError);
+          const msg = String(profileError.message ?? "").trim();
+          const code = String(profileError.code ?? "").trim();
+          if (msg || code) {
+            console.error("Error loading creator profile:", [msg, code].filter(Boolean).join(" ") || "Unknown error");
+          }
         }
 
         setCreatorProfile({

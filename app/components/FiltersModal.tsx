@@ -1,15 +1,17 @@
 "use client";
 
-/* eslint-disable react-hooks/set-state-in-effect */
+ 
 
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
-import { CATEGORIES } from "../constants";
+import { createPortal } from "react-dom";
+import { CATEGORIES, getTagEmoji } from "../constants";
 import Icon from "./Icon";
 import { type UserAccess } from "../lib/access";
 
 export type ActiveFilters = {
   categories: string[];
   sort: string | null;
+  tags?: string[];
   premium?: boolean;
   hidden?: boolean;
   vibe?: boolean;
@@ -42,6 +44,11 @@ type FiltersModalProps = {
   // Optional: get count for each category
   getCategoryCount?: (category: string) => number | Promise<number>;
   
+  // Optional: list of available tags (e.g. from places)
+  getAvailableTags?: () => string[] | Promise<string[]>;
+  // Optional: get count for each tag
+  getTagCount?: (tag: string) => number | Promise<number>;
+  
   // Optional: user access level - used to determine if Premium filter should be shown
   userAccess?: UserAccess;
   
@@ -61,6 +68,8 @@ export default function FiltersModal({
   getFilteredCount,
   getCityCount: _getCityCount,
   getCategoryCount,
+  getAvailableTags,
+  getTagCount,
   userAccess,
   onResetAll,
 }: FiltersModalProps) {
@@ -68,6 +77,7 @@ export default function FiltersModal({
   const safeAppliedFilters: ActiveFilters = appliedFilters || {
     categories: [],
     sort: null,
+    tags: [],
     premium: false,
     hidden: false,
     vibe: false,
@@ -87,6 +97,9 @@ export default function FiltersModal({
   
   // Category counts
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
+  // Available tags and tag counts
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [tagCounts, setTagCounts] = useState<Record<string, number>>({});
   
   // Use ref to store getFilteredCount to avoid dependency issues
   const getFilteredCountRef = useRef(getFilteredCount);
@@ -104,6 +117,7 @@ export default function FiltersModal({
   useEffect(() => {
     if (isOpen) {
       let filtersToSet = appliedFiltersRef.current;
+      filtersToSet = { ...filtersToSet, tags: filtersToSet.tags ?? [] };
       // If user doesn't have premium access, remove premium filter
       if (!userAccess?.hasPremium && !userAccess?.isAdmin) {
         filtersToSet = {
@@ -139,6 +153,37 @@ export default function FiltersModal({
       loadCategoryCounts();
     }
   }, [isOpen, getCategoryCount]);
+
+  // Load available tags when modal opens
+  useEffect(() => {
+    if (!isOpen || !getAvailableTags) return;
+    const load = async () => {
+      try {
+        const tags = await getAvailableTags();
+        setAvailableTags(Array.isArray(tags) ? tags : []);
+      } catch {
+        setAvailableTags([]);
+      }
+    };
+    load();
+  }, [isOpen, getAvailableTags]);
+
+  // Load tag counts when modal opens and availableTags is set
+  useEffect(() => {
+    if (!isOpen || !getTagCount || availableTags.length === 0) return;
+    const load = async () => {
+      const counts: Record<string, number> = {};
+      for (const tag of availableTags) {
+        try {
+          counts[tag] = await getTagCount(tag);
+        } catch {
+          counts[tag] = 0;
+        }
+      }
+      setTagCounts(counts);
+    };
+    load();
+  }, [isOpen, getTagCount, availableTags.length]);
   
   // Update count when draftFilters change
   useEffect(() => {
@@ -222,6 +267,14 @@ export default function FiltersModal({
       vibe: !prev.vibe,
     }));
   };
+
+  const handleToggleTag = (tag: string) => {
+    setDraftFilters((prev) => {
+      const tags = prev.tags ?? [];
+      const next = tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag];
+      return { ...prev, tags: next };
+    });
+  };
   
   const handleClearAll = () => {
     // If onResetAll callback is provided, use it to reset everything (cities, search, tags, filters)
@@ -235,6 +288,7 @@ export default function FiltersModal({
     const clearedFilters: ActiveFilters = {
       categories: [],
       sort: null,
+      tags: [],
       premium: false,
       hidden: false,
       vibe: false,
@@ -303,7 +357,7 @@ export default function FiltersModal({
     JSON.stringify(draftFilters) !== JSON.stringify(safeAppliedFilters);
   
   // Get applied filters for display
-  const appliedFiltersList: Array<{ type: "city" | "category" | "premium" | "hidden" | "vibe"; label: string; value?: string }> = [];
+  const appliedFiltersList: Array<{ type: "city" | "category" | "tag" | "premium" | "hidden" | "vibe"; label: string; value?: string }> = [];
   if (draftFilters.premium) {
     appliedFiltersList.push({ type: "premium", label: "Premium" });
   }
@@ -315,6 +369,9 @@ export default function FiltersModal({
   }
   draftFilters.categories.forEach((cat) => {
     appliedFiltersList.push({ type: "category", label: cat, value: cat });
+  });
+  (draftFilters.tags ?? []).forEach((tag) => {
+    appliedFiltersList.push({ type: "tag", label: tag, value: tag });
   });
   if (draftFilters.premiumOnly) {
     appliedFiltersList.push({ type: "premium", label: "Premium" });
@@ -328,8 +385,8 @@ export default function FiltersModal({
   };
   
 
-  return (
-    <div className="fixed inset-0 z-[70] flex items-end lg:items-center justify-center">
+  const modalEl = (
+    <div className="fixed inset-0 z-[9999] flex items-end lg:items-center justify-center" aria-modal="true" role="dialog">
       {/* Overlay */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm lg:bg-black/50"
@@ -449,6 +506,38 @@ export default function FiltersModal({
               })}
             </div>
           </div>
+
+          {/* Tags Section */}
+          {getAvailableTags && availableTags.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold text-[#6F7A5A] uppercase tracking-wide mb-4">TAGS</h3>
+              <div className="flex flex-wrap gap-2">
+                {availableTags.map((tag) => {
+                  const isSelected = (draftFilters.tags ?? []).includes(tag);
+                  const count = tagCounts[tag];
+                  return (
+                    <button
+                      key={tag}
+                      onClick={() => handleToggleTag(tag)}
+                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-full border transition-colors whitespace-nowrap ${
+                        isSelected
+                          ? "border-[#8F9E4F] bg-[#F4F6EF] text-[#1F2A1F]"
+                          : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
+                      }`}
+                    >
+                      <span className="text-base leading-none">{getTagEmoji(tag)}</span>
+                      <span className="text-sm font-medium">{tag}</span>
+                      {count !== undefined && (
+                        <span className={`text-xs ${isSelected ? "text-[#6F7A5A]" : "text-[#A8B096]"}`}>
+                          ({count})
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer (sticky) */}
@@ -484,4 +573,5 @@ export default function FiltersModal({
       </div>
     </div>
   );
+  return typeof document !== "undefined" ? createPortal(modalEl, document.body) : null;
 }

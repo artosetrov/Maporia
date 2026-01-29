@@ -5,8 +5,12 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
+import type { Database } from "../../../types/supabase";
 import { useUserAccess } from "../../../hooks/useUserAccess";
 import { isUserAdmin } from "../../../lib/access";
+
+type PlaceSettingsRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by">;
+type PlacePhotoUrlRow = Pick<Database["public"]["Tables"]["place_photos"]["Row"], "url">;
 import Icon from "../../../components/Icon";
 
 function cx(...a: Array<string | false | undefined | null>) {
@@ -33,12 +37,13 @@ export default function PlaceSettingsPage() {
 
     (async () => {
       setLoading(true);
-      const { data, error: placeError } = await supabase
+      const { data: rawData, error: placeError } = await supabase
         .from("places")
         .select("id, title, created_by, is_hidden, visibility")
         .eq("id", placeId)
         .single();
 
+      const data = rawData as PlaceSettingsRow | null;
       if (placeError || !data) {
         router.push(`/places/${placeId}/edit`);
         return;
@@ -73,11 +78,12 @@ export default function PlaceSettingsPage() {
 
     try {
       // Step 1: Get all photos to delete from storage
-      const { data: photosData } = await supabase
+      const { data: rawPhotos } = await supabase
         .from("place_photos")
         .select("url")
         .eq("place_id", placeId);
 
+      const photosData = rawPhotos as PlacePhotoUrlRow[] | null;
       // Step 2: Delete photos from storage (if they exist in storage bucket)
       if (photosData && photosData.length > 0) {
         const photoUrls = photosData.map((p) => p.url).filter(Boolean) as string[];
@@ -176,6 +182,7 @@ export default function PlaceSettingsPage() {
     const currentIsAdmin = isUserAdmin(access);
     const updateQuery = supabase
       .from("places")
+      // @ts-expect-error Supabase generated types infer update payload as never
       .update(payload)
       .eq("id", placeId);
     

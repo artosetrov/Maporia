@@ -75,10 +75,10 @@ export async function GET(request: NextRequest) {
 
     if (!tagsError && tagsData) {
       // Tags table exists, use it
-      const sortedTags = tagsData
-        .map((t) => t.name)
-        .filter((name): name is string => typeof name === "string" && name.trim().length > 0)
-        .sort((a, b) => a.localeCompare(b));
+      const sortedTags = (tagsData as { name?: string | null }[])
+        .map((t: { name?: string | null }) => t.name)
+        .filter((name: string | null | undefined): name is string => typeof name === "string" && name.trim().length > 0)
+        .sort((a: string, b: string) => a.localeCompare(b));
       return NextResponse.json({ tags: sortedTags });
     }
 
@@ -272,11 +272,11 @@ export async function PUT(request: NextRequest) {
         for (const place of places) {
           if (place.tags && Array.isArray(place.tags)) {
             const hasOldTag = place.tags.some(
-              (tag) => typeof tag === "string" && tag.trim() === oldTagName
+              (tag: string | unknown) => typeof tag === "string" && tag.trim() === oldTagName
             );
 
             if (hasOldTag) {
-              const updatedTags = place.tags.map((tag) =>
+              const updatedTags = place.tags.map((tag: string | unknown) =>
                 typeof tag === "string" && tag.trim() === oldTagName ? newTagName : tag
               );
 
@@ -360,11 +360,11 @@ export async function PUT(request: NextRequest) {
       for (const place of places) {
         if (place.tags && Array.isArray(place.tags)) {
           const hasOldTag = place.tags.some(
-            (tag) => typeof tag === "string" && tag.trim() === oldTagName
+            (tag: string | unknown) => typeof tag === "string" && tag.trim() === oldTagName
           );
 
           if (hasOldTag) {
-            const updatedTags = place.tags.map((tag) =>
+            const updatedTags = place.tags.map((tag: string | unknown) =>
               typeof tag === "string" && tag.trim() === oldTagName ? newTagName : tag
             );
 
@@ -444,13 +444,13 @@ export async function DELETE(request: NextRequest) {
       for (const place of places) {
         if (place.tags && Array.isArray(place.tags)) {
           const hasTag = place.tags.some(
-            (tag) => typeof tag === "string" && tag.trim() === tagToDelete
+            (tag: string | unknown) => typeof tag === "string" && tag.trim() === tagToDelete
           );
 
           if (hasTag) {
             // Remove the tag
             const updatedTags = place.tags.filter(
-              (tag) => typeof tag !== "string" || tag.trim() !== tagToDelete
+              (tag: string | unknown) => typeof tag !== "string" || tag.trim() !== tagToDelete
             );
 
             const { error: updateError } = await access.supabase

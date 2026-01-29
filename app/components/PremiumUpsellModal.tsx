@@ -7,7 +7,10 @@ import Icon from "./Icon";
 import Link from "next/link";
 import PremiumBadge from "./PremiumBadge";
 import { supabase } from "../lib/supabase";
+import type { Database } from "../types/supabase";
 import { isPlacePremium } from "../lib/access";
+
+type PlaceCoverRow = Pick<Database["public"]["Tables"]["places"]["Row"], "id" | "cover_url" | "access_level" | "visibility">;
 
 type PremiumUpsellModalProps = {
   open: boolean;
@@ -100,13 +103,14 @@ export default function PremiumUpsellModal({
         // Filter client-side to catch all premium place variations
         // The RLS policy "Everyone can view premium place covers" should allow this
         // Only select fields that exist in the database: access_level and visibility
-        const { data, error } = await supabase
+        const { data: rawData, error } = await supabase
           .from("places")
           .select("id, cover_url, access_level, visibility")
           .not("cover_url", "is", null)
           .limit(50) // Load more to filter client-side
           .order("created_at", { ascending: false });
 
+        const data = rawData as PlaceCoverRow[] | null;
         if (error) {
           // Silently handle RLS errors - it's expected if policy doesn't exist yet
           if (error.code === 'PGRST301' || error.code === '42501' || 
@@ -133,7 +137,7 @@ export default function PremiumUpsellModal({
         // This catches all variations: access_level and visibility
         // Note: isPlacePremium also checks is_premium and premium_only for backward compatibility,
         // but these fields don't exist in the database, so only access_level and visibility are used
-        const premium = data.filter(place => isPlacePremium(place));
+        const premium = (data || []).filter(place => isPlacePremium(place));
         
         console.log(`Found ${premium.length} premium places out of ${data.length} total places with cover_url`);
 
@@ -210,7 +214,7 @@ export default function PremiumUpsellModal({
   // Render modal in a portal to ensure it's on top of everything
   const modalContent = (
     <div 
-      className="fixed inset-0 z-[80] flex items-end lg:items-center justify-center p-0 lg:p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[9999] flex items-end lg:items-center justify-center p-0 lg:p-4 bg-black/60 backdrop-blur-sm"
       style={{ height: dynamicHeight }}
     >
       <div 
@@ -222,8 +226,8 @@ export default function PremiumUpsellModal({
         }}
       >
         
-        {/* Left Pane - Image Slider with Badge and Quote (1/3 width) */}
-        <div className="relative w-full lg:w-1/3 h-64 lg:h-auto bg-gradient-to-br from-[#8F9E4F] to-[#6F7A5A] flex flex-col p-6 overflow-hidden">
+        {/* Left Pane - Image Slider with Badge and Quote (1/3 width); hidden on mobile */}
+        <div className="hidden lg:flex relative w-full lg:w-1/3 h-64 lg:h-auto bg-gradient-to-br from-[#8F9E4F] to-[#6F7A5A] flex-col p-6 overflow-hidden">
           {/* Background Image Slider - автоматический слайдер из обложек премиум-мест */}
           {premiumPlaces.length > 0 ? (
             <div className="absolute inset-0">
@@ -324,6 +328,16 @@ export default function PremiumUpsellModal({
                 {renderTitle()}
               </h2>
             )}
+
+            {/* Premium badge - mobile only, under title */}
+            <div className="lg:hidden">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#D6B25E] text-white text-xs font-semibold badge-shadow">
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+                <span>Premium</span>
+              </div>
+            </div>
 
             {/* Subtitle */}
             {content.subtitle && (

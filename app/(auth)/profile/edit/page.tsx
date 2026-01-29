@@ -39,6 +39,7 @@ async function handleGoogleImport(data: any, profile: Profile | null, setProfile
   // Save to database
   const { error: updateError } = await supabase
     .from("profiles")
+    // @ts-expect-error Supabase generated types infer update payload as never
     .update(updates)
     .eq("id", user.id);
 

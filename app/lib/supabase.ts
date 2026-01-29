@@ -217,14 +217,15 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
               });
             }
           })
-          .catch((testErr) => {
+          .then(undefined, (testErr: unknown) => {
             // Silently ignore AbortError
-            if (testErr?.name === 'AbortError' || testErr?.message?.includes('abort')) {
+            const err = testErr as { name?: string; message?: string };
+            if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
               return;
             }
             console.error('[Supabase] Test query exception:', {
-              name: testErr?.name,
-              message: testErr?.message,
+              name: err?.name,
+              message: err?.message,
             });
           });
       }
