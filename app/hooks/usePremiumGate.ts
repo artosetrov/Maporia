@@ -72,6 +72,30 @@ export function usePremiumGate() {
   );
 
   /**
+   * Open the appropriate modal when user clicks a premium collection they can't access.
+   * - guest → Auth Modal with redirect to /collections/[id] after login
+   * - logged in + free → Premium Purchase Modal (collection context)
+   * - premium → no-op (caller should navigate to /collections/[id])
+   */
+  const openPremiumCollection = useCallback(
+    (collectionId: string, collectionTitle?: string) => {
+      if (loading) return;
+      if (access.role === "guest") {
+        setAuthRedirectPath(`/collections/${collectionId}`);
+        setAuthModalOpen(true);
+        return;
+      }
+      if (!isPremium) {
+        setModalContext("collection");
+        setModalPlaceTitle(undefined);
+        setModalCollectionTitle(collectionTitle);
+        setModalOpen(true);
+      }
+    },
+    [loading, access.role, isPremium]
+  );
+
+  /**
    * Check if user can access a premium place
    */
   const canAccessPlace = useCallback(
@@ -107,6 +131,7 @@ export function usePremiumGate() {
     loading,
     openPremiumModal,
     openPremiumLocation,
+    openPremiumCollection,
     closePremiumModal,
     closeAuthModal,
     modalOpen,

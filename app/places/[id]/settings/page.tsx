@@ -27,6 +27,7 @@ export default function PlaceSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [place, setPlace] = useState<{ id: string; title: string | null; created_by: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [hiding, setHiding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isHidden, setIsHidden] = useState(false);
@@ -64,16 +65,20 @@ export default function PlaceSettingsPage() {
     })();
   }, [placeId, user, router, access, accessLoading]);
 
-  async function handleDelete() {
+  function openDeleteModal() {
     if (!placeId || !user || !place) return;
-    
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${place.title || 'this place'}"? This action cannot be undone.`
-    );
-    
-    if (!confirmed) return;
+    setShowDeleteModal(true);
+    setError(null);
+  }
 
+  function closeDeleteModal() {
+    setShowDeleteModal(false);
+  }
+
+  async function confirmDeletePlace() {
+    if (!placeId || !user || !place) return;
     setDeleting(true);
+    setShowDeleteModal(false);
     setError(null);
 
     try {
@@ -297,7 +302,7 @@ export default function PlaceSettingsPage() {
               Once you delete a place, there is no going back. Please be certain.
             </p>
             <button
-              onClick={handleDelete}
+              onClick={openDeleteModal}
               disabled={deleting}
               className={cx(
                 "w-full h-11 rounded-xl border border-[#C96A5B] bg-[#C96A5B] px-5 text-sm font-medium text-white hover:bg-[#B85A4B] transition",
@@ -309,6 +314,41 @@ export default function PlaceSettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Delete place confirmation modal */}
+      {showDeleteModal && place && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-place-modal-title"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white border border-[#ECEEE4] shadow-lg p-6">
+            <h2 id="delete-place-modal-title" className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-2">
+              Delete place
+            </h2>
+            <p className="text-sm text-[#6F7A5A] mb-6">
+              Are you sure you want to delete <strong className="text-[#1F2A1F]">{place.title || "this place"}</strong>? This action cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={closeDeleteModal}
+                className="px-4 py-2.5 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] text-sm font-medium hover:bg-[#FAFAF7] transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeletePlace}
+                className="px-4 py-2.5 rounded-xl bg-[#C96A5B] text-white text-sm font-medium hover:bg-[#B85A4B] transition"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

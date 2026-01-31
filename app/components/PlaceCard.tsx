@@ -36,6 +36,7 @@ type PlaceCardProps = {
     is_premium?: boolean | null; // TODO: Use when schema has this field
     premium_only?: boolean | null; // TODO: Use when schema has this field
     access_level?: string | null; // TODO: Use when schema has this field
+    visibility?: string | null;
   };
   userAccess?: UserAccess; // User's access level
   userId?: string | null; // Current user ID to check ownership

@@ -458,6 +458,19 @@ export default function TopBar({
                                 <span className="text-xs font-medium text-[#1F2A1F] text-center">My favorites</span>
                               </Link>
                               <Link
+                                href="/collections"
+                                onClick={() => {
+                                  setMenuOpen(false);
+                                  setMenuPosition(null);
+                                }}
+                                className="flex flex-col items-center justify-center p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
+                              >
+                                <div className="w-12 h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
+                                  <Icon name="grid" size={24} className="text-[#1F2A1F]" />
+                                </div>
+                                <span className="text-xs font-medium text-[#1F2A1F] text-center">Collections</span>
+                              </Link>
+                              <Link
                                 href="/profile?section=added"
                                 onClick={() => {
                                   setMenuOpen(false);

@@ -152,6 +152,7 @@ export default function PlacePage() {
   const [swipeStart, setSwipeStart] = useState<{ x: number; y: number } | null>(null);
   const [pinchStartDistance, setPinchStartDistance] = useState<number | null>(null);
   const galleryImageRef = useRef<HTMLImageElement>(null);
+  const [placeCollections, setPlaceCollections] = useState<{ id: string; title: string; description: string | null; cover_image: string | null; access_type: string }[]>([]);
 
   // User access for premium checks and render gate (from context — single session/profile request)
   const { loading: accessLoading, access } = useUserAccessContext();
@@ -463,6 +464,24 @@ export default function PlacePage() {
       
       // Save to recently viewed
       saveToRecentlyViewed(id);
+
+      // Load collections this place belongs to (active only)
+      const pcRes = await supabase
+        .from("place_collections")
+        .select("collection_id")
+        .eq("place_id", id);
+      const pcData = (pcRes.data ?? []) as { collection_id: string }[];
+      const collectionIds = pcRes.error ? [] : pcData.map((r) => r.collection_id).filter(Boolean);
+      if (collectionIds.length > 0) {
+        const { data: colData } = await supabase
+          .from("collections")
+          .select("id, title, description, cover_image, access_type")
+          .in("id", collectionIds)
+          .eq("is_active", true);
+        setPlaceCollections((colData ?? []) as { id: string; title: string; description: string | null; cover_image: string | null; access_type: string }[]);
+      } else {
+        setPlaceCollections([]);
+      }
 
       // Load creator profile
       if (placeItem.created_by) {
@@ -1330,6 +1349,42 @@ export default function PlacePage() {
               </div>
             </div>
           )}
+
+          {placeCollections.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold text-[#1F2A1F] mb-3">In collections</h3>
+              <div className="space-y-4">
+                {placeCollections.map((c) => (
+                  <Link
+                    key={c.id}
+                    href={`/collections/${c.id}`}
+                    className="group flex rounded-2xl border border-[#ECEEE4] bg-white overflow-hidden shadow-sm hover:shadow-md transition"
+                  >
+                    <div className="w-32 sm:w-40 flex-shrink-0 aspect-[4/3] bg-[#ECEEE4] relative overflow-hidden">
+                      {c.cover_image ? (
+                        <img src={c.cover_image} alt="" className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-[#A8B096]">
+                          <Icon name="photo" size={32} />
+                        </div>
+                      )}
+                      <div className="absolute top-1.5 right-1.5">
+                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${c.access_type === "premium" ? "bg-[#8F9E4F] text-white" : "bg-white/90 text-[#6F7A5A]"}`}>
+                          {c.access_type === "premium" ? "Premium" : "Free"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0 p-4 flex flex-col justify-center">
+                      <h4 className="font-fraunces font-semibold text-[#1F2A1F] text-base mb-1 group-hover:text-[#8F9E4F] transition">{c.title}</h4>
+                      {c.description && (
+                        <p className="text-sm text-[#6F7A5A] line-clamp-2">{c.description}</p>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Photos Section */}
@@ -1812,6 +1867,42 @@ export default function PlacePage() {
                     >
                       {tag}
                     </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {placeCollections.length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-3">In collections</h3>
+                <div className="space-y-4">
+                  {placeCollections.map((c) => (
+                    <Link
+                      key={c.id}
+                      href={`/collections/${c.id}`}
+                      className="group flex rounded-2xl border border-[#ECEEE4] bg-white overflow-hidden shadow-sm hover:shadow-md transition"
+                    >
+                      <div className="w-28 sm:w-36 flex-shrink-0 aspect-[4/3] bg-[#ECEEE4] relative overflow-hidden">
+                        {c.cover_image ? (
+                          <img src={c.cover_image} alt="" className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[#A8B096]">
+                            <Icon name="photo" size={24} />
+                          </div>
+                        )}
+                        <div className="absolute top-1.5 right-1.5">
+                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${c.access_type === "premium" ? "bg-[#8F9E4F] text-white" : "bg-white/90 text-[#6F7A5A]"}`}>
+                            {c.access_type === "premium" ? "Premium" : "Free"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0 p-4 flex flex-col justify-center">
+                        <h4 className="font-fraunces font-semibold text-[#1F2A1F] text-base mb-1 group-hover:text-[#8F9E4F] transition">{c.title}</h4>
+                        {c.description && (
+                          <p className="text-sm text-[#6F7A5A] line-clamp-2">{c.description}</p>
+                        )}
+                      </div>
+                    </Link>
                   ))}
                 </div>
               </div>

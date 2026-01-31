@@ -1,6 +1,8 @@
 # Maporia Brand Guide
 
-Актуальная версия (по коду и активам в репозитории).
+**Single source of truth:** Live design-system doc at [**/brand-guide**](https://maporia.co/brand-guide) (same content, structured for daily use). This file is the canonical reference for code and assets.
+
+**Page structure (9 sections):** 1. Brand Essence · 2. Logo System · 3. Color System · 4. Typography · 5. Iconography · 6. UI Components · 7. Product Patterns · 8. Layout & Spacing · 9. Developer / Handoff.
 
 ---
 
@@ -107,11 +109,26 @@
 
 ---
 
-## 7. Ссылки на код и ресурсы
+## 7. Visual Schemas (Layout)
+
+Схемы главных экранов с реальными элементами интерфейса (TopBar, SearchBar, BottomNav):
+
+- **Home (Mobile):** Search pill («Search by vibe, mood, or place» / «Start to your search») → контент → BottomNav (Explore, Saved, Profile).
+- **Home (Desktop):** Logo_maporia1.svg | City + Filters | Login / Avatar + Hamburger.
+- **Map (Mobile):** Back | SearchBar (город + подзаголовок) | Filters с бейджем → контент → BottomNav.
+- **Map (Desktop):** Logo | City + Filters | List/Map toggle | Avatar + Hamburger.
+
+Подробные ASCII-схемы, названия компонентов и ссылки на код: **[docs/VISUAL-SCHEMAS.md](VISUAL-SCHEMAS.md)**.
+
+---
+
+## 8. Ссылки на код и ресурсы
 
 - Шрифты и токены: `app/globals.css`
+- **Радио и чекбоксы:** глобальные стили в `app/globals.css` — рамка `--border-light`, выбранное / hover / focus — `--olive-primary`, disabled — `--disabled-bg`; живые примеры на `/brand-guide`, секция 6 «Form controls».
 - Компонент Wordmark: `app/components/Wordmark.tsx`
 - Использование в TopBar: `app/components/TopBar.tsx` (десктоп — логотип слева)
 - Использование на входе: `app/auth/page.tsx`, `app/components/AuthModal.tsx`
 - Символ и экспорты: `public/brand/` (README + `maporia-symbol.svg`, `maporia-symbol-1024.svg`)
 - Страница с примерами бренда в приложении: `/brand-guide` (`app/brand-guide/page.tsx`)
+- Схемы экранов и элементов UI: `docs/VISUAL-SCHEMAS.md`

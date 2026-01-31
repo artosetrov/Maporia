@@ -52,6 +52,16 @@
 @theme inline {
   --color-background: var(--warm-white);
   --color-foreground: var(--text-primary);
+  /* Brand tokens (Brand Guide) — use as bg-*, text-*, border-* */
+  --color-warm-white: var(--warm-white);
+  --color-olive-primary: var(--olive-primary);
+  --color-olive-dark: var(--olive-dark);
+  --color-content-primary: var(--text-primary);
+  --color-content-secondary: var(--text-secondary);
+  --color-content-muted: var(--text-muted);
+  --color-border-light: var(--border-light);
+  --color-error: var(--error);
+  --color-disabled-bg: var(--disabled-bg);
   --font-sans: var(--font-inter);
   --font-serif: var(--font-fraunces);
 }
@@ -132,6 +142,69 @@ body, p, .body {
 .text-caption {
   font-size: 12px;
   line-height: 1.5;
+}
+
+/* Branded form controls: radio & checkbox (Brand Guide — olive-primary, border-light) */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--border-light);
+  border-radius: 0.375rem;
+  background: white;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+input[type="checkbox"]:hover {
+  border-color: var(--olive-primary);
+}
+input[type="checkbox"]:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--warm-white), 0 0 0 4px var(--olive-primary);
+}
+input[type="checkbox"]:checked {
+  background: var(--olive-primary);
+  border-color: var(--olive-primary);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
+  background-size: 0.875rem 0.875rem;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+input[type="checkbox"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--disabled-bg);
+}
+
+input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--border-light);
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+input[type="radio"]:hover {
+  border-color: var(--olive-primary);
+}
+input[type="radio"]:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--warm-white), 0 0 0 4px var(--olive-primary);
+}
+input[type="radio"]:checked {
+  border-color: var(--olive-primary);
+  background: radial-gradient(circle at center, var(--olive-primary) 35%, transparent 36%);
+}
+input[type="radio"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--disabled-bg);
 }
 
 /* Badge shadow - единая тень для всех плашек и badge-элементов */

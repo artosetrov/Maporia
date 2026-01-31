@@ -190,6 +190,61 @@ export interface Database {
         Insert: { id?: string; name?: string | null }
         Update: { id?: string; name?: string | null }
       }
+      collections: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          cover_image: string | null
+          access_type: "free" | "premium"
+          is_active: boolean
+          created_at: string
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          title: string
+          description?: string | null
+          cover_image?: string | null
+          access_type?: "free" | "premium"
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          title?: string
+          description?: string | null
+          cover_image?: string | null
+          access_type?: "free" | "premium"
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string | null
+        }
+      }
+      place_collections: {
+        Row: {
+          id: string
+          place_id: string
+          collection_id: string
+          sort_order: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          place_id: string
+          collection_id: string
+          sort_order?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          place_id?: string
+          collection_id?: string
+          sort_order?: number
+          created_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -226,7 +281,7 @@ export interface Database {
       }
     }
     Enums: {
-      [_ in never]: never
+      collection_access_type: "free" | "premium"
     }
   }
 }

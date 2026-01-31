@@ -2,450 +2,105 @@
 
 export const dynamic = "force-dynamic";
 
- 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import Icon from "../components/Icon";
+import { useRouter } from "next/navigation";
+import Icon, { type IconName } from "../components/Icon";
+import Wordmark from "../components/Wordmark";
 import PlaceCard from "../components/PlaceCard";
 import FavoriteIcon from "../components/FavoriteIcon";
 import PremiumUpsellModal from "../components/PremiumUpsellModal";
 
-function ColorSwatch({ name, hex, description }: { name: string; hex: string; description?: string }) {
+// ——— Helpers ———
+
+function ColorRow({
+  name,
+  hex,
+  usage,
+  notes,
+}: {
+  name: string;
+  hex: string;
+  usage: string;
+  notes?: string;
+}) {
   return (
-    <div className="rounded-xl border border-[#ECEEE4] bg-white p-4">
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-16 h-16 rounded-lg border-2 border-[#ECEEE4]" style={{ backgroundColor: hex }} />
-        <div className="flex-1">
-          <div className="font-semibold text-[#1F2A1F] mb-1">{name}</div>
-          <div className="text-sm text-[#6F7A5A] font-mono">{hex}</div>
-          {description && <div className="text-xs text-[#A8B096] mt-1">{description}</div>}
-        </div>
+    <div className="flex items-center gap-4 py-2 border-b border-[#ECEEE4] last:border-0">
+      <div
+        className="w-10 h-10 rounded-lg border border-[#ECEEE4] flex-shrink-0"
+        style={{ backgroundColor: hex }}
+      />
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-[#1F2A1F]">{name}</div>
+        <div className="text-sm font-mono text-[#6F7A5A]">{hex}</div>
+        <div className="text-xs text-[#6F7A5A] mt-0.5">{usage}</div>
+        {notes && <div className="text-xs text-[#A8B096] mt-0.5">{notes}</div>}
       </div>
     </div>
   );
 }
 
-function TypographySample({ name, className, sample }: { name: string; className: string; sample: string }) {
+function TypoRow({ name, className, sample }: { name: string; className: string; sample: string }) {
   return (
     <div className="rounded-xl border border-[#ECEEE4] bg-white p-4">
-      <div className="text-xs font-medium text-[#6F7A5A] mb-2 uppercase tracking-wide">{name}</div>
+      <div className="text-xs font-medium text-[#6F7A5A] uppercase tracking-wide mb-2">{name}</div>
       <div className={className}>{sample}</div>
     </div>
   );
 }
 
-function ButtonSample({ label, className, description }: { label: string; className: string; description?: string }) {
+function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-[#ECEEE4] bg-white p-4">
-      <button className={className}>{label}</button>
-      {description && <div className="text-xs text-[#6F7A5A] mt-2">{description}</div>}
+    <section id={id} className="scroll-mt-24">
+      <h2 className="font-fraunces text-2xl font-semibold text-[#1F2A1F] mb-6">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function SubSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-8">
+      <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">{title}</h3>
+      {children}
     </div>
   );
 }
 
-function PremiumUpsellModalEditor() {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  
-  // Default values
-  const [modalContent, setModalContent] = useState({
-    title: "Unlock Maporia Premium",
-    titleHighlight: "Maporia",
-    subtitle: "Get full access to our hidden local gems — no crowds, no tourist traps. Just authentic experiences.",
-    benefit1Title: "Premium-only places",
-    benefit1Desc: "Exclusive access to local secrets and hidden spots.",
-    benefit2Title: "Curated Collections",
-    benefit2Desc: "Secret Spots, Romantic Sunsets, Hidden Cafés & more.",
-    benefit3Title: "Custom Routes",
-    benefit3Desc: "Save favorites and build your personal itinerary.",
-    socialProof: "Discover places you'd never find on Google.",
-    price: "$20",
-    pricePeriod: "/ year",
-    priceSubtext: "Less than $2 a month",
-    priceRightTitle: "Full Access",
-    priceRightDesc: "All premium places + collections",
-    primaryButtonText: "Coming Soon",
-    primaryButtonLink: "",
-    secondaryButtonText: "Not now, thanks",
-    footerText: "Cancel anytime. Premium features will unlock instantly when available.",
-    footerLinkText: "Terms of Service apply.",
-    footerLinkUrl: "#",
-  });
-
-  return (
-    <div className="space-y-6">
-      {/* Preview Section */}
-      <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-semibold text-[#1F2A1F] mb-2">Premium Upsell Modal</h3>
-            <p className="text-sm text-[#6F7A5A]">Used when non-premium users try to access premium content</p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setIsEditing(!isEditing)}
-              className="px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] font-medium text-sm hover:bg-[#FAFAF7] transition-colors flex items-center gap-2"
-            >
-              <Icon name="edit" size={16} />
-              {isEditing ? "Cancel" : "Edit"}
-            </button>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="px-4 py-2 rounded-xl bg-[#8F9E4F] text-white font-medium text-sm hover:brightness-110 transition-colors"
-            >
-              Preview
-            </button>
-          </div>
-        </div>
-
-        {/* Editor Form */}
-        {isEditing && (
-          <div className="mt-6 p-6 bg-[#FAFAF7] rounded-xl border border-[#ECEEE4] space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Title */}
-              <div>
-                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Title</label>
-                <input
-                  type="text"
-                  value={modalContent.title}
-                  onChange={(e) => setModalContent({ ...modalContent, title: e.target.value })}
-                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                />
-              </div>
-              
-              {/* Title Highlight */}
-              <div>
-                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Title Highlight (word to emphasize)</label>
-                <input
-                  type="text"
-                  value={modalContent.titleHighlight}
-                  onChange={(e) => setModalContent({ ...modalContent, titleHighlight: e.target.value })}
-                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                />
-              </div>
-
-              {/* Subtitle */}
-              <div className="lg:col-span-2">
-                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Subtitle</label>
-                <textarea
-                  value={modalContent.subtitle}
-                  onChange={(e) => setModalContent({ ...modalContent, subtitle: e.target.value })}
-                  rows={2}
-                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] resize-none"
-                />
-              </div>
-
-              {/* Benefits */}
-              <div className="lg:col-span-2">
-                <h4 className="text-sm font-semibold text-[#1F2A1F] mb-3">Benefits</h4>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 1 - Title</label>
-                      <input
-                        type="text"
-                        value={modalContent.benefit1Title}
-                        onChange={(e) => setModalContent({ ...modalContent, benefit1Title: e.target.value })}
-                        className="w-full px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 1 - Description</label>
-                      <input
-                        type="text"
-                        value={modalContent.benefit1Desc}
-                        onChange={(e) => setModalContent({ ...modalContent, benefit1Desc: e.target.value })}
-                        className="w-full px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 2 - Title</label>
-                      <input
-                        type="text"
-                        value={modalContent.benefit2Title}
-                        onChange={(e) => setModalContent({ ...modalContent, benefit2Title: e.target.value })}
-                        className="w-full px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 2 - Description</label>
-                      <input
-                        type="text"
-                        value={modalContent.benefit2Desc}
-                        onChange={(e) => setModalContent({ ...modalContent, benefit2Desc: e.target.value })}
-                        className="w-full px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 3 - Title</label>
-                      <input
-                        type="text"
-                        value={modalContent.benefit3Title}
-                        onChange={(e) => setModalContent({ ...modalContent, benefit3Title: e.target.value })}
-                        className="w-full px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-[#6F7A5A] mb-1">Benefit 3 - Description</label>
-                      <input
-                        type="text"
-                        value={modalContent.benefit3Desc}
-                        onChange={(e) => setModalContent({ ...modalContent, benefit3Desc: e.target.value })}
-                        className="w-full px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Social Proof */}
-              <div className="lg:col-span-2">
-                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Social Proof</label>
-                <input
-                  type="text"
-                  value={modalContent.socialProof}
-                  onChange={(e) => setModalContent({ ...modalContent, socialProof: e.target.value })}
-                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                />
-              </div>
-
-              {/* Price */}
-              <div>
-                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Price</label>
-                <input
-                  type="text"
-                  value={modalContent.price}
-                  onChange={(e) => setModalContent({ ...modalContent, price: e.target.value })}
-                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Price Period</label>
-                <input
-                  type="text"
-                  value={modalContent.pricePeriod}
-                  onChange={(e) => setModalContent({ ...modalContent, pricePeriod: e.target.value })}
-                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Price Subtext</label>
-                <input
-                  type="text"
-                  value={modalContent.priceSubtext}
-                  onChange={(e) => setModalContent({ ...modalContent, priceSubtext: e.target.value })}
-                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Price Right Title</label>
-                <input
-                  type="text"
-                  value={modalContent.priceRightTitle}
-                  onChange={(e) => setModalContent({ ...modalContent, priceRightTitle: e.target.value })}
-                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Price Right Description</label>
-                <input
-                  type="text"
-                  value={modalContent.priceRightDesc}
-                  onChange={(e) => setModalContent({ ...modalContent, priceRightDesc: e.target.value })}
-                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                />
-              </div>
-
-              {/* Buttons */}
-              <div>
-                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Primary Button Text</label>
-                <input
-                  type="text"
-                  value={modalContent.primaryButtonText}
-                  onChange={(e) => setModalContent({ ...modalContent, primaryButtonText: e.target.value })}
-                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Primary Button Link (URL)</label>
-                <input
-                  type="text"
-                  value={modalContent.primaryButtonLink}
-                  onChange={(e) => setModalContent({ ...modalContent, primaryButtonLink: e.target.value })}
-                  placeholder="https://..."
-                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Secondary Button Text</label>
-                <input
-                  type="text"
-                  value={modalContent.secondaryButtonText}
-                  onChange={(e) => setModalContent({ ...modalContent, secondaryButtonText: e.target.value })}
-                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                />
-              </div>
-
-              {/* Footer */}
-              <div>
-                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Footer Text</label>
-                <textarea
-                  value={modalContent.footerText}
-                  onChange={(e) => setModalContent({ ...modalContent, footerText: e.target.value })}
-                  rows={2}
-                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] resize-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Footer Link Text</label>
-                <input
-                  type="text"
-                  value={modalContent.footerLinkText}
-                  onChange={(e) => setModalContent({ ...modalContent, footerLinkText: e.target.value })}
-                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Footer Link URL</label>
-                <input
-                  type="text"
-                  value={modalContent.footerLinkUrl}
-                  onChange={(e) => setModalContent({ ...modalContent, footerLinkUrl: e.target.value })}
-                  placeholder="https://..."
-                  className="w-full px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Preview Button */}
-        {!isEditing && (
-          <div className="mt-4">
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="px-4 py-2 rounded-xl bg-[#8F9E4F] text-white font-medium text-sm hover:brightness-110 transition-colors"
-            >
-              Open Modal Preview
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Modal Preview with Custom Content */}
-      <PremiumUpsellModalPreview
-        open={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        content={modalContent}
-      />
-    </div>
-  );
-}
-
-function PremiumUpsellModalPreview({ 
-  open, 
-  onClose, 
-  content 
-}: { 
-  open: boolean; 
-  onClose: () => void; 
-  content: any;
-}) {
-  return (
-    <PremiumUpsellModal 
-      open={open} 
-      onClose={onClose}
-      customContent={content}
-    />
-  );
-}
+// ——— Icon grid (compact) ———
 
 function IconGrid() {
-  const icons: Array<{ name: string; description: string }> = [
-    { name: "search", description: "Search" },
-    { name: "favorite", description: "Favorite/Bookmark" },
-    { name: "profile", description: "Profile/User" },
-    { name: "back", description: "Back/Previous" },
-    { name: "forward", description: "Forward/Next" },
-    { name: "close", description: "Close" },
-    { name: "share", description: "Share" },
-    { name: "edit", description: "Edit" },
-    { name: "delete", description: "Delete" },
-    { name: "settings", description: "Settings" },
-    { name: "filter", description: "Filter" },
-    { name: "map", description: "Map" },
-    { name: "location", description: "Location" },
-    { name: "photo", description: "Photo" },
-    { name: "add", description: "Add" },
-    { name: "remove", description: "Remove" },
-    { name: "check", description: "Check" },
-    { name: "heart", description: "Heart/Like" },
-    { name: "comment", description: "Comment" },
-    { name: "calendar", description: "Calendar" },
-    { name: "clock", description: "Clock/Time" },
-    { name: "link", description: "Link" },
-    { name: "external-link", description: "External Link" },
-    { name: "eye", description: "Eye/View" },
-    { name: "eye-off", description: "Eye Off/Hide" },
-    { name: "lock", description: "Lock" },
-    { name: "unlock", description: "Unlock" },
-    { name: "star", description: "Star" },
-    { name: "grid", description: "Grid" },
-    { name: "list", description: "List" },
-    { name: "zoom-in", description: "Zoom In" },
-    { name: "zoom-out", description: "Zoom Out" },
-    { name: "my-location", description: "My Location" },
-    { name: "logout", description: "Logout" },
-    { name: "bookmark", description: "Bookmark" },
-    { name: "package", description: "Package" },
-    { name: "maximize", description: "Maximize" },
-    { name: "minimize", description: "Minimize" },
-    { name: "briefcase", description: "Briefcase" },
-    { name: "calendar-days", description: "Calendar Days" },
+  const icons = [
+    "search", "favorite", "profile", "back", "forward", "close", "share", "edit", "delete",
+    "settings", "filter", "map", "location", "photo", "add", "check", "heart", "lock", "star",
   ];
-
   return (
     <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-      <h3 className="text-xl font-semibold font-fraunces text-[#1F2A1F] mb-4">Icon System</h3>
-      <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-4">
-        {icons.map((icon) => (
-          <div key={icon.name} className="flex flex-col items-center gap-2">
-            <div className="w-12 h-12 rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] flex items-center justify-center">
-              <Icon name={icon.name as any} size={20} className="text-[#1F2A1F]" />
+      <div className="grid grid-cols-6 sm:grid-cols-9 gap-4">
+        {icons.map((name) => (
+          <div key={name} className="flex flex-col items-center gap-1">
+            <div className="w-10 h-10 rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] flex items-center justify-center">
+              <Icon name={name as IconName} size={20} className="text-[#1F2A1F]" />
             </div>
-            <div className="text-xs text-center text-[#6F7A5A] font-mono">{icon.name}</div>
+            <span className="text-xs text-[#6F7A5A] font-mono truncate w-full text-center">{name}</span>
           </div>
         ))}
       </div>
-      <div className="mt-6 p-4 bg-[#FAFAF7] rounded-lg">
-        <div className="text-sm text-[#1F2A1F] mb-2 font-semibold">Icon Rules:</div>
-        <ul className="text-xs text-[#6F7A5A] space-y-1 list-disc list-inside">
-          <li>One icon per semantic meaning</li>
-          <li>Consistent sizing: 16px, 20px, 24px</li>
-          <li>Consistent stroke: 2px</li>
-          <li>All icons use viewBox="0 0 24 24"</li>
-          <li>Icons use fill="none" stroke="currentColor"</li>
-        </ul>
-      </div>
     </div>
   );
 }
 
+// ——— Main page ———
+
 export default function BrandGuidePage() {
   const router = useRouter();
+  const [premiumModalOpen, setPremiumModalOpen] = useState(false);
 
   return (
     <main className="min-h-screen bg-[#FAFAF7] pb-24">
-      {/* Top App Bar */}
+      {/* Top bar */}
       <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between h-16">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between h-14">
             <button
               onClick={() => router.back()}
               className="p-2 -ml-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition"
@@ -453,1824 +108,369 @@ export default function BrandGuidePage() {
             >
               <Icon name="back" size={20} />
             </button>
-            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Brand Guide</h1>
+            <h1 className="font-fraunces text-lg font-semibold text-[#1F2A1F]">Brand Guide</h1>
             <div className="w-9" />
           </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        <div className="space-y-8">
-          {/* Introduction */}
-          <div className="rounded-2xl border border-[#ECEEE4] bg-white p-6 shadow-sm">
-            <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-4">Maporia Brand System</h1>
-            <p className="text-base text-[#6F7A5A] leading-relaxed">
-              Complete design system and brand guidelines for Maporia. This guide includes all colors, typography, 
-              UI components, icons, and styling rules used throughout the application.
-            </p>
-            <p className="text-sm text-[#6F7A5A] mt-3">
-              <strong className="text-[#1F2A1F]">Access:</strong> This guide is available in the Profile → Elements section (admin only) 
-              or directly at <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">/brand-guide</code>
-            </p>
-            <p className="text-sm text-[#6F7A5A] mt-2">
-              <strong className="text-[#1F2A1F]">Canonical doc:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">docs/BRAND-GUIDE.md</code> — актуальная версия в одном файле.
-            </p>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-16">
+        {/* 1. Brand Essence */}
+        <Section id="essence" title="1. Brand Essence">
+          <div className="rounded-2xl border border-[#ECEEE4] bg-white p-6 space-y-6">
+            <SubSection title="Positioning">
+              <p className="text-[#1F2A1F]">
+                Maporia is a discovery app for <strong>hidden local places</strong> — not tourist traps — with a calm, premium, editorial feel.
+              </p>
+            </SubSection>
+            <SubSection title="Core attributes">
+              <ul className="list-disc list-inside text-[#6F7A5A] space-y-1 text-sm">
+                <li>Calm, uncluttered</li>
+                <li>Hidden / off-the-beaten-path</li>
+                <li>Emotional, discovery-led</li>
+                <li>Local, place-first</li>
+                <li>Premium, quality over quantity</li>
+              </ul>
+            </SubSection>
+            <SubSection title="Audience">
+              <ul className="text-sm text-[#6F7A5A] space-y-2">
+                <li><strong className="text-[#1F2A1F]">For:</strong> Travelers and locals who want authentic spots, curated lists, and a focused experience.</li>
+                <li><strong className="text-[#1F2A1F]">Not for:</strong> Mass tourism, generic “top 10” lists, or noisy ad-driven feeds.</li>
+              </ul>
+            </SubSection>
           </div>
+        </Section>
 
-          {/* Colors Section */}
-          <section>
-            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Colors</h2>
-            
-            <div className="space-y-4 mb-6">
-              <h3 className="text-lg font-semibold text-[#1F2A1F]">Primary Colors</h3>
-              <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-3 gap-4">
-                <ColorSwatch name="Olive Green" hex="#8F9E4F" description="Primary brand color" />
-                <ColorSwatch name="Soft Sage" hex="#C9D2A3" description="Secondary accent" />
-                <ColorSwatch name="Warm White" hex="#FAFAF7" description="Background color" />
-              </div>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              <h3 className="text-lg font-semibold text-[#1F2A1F]">Text Colors</h3>
-              <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-3 gap-4">
-                <ColorSwatch name="Primary Text" hex="#1F2A1F" description="Main text color" />
-                <ColorSwatch name="Secondary Text" hex="#6F7A5A" description="Secondary text" />
-                <ColorSwatch name="Muted Text" hex="#A8B096" description="Muted/disabled text" />
-              </div>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              <h3 className="text-lg font-semibold text-[#1F2A1F]">State Colors</h3>
-              <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-4 gap-4">
-                <ColorSwatch name="Success" hex="#7FA35C" description="Success states" />
-                <ColorSwatch name="Warning / Premium" hex="#D6B25E" description="Warning states & Premium badge" />
-                <ColorSwatch name="Error" hex="#C96A5B" description="Error states" />
-                <ColorSwatch name="Disabled" hex="#DADDD0" description="Disabled states" />
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-[#1F2A1F]">Borders & Backgrounds</h3>
-              <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-3 gap-4">
-                <ColorSwatch name="Border Light" hex="#ECEEE4" description="Light borders" />
-                <ColorSwatch name="Border Input" hex="#E5E8DB" description="Input borders" />
-                <ColorSwatch name="Card Background" hex="#FFFFFF" description="Card backgrounds" />
-              </div>
-            </div>
-          </section>
-
-          {/* Logo Guidelines Section */}
-          <section>
-            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Maporia Logo Guidelines</h2>
-            
-            {/* Logo System */}
-            <div className="space-y-4 mb-6">
-              <h3 className="text-lg font-semibold text-[#1F2A1F]">Logo System</h3>
-              <p className="text-sm text-[#6F7A5A] mb-4">
-                Maporia uses a simple, scalable system:
-              </p>
-              <div className="space-y-2 text-sm text-[#1F2A1F]">
-                <div className="flex items-start gap-2">
-                  <span className="font-semibold">• Primary logo:</span>
-                  <span>the <strong>Logo_maporia1.svg</strong> icon (used in desktop TopBar)</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="font-semibold">• File location:</span>
-                  <span><code className="text-xs bg-[#FAFAF7] px-1 py-0.5 rounded">/public/Logo_maporia1.svg</code></span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="font-semibold">• Brand lockup:</span>
-                  <span><strong>Pin icon + "Maporia" wordmark</strong> (desktop / marketing via Wordmark component)</span>
+        {/* 2. Logo System */}
+        <Section id="logo" title="2. Logo System">
+          <div className="rounded-2xl border border-[#ECEEE4] bg-white p-6 space-y-6">
+            <SubSection title="Variants">
+              <ul className="text-sm text-[#6F7A5A] space-y-2">
+                <li><strong className="text-[#1F2A1F]">Primary:</strong> Logo_maporia1.svg (pin + green #81904C, white mark). Desktop TopBar, auth.</li>
+                <li><strong className="text-[#1F2A1F">Wordmark:</strong> Pin + “Maporia” text via <code className="bg-[#FAFAF7] px-1 rounded text-xs">Wordmark</code> — marketing, landing.</li>
+                <li><strong className="text-[#1F2A1F">Dark/inverted:</strong> <code className="bg-[#FAFAF7] px-1 rounded text-xs">inverted={true}</code> — white on green.</li>
+              </ul>
+              <div className="flex flex-wrap items-center gap-6 mt-4">
+                <img src="/Logo_maporia1.svg" alt="Maporia" className="h-10 w-auto" />
+                <Wordmark href="/" withIcon size="default" />
+                <div className="rounded-xl bg-[#8F9E4F] px-4 py-2">
+                  <Wordmark href="/" withIcon size="default" inverted />
                 </div>
               </div>
-              <div className="mt-4 p-4 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7]">
-                <p className="text-sm text-[#1F2A1F] font-medium mb-2">Rule of thumb:</p>
-                <div className="space-y-1 text-sm text-[#6F7A5A]">
-                  <div>• <strong className="text-[#1F2A1F]">Logo_maporia1.svg = desktop TopBar</strong> (primary logo)</div>
-                  <div>• <strong className="text-[#1F2A1F]">Wordmark component = brand presence</strong> (with icon + text option)</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Primary Logo */}
-            <div className="space-y-4 mb-6">
-              <h3 className="text-lg font-semibold text-[#1F2A1F]">Primary Logo (Logo_maporia1.svg)</h3>
-              <p className="text-sm text-[#6F7A5A] mb-4">
-                The primary logo used in desktop TopBar. File: <code className="text-xs bg-[#FAFAF7] px-1 py-0.5 rounded">/public/Logo_maporia1.svg</code>
-              </p>
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-16 h-16 rounded-lg bg-white flex items-center justify-center border border-[#ECEEE4]">
-                    <img
-                      src="/Logo_maporia1.svg"
-                      alt="Maporia Pin Logo"
-                      className="h-10 w-auto"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-semibold text-[#1F2A1F] mb-1">Logo_maporia1.svg Logo</div>
-                    <div className="text-sm text-[#6F7A5A]">Background: white • Color: #81904C (fixed in SVG)</div>
-                    <div className="text-xs text-[#A8B096] mt-1">Size in TopBar: h-10 (40px height)</div>
-                  </div>
-                </div>
-                <div className="text-xs text-[#A8B096]">
-                  Where to use: desktop TopBar (primary), website header, desktop UI
-                </div>
-                <div className="mt-4 p-3 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4]">
-                  <div className="text-xs font-semibold text-[#1F2A1F] mb-2">Usage in code:</div>
-                  <code className="text-xs text-[#6F7A5A] block">
-                    {`<img src="/Logo_maporia1.svg" alt="Maporia" className="h-10 w-auto" />`}
-                  </code>
-                </div>
-              </div>
-            </div>
-
-            {/* Wordmark Component */}
-            <div className="space-y-4 mb-6">
-              <h3 className="text-lg font-semibold text-[#1F2A1F]">Wordmark Component</h3>
-              <p className="text-sm text-[#6F7A5A] mb-4">
-                The Wordmark component can display text with optional icon. For icon, it uses Logo_maporia1.svg when <code className="text-xs bg-[#FAFAF7] px-1 py-0.5 rounded">withIcon={true}</code>.
-              </p>
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-16 h-16 rounded-lg bg-white flex items-center justify-center border border-[#ECEEE4]">
-                    <img
-                      src="/Logo_maporia1.svg"
-                      alt="Maporia Pin"
-                      className="h-5 w-auto"
-                    />
-                    <span className="ml-2 font-manrope font-extrabold text-[#8F9E4F] text-lg" style={{ letterSpacing: "-0.02em" }}>
-                      Maporia
-                    </span>
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-semibold text-[#1F2A1F] mb-1">Pin + Wordmark</div>
-                    <div className="text-sm text-[#6F7A5A]">Icon: Logo_maporia1.svg • Text: Manrope Extrabold • Color: #8F9E4F</div>
-                  </div>
-                </div>
-                <div className="text-xs text-[#A8B096]">
-                  Where to use: marketing pages, landing pages, email headers, presentations
-                </div>
-                <div className="mt-4 p-3 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4]">
-                  <div className="text-xs font-semibold text-[#1F2A1F] mb-2">Usage in code:</div>
-                  <code className="text-xs text-[#6F7A5A] block">
-                    {`<Wordmark href="/" withIcon={true} size="default" />`}
-                  </code>
-                </div>
-              </div>
-            </div>
-
-            {/* Typography for Wordmark */}
-            <div className="space-y-4 mb-6">
-              <h3 className="text-lg font-semibold text-[#1F2A1F]">Typography (Wordmark / UI)</h3>
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-4">
-                <div className="space-y-3">
-                  <div>
-                    <div className="text-sm font-semibold text-[#1F2A1F] mb-1">Primary font: <span className="font-mono text-[#8F9E4F]">Manrope</span></div>
-                    <div className="text-xs text-[#6F7A5A]">Free, web-safe, modern, premium, readable. Works consistently across web + product UI.</div>
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold text-[#1F2A1F] mb-1">Recommended weights</div>
-                    <div className="text-xs text-[#6F7A5A] space-y-1">
-                      <div>• <strong>Desktop:</strong> Medium (500) / Extrabold (800)</div>
-                      <div>• <strong>Mobile:</strong> Medium (500)</div>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold text-[#1F2A1F] mb-1">Fallbacks</div>
-                    <div className="text-xs text-[#6F7A5A] font-mono bg-[#FAFAF7] p-2 rounded-lg">
-                      Manrope, Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Usage Rules */}
-            <div className="space-y-4 mb-6">
-              <h3 className="text-lg font-semibold text-[#1F2A1F]">Usage Rules (Do / Don't)</h3>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            </SubSection>
+            <SubSection title="Clear space & minimum size">
+              <ul className="text-sm text-[#6F7A5A] space-y-1">
+                <li>Clear space: at least <strong className="text-[#1F2A1F]">1×</strong> (width of “M” stroke) on all sides.</li>
+                <li>Desktop TopBar: <strong className="text-[#1F2A1F]">h-10</strong> (40px). Mobile: icon-only min <strong className="text-[#1F2A1F]">24px</strong>.</li>
+                <li>Full lockup: icon 16/20/24px, text base/lg/xl. Smaller → icon-only.</li>
+              </ul>
+            </SubSection>
+            <SubSection title="Do / Don’t">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="rounded-xl border border-[#7FA35C] bg-[#FAFAF7] p-4">
-                  <div className="text-sm font-semibold text-[#1F2A1F] mb-3">Do</div>
-                  <div className="space-y-2 text-sm text-[#6F7A5A]">
-                    <div>• Keep the logo <strong className="text-[#1F2A1F]">flat and clean</strong></div>
-                    <div>• Use <strong className="text-[#1F2A1F]">solid colors only</strong></div>
-                    <div>• Use <strong className="text-[#1F2A1F]">icon-only</strong> in tight spaces (mobile nav, tabs, small headers)</div>
-                    <div>• Use <strong className="text-[#1F2A1F]">icon + wordmark</strong> in spacious layouts (desktop header, marketing)</div>
-                  </div>
+                  <div className="font-semibold text-[#1F2A1F] text-sm mb-2">Do</div>
+                  <ul className="text-xs text-[#6F7A5A] space-y-1">Flat, solid colors only; icon-only in tight spaces; icon + wordmark in headers/marketing.</ul>
                 </div>
                 <div className="rounded-xl border border-[#C96A5B] bg-[#FAFAF7] p-4">
-                  <div className="text-sm font-semibold text-[#1F2A1F] mb-3">Don't</div>
-                  <div className="space-y-2 text-sm text-[#6F7A5A]">
-                    <div>• <strong className="text-[#C96A5B]">Do not stretch</strong> or skew</div>
-                    <div>• <strong className="text-[#C96A5B">Do not add</strong> shadows, strokes, outlines, gradients, glows</div>
-                    <div>• <strong className="text-[#C96A5B">Do not change</strong> icon proportions or corner radii</div>
-                    <div>• <strong className="text-[#C96A5B">Do not recolor</strong> the logo outside the brand palette</div>
-                  </div>
+                  <div className="font-semibold text-[#1F2A1F] text-sm mb-2">Don’t</div>
+                  <ul className="text-xs text-[#6F7A5A] space-y-1">Stretch/skew; add shadows, strokes, gradients; change proportions; use ® in product UI.</ul>
                 </div>
               </div>
-            </div>
+            </SubSection>
+          </div>
+        </Section>
 
-            {/* Clear Space & Minimum Sizes */}
-            <div className="space-y-4 mb-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="rounded-xl border border-[#ECEEE4] bg-white p-4">
-                  <h4 className="text-sm font-semibold text-[#1F2A1F] mb-3">Clear Space</h4>
-                  <p className="text-xs text-[#6F7A5A] mb-2">Minimum clear space around the logo:</p>
-                  <div className="text-xs text-[#6F7A5A] space-y-1">
-                    <div>• <strong className="text-[#1F2A1F]">X = width of the "M" stroke</strong></div>
-                    <div>• Keep at least <strong className="text-[#1F2A1F]">1X padding</strong> on all sides</div>
-                  </div>
-                </div>
-                <div className="rounded-xl border border-[#ECEEE4] bg-white p-4">
-                  <h4 className="text-sm font-semibold text-[#1F2A1F] mb-3">Minimum Sizes</h4>
-                  <div className="text-xs text-[#6F7A5A] space-y-1">
-                    <div>• <strong className="text-[#1F2A1F]">Logo_maporia1.svg (desktop TopBar):</strong> <strong>h-10</strong> (40px height)</div>
-                    <div>• <strong className="text-[#1F2A1F]">Icon-only (mobile):</strong> minimum <strong>24px</strong></div>
-                    <div>• <strong className="text-[#1F2A1F]">Full lockup (icon + wordmark):</strong> icon 16/20/24px, text text-base / text-lg / text-xl</div>
-                    <div className="text-[#A8B096] mt-2">(If smaller → switch to icon-only.)</div>
-                  </div>
-                </div>
+        {/* 3. Color System */}
+        <Section id="colors" title="3. Color System">
+          <div className="rounded-2xl border border-[#ECEEE4] bg-white p-6 space-y-6">
+            <SubSection title="Brand colors">
+              <div className="space-y-0">
+                <ColorRow name="Olive primary" hex="#8F9E4F" usage="Wordmark, CTAs, links, focus rings." notes="Primary brand; use for key actions." />
+                <ColorRow name="Olive dark" hex="#556036" usage="Hover on primary buttons." />
+                <ColorRow name="Soft sage" hex="#C9D2A3" usage="Secondary accent, soft highlights." notes="Avoid as primary CTA." />
+                <ColorRow name="Warm white" hex="#FAFAF7" usage="Page background." />
               </div>
-            </div>
-
-            {/* Quick Rules for Product UI */}
-            <div className="rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] p-4">
-              <h4 className="text-sm font-semibold text-[#1F2A1F] mb-3">Quick Rules for Product UI</h4>
-              <div className="space-y-2 text-sm text-[#6F7A5A]">
-                <div>• <strong className="text-[#1F2A1F]">Desktop TopBar:</strong> Logo_maporia1.svg (h-10, 40px height)</div>
-                <div>• <strong className="text-[#1F2A1F]">Mobile header:</strong> icon-only (varies by page)</div>
-                <div>• <strong className="text-[#1F2A1F]">Wordmark component:</strong> Logo_maporia1.svg + "Maporia" text (when withIcon={true})</div>
-                <div>• <strong className="text-[#1F2A1F]">App icon / favicon:</strong> icon-only</div>
+            </SubSection>
+            <SubSection title="UI / functional colors">
+              <div className="space-y-0">
+                <ColorRow name="Text primary" hex="#1F2A1F" usage="Headings, body copy." notes="WCAG: ensure contrast on warm white." />
+                <ColorRow name="Text secondary" hex="#6F7A5A" usage="Captions, meta, secondary text." />
+                <ColorRow name="Text muted" hex="#A8B096" usage="Placeholders, disabled text." notes="Do not use for critical copy." />
+                <ColorRow name="Border light" hex="#ECEEE4" usage="Cards, dividers, borders." />
+                <ColorRow name="Border input" hex="#E5E8DB" usage="Input borders." />
+                <ColorRow name="Success" hex="#7FA35C" usage="Success states, confirmations." />
+                <ColorRow name="Warning / Premium" hex="#D6B25E" usage="Premium badge, warnings." />
+                <ColorRow name="Error" hex="#C96A5B" usage="Errors, destructive actions." />
+                <ColorRow name="Disabled" hex="#DADDD0" usage="Disabled buttons, inactive." />
               </div>
-            </div>
-          </section>
-
-          {/* Typography Section */}
-          <section>
-            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Typography</h2>
-            
-            <div className="space-y-4 mb-6">
-              <h3 className="text-lg font-semibold text-[#1F2A1F]">Headings (Fraunces)</h3>
-              <div className="space-y-4">
-                <TypographySample 
-                  name="H1" 
-                  className="text-3xl font-semibold font-fraunces text-[#1F2A1F]" 
-                  sample="Heading 1 - Main Page Titles" 
-                />
-                <TypographySample 
-                  name="H2" 
-                  className="text-2xl font-semibold font-fraunces text-[#1F2A1F]" 
-                  sample="Heading 2 - Section Titles" 
-                />
-                <TypographySample 
-                  name="H3" 
-                  className="text-xl font-semibold font-fraunces text-[#1F2A1F]" 
-                  sample="Heading 3 - Subsection Titles" 
-                />
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-[#1F2A1F]">Body Text (Inter)</h3>
-              <div className="space-y-4">
-                <TypographySample 
-                  name="Body" 
-                  className="text-base text-[#1F2A1F]" 
-                  sample="Body text - Regular content. Inter font family, 15px, line-height 1.5." 
-                />
-                <TypographySample 
-                  name="Small" 
-                  className="text-sm text-[#6F7A5A]" 
-                  sample="Small text - Secondary information, 13px." 
-                />
-                <TypographySample 
-                  name="Caption" 
-                  className="text-xs text-[#A8B096]" 
-                  sample="Caption text - Muted information, 12px." 
-                />
-              </div>
-            </div>
-          </section>
-
-          {/* Buttons Section */}
-          <section>
-            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Buttons</h2>
-            
-            <div className="space-y-4 mb-6">
-              <h3 className="text-lg font-semibold text-[#1F2A1F]">Primary Buttons</h3>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ButtonSample 
-                  label="Primary Button" 
-                  className="w-full h-11 rounded-xl bg-[#8F9E4F] text-white px-5 text-sm font-medium hover:bg-[#7A8A42] transition"
-                  description="Standard height: h-11, padding: px-5"
-                />
-                <ButtonSample 
-                  label="Primary (Hover)" 
-                  className="w-full h-11 rounded-xl bg-[#7A8A42] text-white px-5 text-sm font-medium transition"
-                  description="Hover state: #7A8A42"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              <h3 className="text-lg font-semibold text-[#1F2A1F]">Secondary Buttons</h3>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ButtonSample 
-                  label="Secondary Button" 
-                  className="w-full h-11 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] px-5 text-sm font-medium hover:bg-[#FAFAF7] transition"
-                  description="Bordered style"
-                />
-                <ButtonSample 
-                  label="Text Button" 
-                  className="w-full h-11 rounded-xl text-[#1F2A1F] px-5 text-sm font-medium hover:bg-[#FAFAF7] transition"
-                  description="Text-only style"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-[#1F2A1F]">Danger Buttons</h3>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ButtonSample 
-                  label="Delete Button" 
-                  className="w-full h-11 rounded-xl border border-[#C96A5B] bg-[#C96A5B] text-white px-5 text-sm font-medium hover:bg-[#B85A4B] transition"
-                  description="Error/danger actions"
-                />
-              </div>
-            </div>
-          </section>
-
-          {/* Cards Section */}
-          <section>
-            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Cards</h2>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
-                <h3 className="font-semibold text-[#1F2A1F] mb-2">Standard Card</h3>
-                <p className="text-sm text-[#6F7A5A]">
-                  Standard card with border, white background, and shadow-sm.
-                </p>
-              </div>
-              
-              <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-md">
-                <h3 className="font-semibold text-[#1F2A1F] mb-2">Card with Hover</h3>
-                <p className="text-sm text-[#6F7A5A]">
-                  Card with shadow-md on hover. All shadows use blur 20px minimum.
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {/* Shadows Section */}
-          <section>
-            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Shadows</h2>
-            
-            <div className="mb-4 p-4 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7]">
-              <p className="text-sm text-[#1F2A1F] font-medium mb-2">Shadow Rules:</p>
-              <ul className="text-xs text-[#6F7A5A] space-y-1 list-disc list-inside">
-                <li>Все тени используют <strong className="text-[#1F2A1F]">blur минимум 20px</strong> для мягкого эффекта</li>
-                <li>Тени переопределены в <code className="bg-white px-1.5 py-0.5 rounded">globals.css</code> для единообразия</li>
-                <li><code className="bg-white px-1.5 py-0.5 rounded">badge-shadow</code> - специальная тень для badge-элементов и плашек</li>
+            </SubSection>
+            <SubSection title="Accessibility">
+              <ul className="text-sm text-[#6F7A5A] space-y-1">
+                <li>Primary text (#1F2A1F) on warm white: aim for WCAG AA (4.5:1+).</li>
+                <li>Olive (#8F9E4F) on white: use for large areas or with sufficient weight; pair with dark text where needed.</li>
+                <li>Error/success: pair with sufficient contrast or use as borders/backgrounds with dark text.</li>
               </ul>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-4 shadow-sm">
-                <div className="text-sm font-semibold text-[#1F2A1F] mb-1">shadow-sm</div>
-                <div className="text-xs text-[#6F7A5A]">Blur: 20px</div>
-                <div className="text-xs text-[#A8B096] mt-1">Стандартные карточки</div>
-              </div>
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-4 shadow-md">
-                <div className="text-sm font-semibold text-[#1F2A1F] mb-1">shadow-md</div>
-                <div className="text-xs text-[#6F7A5A]">Blur: 20px</div>
-                <div className="text-xs text-[#A8B096] mt-1">Hover состояния</div>
-              </div>
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-4 shadow-lg">
-                <div className="text-sm font-semibold text-[#1F2A1F] mb-1">shadow-lg</div>
-                <div className="text-xs text-[#6F7A5A]">Blur: 20px</div>
-                <div className="text-xs text-[#A8B096] mt-1">Модальные окна</div>
-              </div>
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-4 badge-shadow">
-                <div className="text-sm font-semibold text-[#1F2A1F] mb-1">badge-shadow</div>
-                <div className="text-xs text-[#6F7A5A]">Blur: 20px</div>
-                <div className="text-xs text-[#A8B096] mt-1">Badge, плашки, счетчики</div>
-              </div>
-            </div>
-          </section>
+            </SubSection>
+          </div>
+        </Section>
 
-          {/* Icons Section */}
-          <section>
+        {/* 4. Typography */}
+        <Section id="typography" title="4. Typography">
+          <div className="rounded-2xl border border-[#ECEEE4] bg-white p-6 space-y-6">
+            <SubSection title="Fonts & fallbacks">
+              <ul className="text-sm text-[#6F7A5A] space-y-1">
+                <li><strong className="text-[#1F2A1F]">Wordmark:</strong> Manrope Extrabold (800), letter-spacing -0.02em. Fallback: Inter, system-ui, sans-serif.</li>
+                <li><strong className="text-[#1F2A1F]">Headings / place titles:</strong> Fraunces. Fallback: Georgia, serif.</li>
+                <li><strong className="text-[#1F2A1F]">Body / UI:</strong> Inter. Fallback: -apple-system, BlinkMacSystemFont, Arial, sans-serif.</li>
+              </ul>
+            </SubSection>
+            <SubSection title="Hierarchy">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <TypoRow name="H1" className="font-fraunces text-2xl sm:text-3xl font-semibold text-[#1F2A1F]" sample="Page title" />
+                <TypoRow name="H2" className="font-fraunces text-xl sm:text-2xl font-semibold text-[#1F2A1F]" sample="Section title" />
+                <TypoRow name="H3" className="font-fraunces text-lg font-semibold text-[#1F2A1F]" sample="Subsection" />
+                <TypoRow name="Body" className="text-base text-[#1F2A1F]" sample="Body text, 15px, line-height 1.5" />
+                <TypoRow name="Small" className="text-sm text-[#6F7A5A]" sample="Secondary, 13px" />
+                <TypoRow name="Caption" className="text-xs text-[#A8B096]" sample="Caption, 12px" />
+              </div>
+            </SubSection>
+            <SubSection title="Usage & guidance">
+              <ul className="text-sm text-[#6F7A5A] space-y-1">
+                <li><strong className="text-[#1F2A1F]">Marketing / landing:</strong> Fraunces for headlines; Manrope for wordmark only.</li>
+                <li><strong className="text-[#1F2A1F]">App UI / modals:</strong> Fraunces for section titles; Inter for body, labels, buttons.</li>
+                <li>Line-height: 1.5 body; 1.25–1.3 headings. Max text width for long copy: ~65ch.</li>
+              </ul>
+            </SubSection>
+          </div>
+        </Section>
+
+        {/* 5. Iconography */}
+        <Section id="iconography" title="5. Iconography">
+          <div className="rounded-2xl border border-[#ECEEE4] bg-white p-6 space-y-6">
+            <SubSection title="Style & sizes">
+              <ul className="text-sm text-[#6F7A5A] space-y-1">
+                <li>Stroke: 2px. ViewBox: 0 0 24 24. fill=none, stroke=currentColor.</li>
+                <li>Supported sizes: <strong className="text-[#1F2A1F]">16, 20, 24px</strong> (align to 4px grid).</li>
+                <li>One icon per semantic meaning; consistent weight.</li>
+              </ul>
+            </SubSection>
+            <SubSection title="Icons vs emoji">
+              <ul className="text-sm text-[#6F7A5A] space-y-1">
+                <li><strong className="text-[#1F2A1F]">Icons:</strong> Navigation, actions, filters, settings, status (lock, heart, etc.).</li>
+                <li><strong className="text-[#1F2A1F]">Emoji:</strong> Category/tag pills, mood labels, light personality (e.g. interest tags). Do not replace core UI icons with emoji.</li>
+              </ul>
+            </SubSection>
             <IconGrid />
-          </section>
+          </div>
+        </Section>
 
-          {/* Spacing & Layout Section */}
-          <section>
-            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Spacing & Layout</h2>
-            
-            <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-              <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Standard Spacing</h3>
-              <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-4 h-4 rounded bg-[#8F9E4F]" />
-                  <div className="text-sm text-[#6F7A5A]">4px (gap-1)</div>
+        {/* 6. UI Components */}
+        <Section id="components" title="6. UI Components">
+          <div className="rounded-2xl border border-[#ECEEE4] bg-white p-6 space-y-8">
+            <SubSection title="Atoms">
+              <ul className="text-sm text-[#6F7A5A] space-y-2 mb-4">
+                <li><strong className="text-[#1F2A1F]">Buttons:</strong> Primary (olive, h-11, rounded-xl), secondary (border), danger (error). States: default, hover, active, disabled.</li>
+                <li><strong className="text-[#1F2A1F]">Tags/pills:</strong> Default (warm white bg + border), primary (olive), premium (warning gold), error. Rounded-full.</li>
+                <li><strong className="text-[#1F2A1F]">Icons:</strong> Use <code className="bg-[#FAFAF7] px-1 rounded text-xs">Icon</code> component; 16/20/24.</li>
+              </ul>
+              <div className="flex flex-wrap gap-3">
+                <button className="h-11 px-5 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium">Primary</button>
+                <button className="h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] text-sm font-medium">Secondary</button>
+                <span className="px-3 py-1 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] text-sm text-[#1F2A1F]">Tag</span>
+                <span className="px-2.5 py-1 rounded-full bg-[#D6B25E] text-white text-xs font-semibold">Premium</span>
+              </div>
+            </SubSection>
+            <SubSection title="Form controls: radio & checkbox">
+              <p className="text-sm text-[#6F7A5A] mb-4">
+                Border <code className="bg-[#FAFAF7] px-1 rounded text-xs">--border-light</code>; checked, hover and focus use <code className="bg-[#FAFAF7] px-1 rounded text-xs">--olive-primary</code>. Styles in <code className="bg-[#FAFAF7] px-1 rounded text-xs">app/globals.css</code> (appearance: none, custom checkmark/radio dot). Disabled: <code className="bg-[#FAFAF7] px-1 rounded text-xs">--disabled-bg</code>.
+              </p>
+              <div className="flex flex-wrap gap-8">
+                <div>
+                  <div className="text-xs font-medium text-[#6F7A5A] uppercase tracking-wide mb-3">Checkbox</div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" className="mt-0.5" defaultChecked aria-label="Checked" />
+                    <span className="text-sm text-[#1F2A1F]">Checked</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer mt-2">
+                    <input type="checkbox" className="mt-0.5" aria-label="Unchecked" />
+                    <span className="text-sm text-[#1F2A1F]">Unchecked</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer mt-2 opacity-70">
+                    <input type="checkbox" className="mt-0.5" disabled aria-label="Disabled" />
+                    <span className="text-sm text-[#6F7A5A]">Disabled</span>
+                  </label>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="w-8 h-4 rounded bg-[#8F9E4F]" />
-                  <div className="text-sm text-[#6F7A5A]">8px (gap-2)</div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-4 rounded bg-[#8F9E4F]" />
-                  <div className="text-sm text-[#6F7A5A]">12px (gap-3)</div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-4 rounded bg-[#8F9E4F]" />
-                  <div className="text-sm text-[#6F7A5A]">16px (gap-4)</div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="w-20 h-4 rounded bg-[#8F9E4F]" />
-                  <div className="text-sm text-[#6F7A5A]">20px (gap-5)</div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="w-24 h-4 rounded bg-[#8F9E4F]" />
-                  <div className="text-sm text-[#6F7A5A]">24px (gap-6)</div>
+                <div>
+                  <div className="text-xs font-medium text-[#6F7A5A] uppercase tracking-wide mb-3">Radio</div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="bg-demo" value="a" className="mt-0.5" defaultChecked aria-label="Option A" />
+                    <span className="text-sm text-[#1F2A1F]">Option A</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer mt-2">
+                    <input type="radio" name="bg-demo" value="b" className="mt-0.5" aria-label="Option B" />
+                    <span className="text-sm text-[#1F2A1F]">Option B</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer mt-2 opacity-70">
+                    <input type="radio" name="bg-demo-disabled" value="c" className="mt-0.5" disabled aria-label="Disabled" />
+                    <span className="text-sm text-[#6F7A5A]">Disabled</span>
+                  </label>
                 </div>
               </div>
-            </div>
-
-            <div className="mt-6 rounded-xl border border-[#ECEEE4] bg-white p-6">
-              <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Border Radius</h3>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="p-4 bg-[#FAFAF7] rounded-lg border border-[#ECEEE4]">
-                  <div className="text-sm font-semibold text-[#1F2A1F] mb-1">rounded-lg</div>
-                  <div className="text-xs text-[#6F7A5A]">8px</div>
-                </div>
-                <div className="p-4 bg-[#FAFAF7] rounded-xl border border-[#ECEEE4]">
-                  <div className="text-sm font-semibold text-[#1F2A1F] mb-1">rounded-xl</div>
-                  <div className="text-xs text-[#6F7A5A]">12px</div>
-                </div>
-                <div className="p-4 bg-[#FAFAF7] rounded-2xl border border-[#ECEEE4]">
-                  <div className="text-sm font-semibold text-[#1F2A1F] mb-1">rounded-2xl</div>
-                  <div className="text-xs text-[#6F7A5A]">16px</div>
-                </div>
-                <div className="p-4 bg-[#FAFAF7] rounded-full border border-[#ECEEE4]">
-                  <div className="text-sm font-semibold text-[#1F2A1F] mb-1">rounded-full</div>
-                  <div className="text-xs text-[#6F7A5A]">Full circle</div>
-                </div>
+            </SubSection>
+            <SubSection title="Molecules">
+              <ul className="text-sm text-[#6F7A5A] space-y-1 mb-4">
+                <li><strong className="text-[#1F2A1F]">Cards:</strong> rounded-2xl, border border-[#ECEEE4], bg white, shadow-sm; shadow-md on hover where clickable.</li>
+                <li><strong className="text-[#1F2A1F]">List items:</strong> Padding p-4/p-5; optional chevron (Icon name="forward").</li>
+              </ul>
+              <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
+                <div className="font-semibold text-[#1F2A1F]">Card title</div>
+                <p className="text-sm text-[#6F7A5A] mt-1">Supporting text.</p>
               </div>
-            </div>
-          </section>
-
-          {/* Component Examples Section */}
-          <section>
-            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Component Examples</h2>
-            
-            <div className="space-y-6">
-              {/* Input Field */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Input Field</h3>
-                <input
-                  type="text"
-                  placeholder="Enter text..."
-                  className="w-full h-11 rounded-xl border border-[#E5E8DB] bg-white px-4 text-sm text-[#1F2A1F] placeholder:text-[#A8B096] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] focus:border-transparent"
-                />
-              </div>
-
-              {/* Badge/Pill */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Badges/Pills</h3>
-                <div className="flex flex-wrap gap-2">
-                  <span className="px-3 py-1 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] text-sm text-[#1F2A1F]">
-                    Default Badge
-                  </span>
-                  <span className="px-3 py-1 rounded-full bg-[#8F9E4F] text-white text-sm">
-                    Primary Badge
-                  </span>
-                  <span className="px-2.5 py-1 rounded-full bg-[#D6B25E] text-white text-xs font-semibold flex items-center gap-1.5">
-                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                    </svg>
-                    Premium
-                  </span>
-                  <span className="px-3 py-1 rounded-full bg-[#C96A5B] text-white text-sm">
-                    Error Badge
-                  </span>
-                </div>
-              </div>
-
-              {/* Alert/Message */}
-              <div className="rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 p-4">
-                <div className="text-sm text-[#C96A5B]">
-                  <strong>Error message:</strong> This is an example error message with brand error colors.
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-[#7FA35C]/30 bg-[#7FA35C]/10 p-4">
-                <div className="text-sm text-[#7FA35C]">
-                  <strong>Success message:</strong> This is an example success message with brand success colors.
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Place Cards Section */}
-          <section>
-            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Place Cards</h2>
-            
-            <div className="space-y-8">
-              {/* Standard Place Card */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-2">Standard Place Card</h3>
-                <p className="text-sm text-[#6F7A5A] mb-4">Used in: Home page (carousel), Explore page (grid), Map page (list)</p>
+            </SubSection>
+            <SubSection title="Organisms">
+              <ul className="text-sm text-[#6F7A5A] space-y-1 mb-4">
+                <li><strong className="text-[#1F2A1F">Place card:</strong> Image, title, city, tags; optional favorite, premium badge, locked overlay. Used: Home, Explore, Map, Saved.</li>
+                <li><strong className="text-[#1F2A1F">Search modal:</strong> City, filters, suggested destinations, vibe tags. See Product Patterns.</li>
+                <li><strong className="text-[#1F2A1F">Premium upsell modal:</strong> Shown when non-premium user hits premium content. CTA + benefits.</li>
+              </ul>
+              <div className="flex flex-wrap gap-6">
                 <div className="max-w-[200px]">
                   <PlaceCard
                     place={{
-                      id: "example-1",
-                      title: "The New River Castle",
-                      city: "Fort Lauderdale, FL",
+                      id: "ex1",
+                      title: "Hidden spot",
+                      city: "Miami, FL",
                       cover_url: "https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=400&h=300&fit=crop",
-                      tags: ["hidden", "unique"],
+                      tags: ["hidden"],
                       created_by: null,
                     }}
                     userAccess={{ role: "guest", hasPremium: false, isAdmin: false }}
                   />
                 </div>
-              </div>
-
-              {/* Place Card with Favorite Button */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-2">Place Card with Favorite Button</h3>
-                <p className="text-sm text-[#6F7A5A] mb-4">Used in: Home page, Explore page, Map page (with favorite toggle)</p>
                 <div className="max-w-[200px]">
                   <PlaceCard
                     place={{
-                      id: "example-2",
-                      title: "Coastal Hideaway",
-                      city: "Miami, FL",
-                      cover_url: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=400&h=300&fit=crop",
-                      tags: ["beach", "sunset"],
-                      created_by: null,
-                    }}
-                    userAccess={{ role: "standard", hasPremium: false, isAdmin: false }}
-                    userId="user-123"
-                    isFavorite={false}
-                    favoriteButton={
-                      <button
-                        className="h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors"
-                        title="Add to favorites"
-                      >
-                        <FavoriteIcon isActive={false} size={16} />
-                      </button>
-                    }
-                  />
-                </div>
-              </div>
-
-              {/* Place Card with Premium Badge */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-2">Place Card with Premium Badge</h3>
-                <p className="text-sm text-[#6F7A5A] mb-4">Used in: All pages (when place is premium)</p>
-                <div className="max-w-[200px]">
-                  <PlaceCard
-                    place={{
-                      id: "example-3",
-                      title: "Secret Garden",
+                      id: "ex2",
+                      title: "Premium place",
                       city: "Key West, FL",
-                      cover_url: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=400&h=300&fit=crop",
+                      cover_url: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=400&h=300&fit=crop",
                       tags: ["exclusive"],
                       access_level: "premium",
                       created_by: null,
                     }}
-                    userAccess={{ role: "premium", hasPremium: true, isAdmin: false }}
-                    userId="user-123"
-                    isFavorite={true}
-                    favoriteButton={
-                      <button
-                        className="h-8 w-8 rounded-full bg-[#FAFAF7] border border-[#8F9E4F] flex items-center justify-center transition-colors"
-                        title="Remove from favorites"
-                      >
-                        <FavoriteIcon isActive={true} size={16} />
-                      </button>
-                    }
-                  />
-                </div>
-              </div>
-
-              {/* Locked Place Card (Premium, no access) */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-2">Locked Place Card (Premium, No Access)</h3>
-                <p className="text-sm text-[#6F7A5A] mb-4">Used in: All pages (when place is premium and user doesn't have access)</p>
-                <div className="max-w-[200px]">
-                  <PlaceCard
-                    place={{
-                      id: "example-4",
-                      title: "Haunted Gem #1",
-                      city: "Miami, FL",
-                      cover_url: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=300&fit=crop",
-                      access_level: "premium",
-                      created_by: null,
-                    }}
                     userAccess={{ role: "standard", hasPremium: false, isAdmin: false }}
-                    userId="user-123"
+                    userId="u1"
                     hauntedGemIndex={1}
                   />
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setPremiumModalOpen(true)}
+                className="mt-4 h-11 px-5 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium"
+              >
+                Open Premium Upsell Modal
+              </button>
+            </SubSection>
+          </div>
+        </Section>
 
-              {/* Place Card with Remove Favorite Button */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-2">Place Card with Remove Favorite Button</h3>
-                <p className="text-sm text-[#6F7A5A] mb-4">Used in: Saved page, Profile page (Trips section)</p>
-                <div className="max-w-[200px]">
-                  <PlaceCard
-                    place={{
-                      id: "example-5",
-                      title: "Urban Oasis",
-                      city: "Tampa, FL",
-                      cover_url: "https://images.unsplash.com/photo-1494522358652-f8ccf4b6c8d4?w=400&h=300&fit=crop",
-                      tags: ["city", "park"],
-                      created_by: null,
-                    }}
-                    userAccess={{ role: "standard", hasPremium: false, isAdmin: false }}
-                    userId="user-123"
-                    onRemoveFavorite={(placeId, e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                  />
-                </div>
+        <PremiumUpsellModal open={premiumModalOpen} onClose={() => setPremiumModalOpen(false)} />
+
+        {/* 7. Product Patterns */}
+        <Section id="patterns" title="7. Product Patterns">
+          <div className="rounded-2xl border border-[#ECEEE4] bg-white p-6 space-y-6">
+            <SubSection title="Place card logic">
+              <ul className="text-sm text-[#6F7A5A] space-y-1">
+                <li><strong className="text-[#1F2A1F">Premium:</strong> Badge when place is premium; if user lacks access → locked overlay + upsell on tap.</li>
+                <li><strong className="text-[#1F2A1F">Hidden / Haunted Gem:</strong> Optional index for “Haunted Gem #N” label.</li>
+                <li><strong className="text-[#1F2A1F">Liked/favorite:</strong> Heart filled when saved; optional remove-from-list on card.</li>
+              </ul>
+            </SubSection>
+            <SubSection title="Search flow">
+              <ul className="text-sm text-[#6F7A5A] space-y-1">
+                <li>City first (required context), then filters/tags. SearchBar opens SearchModal.</li>
+                <li>Flow: city → tags/vibe → results. Suggested destinations + “What’s your vibe?” in modal.</li>
+              </ul>
+            </SubSection>
+            <SubSection title="Premium gating">
+              <ul className="text-sm text-[#6F7A5A] space-y-1">
+                <li>Locked place cards show overlay; tap → Premium Upsell Modal. No inline paywall in list.</li>
+              </ul>
+            </SubSection>
+            <SubSection title="Empty & loading states">
+              <ul className="text-sm text-[#6F7A5A] space-y-1">
+                <li>Empty: Short copy + primary CTA where relevant (e.g. “No saved places yet”).</li>
+                <li>Loading: Skeleton with same layout (image, title, meta); shimmer or pulse. No spinners for full-page content.</li>
+              </ul>
+            </SubSection>
+          </div>
+        </Section>
+
+        {/* 8. Layout & Spacing */}
+        <Section id="layout" title="8. Layout & Spacing">
+          <div className="rounded-2xl border border-[#ECEEE4] bg-white p-6 space-y-6">
+            <SubSection title="Spacing scale">
+              <ul className="text-sm text-[#6F7A5A] space-y-1 font-mono">
+                <li>4px (1) · 8px (2) · 12px (3) · 16px (4) · 20px (5) · 24px (6). Use Tailwind gap/padding tokens.</li>
+              </ul>
+              <div className="flex flex-wrap items-center gap-4 mt-2">
+                {[4, 8, 12, 16, 24].map((n) => (
+                  <div key={n} className="flex items-center gap-2">
+                    <div className="rounded bg-[#8F9E4F]" style={{ width: n, height: n }} />
+                    <span className="text-xs text-[#6F7A5A]">{n}px</span>
+                  </div>
+                ))}
               </div>
+            </SubSection>
+            <SubSection title="Border radius">
+              <ul className="text-sm text-[#6F7A5A] space-y-1">
+                <li>rounded-lg (8px) · rounded-xl (12px) · rounded-2xl (16px) · rounded-full (pills, avatars).</li>
+              </ul>
+            </SubSection>
+            <SubSection title="Shadows & elevation">
+              <ul className="text-sm text-[#6F7A5A] space-y-1">
+                <li>All shadows: blur ≥ 20px. shadow-sm (cards), shadow-md (hover), shadow-lg (modals). badge-shadow for badges/counters.</li>
+              </ul>
+            </SubSection>
+            <SubSection title="Mobile-first">
+              <ul className="text-sm text-[#6F7A5A] space-y-1">
+                <li>Base styles for mobile; lg: for desktop. TopBar/BottomNav behavior: see docs/VISUAL-SCHEMAS.md.</li>
+                <li>Touch targets ≥ 44px. Safe areas: pt-safe-top, pb-safe-bottom where fixed bars exist.</li>
+              </ul>
+            </SubSection>
+          </div>
+        </Section>
 
-              {/* Square Place Card (Home Carousel) */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-2">Square Place Card (1:1 Aspect Ratio)</h3>
-                <p className="text-sm text-[#6F7A5A] mb-4">Used in: Home page carousel sections</p>
-                <div className="max-w-[200px]">
-                  <div className="[&_.place-card-image]:!pb-[100%]">
-                    <PlaceCard
-                      place={{
-                        id: "example-6",
-                        title: "Beach Paradise",
-                        city: "Naples, FL",
-                        cover_url: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400&h=400&fit=crop",
-                        tags: ["beach", "tropical"],
-                        created_by: null,
-                      }}
-                      userAccess={{ role: "standard", hasPremium: false, isAdmin: false }}
-                      userId="user-123"
-                      isFavorite={false}
-                      favoriteButton={
-                        <button
-                          className="h-8 w-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F] flex items-center justify-center transition-colors"
-                          title="Add to favorites"
-                        >
-                          <FavoriteIcon isActive={false} size={16} />
-                        </button>
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
-
-          {/* Premium Upsell Modal Section */}
-          <section>
-            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Premium Upsell Modal</h2>
-            
-            <PremiumUpsellModalEditor />
-          </section>
-
-              {/* Place Card Specifications */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Place Card Specifications</h3>
-                <div className="space-y-3 text-sm text-[#6F7A5A]">
-                  <div>
-                    <strong className="text-[#1F2A1F]">Image Aspect Ratio:</strong> 4:3 (default) or 1:1 (home carousel)
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Border Radius:</strong> rounded-2xl (16px)
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Title Font:</strong> Fraunces, semibold, base size
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">City Font:</strong> Inter, regular, sm size, text-[#6F7A5A]
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Tags:</strong> Inter, xs size, rounded-full, max 3 visible
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Premium Badge:</strong> Top-left corner, #D6B25E background
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Favorite Button:</strong> Top-right corner, visible on hover (or always if favorited)
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Photo Navigation:</strong> Arrows and dots appear on hover when multiple photos
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Search Modal Section */}
-          <section>
-            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Search Modal</h2>
-            
-            <div className="space-y-6">
-              {/* Overview */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Overview</h3>
-                <p className="text-sm text-[#6F7A5A] mb-4 leading-relaxed">
-                  The Search Modal is a full-screen, multi-step search experience inspired by Airbnb's search pattern. 
-                  It provides a seamless way for users to find places by location and vibe/category. The modal uses 
-                  a two-step flow: "Where?" (city selection) and "What's your vibe?" (tag/category selection).
-                </p>
-                <div className="space-y-2 text-sm text-[#6F7A5A]">
-                  <p><strong className="text-[#1F2A1F]">Used in:</strong> Home page (triggered by search bar click)</p>
-                  <p><strong className="text-[#1F2A1F]">Mobile:</strong> Full-screen bottom sheet (100dvh with safe-area insets)</p>
-                  <p><strong className="text-[#1F2A1F]">Desktop:</strong> Centered modal (max-width: 2xl, rounded-2xl)</p>
-                </div>
-              </div>
-
-              {/* Design Specifications */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Design Specifications</h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Container</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Mobile:</strong> Full-screen overlay (fixed inset-0), white background, z-50</li>
-                      <li><strong>Desktop:</strong> Centered modal, max-width: 2xl (672px), rounded-2xl, shadow-xl</li>
-                      <li><strong>Height:</strong> Mobile uses 100dvh with dynamic viewport height for Chrome compatibility</li>
-                      <li><strong>Background:</strong> Mobile: white, Desktop: black/50 overlay</li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Header</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Height:</strong> Auto (py-3, px-4)</li>
-                      <li><strong>Border:</strong> Bottom border (#ECEEE4)</li>
-                      <li><strong>Title:</strong> Fraunces, text-2xl, font-semibold, text-[#1F2A1F]</li>
-                      <li><strong>Buttons:</strong> Circular (w-10 h-10), rounded-full, hover:bg-[#FAFAF7]</li>
-                      <li><strong>Back button:</strong> Only visible on Step 2, left side</li>
-                      <li><strong>Close button:</strong> Always visible, right side (X icon)</li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Search Input (Step 1)</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Container:</strong> px-6 py-4, border-b (#ECEEE4)</li>
-                      <li><strong>Input field:</strong> Full width, px-4 py-3.5, pl-12 (for icon), rounded-xl</li>
-                      <li><strong>Border:</strong> border (#E5E8DB), focus: border-[#8F9E4F] + ring-2 ring-[#8F9E4F] ring-opacity-20</li>
-                      <li><strong>Background:</strong> White (bg-white)</li>
-                      <li><strong>Placeholder:</strong> text-[#A8B096]</li>
-                      <li><strong>Icon:</strong> Search icon, 20px, absolute left-4, text-[#6F7A5A]</li>
-                      <li><strong>Text:</strong> text-base, text-[#1F2A1F]</li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Suggested Destinations (Step 1, Empty Query)</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Layout:</strong> Vertical list, space-y-0, px-6 py-4</li>
-                      <li><strong>Section title:</strong> "Suggested destinations", text-sm font-medium, mb-4</li>
-                      <li><strong>List items:</strong> Full-width buttons, px-0 py-4, border-b (#ECEEE4) between items</li>
-                      <li><strong>Icon container:</strong> 12x12 (48px), rounded-xl, colored backgrounds with themed icons</li>
-                      <li><strong>Text:</strong> Primary text (base, font-medium), secondary text (sm, text-[#6F7A5A])</li>
-                      <li><strong>Hover:</strong> bg-[#FAFAF7] on entire row</li>
-                      <li><strong>Icon colors:</strong> Rotating palette (green, pink, purple, teal, goldenrod, indigo)</li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Search Results (Step 1, Typing)</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Layout:</strong> Vertical list, space-y-0, px-6 py-2</li>
-                      <li><strong>Place results:</strong> Show cover images (12x12, rounded-xl) when available, fallback to colored icon</li>
-                      <li><strong>City results:</strong> Colored location icons</li>
-                      <li><strong>Image handling:</strong> object-cover, error fallback to icon</li>
-                      <li><strong>Click behavior:</strong> Places navigate to place page, cities select city</li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">City Info Block (Step 2)</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Container:</strong> px-6 pt-6 pb-4, border-b (#ECEEE4)</li>
-                      <li><strong>Icon:</strong> 10x10 (40px), rounded-xl, bg-[#E8F0E8], location icon (#8F9E4F)</li>
-                      <li><strong>City name:</strong> text-base, font-semibold, text-[#1F2A1F]</li>
-                      <li><strong>Count:</strong> text-sm, text-[#6F7A5A], shows "N locations available"</li>
-                      <li><strong>Change button:</strong> text-sm, font-medium, text-[#8F9E4F], underline, hover: text-[#7A8A42]</li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Tag Selection (Step 2)</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Layout:</strong> Vertical list, space-y-0, px-6</li>
-                      <li><strong>Section title:</strong> "What's your vibe?", Fraunces, text-lg, font-semibold</li>
-                      <li><strong>Subtitle:</strong> "Pick one or a few — we'll handle the rest.", text-sm, text-[#6F7A5A]</li>
-                      <li><strong>Tag rows:</strong> Full-width buttons, px-0 py-4, border-b (#ECEEE4) between items</li>
-                      <li><strong>Emoji:</strong> 2xl (24px), left side</li>
-                      <li><strong>Label:</strong> text-base, font-medium, text-[#1F2A1F]</li>
-                      <li><strong>Count:</strong> text-sm, text-[#6F7A5A], shows "(N)" next to label when city selected</li>
-                      <li><strong>Selection indicator:</strong> 6x6 (24px) circle, selected: bg-[#8F9E4F] with white checkmark, unselected: border-2 (#ECEEE4)</li>
-                      <li><strong>Hover:</strong> bg-[#FAFAF7] on entire row</li>
-                      <li><strong>Selected state:</strong> bg-[#FAFAF7] on row</li>
-                      <li><strong>Soft limit warning:</strong> Shows when {'>'}3 tags selected, text-xs, text-center, text-[#6F7A5A]</li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Sticky Footer</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Container:</strong> border-t (#ECEEE4), px-6 py-4, flex justify-between</li>
-                      <li><strong>Safe area:</strong> paddingBottom: max(16px, env(safe-area-inset-bottom))</li>
-                      <li><strong>Clear button:</strong> Text button, underline, text-sm, font-medium, disabled: text-[#A8B096], no-underline</li>
-                      <li><strong>Primary CTA:</strong> h-11, rounded-xl, bg-[#8F9E4F], text-white, px-5, text-sm, font-medium</li>
-                      <li><strong>CTA states:</strong> Step 1: "Next" (if city selected) or "Search" (if query typed), Step 2: "Search"</li>
-                      <li><strong>Disabled state:</strong> bg-[#DADDD0], cursor-not-allowed</li>
-                      <li><strong>Icons:</strong> 20px, white, flex-shrink-0</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* User Flow */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">User Flow & Interactions</h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Step 1: "Where?" (City Selection)</h4>
-                    <ol className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-decimal">
-                      <li>User clicks search bar → Modal opens, autofocus on input</li>
-                      <li>Empty state: Shows "Suggested destinations" (Nearby, Current city, Popular cities, Recent searches)</li>
-                      <li>Typing: Shows live search results (cities and places with cover images)</li>
-                      <li>City selection: Clicking a city auto-advances to Step 2</li>
-                      <li>Place selection: Clicking a place navigates to place page and closes modal</li>
-                      <li>Button behavior: "Next" (if city selected) or "Search" (if query typed)</li>
-                    </ol>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Step 2: "What's your vibe?" (Tag Selection)</h4>
-                    <ol className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-decimal">
-                      <li>Shows selected city info block with location count</li>
-                      <li>Displays all categories as selectable rows with emoji, label, and count</li>
-                      <li>User can select multiple tags (soft limit: 3, but not enforced)</li>
-                      <li>Tag counts update dynamically based on selected city</li>
-                      <li>Back button returns to Step 1</li>
-                      <li>"Clear tags" button resets tag selection</li>
-                      <li>"Search" button applies filters and closes modal</li>
-                    </ol>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">State Management</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Recent searches:</strong> Stored in localStorage, includes city, query, and tags</li>
-                      <li><strong>Persistence:</strong> Selections persist when modal closes and reopens</li>
-                      <li><strong>Live counts:</strong> Tag counts and place counts update in real-time as filters change</li>
-                      <li><strong>Debouncing:</strong> Search queries debounced (200ms) to reduce API calls</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Technical Details */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Technical Implementation</h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Viewport Handling</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Mobile Chrome fix:</strong> Uses window.visualViewport.height for accurate 100dvh</li>
-                      <li><strong>Safe area:</strong> paddingBottom uses env(safe-area-inset-bottom) for notched devices</li>
-                      <li><strong>Dynamic height:</strong> Updates on viewport resize events</li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Data Fetching</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>City search:</strong> Filters cities client-side from loaded list</li>
-                      <li><strong>Place search:</strong> Supabase query with ilike for title, description, country</li>
-                      <li><strong>Tag counts:</strong> Separate queries for each category in selected city</li>
-                      <li><strong>Filtered count:</strong> Combines city, tags, and query filters using Supabase overlaps</li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Accessibility</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Keyboard:</strong> ESC closes modal, Tab navigation, Enter submits</li>
-                      <li><strong>Focus trap:</strong> Desktop modal traps focus within</li>
-                      <li><strong>ARIA labels:</strong> All buttons have aria-label attributes</li>
-                      <li><strong>Screen readers:</strong> Semantic HTML, proper heading hierarchy</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Brand Colors Used */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Brand Colors Used</h3>
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-[#8F9E4F]" />
-                    <div>
-                      <div className="text-sm font-medium text-[#1F2A1F]">Primary Green</div>
-                      <div className="text-xs text-[#6F7A5A]">#8F9E4F</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-[#1F2A1F]" />
-                    <div>
-                      <div className="text-sm font-medium text-[#1F2A1F]">Primary Text</div>
-                      <div className="text-xs text-[#6F7A5A]">#1F2A1F</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-[#6F7A5A]" />
-                    <div>
-                      <div className="text-sm font-medium text-[#1F2A1F]">Secondary Text</div>
-                      <div className="text-xs text-[#6F7A5A]">#6F7A5A</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-[#ECEEE4]" />
-                    <div>
-                      <div className="text-sm font-medium text-[#1F2A1F]">Border Light</div>
-                      <div className="text-xs text-[#6F7A5A]">#ECEEE4</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-[#FAFAF7]" />
-                    <div>
-                      <div className="text-sm font-medium text-[#1F2A1F]">Warm White</div>
-                      <div className="text-xs text-[#6F7A5A]">#FAFAF7</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-[#DADDD0]" />
-                    <div>
-                      <div className="text-sm font-medium text-[#1F2A1F]">Disabled</div>
-                      <div className="text-xs text-[#6F7A5A]">#DADDD0</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* TopBar Section */}
-          <section>
-            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">TopBar Navigation</h2>
-            
-            <div className="space-y-6">
-              {/* Overview */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Overview</h3>
-                <p className="text-sm text-[#6F7A5A] leading-relaxed mb-4">
-                  The TopBar is the primary navigation component used across all pages. It adapts responsively between 
-                  mobile and desktop layouts, with different configurations for each page type (Home, Map, Profile, Place pages, etc.).
-                </p>
-                <div className="space-y-2 text-sm text-[#6F7A5A]">
-                  <div><strong className="text-[#1F2A1F]">Component:</strong> <code className="bg-[#FAFAF7] px-2 py-0.5 rounded">app/components/TopBar.tsx</code></div>
-                  <div><strong className="text-[#1F2A1F]">Breakpoint:</strong> <code className="bg-[#FAFAF7] px-2 py-0.5 rounded">lg (1024px)</code> — переключение между мобильной и десктоп версиями</div>
-                  <div><strong className="text-[#1F2A1F]">Z-index:</strong> <code className="bg-[#FAFAF7] px-2 py-0.5 rounded">z-40</code> (основной TopBar), <code className="bg-[#FAFAF7] px-2 py-0.5 rounded">z-30</code> (переключатель List/Map)</div>
-                </div>
-              </div>
-
-              {/* Home Page */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Home Page (`/`)</h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Mobile Version (&lt; 1024px)</h4>
-                    <div className="bg-[#FAFAF7] rounded-lg p-4 mb-3 font-mono text-xs">
-                      [Back] [Search Pill] [Filters]
-                    </div>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Back Button:</strong> Скрыт на главной странице</li>
-                      <li><strong>Search Pill:</strong> "Start to your search", центрирован, открывает SearchModal</li>
-                      <li><strong>Filters Button:</strong> Скрыт на главной странице</li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Desktop Version (≥ 1024px)</h4>
-                    <div className="bg-[#FAFAF7] rounded-lg p-4 mb-3 font-mono text-xs">
-                      [Logo_maporia1.svg Logo] [SearchBar (Airbnb-style)] [Add Gem] [Avatar] [Hamburger Menu]
-                    </div>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Logo_maporia1.svg Logo:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">h-10 w-auto</code> (40px height), ссылка на `/`</li>
-                      <li><strong>SearchBar:</strong> Полнофункциональный Airbnb-style pill с City Selector, Search Input, Filters</li>
-                      <li><strong>Avatar:</strong> Прямая ссылка на `/profile`, без chevron-down иконки</li>
-                      <li><strong>Hamburger Menu:</strong> Отдельная кнопка с иконкой меню, открывает dropdown с Profile, Feed, Saved, Settings, Logout</li>
-                      <li><strong>Border-bottom:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">border-b border-[#ECEEE4]</code></li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Map Page */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Map Page (`/map`)</h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Mobile Version (&lt; 1024px)</h4>
-                    <div className="bg-[#FAFAF7] rounded-lg p-4 mb-3 font-mono text-xs">
-                      [Back] [SearchBar (Mobile)] [Filters]<br/>
-                      ─────────────────────────────────────<br/>
-                      [List] [Map] ← Переключатель (fixed, top-[64px])
-                    </div>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Back Button:</strong> Навигация на `/`</li>
-                      <li><strong>SearchBar:</strong> Кнопка-триггер, показывает `searchValue` или `selectedCity · Search...`, открывает SearchModal</li>
-                      <li><strong>Filters Button:</strong> Badge с количеством фильтров (если `activeFiltersCount {'>'} 0`)</li>
-                      <li><strong>View Toggle:</strong> Fixed на второй строке, только на мобильных (`lg:hidden`), две кнопки List/Map</li>
-                      <li><strong>Border-bottom:</strong> Убран (`pathname === "/map"` → нет `border-b`)</li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Desktop Version (≥ 1024px)</h4>
-                    <div className="bg-[#FAFAF7] rounded-lg p-4 mb-3 font-mono text-xs">
-                      [Logo_maporia1.svg Logo] [SearchBar (Airbnb-style)] [Add Gem] [Avatar] [Hamburger Menu]
-                    </div>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Logo_maporia1.svg Logo:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">h-10 w-auto</code> (40px height)</li>
-                      <li><strong>SearchBar:</strong> Встроенный компонент с live search (не модальное окно)</li>
-                      <li><strong>Avatar:</strong> Прямая ссылка на `/profile`</li>
-                      <li><strong>Hamburger Menu:</strong> Открывает dropdown меню</li>
-                      <li><strong>View Toggle:</strong> Скрыт (на десктопе используется split view)</li>
-                      <li><strong>Border-bottom:</strong> Убран</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Other Pages */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Other Pages</h3>
-                
-                <div className="space-y-3">
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Place Page (`/id/[id]`)</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Mobile:</strong> [Back] [Share] [Favorite]</li>
-                      <li><strong>Desktop:</strong> Стандартный TopBar с Logo, SearchBar, Auth</li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Profile Page (`/profile`)</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Mobile:</strong> Custom fixed header с "Profile" слева и "Edit" справа (ссылка на `/profile/edit`), без стандартного TopBar</li>
-                      <li><strong>Desktop:</strong> Стандартный TopBar с Logo_maporia1.svg, SearchBar, Auth</li>
-                      <li><strong>Mobile Header:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">fixed top-0 left-0 right-0 z-40 bg-white</code>, высота <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">h-[64px]</code></li>
-                      <li><strong>Content Padding:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">pt-[64px]</code> для мобильной версии</li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Other Pages (`/explore`, `/feed`, `/saved`, `/settings`, `/collections`)</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Mobile:</strong> [Logo] [Search Pill] [Filters]</li>
-                      <li><strong>Desktop:</strong> Стандартный TopBar с Logo, SearchBar, Auth</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Technical Details */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Technical Details</h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Positioning & Layout</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>TopBar:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">fixed top-0 left-0 right-0</code></li>
-                      <li><strong>View Toggle:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">fixed top-[64px] lg:top-[80px]</code></li>
-                      <li><strong>Add Place (profile):</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">absolute top-safe-top top-3 right-4</code></li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">SearchBar States</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Mobile:</strong> Кнопка-триггер → открывает SearchModal</li>
-                      <li><strong>Desktop:</strong> Встроенный компонент с live search</li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Filter Indicators</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Mobile:</strong> Только на кнопке Filters (badge с количеством)</li>
-                      <li><strong>Desktop:</strong> На кнопке Filters внутри SearchBar (badge)</li>
-                      <li><strong>Badge style:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">w-5 h-5 rounded-full bg-[#8F9E4F] text-white text-xs</code></li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">View Toggle (List/Map)</h4>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 ml-4 list-disc">
-                      <li><strong>Visibility:</strong> Только на мобильных (`lg:hidden`)</li>
-                      <li><strong>Position:</strong> Fixed на второй строке под TopBar</li>
-                      <li><strong>Active state:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">bg-[#8F9E4F] text-white</code></li>
-                      <li><strong>Inactive state:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">bg-white text-[#8F9E4F] border border-[#ECEEE4]</code></li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Props Interface */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Props Interface</h3>
-                <pre className="bg-[#FAFAF7] rounded-lg p-4 overflow-x-auto text-xs text-[#6F7A5A]">
-{`type TopBarProps = {
-  // Search bar props
-  showSearchBar?: boolean;
-  searchValue?: string;
-  onSearchChange?: (value: string) => void;
-  selectedCity?: string | null;
-  onCityChange?: (city: string | null) => void;
-  onFiltersClick?: () => void;
-  activeFiltersCount?: number;
-  activeFiltersSummary?: string;
-  onSearchBarClick?: () => void; // Mobile: opens SearchModal
-  
-  // User props
-  userAvatar?: string | null;
-  userDisplayName?: string | null;
-  userEmail?: string | null;
-  
-  // Custom props
-  showBackButton?: boolean;
-  showAddPlaceButton?: boolean;
-  onBackClick?: () => void;
-  
-  // Place page props
-  onShareClick?: () => void;
-  onFavoriteClick?: () => void;
-  isFavorite?: boolean;
-  favoriteLoading?: boolean;
-  
-  // Map page view toggle
-  view?: "list" | "map";
-  onViewChange?: (view: "list" | "map") => void;
-};`}
-                </pre>
-              </div>
-
-              {/* Visual Schemas */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Visual Schemas</h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Home Page (Mobile)</h4>
-                    <div className="bg-[#FAFAF7] rounded-lg p-4 font-mono text-xs border border-[#ECEEE4]">
-                      ┌─────────────────────────────────┐<br/>
-                      │ [🔍 Start to your search]      │<br/>
-                      └─────────────────────────────────┘
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Home Page (Desktop)</h4>
-                    <div className="bg-[#FAFAF7] rounded-lg p-4 font-mono text-xs border border-[#ECEEE4]">
-                      ┌─────────────────────────────────────────────────────────────┐<br/>
-                      │ [Maporia] [Anywhere ▼ | Search... | 🔍 Filters] [➕] [👤▼] │<br/>
-                      └─────────────────────────────────────────────────────────────┘
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Map Page (Mobile)</h4>
-                    <div className="bg-[#FAFAF7] rounded-lg p-4 font-mono text-xs border border-[#ECEEE4]">
-                      ┌─────────────────────────────────┐<br/>
-                      │ [←] [Miami · Search...] [🔍 2]   │<br/>
-                      ├─────────────────────────────────┤<br/>
-                      │ [List] [Map]                    │<br/>
-                      └─────────────────────────────────┘
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#1F2A1F] mb-2">Map Page (Desktop)</h4>
-                    <div className="bg-[#FAFAF7] rounded-lg p-4 font-mono text-xs border border-[#ECEEE4]">
-                      ┌─────────────────────────────────────────────────────────────┐<br/>
-                      │ [Maporia] [Miami ▼ | Search... | 🔍 2] [➕] [👤▼]          │<br/>
-                      └─────────────────────────────────────────────────────────────┘
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Responsive Design Section */}
-          <section>
-            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Responsive Design & Breakpoints</h2>
-            
-            <div className="space-y-6">
-              {/* Breakpoints Overview */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Breakpoints</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[#ECEEE4]">
-                        <th className="text-left py-2 px-3 font-semibold text-[#1F2A1F]">Breakpoint</th>
-                        <th className="text-left py-2 px-3 font-semibold text-[#1F2A1F]">Width</th>
-                        <th className="text-left py-2 px-3 font-semibold text-[#1F2A1F]">Device</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-b border-[#ECEEE4]">
-                        <td className="py-2 px-3 text-[#6F7A5A] font-mono">Mobile</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">&lt; 600px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">Mobile phones</td>
-                      </tr>
-                      <tr className="border-b border-[#ECEEE4]">
-                        <td className="py-2 px-3 text-[#6F7A5A] font-mono">Tablet</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">600px - 899px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">Tablets, small laptops</td>
-                      </tr>
-                      <tr className="border-b border-[#ECEEE4]">
-                        <td className="py-2 px-3 text-[#6F7A5A] font-mono">Tablet Large</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">900px - 1119px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">Large tablets</td>
-                      </tr>
-                      <tr className="border-b border-[#ECEEE4]">
-                        <td className="py-2 px-3 text-[#6F7A5A] font-mono">Desktop</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">1120px - 1439px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">Desktop screens</td>
-                      </tr>
-                      <tr className="border-b border-[#ECEEE4]">
-                        <td className="py-2 px-3 text-[#6F7A5A] font-mono">Desktop XL</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">1440px - 1919px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">Large desktop screens</td>
-                      </tr>
-                      <tr>
-                        <td className="py-2 px-3 text-[#6F7A5A] font-mono">Very Large</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">≥ 1920px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">Very large monitors</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Typography Responsive */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Typography - Responsive Sizes</h3>
-                <div className="space-y-3 text-sm text-[#6F7A5A]">
-                  <div>
-                    <strong className="text-[#1F2A1F]">H1:</strong> 30px (mobile) → 32px (≥600px)
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">H2:</strong> 22px (mobile) → 24px (≥600px)
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Body:</strong> 15px (all sizes)
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Small:</strong> 13px (all sizes)
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Caption:</strong> 12px (all sizes)
-                  </div>
-                </div>
-              </div>
-
-              {/* Place Cards Grid - Responsive */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Place Cards Grid - Responsive Behavior</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[#ECEEE4]">
-                        <th className="text-left py-2 px-3 font-semibold text-[#1F2A1F]">Breakpoint</th>
-                        <th className="text-left py-2 px-3 font-semibold text-[#1F2A1F]">Columns</th>
-                        <th className="text-left py-2 px-3 font-semibold text-[#1F2A1F]">Card Width</th>
-                        <th className="text-left py-2 px-3 font-semibold text-[#1F2A1F]">Gap</th>
-                        <th className="text-left py-2 px-3 font-semibold text-[#1F2A1F]">Used In</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-b border-[#ECEEE4]">
-                        <td className="py-2 px-3 text-[#6F7A5A] font-mono">&lt; 600px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">1</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">100% (full width)</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">16px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">All pages</td>
-                      </tr>
-                      <tr className="border-b border-[#ECEEE4]">
-                        <td className="py-2 px-3 text-[#6F7A5A] font-mono">600-899px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">1</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">100% (max 680px, centered)</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">16px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">Map, Explore</td>
-                      </tr>
-                      <tr className="border-b border-[#ECEEE4]">
-                        <td className="py-2 px-3 text-[#6F7A5A] font-mono">900-1119px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">2</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">300-420px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">18-20px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">Map, Explore</td>
-                      </tr>
-                      <tr className="border-b border-[#ECEEE4]">
-                        <td className="py-2 px-3 text-[#6F7A5A] font-mono">1120-1439px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">2</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">320-420px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">22-24px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">Map (62.5% list, 37.5% map)</td>
-                      </tr>
-                      <tr className="border-b border-[#ECEEE4]">
-                        <td className="py-2 px-3 text-[#6F7A5A] font-mono">1440-1919px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">3</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">320-420px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">24px (row: 28px)</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">Map (60% list, 40% map)</td>
-                      </tr>
-                      <tr>
-                        <td className="py-2 px-3 text-[#6F7A5A] font-mono">≥ 1920px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">3</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">320-420px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">24px (row: 28px)</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">Map (list: max 1152px, map: flex-1)</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Home Page Carousel - Responsive */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Home Page Carousel - Responsive Card Sizes</h3>
-                <div className="space-y-3 text-sm text-[#6F7A5A]">
-                  <div>
-                    <strong className="text-[#1F2A1F]">&lt; 390px:</strong> 2.2 cards visible, dynamic width
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">390-599px:</strong> 2.2 cards visible, dynamic width
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">600-899px:</strong> Fixed 270px width
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">900-1119px:</strong> Fixed 200px width, 7 cards visible
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">1120-1439px:</strong> Fixed 220px width, 7 cards visible
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">1440-1919px:</strong> Fixed 185px width, 7 cards visible
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">≥ 1920px:</strong> Fixed 220px width, 7 cards visible
-                  </div>
-                </div>
-              </div>
-
-              {/* Navigation - Responsive */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Navigation - Responsive Behavior</h3>
-                <div className="space-y-4">
-                  <div>
-                    <div className="font-semibold text-[#1F2A1F] mb-2">TopBar</div>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 list-disc list-inside">
-                      <li><strong>&lt; 600px:</strong> Mobile search bar, hamburger menu</li>
-                      <li><strong>≥ 600px:</strong> Desktop search bar, full navigation</li>
-                      <li><strong>≥ 900px:</strong> Additional filters visible</li>
-                      <li><strong>≥ 1120px:</strong> Full search bar centered</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <div className="font-semibold text-[#1F2A1F] mb-2">BottomNav</div>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 list-disc list-inside">
-                      <li><strong>&lt; 1024px (lg):</strong> Visible, fixed bottom</li>
-                      <li><strong>≥ 1024px:</strong> Hidden</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Map Page - Responsive */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Map Page - Responsive Layout</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[#ECEEE4]">
-                        <th className="text-left py-2 px-3 font-semibold text-[#1F2A1F]">Breakpoint</th>
-                        <th className="text-left py-2 px-3 font-semibold text-[#1F2A1F]">List/Map Ratio</th>
-                        <th className="text-left py-2 px-3 font-semibold text-[#1F2A1F]">Map Mode</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-b border-[#ECEEE4]">
-                        <td className="py-2 px-3 text-[#6F7A5A] font-mono">&lt; 600px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">100% / 0%</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">Floating button → Bottom sheet (50vh map)</td>
-                      </tr>
-                      <tr className="border-b border-[#ECEEE4]">
-                        <td className="py-2 px-3 text-[#6F7A5A] font-mono">600-899px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">100% / 0%</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">Hidden (button "Map")</td>
-                      </tr>
-                      <tr className="border-b border-[#ECEEE4]">
-                        <td className="py-2 px-3 text-[#6F7A5A] font-mono">900-1119px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">100% / 0%</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">Hidden (button "Show map")</td>
-                      </tr>
-                      <tr className="border-b border-[#ECEEE4]">
-                        <td className="py-2 px-3 text-[#6F7A5A] font-mono">1120-1439px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">62.5% / 37.5%</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">Sticky right (top: 80px)</td>
-                      </tr>
-                      <tr>
-                        <td className="py-2 px-3 text-[#6F7A5A] font-mono">≥ 1440px</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">60% / 40%</td>
-                        <td className="py-2 px-3 text-[#6F7A5A]">Sticky right (top: 80px, border-radius: 16px)</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Place Detail Page - Responsive */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Place Detail Page - Responsive Layout</h3>
-                <div className="space-y-4">
-                  <div>
-                    <div className="font-semibold text-[#1F2A1F] mb-2">Gallery</div>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 list-disc list-inside">
-                      <li><strong>&lt; 600px:</strong> Mobile carousel (full-bleed, 56vh height)</li>
-                      <li><strong>600-899px:</strong> Simplified mosaic or hero + scroll</li>
-                      <li><strong>≥ 900px:</strong> 2-column mosaic (hero 60-66% + 4 tiles 34-40%)</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <div className="font-semibold text-[#1F2A1F] mb-2">Content Layout</div>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 list-disc list-inside">
-                      <li><strong>&lt; 1120px:</strong> 1 column (content + booking below)</li>
-                      <li><strong>1120-1439px:</strong> 2 columns (64% content, 36% booking sticky right)</li>
-                      <li><strong>≥ 1440px:</strong> 2 columns (60% content, 40% booking sticky right)</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <div className="font-semibold text-[#1F2A1F] mb-2">Container</div>
-                    <ul className="text-sm text-[#6F7A5A] space-y-1 list-disc list-inside">
-                      <li><strong>&lt; 600px:</strong> Full width, no padding (full-bleed)</li>
-                      <li><strong>600-899px:</strong> Full width, 20px padding</li>
-                      <li><strong>900-1119px:</strong> Full width, 24px padding</li>
-                      <li><strong>1120-1439px:</strong> Max-width 1120px, 24px padding</li>
-                      <li><strong>≥ 1440px:</strong> Max-width 1280px, 24px padding</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Spacing - Responsive */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Spacing - Responsive Padding</h3>
-                <div className="space-y-3 text-sm text-[#6F7A5A]">
-                  <div>
-                    <strong className="text-[#1F2A1F]">Page Padding:</strong>
-                  </div>
-                  <ul className="list-disc list-inside space-y-1 ml-4">
-                    <li><strong>&lt; 600px:</strong> 16px</li>
-                    <li><strong>600-899px:</strong> 20px</li>
-                    <li><strong>≥ 900px:</strong> 24px</li>
-                    <li><strong>≥ 1920px:</strong> 32px</li>
-                  </ul>
-                  <div className="mt-4">
-                    <strong className="text-[#1F2A1F]">Container Max Width:</strong>
-                  </div>
-                  <ul className="list-disc list-inside space-y-1 ml-4">
-                    <li><strong>&lt; 1120px:</strong> 100% (full width)</li>
-                    <li><strong>1120-1439px:</strong> 1120px</li>
-                    <li><strong>1440-1919px:</strong> 1920px</li>
-                    <li><strong>≥ 1920px:</strong> No max-width (stretches)</li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* Buttons - Responsive */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Buttons - Responsive Behavior</h3>
-                <div className="space-y-3 text-sm text-[#6F7A5A]">
-                  <div>
-                    <strong className="text-[#1F2A1F]">Standard Button Height:</strong> h-11 (44px) - consistent across all breakpoints
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Padding:</strong> px-5 (20px) - consistent across all breakpoints
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Icon Buttons:</strong> Size adapts (16px, 20px, 24px) but proportions remain consistent
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Places Filtering Logic */}
-          <section>
-            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Places Filtering Logic</h2>
-            
-            <div className="space-y-6">
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Filter Structure</h3>
-                <div className="space-y-4 text-sm text-[#6F7A5A]">
-                  <div>
-                    <strong className="text-[#1F2A1F]">Filter Groups:</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li><strong>Top Pills:</strong> Premium, Hidden, Vibe (boolean filters)</li>
-                      <li><strong>City:</strong> Multi-select cities</li>
-                      <li><strong>Category:</strong> Multi-select categories</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Filter Logic:</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li><strong>AND between groups:</strong> (Top Pills) AND (City) AND (Category)</li>
-                      <li><strong>OR within groups:</strong> City OR City OR City, Category OR Category</li>
-                      <li><strong>AND within Top Pills:</strong> Premium AND Hidden AND Vibe (if multiple selected)</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Filter Rules</h3>
-                <div className="space-y-4 text-sm text-[#6F7A5A]">
-                  <div>
-                    <strong className="text-[#1F2A1F]">Top Pills (Premium, Hidden, Vibe):</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li>Each enabled pill adds an AND condition</li>
-                      <li>Premium: <code className="bg-[#FAFAF7] px-1 rounded">is_premium === true</code> OR <code className="bg-[#FAFAF7] px-1 rounded">access_level === 'premium'</code></li>
-                      <li>Hidden: <code className="bg-[#FAFAF7] px-1 rounded">is_hidden === true</code> OR category includes "🤫 Hidden & Unique"</li>
-                      <li>Vibe: <code className="bg-[#FAFAF7] px-1 rounded">is_vibe === true</code> OR category includes "✨ Vibe & Atmosphere"</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">City Filter:</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li>0 cities selected → no city filter applied</li>
-                      <li>1 city selected → show places from that city only</li>
-                      <li>2+ cities selected → show places from any selected city (OR logic)</li>
-                      <li>All cities selected → show all places (sum of all cities)</li>
-                      <li>City comparison uses normalized names (trim, lowercase)</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Category Filter:</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li>0 categories selected → no category filter applied</li>
-                      <li>1+ categories selected → place passes if it has ANY selected category (OR logic)</li>
-                      <li>All categories selected → show all places (no category filter)</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Special Cases:</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li>If no filters selected → show all places</li>
-                      <li>If all cities selected → filter remains active, shows sum of all places</li>
-                      <li>If all categories selected → filter remains active, shows all places</li>
-                      <li>Search query is applied separately before filter logic</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Implementation</h3>
-                <div className="space-y-3 text-sm text-[#6F7A5A]">
-                  <div>
-                    <strong className="text-[#1F2A1F]">Centralized Function:</strong>
-                    <code className="block bg-[#FAFAF7] p-3 rounded-lg mt-2 font-mono text-xs">filterPlaces(places: Place[], filters: PlaceFilters): Place[]</code>
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Filter Order:</strong>
-                    <ol className="list-decimal list-inside space-y-1 ml-4 mt-2">
-                      <li>Apply search query filter (if exists)</li>
-                      <li>Apply Top Pills filters (Premium, Hidden, Vibe) - AND between them</li>
-                      <li>Apply City filter (OR within selected cities)</li>
-                      <li>Apply Category filter (OR within selected categories)</li>
-                    </ol>
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Count Calculation:</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li>Always loads all places from database for accurate count</li>
-                      <li>Applies all filters client-side using <code className="bg-[#FAFAF7] px-1 rounded">filterPlaces</code></li>
-                      <li>Returns filtered count for "Show X places" button</li>
-                      <li>Button is disabled when count is 0</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Profile Page Structure */}
-          <section>
-            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Profile Page Structure</h2>
-            
-            <div className="space-y-6">
-              {/* Mobile Header */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Mobile Custom Header</h3>
-                <div className="space-y-3 text-sm text-[#6F7A5A]">
-                  <div>
-                    <strong className="text-[#1F2A1F]">Structure:</strong>
-                    <div className="bg-[#FAFAF7] rounded-lg p-4 mb-3 font-mono text-xs mt-2">
-                      [Profile Title] [Edit Button]
-                    </div>
-                  </div>
-                  <ul className="list-disc list-inside space-y-1 ml-4">
-                    <li><strong>Title:</strong> "Profile", text-lg, font-semibold, слева</li>
-                    <li><strong>Edit Button:</strong> Справа, ссылка на `/profile/edit`, иконка редактирования</li>
-                    <li><strong>Position:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">fixed top-0 left-0 right-0 z-40</code></li>
-                    <li><strong>Height:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">h-[64px]</code></li>
-                    <li><strong>No border:</strong> Без разделителя между header и контентом</li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* Desktop Layout */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Desktop Layout (≥ 900px)</h3>
-                <div className="space-y-3 text-sm text-[#6F7A5A]">
-                  <div>
-                    <strong className="text-[#1F2A1F]">Quick Access Cards:</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li>Расположены под "Hero Card" в секции About</li>
-                      <li>Grid: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">grid grid-cols-3 gap-4</code></li>
-                      <li>Карточки: "My favorites", "Added places", "History"</li>
-                      <li>Каждая карточка переключает соответствующую секцию</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Sidebar Navigation:</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li>About, Trips, Added, History, Activity</li>
-                      <li>Для админов: Users, Elements</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Profile Sections */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Profile Sections</h3>
-                <div className="space-y-3 text-sm text-[#6F7A5A]">
-                  <div>
-                    <strong className="text-[#1F2A1F]">About Section:</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li>Hero Card с аватаром, именем, статистикой</li>
-                      <li>Quick Access Cards (только на desktop): My favorites, Added places, History</li>
-                      <li>Bio, Reviews, Stats</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">History Section:</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li>Показывает недавно просмотренные места</li>
-                      <li>Данные загружаются из localStorage (<code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">recentlyViewedPlaceIds</code>)</li>
-                      <li>Использует те же PlaceCard компоненты, что и на /map</li>
-                      <li>Grid layout: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">grid grid-cols-2 lg:grid-cols-3 gap-6</code></li>
-                    </ul>
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Mobile Quick Access Cards:</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li>Все пункты оформлены как карточки в grid: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">grid grid-cols-2 gap-4</code></li>
-                      <li>Карточки: "My favorites", "Added places", "History", "Activity"</li>
-                      <li>Для админов дополнительно: "Users", "Elements"</li>
-                      <li>Стиль карточек: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md</code></li>
-                      <li>Карточки с фото показывают до 2 перекрывающихся изображений с поворотом</li>
-                      <li>Карточки без фото показывают иконку в центре</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Elements Section (Admin only):</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li>Premium Upsell Modal Editor - редактирование контента модального окна</li>
-                      <li>Brand Guide - ссылка на полный Brand Guide</li>
-                      <li>Доступна только для администраторов</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Profile Edit Pages */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Profile Edit Pages (`/profile/edit/*`)</h3>
-                <div className="space-y-3 text-sm text-[#6F7A5A]">
-                  <div>
-                    <strong className="text-[#1F2A1F]">Mobile Header (все sub-pages):</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li>Fixed header с кнопкой "назад" (стрелочка) слева</li>
-                      <li>Заголовок страницы по центру (например: "Profile editor", "Profile photo", "Display name", "Username", "Bio")</li>
-                      <li>Spacer справа для центрирования</li>
-                      <li>Кнопка "назад" ведет на `/profile/edit` (или `/profile` для главной edit страницы)</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Desktop Header:</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li>Стандартный sticky header с кнопкой закрытия и заголовком</li>
-                      <li>Виден только на desktop: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">hidden lg:block</code></li>
-                    </ul>
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Content Padding:</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li>Mobile: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">pt-[80px]</code></li>
-                      <li>Desktop: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">lg:pt-8</code></li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Performance & Behavior */}
-          <section>
-            <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Performance & Behavior</h2>
-            
-            <div className="space-y-6">
-              {/* Tab Switching / Visibility */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">Tab Switching & Visibility Change</h3>
-                <div className="space-y-3 text-sm text-[#6F7A5A]">
-                  <div>
-                    <strong className="text-[#1F2A1F]">Problem Solved:</strong>
-                    <p className="mt-1">После долгого использования и частого переключения вкладок контент переставал подгружаться при скролле.</p>
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Solution:</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li>Обработка события <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">visibilitychange</code> на всех страницах с подгрузкой контента</li>
-                      <li>При возврате на вкладку (<code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">document.visibilityState === 'visible'</code>) данные автоматически перезагружаются</li>
-                      <li>Сброс <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">loadPlacesRef.current.key</code> для принудительной перезагрузки</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Implementation:</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li><strong>Map Page:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">app/map/page.tsx</code> - useEffect с visibilitychange handler</li>
-                      <li><strong>HomeSection:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">app/components/HomeSection.tsx</code> - для всех секций, не только recentlyViewed</li>
-                      <li><strong>Cleanup:</strong> Все event listeners правильно очищаются при размонтировании</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* BottomNav Scroll Behavior */}
-              <div className="rounded-xl border border-[#ECEEE4] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#1F2A1F] mb-4">BottomNav Scroll Behavior</h3>
-                <div className="space-y-3 text-sm text-[#6F7A5A]">
-                  <div>
-                    <strong className="text-[#1F2A1F]">Behavior:</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li>Скрывается при скролле вниз на всех мобильных страницах</li>
-                      <li>Появляется при скролле вверх</li>
-                      <li>Работает на всех страницах (Home, Map, Profile, Saved, etc.)</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Implementation:</strong>
-                    <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
-                      <li>Слушает события скролла: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">window</code>, <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">document</code>, <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">document.documentElement</code></li>
-                      <li>Threshold: <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">10px</code> минимальное расстояние для срабатывания</li>
-                      <li>Скрывается при скролле вниз на <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">{'>'} 50px</code> от начала</li>
-                      <li>Использует <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">requestAnimationFrame</code> для оптимизации</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <strong className="text-[#1F2A1F]">Component:</strong> <code className="bg-[#FAFAF7] px-1.5 py-0.5 rounded">app/components/BottomNav.tsx</code>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
+        {/* 9. Developer / Handoff */}
+        <Section id="developer" title="9. Developer / Handoff">
+          <div className="rounded-2xl border border-[#ECEEE4] bg-white p-6 space-y-6">
+            <SubSection title="Design tokens">
+              <ul className="text-sm text-[#6F7A5A] space-y-1">
+                <li>CSS vars in <code className="bg-[#FAFAF7] px-1 rounded text-xs">app/globals.css</code>: --olive-primary, --warm-white, --text-primary, --text-secondary, --text-muted, --border-light, --success, --error, --disabled-bg, etc.</li>
+                <li>Tailwind: use hex or var() for consistency. No hardcoded non-token colors in new UI.</li>
+              </ul>
+            </SubSection>
+            <SubSection title="Naming">
+              <ul className="text-sm text-[#6F7A5A] space-y-1">
+                <li>Components: PascalCase. Tokens: kebab-case (--olive-primary). Classes: Tailwind + optional BEM for custom.</li>
+              </ul>
+            </SubSection>
+            <SubSection title="Fixed vs flexible">
+              <ul className="text-sm text-[#6F7A5A] space-y-1">
+                <li><strong className="text-[#1F2A1F">Fixed:</strong> Logo lockup proportions, wordmark font (Manrope 800), primary green #8F9E4F, clear space.</li>
+                <li><strong className="text-[#1F2A1F">Flexible:</strong> Section order on this page, copy, number of place card variants; spacing within scale.</li>
+              </ul>
+            </SubSection>
+            <SubSection title="Handoff notes">
+              <ul className="text-sm text-[#6F7A5A] space-y-1">
+                <li><strong className="text-[#1F2A1F">Frontend:</strong> Wordmark.tsx, Icon component, PlaceCard, PremiumUpsellModal. Use design tokens from globals.css.</li>
+                <li><strong className="text-[#1F2A1F">No-code / Glide:</strong> Export logo SVGs from public/; use HEX list from Color System; typography = Fraunces headings, Inter body.</li>
+                <li>Canonical doc: <code className="bg-[#FAFAF7] px-1 rounded text-xs">docs/BRAND-GUIDE.md</code>. Layout schemas: <code className="bg-[#FAFAF7] px-1 rounded text-xs">docs/VISUAL-SCHEMAS.md</code>.</li>
+              </ul>
+            </SubSection>
+          </div>
+        </Section>
       </div>
     </main>
   );

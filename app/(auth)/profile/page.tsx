@@ -1950,17 +1950,20 @@ function AddedPlacesSection({
   const { access, user } = useUserAccessContext();
   const [deletingPlaceId, setDeletingPlaceId] = useState<string | null>(null);
   const [menuOpenPlaceId, setMenuOpenPlaceId] = useState<string | null>(null);
+  const [deleteConfirmPlace, setDeleteConfirmPlace] = useState<{ id: string; title: string } | null>(null);
 
-  async function handleDelete(placeId: string, placeTitle: string) {
+  function openDeletePlaceConfirm(placeId: string, placeTitle: string) {
+    setDeleteConfirmPlace({ id: placeId, title: placeTitle || "this place" });
+  }
+
+  function closeDeletePlaceConfirm() {
+    setDeleteConfirmPlace(null);
+  }
+
+  async function confirmDeletePlace(placeId: string) {
     if (!user) return;
-
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${placeTitle || 'this place'}"? This action cannot be undone.`
-    );
-    
-    if (!confirmed) return;
-
     setDeletingPlaceId(placeId);
+    setDeleteConfirmPlace(null);
 
     try {
       // Step 1: Get all photos to delete from storage
@@ -2043,6 +2046,15 @@ function AddedPlacesSection({
     } finally {
       setDeletingPlaceId(null);
     }
+  }
+
+  async function handleDelete(placeId: string, placeTitle: string) {
+    openDeletePlaceConfirm(placeId, placeTitle);
+  }
+
+  async function handleConfirmDeletePlace() {
+    if (!deleteConfirmPlace) return;
+    await confirmDeletePlace(deleteConfirmPlace.id);
   }
 
   if (loading) {
@@ -2293,6 +2305,41 @@ function AddedPlacesSection({
                 className="w-full py-3 text-base font-medium text-[#6F7A5A] hover:text-[#1F2A1F] transition-colors"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete place confirmation modal */}
+      {deleteConfirmPlace && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-place-modal-title"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white border border-[#ECEEE4] shadow-lg p-6">
+            <h2 id="delete-place-modal-title" className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-2">
+              Delete place
+            </h2>
+            <p className="text-sm text-[#6F7A5A] mb-6">
+              Are you sure you want to delete <strong className="text-[#1F2A1F]">{deleteConfirmPlace.title}</strong>? This action cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={closeDeletePlaceConfirm}
+                className="px-4 py-2.5 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] text-sm font-medium hover:bg-[#FAFAF7] transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeletePlace}
+                className="px-4 py-2.5 rounded-xl bg-[#C96A5B] text-white text-sm font-medium hover:bg-[#B85A4B] transition"
+              >
+                Delete
               </button>
             </div>
           </div>
@@ -2942,6 +2989,25 @@ function ElementsSection() {
           )}
         </div>
 
+        {/* Collections (Admin CRUD) */}
+        <Link
+          href="/admin/collections"
+          className="block rounded-xl border border-[#ECEEE4] bg-white p-6 hover:shadow-md transition group"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4] flex items-center justify-center">
+                <Icon name="grid" size={24} className="text-[#8F9E4F]" />
+              </div>
+              <div>
+                <div className="font-semibold text-[#1F2A1F] mb-1">Collections</div>
+                <div className="text-sm text-[#6F7A5A]">Create and manage curated place collections (free / premium)</div>
+              </div>
+            </div>
+            <Icon name="forward" size={20} className="text-[#A8B096] group-hover:text-[#6F7A5A] transition" />
+          </div>
+        </Link>
+
         {/* Edit Tags */}
         <TagsSection />
 
@@ -3307,7 +3373,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Track pending role changes before saving
+  const [deleteConfirmUserId, setDeleteConfirmUserId] = useState<string | null>(null);
   const [pendingRoleChanges, setPendingRoleChanges] = useState<Map<string, 'standard' | 'premium' | 'admin'>>(new Map());
 
   useEffect(() => {
@@ -3435,23 +3501,25 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
     });
   }
 
-  async function deleteUser(userId: string) {
-    if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
-      return;
-    }
-
+  function openDeleteConfirm(userId: string) {
     if (userId === currentUserId) {
       setError("You cannot delete your own account");
       return;
     }
+    setError(null);
+    setDeleteConfirmUserId(userId);
+  }
 
+  function closeDeleteConfirm() {
+    setDeleteConfirmUserId(null);
+  }
+
+  async function confirmDeleteUser(userId: string) {
     setDeletingUserId(userId);
     setError(null);
+    setDeleteConfirmUserId(null);
 
     try {
-      // Delete from profiles (auth deletion requires server-side admin API)
-      // Note: This will delete the profile but not the auth user
-      // For full deletion, you need a server-side API endpoint
       const { error: profileError } = await supabase
         .from("profiles")
         .delete()
@@ -3462,8 +3530,6 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
         setError("Failed to delete user. Note: Full user deletion requires server-side API.");
         return;
       }
-
-      // Reload users
       await loadUsers();
     } catch (err) {
       console.error("Error deleting user:", err);
@@ -3603,7 +3669,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
                   {/* Delete Button */}
                   {user.id !== currentUserId && !pendingRoleChanges.has(user.id) && (
                     <button
-                      onClick={() => deleteUser(user.id)}
+                      onClick={() => openDeleteConfirm(user.id)}
                       disabled={deletingUserId === user.id}
                       className="p-2 rounded-lg border border-[#C96A5B]/30 text-[#C96A5B] hover:bg-[#C96A5B]/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Delete user"
@@ -3621,6 +3687,47 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
           ))
         )}
       </div>
+
+      {/* Delete user confirmation modal */}
+      {deleteConfirmUserId != null && (() => {
+        const userToDelete = users.find((u) => u.id === deleteConfirmUserId);
+        const displayName = userToDelete
+          ? userToDelete.display_name || userToDelete.username || userToDelete.email || "User"
+          : "this user";
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-user-modal-title"
+          >
+            <div className="w-full max-w-md rounded-2xl bg-white border border-[#ECEEE4] shadow-lg p-6">
+              <h2 id="delete-user-modal-title" className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-2">
+                Delete user
+              </h2>
+              <p className="text-sm text-[#6F7A5A] mb-6">
+                Are you sure you want to delete <strong className="text-[#1F2A1F]">{displayName}</strong>? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={closeDeleteConfirm}
+                  className="px-4 py-2.5 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] text-sm font-medium hover:bg-[#FAFAF7] transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => confirmDeleteUser(deleteConfirmUserId)}
+                  className="px-4 py-2.5 rounded-xl bg-[#C96A5B] text-white text-sm font-medium hover:bg-[#B85A4B] transition"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

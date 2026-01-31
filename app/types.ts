@@ -109,3 +109,33 @@ export type CreatorProfile = {
   username: string | null;
   avatar_url: string | null;
 };
+
+/**
+ * Collection access type
+ */
+export type CollectionAccessType = "free" | "premium";
+
+/**
+ * Collection from collections table
+ */
+export type Collection = {
+  id: string;
+  title: string;
+  description: string | null;
+  cover_image: string | null;
+  access_type: CollectionAccessType;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string | null;
+};
+
+/**
+ * Place–collection join (place_collections table)
+ */
+export type PlaceCollection = {
+  id: string;
+  place_id: string;
+  collection_id: string;
+  sort_order: number;
+  created_at?: string;
+};

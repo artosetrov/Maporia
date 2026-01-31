@@ -317,6 +317,12 @@ FOR UPDATE
 USING (is_admin() = TRUE)
 WITH CHECK (is_admin() = TRUE);
 
+-- Policy: Admins can delete any profile (for admin user management)
+CREATE POLICY "Admins can delete any profile"
+ON profiles
+FOR DELETE
+USING (is_admin() = TRUE);
+
 -- 9. Ensure RLS is enabled on all tables
 ALTER TABLE places ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reactions ENABLE ROW LEVEL SECURITY;

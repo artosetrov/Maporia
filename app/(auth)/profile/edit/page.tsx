@@ -8,50 +8,11 @@ import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import { useUserAccessContext } from "../../../contexts/UserAccessContext";
 import Icon from "../../../components/Icon";
-import UnifiedGoogleImportField from "../../../components/UnifiedGoogleImportField";
 import type { Profile } from "../../../types";
+import { getTagEmoji } from "../../../constants";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
-}
-
-async function handleGoogleImport(data: any, profile: Profile | null, setProfile: (p: Profile) => void, user: any) {
-  // Update profile with imported data
-  const updates: any = {
-    display_name: data.name || data.business_name || profile?.display_name || null,
-    address: data.formatted_address || data.address || profile?.address || null,
-    website: data.website || profile?.website || null,
-    phone: data.phone || profile?.phone || null,
-    google_place_id: data.place_id || data.google_place_id || null,
-    google_maps_url: data.google_maps_url || null,
-    google_rating: data.rating || null,
-    google_reviews_count: data.reviews_count || data.user_ratings_total || null,
-    google_opening_hours: data.opening_hours || null,
-  };
-
-  // Only update bio if it's currently empty
-  if (!profile?.bio && data.types && data.types.length > 0) {
-    const city = data.city || data.formatted_address?.split(",").pop()?.trim() || "";
-    const category = data.category || data.types[0] || "";
-    updates.bio = `${category}${city ? ` in ${city}` : ""}`;
-  }
-
-  // Save to database
-  const { error: updateError } = await supabase
-    .from("profiles")
-    // @ts-expect-error Supabase generated types infer update payload as never
-    .update(updates)
-    .eq("id", user.id);
-
-  if (updateError) {
-    throw new Error(updateError.message || "Failed to save imported data");
-  }
-
-  // Update local state
-  setProfile({
-    ...profile!,
-    ...updates,
-  });
 }
 
 export default function ProfileEditorHub() {
@@ -191,17 +152,6 @@ export default function ProfileEditorHub() {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 pt-[80px] lg:pt-6">
         <div className="space-y-4">
-            {/* Google Import Card */}
-            {user && (
-              <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
-                <UnifiedGoogleImportField
-                  userId={user.id}
-                  context="profile"
-                  onImportSuccess={(data) => handleGoogleImport(data, profile, setProfile, user)}
-                />
-              </div>
-            )}
-
           {/* Avatar Card */}
           <Link
             href={`/profile/edit/avatar`}
@@ -249,19 +199,19 @@ export default function ProfileEditorHub() {
             </div>
           </Link>
 
-          {/* Username Card */}
+          {/* Email Card */}
           <Link
-            href={`/profile/edit/username`}
+            href="/settings/email"
             className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
           >
             <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <h3 className="font-semibold text-[#1F2A1F] mb-1">Username</h3>
-                <p className="text-sm text-[#6F7A5A] line-clamp-1">
-                  {profile.username || "No username set"}
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-[#1F2A1F] mb-1">Email</h3>
+                <p className="text-sm text-[#6F7A5A] truncate">
+                  {user?.email || "Not set"}
                 </p>
               </div>
-              <Icon name="forward" size={20} className="text-[#6F7A5A]" />
+              <Icon name="forward" size={20} className="text-[#6F7A5A] flex-shrink-0" />
             </div>
           </Link>
 
@@ -286,16 +236,42 @@ export default function ProfileEditorHub() {
             href={`/profile/edit/interests`}
             className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
           >
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <h3 className="font-semibold text-[#1F2A1F] mb-1">Interests</h3>
-                <p className="text-sm text-[#6F7A5A] line-clamp-1">
-                  {profile.favorite_categories && profile.favorite_categories.length > 0
-                    ? `${profile.favorite_categories.length} categories, ${(profile.favorite_tags || []).length} tags`
-                    : "No interests set"}
-                </p>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-[#1F2A1F] mb-2">Interests</h3>
+                {profile.favorite_categories?.length || profile.favorite_tags?.length ? (
+                  <div className="space-y-2">
+                    {profile.favorite_categories && profile.favorite_categories.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {profile.favorite_categories.map((cat) => (
+                          <span
+                            key={cat}
+                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#FAFAF7] text-[#1F2A1F] border border-[#ECEEE4]"
+                          >
+                            {cat}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {profile.favorite_tags && profile.favorite_tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {profile.favorite_tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#FAFAF7] text-[#1F2A1F] border border-[#ECEEE4]"
+                          >
+                            <span className="leading-none">{getTagEmoji(tag)}</span>
+                            <span className="ml-1">{tag}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[#6F7A5A]">No interests set</p>
+                )}
               </div>
-              <Icon name="forward" size={20} className="text-[#6F7A5A]" />
+              <Icon name="forward" size={20} className="text-[#6F7A5A] flex-shrink-0" />
             </div>
           </Link>
         </div>

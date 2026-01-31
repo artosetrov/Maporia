@@ -118,6 +118,7 @@ export default function PlaceEditorHub() {
   const [isHidden, setIsHidden] = useState(false);
   const [hiding, setHiding] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [commentsEnabled, setCommentsEnabled] = useState(true); // Default to enabled
   const [togglingComments, setTogglingComments] = useState(false);
   const autoVisibilityEnabledRef = useRef(false); // Track if auto-visibility was already enabled
@@ -537,15 +538,20 @@ export default function PlaceEditorHub() {
     if (navigator.vibrate) navigator.vibrate(10);
   }
 
-  async function handleDelete() {
+  function openDeleteModal() {
     if (!placeId || !user || !place) return;
+    setShowDeleteModal(true);
+    setError(null);
+  }
 
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${place.title || "this place"}"? This action cannot be undone.`
-    );
-    if (!confirmed) return;
+  function closeDeleteModal() {
+    setShowDeleteModal(false);
+  }
 
+  async function confirmDeletePlace() {
+    if (!placeId || !user || !place) return;
     setDeleting(true);
+    setShowDeleteModal(false);
     setError(null);
 
     try {
@@ -1014,6 +1020,27 @@ export default function PlaceEditorHub() {
               </div>
             </Link>
 
+            {/* Collections Card (Admin only) */}
+            {isAdmin && (
+              <Link
+                href={`/places/${placeId}/edit/collections`}
+                className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-[#ECEEE4]">
+                      <Icon name="grid" size={16} className="text-[#A8B096]" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Collections</h3>
+                      <p className="text-sm text-[#6F7A5A]">Assign to curated collections (admin)</p>
+                    </div>
+                  </div>
+                  <Icon name="forward" size={20} className="text-[#6F7A5A]" />
+                </div>
+              </Link>
+            )}
+
             <div className="pt-2">
               <h2 className="font-fraunces font-semibold text-[#1F2A1F] text-base">
                 Settings
@@ -1214,7 +1241,7 @@ export default function PlaceEditorHub() {
                 Once you delete a place, there is no going back. Please be certain.
               </p>
               <button
-                onClick={handleDelete}
+                onClick={openDeleteModal}
                 disabled={deleting}
                 className={cx(
                   "text-sm font-medium text-[#C96A5B] hover:text-[#C96A5B] underline transition hover:opacity-80",
@@ -1226,6 +1253,41 @@ export default function PlaceEditorHub() {
             </div>
           </div>
       </div>
+
+      {/* Delete place confirmation modal */}
+      {showDeleteModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-place-modal-title"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white border border-[#ECEEE4] shadow-lg p-6">
+            <h2 id="delete-place-modal-title" className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-2">
+              Delete place
+            </h2>
+            <p className="text-sm text-[#6F7A5A] mb-6">
+              Are you sure you want to delete <strong className="text-[#1F2A1F]">{place?.title || "this place"}</strong>? This action cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={closeDeleteModal}
+                className="px-4 py-2.5 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] text-sm font-medium hover:bg-[#FAFAF7] transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeletePlace}
+                className="px-4 py-2.5 rounded-xl bg-[#C96A5B] text-white text-sm font-medium hover:bg-[#B85A4B] transition"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Action Buttons */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#ECEEE4] pb-safe-bottom">

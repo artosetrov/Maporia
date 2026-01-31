@@ -186,6 +186,19 @@ export default function InterestsEditorPage() {
           </div>
         )}
 
+        {/* Description block — informational only */}
+        <div className="mb-8 rounded-2xl border border-[#ECEEE4] bg-[#FAFAF7] p-5 sm:p-6">
+          <p className="text-[#A8B096] text-2xl leading-none mb-3" aria-hidden="true">
+            ✨
+          </p>
+          <h2 className="text-lg font-semibold text-[#1F2A1F] mb-2">
+            Choose what inspires you
+          </h2>
+          <p className="text-sm text-[#6F7A5A] leading-relaxed">
+            Select the categories you feel closest to, and Maporia will curate the most interesting places that match your vibe.
+          </p>
+        </div>
+
         <div className="space-y-8">
           {/* Categories Section */}
           <div>
