@@ -175,8 +175,17 @@ export async function POST(request: NextRequest) {
     if (target_place_id && typeof target_place_id === "string") {
       const targetPlaceId = target_place_id;
 
+      // When service role key is not set, RLS applies and auth.uid() is null → update returns 0 rows.
+      // Use a client with the user's JWT so RLS sees auth.uid() = user.id and allows owner update.
+      const supabaseForPlace =
+        isUsingServiceRole
+          ? supabase
+          : createClient(supabaseUrl, supabaseAnonKey, {
+              global: { headers: { Authorization: `Bearer ${access_token}` } },
+            });
+
       // Load target place to verify ownership (unless admin)
-      const { data: targetPlace, error: targetPlaceError } = await supabase
+      const { data: targetPlace, error: targetPlaceError } = await supabaseForPlace
         .from("places")
         .select("id, created_by, description")
         .eq("id", targetPlaceId)
@@ -198,7 +207,7 @@ export async function POST(request: NextRequest) {
       }
 
       // If google_place_id already exists for another place, return duplicate
-      const { data: existingByGoogleId, error: existingByGoogleIdError } = await supabase
+      const { data: existingByGoogleId, error: existingByGoogleIdError } = await supabaseForPlace
         .from("places")
         .select("id, title")
         .eq("google_place_id", google_place_id)
@@ -266,7 +275,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Apply updates (do not use .single() — with RLS, 0 rows can be returned and .single() would throw "Cannot coerce the result to a single JSON object")
-      const { data: updatedRows, error: updateError } = await supabase
+      const { data: updatedRows, error: updateError } = await supabaseForPlace
         .from("places")
         .update(updates)
         .eq("id", targetPlaceId)
@@ -288,7 +297,7 @@ export async function POST(request: NextRequest) {
 
         // If user selected photos, replace Photo tour
         if (photos.length > 0) {
-          const { error: deletePhotosError } = await supabase
+          const { error: deletePhotosError } = await supabaseForPlace
             .from("place_photos")
             .delete()
             .eq("place_id", targetPlaceId);
@@ -305,7 +314,7 @@ export async function POST(request: NextRequest) {
             is_cover: index === 0,
           }));
 
-          const { error: insertPhotosError } = await supabase
+          const { error: insertPhotosError } = await supabaseForPlace
             .from("place_photos")
             .insert(photoInserts);
 
@@ -313,7 +322,7 @@ export async function POST(request: NextRequest) {
             console.error("Failed to insert imported photos:", insertPhotosError);
           } else {
             // Keep legacy cover_url in sync for older parts of the app
-            await supabase
+            await supabaseForPlace
               .from("places")
               .update({ cover_url: photos[0] })
               .eq("id", targetPlaceId);
@@ -338,7 +347,7 @@ export async function POST(request: NextRequest) {
             const prompt = buildAiPrompt(ctx);
             const model = process.env.OPENAI_MODEL || "gpt-4.1";
             const aiText = await callOpenAiForDescription({ openAiApiKey, model, prompt });
-            await supabase.from("places").update({ description: aiText }).eq("id", targetPlaceId);
+            await supabaseForPlace.from("places").update({ description: aiText }).eq("id", targetPlaceId);
           }
         } catch (e) {
           console.warn("AI description generation failed (non-fatal):", e);
