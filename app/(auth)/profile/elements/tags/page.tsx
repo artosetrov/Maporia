@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { supabase } from "../../../lib/supabase";
-import { useUserAccessContext } from "../../../contexts/UserAccessContext";
-import { isUserAdmin } from "../../../lib/access";
-import Icon from "../../../components/Icon";
-import { getTagEmoji } from "../../../constants";
+import { supabase } from "../../../../lib/supabase";
+import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
+import { isUserAdmin } from "../../../../lib/access";
+import Icon from "../../../../components/Icon";
+import { getTagEmoji } from "../../../../constants";
 
 export default function EditTagsPage() {
   const router = useRouter();
