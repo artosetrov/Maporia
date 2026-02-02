@@ -54,16 +54,16 @@ export async function POST(request: NextRequest) {
     const openAiApiKey = process.env.OPENAI_API_KEY;
     if (!openAiApiKey) {
       return NextResponse.json(
-        { error: "OPENAI_API_KEY is not configured", code: "MISSING_OPENAI_KEY" },
-        { status: 500 }
+        { error: "AI description is not available.", code: "MISSING_OPENAI_KEY" },
+        { status: 503 }
       );
     }
 
     const googleApiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     if (!googleApiKey) {
       return NextResponse.json(
-        { error: "GOOGLE_MAPS_API_KEY is not configured", code: "MISSING_GOOGLE_KEY" },
-        { status: 500 }
+        { error: "AI description is not available.", code: "MISSING_GOOGLE_KEY" },
+        { status: 503 }
       );
     }
 

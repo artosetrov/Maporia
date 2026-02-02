@@ -102,7 +102,8 @@ export default function DescriptionEditorPage() {
       }
 
       if (!res.ok) {
-        throw new Error(data?.error || "Failed to generate description");
+        const msg = data?.error || "Failed to generate description";
+        throw new Error(msg);
       }
 
       const newDescription = String(data?.description || "").trim();

@@ -244,6 +244,8 @@ export default function GoogleImportField({ userId, targetPlaceId }: GoogleImpor
               setDescriptionHint("AI description is available for Premium users.");
             } else if (aiData?.code === "OPENAI_INSUFFICIENT_QUOTA") {
               setDescriptionHint("AI description is temporarily unavailable (OpenAI billing/quota).");
+            } else if (aiData?.code === "MISSING_OPENAI_KEY" || aiData?.code === "MISSING_GOOGLE_KEY") {
+              setDescriptionHint("AI description is not available. You can still import other fields.");
             } else {
               setDescriptionHint("Couldn't generate AI description. You can still import other fields.");
             }
