@@ -265,18 +265,17 @@ export async function POST(request: NextRequest) {
         // no-op: do not overwrite existing title unless needed
       }
 
-      // Apply updates
-      const { data: updatedPlace, error: updateError } = await supabase
+      // Apply updates (do not use .single() — with RLS, 0 rows can be returned and .single() would throw "Cannot coerce the result to a single JSON object")
+      const { data: updatedRows, error: updateError } = await supabase
         .from("places")
         .update(updates)
         .eq("id", targetPlaceId)
-        .select("id")
-        .single();
+        .select("id");
 
-      if (updateError || !updatedPlace) {
+      if (updateError || !updatedRows?.length) {
         console.error("Error updating place from import:", updateError);
         return NextResponse.json(
-          { error: "Failed to update place", details: updateError?.message, code: "UPDATE_ERROR" },
+          { error: "Failed to update place", details: updateError?.message || "No rows updated (check RLS).", code: "UPDATE_ERROR" },
           { status: 500 }
         );
       }
