@@ -15,6 +15,8 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabaseServiceKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
+const isUsingServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 function hasPremiumAccessFromProfile(profile: {
   role?: string | null;
   subscription_status?: string | null;
@@ -60,12 +62,6 @@ export async function POST(request: NextRequest) {
     }
 
     const googleApiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!googleApiKey) {
-      return NextResponse.json(
-        { error: "AI description is not available.", code: "MISSING_GOOGLE_KEY" },
-        { status: 503 }
-      );
-    }
 
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -81,8 +77,15 @@ export async function POST(request: NextRequest) {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
+    // When service role is not set, RLS applies — load profile with user's JWT so auth.uid() = user.id
+    const supabaseForProfile = isUsingServiceRole
+      ? supabase
+      : createClient(supabaseUrl, supabaseAnonKey, {
+          global: { headers: { Authorization: `Bearer ${access_token}` } },
+        });
+
     // Premium check (defense-in-depth)
-    const { data: profile } = await supabase
+    const { data: profile } = await supabaseForProfile
       .from("profiles")
       .select("role, subscription_status, is_admin")
       .eq("id", user.id)
@@ -95,14 +98,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // If place_id provided — enforce ownership/admin & fetch google_place_id from DB
+    // If place_id provided — enforce ownership/admin & fetch google_place_id and optional fields from DB
     let effectiveGooglePlaceId: string | null = hasGooglePlaceId ? google_place_id! : null;
     const effectivePlaceId: string | null = hasPlaceId ? place_id! : null;
+    let placeRowForContext: { title?: string | null; address?: string | null; city_name_cached?: string | null } | null = null;
 
     if (hasPlaceId) {
       const { data: placeRow, error: placeError } = await supabase
         .from("places")
-        .select("id, created_by, google_place_id")
+        .select("id, created_by, google_place_id, title, address, city_name_cached")
         .eq("id", place_id!)
         .single();
 
@@ -119,25 +123,47 @@ export async function POST(request: NextRequest) {
       }
 
       effectiveGooglePlaceId = effectiveGooglePlaceId || (placeRow as any).google_place_id || null;
-      if (!effectiveGooglePlaceId) {
-        return NextResponse.json(
-          { error: "google_place_id is missing for this place", code: "MISSING_GOOGLE_PLACE_ID" },
-          { status: 400 }
-        );
-      }
+      placeRowForContext = placeRow as any;
     }
 
-    if (!effectiveGooglePlaceId) {
+    if (!effectiveGooglePlaceId && !placeRowForContext) {
       return NextResponse.json(
         { error: "google_place_id is required", code: "MISSING_GOOGLE_PLACE_ID" },
         { status: 400 }
       );
     }
 
-    const ctx = await fetchGooglePlaceAiContext({
-      googleApiKey,
-      googlePlaceId: effectiveGooglePlaceId,
-    });
+    // When using Google Place we need Google API key
+    if (effectiveGooglePlaceId && !googleApiKey) {
+      return NextResponse.json(
+        { error: "AI description is not available.", code: "MISSING_GOOGLE_KEY" },
+        { status: 503 }
+      );
+    }
+
+    let ctx: { name?: string | null; types?: string[] | null; formatted_address?: string | null; rating?: number | null; user_ratings_total?: number | null; editorial_summary?: string | null; reviews?: string[] | null };
+    if (effectiveGooglePlaceId) {
+      try {
+        ctx = await fetchGooglePlaceAiContext({
+          googleApiKey: googleApiKey!,
+          googlePlaceId: effectiveGooglePlaceId,
+        });
+      } catch (googleErr) {
+        const msg = googleErr instanceof Error ? googleErr.message : "Google Places error";
+        return NextResponse.json(
+          { error: "Could not load place data for AI.", details: msg, code: "GOOGLE_PLACES_ERROR" },
+          { status: 502 }
+        );
+      }
+    } else {
+      // No google_place_id — build context from place fields (title, address, city)
+      const name = placeRowForContext?.title?.trim() || null;
+      const addr = [placeRowForContext?.address?.trim(), placeRowForContext?.city_name_cached?.trim()]
+        .filter(Boolean)
+        .join(", ") || null;
+      ctx = { name: name || "this place", formatted_address: addr || undefined, types: null, rating: null, user_ratings_total: null, editorial_summary: null, reviews: null };
+    }
+
     const prompt = buildAiPrompt(ctx);
     const model = process.env.OPENAI_MODEL || "gpt-4.1";
     const description = await callOpenAiForDescription({
@@ -154,8 +180,13 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      // Save to Supabase
-      const { error: updateError } = await supabase
+      // When service role is not set, RLS applies — use user's JWT so owner update is allowed
+      const supabaseForUpdate = isUsingServiceRole
+        ? supabase
+        : createClient(supabaseUrl, supabaseAnonKey, {
+            global: { headers: { Authorization: `Bearer ${access_token}` } },
+          });
+      const { error: updateError } = await supabaseForUpdate
         .from("places")
         .update({ description })
         .eq("id", effectivePlaceId);
