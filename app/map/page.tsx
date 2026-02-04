@@ -88,6 +88,8 @@ type CommentsPlaceIdResult = { data: CommentPlaceId[] | null; error: PostgrestEr
 
 type PlacePhotoUrl = Pick<PlacePhotosRow, "url">;
 type PlacePhotosUrlResult = { data: PlacePhotoUrl[] | null; error: PostgrestError | null };
+type PlacePhotoPlaceIdUrl = Pick<PlacePhotosRow, "place_id" | "url">;
+type PlacePhotosBatchResult = { data: PlacePhotoPlaceIdUrl[] | null; error: PostgrestError | null };
 
 // Нормализация города для сравнения
 function normalizeCity(city: string | null | undefined): string {
@@ -1472,7 +1474,16 @@ function MapPageContent() {
         appliedCities={appliedCities.filter(city => city !== DEFAULT_CITY)}
         userAccess={access}
         getAvailableTags={() => availableTags}
-        getTagCount={(tag: string) => (placesData?.filter((p: Place) => p.tags?.includes(tag)).length ?? 0)}
+        getTagCounts={(tags: string[]) => {
+          const counts: Record<string, number> = {};
+          tags.forEach((t) => (counts[t] = 0));
+          (placesData ?? []).forEach((p: Place) => {
+            (p.tags ?? []).forEach((t: string) => {
+              if (t in counts) counts[t]++;
+            });
+          });
+          return counts;
+        }}
         onCityChange={handleCityChange}
         onCitiesChange={(cities) => {
           if (process.env.NODE_ENV === 'development') {
@@ -2396,45 +2407,52 @@ function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placesWithCoords.map(p => `${p.id}-${p.cover_url || ''}`).join(','), isLoaded]);
 
-  // Загружаем фото для всех мест
+  // Загружаем фото для всех мест одним запросом (batch)
   useEffect(() => {
     if (!isLoaded) return;
-    
-    const loadPhotos = async () => {
-      for (const place of placesWithCoords) {
-        if (placePhotos.has(place.id)) continue;
-        try {
-          const photosResult = (await supabase
-            .from("place_photos")
-            .select("url")
-            .eq("place_id", place.id)
-            .order("sort", { ascending: true })) as PlacePhotosUrlResult;
-          const { data: photosData, error } = photosResult;
-          if (error) {
-            if (place.cover_url) {
-              setPlacePhotos((prev) => new Map(prev).set(place.id, [place.cover_url!]));
-            }
-          } else if (photosData && photosData.length > 0) {
-            const urls = photosData.map((p) => p.url).filter(Boolean);
-            if (urls.length > 0) {
-              setPlacePhotos((prev) => new Map(prev).set(place.id, urls));
-            } else if (place.cover_url) {
-              setPlacePhotos((prev) => new Map(prev).set(place.id, [place.cover_url!]));
-            }
-          } else if (place.cover_url) {
-            setPlacePhotos((prev) => new Map(prev).set(place.id, [place.cover_url!]));
-          }
-        } catch {
-          if (place.cover_url) {
-            setPlacePhotos((prev) => new Map(prev).set(place.id, [place.cover_url!]));
+
+    const placeIds = placesWithCoords.map((p) => p.id);
+    if (placeIds.length === 0) {
+      setPlacePhotos(new Map());
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const photosResult = (await supabase
+          .from("place_photos")
+          .select("place_id, url")
+          .in("place_id", placeIds)
+          .order("sort", { ascending: true })) as PlacePhotosBatchResult;
+        const { data: photosData, error } = photosResult;
+        if (cancelled) return;
+
+        const grouped = new Map<string, string[]>();
+        if (!error && photosData && photosData.length > 0) {
+          for (const row of photosData) {
+            if (!row.place_id || !row.url) continue;
+            if (!grouped.has(row.place_id)) grouped.set(row.place_id, []);
+            grouped.get(row.place_id)!.push(row.url);
           }
         }
+        for (const place of placesWithCoords) {
+          if (!grouped.has(place.id) && place.cover_url) {
+            grouped.set(place.id, [place.cover_url]);
+          }
+        }
+        if (!cancelled) setPlacePhotos(grouped);
+      } catch {
+        if (cancelled) return;
+        const fallback = new Map<string, string[]>();
+        for (const place of placesWithCoords) {
+          if (place.cover_url) fallback.set(place.id, [place.cover_url]);
+        }
+        setPlacePhotos(fallback);
       }
-    };
-    
-    loadPhotos();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placesWithCoords.map(p => p.id).join(','), isLoaded]);
+    })();
+    return () => { cancelled = true; };
+  }, [placesWithCoords.map((p) => p.id).join(","), isLoaded]);
 
   // Вычисляем центр карты на основе всех мест с координатами или используем внешний
   const center = useMemo(() => {

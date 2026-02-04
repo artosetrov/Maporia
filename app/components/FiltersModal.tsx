@@ -46,8 +46,8 @@ type FiltersModalProps = {
   
   // Optional: list of available tags (e.g. from places)
   getAvailableTags?: () => string[] | Promise<string[]>;
-  // Optional: get count for each tag
-  getTagCount?: (tag: string) => number | Promise<number>;
+  // Optional: get counts for all tags in one call (batched). Returns map tagName -> count.
+  getTagCounts?: (tags: string[]) => Record<string, number> | Promise<Record<string, number>>;
   
   // Optional: user access level - used to determine if Premium filter should be shown
   userAccess?: UserAccess;
@@ -69,7 +69,7 @@ export default function FiltersModal({
   getCityCount: _getCityCount,
   getCategoryCount,
   getAvailableTags,
-  getTagCount,
+  getTagCounts,
   userAccess,
   onResetAll,
 }: FiltersModalProps) {
@@ -168,22 +168,20 @@ export default function FiltersModal({
     load();
   }, [isOpen, getAvailableTags]);
 
-  // Load tag counts when modal opens and availableTags is set
+  // Load tag counts in one batch when modal opens and availableTags is set
   useEffect(() => {
-    if (!isOpen || !getTagCount || availableTags.length === 0) return;
+    if (!isOpen || !getTagCounts || availableTags.length === 0) return;
     const load = async () => {
-      const counts: Record<string, number> = {};
-      for (const tag of availableTags) {
-        try {
-          counts[tag] = await getTagCount(tag);
-        } catch {
-          counts[tag] = 0;
-        }
+      try {
+        const result = getTagCounts(availableTags);
+        const counts = result instanceof Promise ? await result : result;
+        setTagCounts(typeof counts === "object" && counts !== null ? counts : {});
+      } catch {
+        setTagCounts({});
       }
-      setTagCounts(counts);
     };
     load();
-  }, [isOpen, getTagCount, availableTags.length]);
+  }, [isOpen, getTagCounts, availableTags.length]);
   
   // Update count when draftFilters change
   useEffect(() => {

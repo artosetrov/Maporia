@@ -2,13 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error("SUPABASE_SERVICE_ROLE_KEY is required for admin routes. Set it in your environment. Do not use NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+}
 if (!supabaseUrl || !supabaseServiceKey) {
-  console.error("Missing Supabase configuration. NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY) are required.");
+  console.error("Missing Supabase configuration. NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for admin routes.");
 }
 
-// Create admin client for server-side operations
+// Create admin client for server-side operations (service role only, no anon fallback)
 const supabaseAdmin = supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
     autoRefreshToken: false,
@@ -16,11 +19,19 @@ const supabaseAdmin = supabaseUrl && supabaseServiceKey ? createClient(supabaseU
   },
 }) : null;
 
+const SERVICE_ROLE_REQUIRED_MESSAGE = "SUPABASE_SERVICE_ROLE_KEY is required for admin routes. Set it in your environment.";
+
 export async function GET(request: NextRequest) {
   try {
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json(
+        { error: SERVICE_ROLE_REQUIRED_MESSAGE },
+        { status: 500 }
+      );
+    }
     if (!supabaseAdmin) {
       return NextResponse.json(
-        { error: "Server configuration error" },
+        { error: "Supabase admin client is not configured. Check NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY." },
         { status: 500 }
       );
     }
@@ -111,9 +122,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json(
+        { error: SERVICE_ROLE_REQUIRED_MESSAGE },
+        { status: 500 }
+      );
+    }
     if (!supabaseAdmin) {
       return NextResponse.json(
-        { error: "Server configuration error" },
+        { error: "Supabase admin client is not configured. Check NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY." },
         { status: 500 }
       );
     }
@@ -182,19 +199,7 @@ export async function POST(request: NextRequest) {
       if (rpcError.code === "42883" || rpcError.message?.includes("does not exist")) {
         console.warn("RPC function not found, trying direct upsert...");
         
-        // Check if we're using service role key (needed to bypass RLS)
-        const isUsingServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-        if (!isUsingServiceRole) {
-          return NextResponse.json(
-            { 
-              error: "Database function not found. Please run create-premium-modal-settings-table.sql in Supabase SQL Editor. Also ensure SUPABASE_SERVICE_ROLE_KEY is set.",
-              code: "FUNCTION_NOT_FOUND"
-            },
-            { status: 500 }
-          );
-        }
-
-        // Try direct upsert with service role key
+        // Try direct upsert with service role client
         const { data, error: upsertError } = await supabaseAdmin
           .from("app_settings")
           .upsert(

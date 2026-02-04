@@ -18,7 +18,7 @@ const supabaseAdmin =
  * Uses service role so all places are returned; client shows lock for premium when needed.
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
@@ -36,6 +36,16 @@ export async function GET(
         },
         { status: 500 }
       );
+    }
+
+    const authHeader = request.headers.get("Authorization");
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { data: colData, error: colError } = await supabaseAdmin

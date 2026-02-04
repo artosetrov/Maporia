@@ -2,7 +2,7 @@
 export const dynamic = "force-dynamic";
 import { useEffect, useMemo, useState, useRef, Suspense } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import TopBar from "../../components/TopBar";
 import BottomNav from "../../components/BottomNav";
 import FiltersModal, { ActiveFilters } from "../../components/FiltersModal";
@@ -129,7 +129,6 @@ function cx(...a: Array<string | false | undefined | null>) {
 
 function ProfileInner() {
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const { redirectToAuth, replaceToAuth } = useAuthRedirect();
 
@@ -309,8 +308,8 @@ function ProfileInner() {
     }
   }, [pendingFilters, selectedCity, searchValue, router]);
   
-  // Get user access for permission checks
-  const { access } = useUserAccessContext();
+  // Get user access for permission checks (and effect deps: run when session is ready)
+  const { access, loading: accessLoading, user } = useUserAccessContext();
   
   // Admin access check - use profile data from useEffect
   const isAdmin = userIsAdmin || userRole === 'admin';
@@ -373,13 +372,66 @@ function ProfileInner() {
       setUserEmail(user.email ?? null);
       setUserCreatedAt(user.created_at ?? null);
 
-      // profile (include role and is_admin for admin check)
-      const { data: prof, error: profError } = await supabase
-        .from("profiles")
-        .select("id, username, display_name, bio, avatar_url, role, is_admin, subscription_status")
-        .eq("id", user.id)
-        .maybeSingle();
-      
+      const recentlyViewedIds = getRecentlyViewedPlaceIds();
+
+      // Batch 1: independent requests that depend only on user.id (and recentlyViewedIds from localStorage)
+      const [
+        profileResult,
+        addedPlacesResult,
+        reactionsResult,
+        commentsCountResult,
+        commentsWrittenResult,
+        commentsForActivityResult,
+        recentlyViewedResult,
+      ] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, username, display_name, bio, avatar_url, role, is_admin, subscription_status")
+          .eq("id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("places")
+          .select("id,title,city,country,address,cover_url,created_at")
+          .eq("created_by", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("reactions")
+          .select("place_id, reaction, created_at")
+          .eq("user_id", user.id)
+          .eq("reaction", "like"),
+        supabase
+          .from("comments")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id),
+        supabase
+          .from("comments")
+          .select("id, text, created_at, place_id")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(20),
+        supabase
+          .from("comments")
+          .select("place_id, created_at, text")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(50),
+        recentlyViewedIds.length > 0
+          ? supabase
+              .from("places")
+              .select("id,title,city,country,address,cover_url,created_at,categories")
+              .in("id", recentlyViewedIds)
+              .limit(20)
+          : Promise.resolve({ data: null }),
+      ]);
+
+      const prof = profileResult.data as unknown as Profile | null;
+      const profError = profileResult.error;
+      const addedPlaces = (addedPlacesResult.data ?? []) as any[];
+      const reactions = reactionsResult.data ?? [];
+      const commentsCountData = commentsCountResult.count ?? 0;
+      const commentsWritten = commentsWrittenResult.data ?? [];
+      const comments = commentsForActivityResult.data ?? [];
+
       if (profError) {
         const msg = profError.message ?? "";
         const code = profError.code ?? "";
@@ -389,144 +441,103 @@ function ProfileInner() {
       }
 
       if (mounted) {
-        setProfile((prof as unknown as Profile | null) ?? null);
+        setProfile(prof ?? null);
         setDisplayNameDraft((prof as any)?.display_name ?? (user.email ?? ""));
         setBioDraft((prof as any)?.bio ?? "");
         setAvatarDraft((prof as any)?.avatar_url ?? null);
-        
-        // Set admin status from profile
         const profileRole = (prof as any)?.role;
         const profileIsAdmin = (prof as any)?.is_admin === true;
         setUserRole(profileRole || null);
         setUserIsAdmin(profileIsAdmin);
       }
 
-      // added places
-      const { data: addedPlaces } = await supabase
-        .from("places")
-        .select("id,title,city,country,address,cover_url,created_at")
-        .eq("created_by", user.id)
-        .order("created_at", { ascending: false });
+      if (mounted) setAdded(addedPlaces as Place[]);
 
-      if (mounted) setAdded((addedPlaces ?? []) as Place[]);
-
-      // saved places
-      const { data: reactions } = await supabase
-        .from("reactions")
-        .select("place_id, reaction, created_at")
-        .eq("user_id", user.id)
-        .eq("reaction", "like");
-
-      const placeIds = (reactions ?? []).map((r: any) => r.place_id);
-
-      let savedPlaces: Place[] = [];
-      if (placeIds.length) {
-        const { data } = await supabase
-          .from("places")
-          .select("id,title,city,country,address,cover_url,created_at")
-          .in("id", placeIds)
-          .order("created_at", { ascending: false });
-        savedPlaces = (data ?? []) as Place[];
-      }
-      if (mounted) setSaved(savedPlaces);
-
-      // Load recently viewed places
-      const recentlyViewedIds = getRecentlyViewedPlaceIds();
       let recentlyViewedPlaces: Place[] = [];
-      if (recentlyViewedIds.length > 0) {
-        const { data: recentlyViewedData } = await supabase
-          .from("places")
-          .select("id,title,city,country,address,cover_url,created_at,categories")
-          .in("id", recentlyViewedIds)
-          .limit(20);
-        
-        // Preserve order from localStorage
-        if (recentlyViewedData) {
-          const placesMap = new Map((recentlyViewedData as Place[]).map(p => [p.id, p]));
-          recentlyViewedPlaces = recentlyViewedIds
-            .map(id => placesMap.get(id))
-            .filter((p): p is Place => p !== undefined);
-        }
+      if (recentlyViewedResult.data && recentlyViewedIds.length > 0) {
+        const placesMap = new Map((recentlyViewedResult.data as Place[]).map((p) => [p.id, p]));
+        recentlyViewedPlaces = recentlyViewedIds
+          .map((id) => placesMap.get(id))
+          .filter((p): p is Place => p !== undefined);
       }
       if (mounted) setRecentlyViewed(recentlyViewedPlaces);
-
-      // Count comments written
-      const { count: commentsCountData } = await supabase
-        .from("comments")
-        .select("*", { count: 'exact', head: true })
-        .eq("user_id", user.id);
-      
       if (mounted) setCommentsCount(commentsCountData || 0);
 
-      // Get reviews written by user
-      const { data: commentsWritten } = await supabase
-        .from("comments")
-        .select("id, text, created_at, place_id")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(20);
+      const placeIds = (reactions as any[]).map((r: any) => r.place_id);
 
-      // Get reviews received (comments on user's places)
-      const addedPlaceIds = (addedPlaces ?? []).map((p: any) => p.id);
+      // Batch 2: savedPlaces and commentsReceived depend only on batch 1 results
+      const addedPlaceIds = addedPlaces.map((p: any) => p.id);
+      const [savedPlacesResult, commentsReceivedResult] = await Promise.all([
+        placeIds.length > 0
+          ? supabase
+              .from("places")
+              .select("id,title,city,country,address,cover_url,created_at")
+              .in("id", placeIds)
+              .order("created_at", { ascending: false })
+          : Promise.resolve({ data: [] }),
+        addedPlaceIds.length > 0
+          ? supabase
+              .from("comments")
+              .select("id, text, created_at, place_id, user_id")
+              .in("place_id", addedPlaceIds)
+              .neq("user_id", user.id)
+              .order("created_at", { ascending: false })
+              .limit(20)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const savedPlaces = (savedPlacesResult.data ?? []) as Place[];
+      if (mounted) setSaved(savedPlaces);
+
+      const commentsReceived = commentsReceivedResult.data ?? [];
       let reviewsReceivedData: Review[] = [];
-      
-      if (addedPlaceIds.length > 0) {
-        const { data: commentsReceived } = await supabase
-          .from("comments")
-          .select("id, text, created_at, place_id, user_id")
-          .in("place_id", addedPlaceIds)
-          .neq("user_id", user.id) // Exclude user's own comments
-          .order("created_at", { ascending: false })
-          .limit(20);
 
-        if (commentsReceived && commentsReceived.length > 0) {
-          const reviewerIds = Array.from(new Set(commentsReceived.map((c: any) => c.user_id)));
-          const placeIdsForReviews = Array.from(new Set(commentsReceived.map((c: any) => c.place_id)));
+      if (commentsReceived.length > 0) {
+        const reviewerIds = Array.from(new Set(commentsReceived.map((c: any) => c.user_id)));
+        const placeIdsForReviews = Array.from(new Set(commentsReceived.map((c: any) => c.place_id)));
 
-          const [profilesData, placesData] = await Promise.all([
-            supabase.from("profiles").select("id, display_name, username, avatar_url").in("id", reviewerIds),
-            supabase.from("places").select("id, title, address").in("id", placeIdsForReviews),
-          ]);
+        const [profilesData, placesData] = await Promise.all([
+          supabase.from("profiles").select("id, display_name, username, avatar_url").in("id", reviewerIds),
+          supabase.from("places").select("id, title, address").in("id", placeIdsForReviews),
+        ]);
 
-          const profilesMap = new Map();
-          (profilesData.data ?? []).forEach((p: any) => {
-            profilesMap.set(p.id, {
-              name: p.display_name || p.username || "User",
-              avatar: p.avatar_url,
-            });
+        const profilesMap = new Map();
+        (profilesData.data ?? []).forEach((p: any) => {
+          profilesMap.set(p.id, {
+            name: p.display_name || p.username || "User",
+            avatar: p.avatar_url,
           });
+        });
 
-          const placesMap = new Map();
-          (placesData.data ?? []).forEach((p: any) => {
-            placesMap.set(p.id, {
-              title: p.title,
-              address: p.address,
-            });
+        const placesMap = new Map();
+        (placesData.data ?? []).forEach((p: any) => {
+          placesMap.set(p.id, {
+            title: p.title,
+            address: p.address,
           });
+        });
 
-          reviewsReceivedData = (commentsReceived ?? []).map((c: any) => {
-            const reviewer = profilesMap.get(c.user_id);
-            const place = placesMap.get(c.place_id);
-            return {
-              id: c.id,
-              text: c.text,
-              created_at: c.created_at,
-              place_id: c.place_id,
-              place_title: place?.title ?? null,
-              place_address: place?.address ?? null,
-              reviewer_id: c.user_id,
-              reviewer_name: reviewer?.name ?? "User",
-              reviewer_avatar: reviewer?.avatar ?? null,
-              reviewer_location: null, // TODO: Add location to profile if needed
-            };
-          });
-        }
+        reviewsReceivedData = (commentsReceived as any[]).map((c: any) => {
+          const reviewer = profilesMap.get(c.user_id);
+          const place = placesMap.get(c.place_id);
+          return {
+            id: c.id,
+            text: c.text,
+            created_at: c.created_at,
+            place_id: c.place_id,
+            place_title: place?.title ?? null,
+            place_address: place?.address ?? null,
+            reviewer_id: c.user_id,
+            reviewer_name: reviewer?.name ?? "User",
+            reviewer_avatar: reviewer?.avatar ?? null,
+            reviewer_location: null,
+          };
+        });
       }
 
-      // Process reviews written
       let reviewsWrittenData: Review[] = [];
-      if (commentsWritten && commentsWritten.length > 0) {
-        const placeIdsForWritten = Array.from(new Set(commentsWritten.map((c: any) => c.place_id)));
+      if (commentsWritten.length > 0) {
+        const placeIdsForWritten = Array.from(new Set((commentsWritten as any[]).map((c: any) => c.place_id)));
         const { data: placesData } = await supabase
           .from("places")
           .select("id, title, address, created_by")
@@ -543,7 +554,7 @@ function ProfileInner() {
         const currentDisplayName = (prof as any)?.display_name || (prof as any)?.username || user.email || "User";
         const currentAvatar = (prof as any)?.avatar_url ?? null;
 
-        reviewsWrittenData = (commentsWritten ?? []).map((c: any) => {
+        reviewsWrittenData = (commentsWritten as any[]).map((c: any) => {
           const place = placesMap.get(c.place_id);
           return {
             id: c.id,
@@ -560,28 +571,20 @@ function ProfileInner() {
         });
       }
 
-      // Load activity
-      const likesAct: ActivityItem[] = (reactions ?? []).map((r: any) => ({
+      const likesAct: ActivityItem[] = (reactions as any[]).map((r: any) => ({
         type: "liked",
         created_at: r.created_at,
         placeId: r.place_id,
       }));
 
-      const { data: comments } = await supabase
-        .from("comments")
-        .select("place_id, created_at, text")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(50);
-
-      const commentsAct: ActivityItem[] = (comments ?? []).map((c: any) => ({
+      const commentsAct: ActivityItem[] = (comments as any[]).map((c: any) => ({
         type: "commented",
         created_at: c.created_at,
         placeId: c.place_id,
         commentText: c.text,
       }));
 
-      const addedAct: ActivityItem[] = ((addedPlaces ?? []) as any[]).map((p) => ({
+      const addedAct: ActivityItem[] = addedPlaces.map((p: any) => ({
         type: "added",
         created_at: p.created_at,
         placeId: p.id,
@@ -619,7 +622,7 @@ function ProfileInner() {
     return () => {
       mounted = false;
     };
-  }, [router, pathname]); // Add pathname to re-trigger on route change
+  }, [router, accessLoading, user?.id]);
 
   async function uploadAvatar(file: File): Promise<{ url: string | null; error: string | null }> {
     try {

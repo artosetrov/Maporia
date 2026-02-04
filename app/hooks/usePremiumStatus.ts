@@ -1,13 +1,13 @@
 "use client";
 
-import { useUserAccess } from "./useUserAccess";
+import { useUserAccessContext } from "../contexts/UserAccessContext";
 
 /**
  * Hook to check if the current user has premium status
  * @returns Object with isPremium boolean and loading state
  */
 export function usePremiumStatus() {
-  const { access, loading } = useUserAccess();
+  const { access, loading } = useUserAccessContext();
 
   return {
     isPremium: access.hasPremium,

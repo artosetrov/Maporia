@@ -3,11 +3,12 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import type { Database } from "../../../types/supabase";
-import { useUserAccess } from "../../../hooks/useUserAccess";
+import { useUserAccessContext } from "../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../lib/access";
+import { getAuthUrl } from "../../../lib/authRedirect";
 
 type PlaceSettingsRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by">;
 type PlacePhotoUrlRow = Pick<Database["public"]["Tables"]["place_photos"]["Row"], "url">;
@@ -22,7 +23,8 @@ export default function PlaceSettingsPage() {
   const params = useParams<{ id: string }>();
   const placeId = params?.id;
 
-  const { loading: accessLoading, user, access } = useUserAccess(true, false);
+  const pathname = usePathname();
+  const { loading: accessLoading, user, access } = useUserAccessContext();
   const isAdmin = isUserAdmin(access);
   const [loading, setLoading] = useState(true);
   const [place, setPlace] = useState<{ id: string; title: string | null; created_by: string } | null>(null);
@@ -31,6 +33,14 @@ export default function PlaceSettingsPage() {
   const [hiding, setHiding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isHidden, setIsHidden] = useState(false);
+
+  // Require auth: redirect when not logged in (same behavior as former useUserAccess(true, false))
+  useEffect(() => {
+    if (accessLoading) return;
+    if (!user) {
+      router.replace(getAuthUrl(pathname ?? undefined));
+    }
+  }, [accessLoading, user, router, pathname]);
 
   // Load place
   useEffect(() => {

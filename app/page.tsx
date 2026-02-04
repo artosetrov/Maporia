@@ -371,7 +371,16 @@ export default function HomePage() {
         appliedFilters={activeFilters}
         userAccess={access}
         getAvailableTags={() => availableTags}
-        getTagCount={(tag: string) => placesForTags.filter((p) => p.tags?.includes(tag)).length}
+        getTagCounts={(tags: string[]) => {
+          const counts: Record<string, number> = {};
+          tags.forEach((t) => (counts[t] = 0));
+          placesForTags.forEach((p) => {
+            (p.tags ?? []).forEach((t) => {
+              if (t in counts) counts[t]++;
+            });
+          });
+          return counts;
+        }}
         getFilteredCount={async (draftFilters: ActiveFilters) => {
           // Подсчитываем количество мест с учетом фильтров
           try {

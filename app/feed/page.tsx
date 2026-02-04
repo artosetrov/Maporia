@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import TopBar from "../components/TopBar";
 import BottomNav from "../components/BottomNav";
 import FiltersModal, { ActiveFilters } from "../components/FiltersModal";
@@ -158,16 +158,15 @@ function ActivityCard({ item }: { item: ActivityItem }) {
 
 export default function FeedPage() {
   const router = useRouter();
-  const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
-  const [userAvatar, setUserAvatar] = useState<string | null>(null);
   
-  // User access (from context — single session/profile request)
-  const { access } = useUserAccessContext();
+  // User access and profile from context (single session/profile request; no pathname re-fetch)
+  const { access, loading: accessLoading, user, profile } = useUserAccessContext();
+  const userId = user?.id ?? null;
+  const userEmail = user?.email ?? null;
+  const userDisplayName = profile?.display_name ?? user?.email?.split("@")[0] ?? null;
+  const userAvatar = profile?.avatar_url ?? null;
   
   // Search and filter state
   const [searchValue, setSearchValue] = useState("");
@@ -181,40 +180,11 @@ export default function FeedPage() {
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
-  // DIAGNOSTIC: Duplicates useUserAccess (getUser + profiles). loadActivities below does not wait for auth.
-  // SUGGESTION: Use useUserAccess for user/profile and pass to state; remove this effect to avoid duplicate requests.
+  // Load activities when session/access is ready (no pathname re-fetch)
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase.auth.getUser();
-      if (data.user) {
-        setUserId(data.user.id);
-        setUserEmail(data.user.email || null);
-
-        // Загружаем профиль пользователя
-        const profileResult = (await supabase
-          .from("profiles")
-          .select("display_name, avatar_url")
-          .eq("id", data.user.id)
-          .maybeSingle()) as ProfileDisplayResult;
-        const { data: profile, error: profileError } = profileResult;
-
-        if (profileError) {
-          console.error("Error loading user profile:", profileError);
-        }
-
-        if (profile) {
-          setUserDisplayName(profile.display_name);
-          setUserAvatar(profile.avatar_url);
-        }
-      }
-    })();
-  }, []);
-
-  // DIAGNOSTIC: loadActivities runs on mount and on pathname change without checking userId/accessLoading.
-  useEffect(() => {
+    if (accessLoading) return;
     loadActivities();
-     
-  }, [pathname]); // Add pathname to re-trigger on route change
+  }, [accessLoading]);
 
   async function loadActivities() {
     setLoading(true);

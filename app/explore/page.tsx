@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
 import { CATEGORIES } from "../constants";
 import TopBar from "../components/TopBar";
@@ -59,6 +59,8 @@ type ReactionsPlaceIdResult = { data: ReactionPlaceId[] | null; error: Postgrest
 
 type PlacePhotoUrl = Pick<PlacePhotosRow, "url">;
 type PlacePhotosUrlResult = { data: PlacePhotoUrl[] | null; error: PostgrestError | null };
+type PlacePhotoPlaceIdUrl = Pick<PlacePhotosRow, "place_id" | "url">;
+type PlacePhotosBatchResult = { data: PlacePhotoPlaceIdUrl[] | null; error: PostgrestError | null };
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
@@ -87,7 +89,6 @@ function timeAgo(iso: string) {
 
 export default function ExplorePage() {
   const router = useRouter();
-  const pathname = usePathname();
   const { redirectToAuth } = useAuthRedirect();
   
   const [view, setView] = useState<"list" | "map">("list");
@@ -102,17 +103,16 @@ export default function ExplorePage() {
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [mapZoom, setMapZoom] = useState<number | null>(null);
 
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
-  const [userAvatar, setUserAvatar] = useState<string | null>(null);
-
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
-  // User access for premium filtering (from context — single session/profile request)
-  const { loading: accessLoading, access } = useUserAccessContext();
+  // User access and profile from context (single session/profile request; no pathname re-fetch)
+  const { loading: accessLoading, access, user, profile } = useUserAccessContext();
+  const userId = user?.id ?? null;
+  const userEmail = user?.email ?? null;
+  const userDisplayName = profile?.display_name ?? user?.email?.split("@")[0] ?? null;
+  const userAvatar = profile?.avatar_url ?? null;
 
   // Calculate locked premium places for Haunted Gem indexing
   const defaultUserAccess: UserAccess = access ?? { 
@@ -285,24 +285,7 @@ export default function ExplorePage() {
     return () => { cancelled = true; };
   }, [selectedCities, selectedCategories, q, selectedTag]);
 
-  // DIAGNOSTIC: loadUser() duplicates useUserAccess (session + profile). Also re-runs on every pathname change.
-  // SUGGESTION: Use userId/profile from useUserAccess only; remove loadUser() if not needed for local state.
-  useEffect(() => {
-    (async () => {
-      try {
-        await loadUser();
-      } catch (err: any) {
-        // Silently ignore AbortError
-        if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-          return;
-        }
-        console.error("[ExplorePage] Error in initial load:", err);
-      }
-    })();
-     
-  }, [pathname]); // Add pathname to re-trigger on route change
-
-  // Fetch favorites when userId changes
+  // Fetch favorites when userId becomes available (from context)
   useEffect(() => {
     if (!userId) {
       setFavorites(new Set());
@@ -1627,45 +1610,52 @@ function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placesWithCoords.map(p => `${p.id}-${p.cover_url || ''}`).join(','), isLoaded]);
 
-  // Загружаем фото для всех мест
+  // Загружаем фото для всех мест одним запросом (batch)
   useEffect(() => {
     if (!isLoaded) return;
-    
-    const loadPhotos = async () => {
-      for (const place of placesWithCoords) {
-        if (placePhotos.has(place.id)) continue;
-        try {
-          const photosResult = (await supabase
-            .from("place_photos")
-            .select("url")
-            .eq("place_id", place.id)
-            .order("sort", { ascending: true })) as PlacePhotosUrlResult;
-          const { data: photosData, error } = photosResult;
-          if (error) {
-            if (place.cover_url) {
-              setPlacePhotos((prev) => new Map(prev).set(place.id, [place.cover_url!]));
-            }
-          } else if (photosData && photosData.length > 0) {
-            const urls = photosData.map((p) => p.url).filter(Boolean);
-            if (urls.length > 0) {
-              setPlacePhotos((prev) => new Map(prev).set(place.id, urls));
-            } else if (place.cover_url) {
-              setPlacePhotos((prev) => new Map(prev).set(place.id, [place.cover_url!]));
-            }
-          } else if (place.cover_url) {
-            setPlacePhotos((prev) => new Map(prev).set(place.id, [place.cover_url!]));
-          }
-        } catch {
-          if (place.cover_url) {
-            setPlacePhotos((prev) => new Map(prev).set(place.id, [place.cover_url!]));
+
+    const placeIds = placesWithCoords.map((p) => p.id);
+    if (placeIds.length === 0) {
+      setPlacePhotos(new Map());
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const photosResult = (await supabase
+          .from("place_photos")
+          .select("place_id, url")
+          .in("place_id", placeIds)
+          .order("sort", { ascending: true })) as PlacePhotosBatchResult;
+        const { data: photosData, error } = photosResult;
+        if (cancelled) return;
+
+        const grouped = new Map<string, string[]>();
+        if (!error && photosData && photosData.length > 0) {
+          for (const row of photosData) {
+            if (!row.place_id || !row.url) continue;
+            if (!grouped.has(row.place_id)) grouped.set(row.place_id, []);
+            grouped.get(row.place_id)!.push(row.url);
           }
         }
+        for (const place of placesWithCoords) {
+          if (!grouped.has(place.id) && place.cover_url) {
+            grouped.set(place.id, [place.cover_url]);
+          }
+        }
+        if (!cancelled) setPlacePhotos(grouped);
+      } catch {
+        if (cancelled) return;
+        const fallback = new Map<string, string[]>();
+        for (const place of placesWithCoords) {
+          if (place.cover_url) fallback.set(place.id, [place.cover_url]);
+        }
+        setPlacePhotos(fallback);
       }
-    };
-    
-    loadPhotos();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placesWithCoords.map(p => p.id).join(','), isLoaded]);
+    })();
+    return () => { cancelled = true; };
+  }, [placesWithCoords.map((p) => p.id).join(","), isLoaded]);
 
   // Вычисляем центр карты на основе всех мест с координатами или используем внешний
   const center = useMemo(() => {
