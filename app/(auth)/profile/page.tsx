@@ -133,7 +133,9 @@ function ProfileInner() {
   const { redirectToAuth, replaceToAuth } = useAuthRedirect();
 
   const [section, setSection] = useState<"about" | "trips" | "added" | "activity" | "users" | "elements" | "history">("about");
-  const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [extrasLoading, setExtrasLoading] = useState(true);
+  const loading = profileLoading;
 
   const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -355,7 +357,8 @@ function ProfileInner() {
     let mounted = true;
 
     (async () => {
-      setLoading(true);
+      setProfileLoading(true);
+      setExtrasLoading(true);
 
       const { data: sessionData } = await supabase.auth.getSession();
       const session = sessionData.session;
@@ -372,65 +375,12 @@ function ProfileInner() {
       setUserEmail(user.email ?? null);
       setUserCreatedAt(user.created_at ?? null);
 
-      const recentlyViewedIds = getRecentlyViewedPlaceIds();
-
-      // Batch 1: independent requests that depend only on user.id (and recentlyViewedIds from localStorage)
-      const [
-        profileResult,
-        addedPlacesResult,
-        reactionsResult,
-        commentsCountResult,
-        commentsWrittenResult,
-        commentsForActivityResult,
-        recentlyViewedResult,
-      ] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id, username, display_name, bio, avatar_url, role, is_admin, subscription_status")
-          .eq("id", user.id)
-          .maybeSingle(),
-        supabase
-          .from("places")
-          .select("id,title,city,country,address,cover_url,created_at")
-          .eq("created_by", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("reactions")
-          .select("place_id, reaction, created_at")
-          .eq("user_id", user.id)
-          .eq("reaction", "like"),
-        supabase
-          .from("comments")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", user.id),
-        supabase
-          .from("comments")
-          .select("id, text, created_at, place_id")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(20),
-        supabase
-          .from("comments")
-          .select("place_id, created_at, text")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(50),
-        recentlyViewedIds.length > 0
-          ? supabase
-              .from("places")
-              .select("id,title,city,country,address,cover_url,created_at,categories")
-              .in("id", recentlyViewedIds)
-              .limit(20)
-          : Promise.resolve({ data: null }),
-      ]);
-
-      const prof = profileResult.data as unknown as Profile | null;
-      const profError = profileResult.error;
-      const addedPlaces = (addedPlacesResult.data ?? []) as any[];
-      const reactions = reactionsResult.data ?? [];
-      const commentsCountData = commentsCountResult.count ?? 0;
-      const commentsWritten = commentsWrittenResult.data ?? [];
-      const comments = commentsForActivityResult.data ?? [];
+      // Critical: profile only — unblocks initial render (avatar, name, bio)
+      const { data: prof, error: profError } = await supabase
+        .from("profiles")
+        .select("id, username, display_name, bio, avatar_url, role, is_admin, subscription_status")
+        .eq("id", user.id)
+        .maybeSingle();
 
       if (profError) {
         const msg = profError.message ?? "";
@@ -441,7 +391,7 @@ function ProfileInner() {
       }
 
       if (mounted) {
-        setProfile(prof ?? null);
+        setProfile((prof as unknown as Profile | null) ?? null);
         setDisplayNameDraft((prof as any)?.display_name ?? (user.email ?? ""));
         setBioDraft((prof as any)?.bio ?? "");
         setAvatarDraft((prof as any)?.avatar_url ?? null);
@@ -449,174 +399,232 @@ function ProfileInner() {
         const profileIsAdmin = (prof as any)?.is_admin === true;
         setUserRole(profileRole || null);
         setUserIsAdmin(profileIsAdmin);
+        setProfileLoading(false);
       }
 
-      if (mounted) setAdded(addedPlaces as Place[]);
+      // Non-critical: load extras in background (do not block UI)
+      (async () => {
+        const recentlyViewedIds = getRecentlyViewedPlaceIds();
 
-      let recentlyViewedPlaces: Place[] = [];
-      if (recentlyViewedResult.data && recentlyViewedIds.length > 0) {
-        const placesMap = new Map((recentlyViewedResult.data as Place[]).map((p) => [p.id, p]));
-        recentlyViewedPlaces = recentlyViewedIds
-          .map((id) => placesMap.get(id))
-          .filter((p): p is Place => p !== undefined);
-      }
-      if (mounted) setRecentlyViewed(recentlyViewedPlaces);
-      if (mounted) setCommentsCount(commentsCountData || 0);
-
-      const placeIds = (reactions as any[]).map((r: any) => r.place_id);
-
-      // Batch 2: savedPlaces and commentsReceived depend only on batch 1 results
-      const addedPlaceIds = addedPlaces.map((p: any) => p.id);
-      const [savedPlacesResult, commentsReceivedResult] = await Promise.all([
-        placeIds.length > 0
-          ? supabase
-              .from("places")
-              .select("id,title,city,country,address,cover_url,created_at")
-              .in("id", placeIds)
-              .order("created_at", { ascending: false })
-          : Promise.resolve({ data: [] }),
-        addedPlaceIds.length > 0
-          ? supabase
-              .from("comments")
-              .select("id, text, created_at, place_id, user_id")
-              .in("place_id", addedPlaceIds)
-              .neq("user_id", user.id)
-              .order("created_at", { ascending: false })
-              .limit(20)
-          : Promise.resolve({ data: [] }),
-      ]);
-
-      const savedPlaces = (savedPlacesResult.data ?? []) as Place[];
-      if (mounted) setSaved(savedPlaces);
-
-      const commentsReceived = commentsReceivedResult.data ?? [];
-      let reviewsReceivedData: Review[] = [];
-
-      if (commentsReceived.length > 0) {
-        const reviewerIds = Array.from(new Set(commentsReceived.map((c: any) => c.user_id)));
-        const placeIdsForReviews = Array.from(new Set(commentsReceived.map((c: any) => c.place_id)));
-
-        const [profilesData, placesData] = await Promise.all([
-          supabase.from("profiles").select("id, display_name, username, avatar_url").in("id", reviewerIds),
-          supabase.from("places").select("id, title, address").in("id", placeIdsForReviews),
+        const [
+          addedPlacesResult,
+          reactionsResult,
+          commentsCountResult,
+          commentsWrittenResult,
+          commentsForActivityResult,
+          recentlyViewedResult,
+        ] = await Promise.all([
+          supabase
+            .from("places")
+            .select("id,title,city,country,address,cover_url,created_at")
+            .eq("created_by", user.id)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("reactions")
+            .select("place_id, reaction, created_at")
+            .eq("user_id", user.id)
+            .eq("reaction", "like"),
+          supabase
+            .from("comments")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", user.id),
+          supabase
+            .from("comments")
+            .select("id, text, created_at, place_id")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false })
+            .limit(20),
+          supabase
+            .from("comments")
+            .select("place_id, created_at, text")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false })
+            .limit(50),
+          recentlyViewedIds.length > 0
+            ? supabase
+                .from("places")
+                .select("id,title,city,country,address,cover_url,created_at,categories")
+                .in("id", recentlyViewedIds)
+                .limit(20)
+            : Promise.resolve({ data: null }),
         ]);
 
-        const profilesMap = new Map();
-        (profilesData.data ?? []).forEach((p: any) => {
-          profilesMap.set(p.id, {
-            name: p.display_name || p.username || "User",
-            avatar: p.avatar_url,
-          });
-        });
+        if (!mounted) return;
 
-        const placesMap = new Map();
-        (placesData.data ?? []).forEach((p: any) => {
-          placesMap.set(p.id, {
-            title: p.title,
-            address: p.address,
-          });
-        });
+        const addedPlaces = (addedPlacesResult.data ?? []) as any[];
+        const reactions = reactionsResult.data ?? [];
+        const commentsCountData = commentsCountResult.count ?? 0;
+        const commentsWritten = commentsWrittenResult.data ?? [];
+        const comments = commentsForActivityResult.data ?? [];
 
-        reviewsReceivedData = (commentsReceived as any[]).map((c: any) => {
-          const reviewer = profilesMap.get(c.user_id);
-          const place = placesMap.get(c.place_id);
+        if (mounted) setAdded(addedPlaces as Place[]);
+
+        let recentlyViewedPlaces: Place[] = [];
+        if (recentlyViewedResult.data && recentlyViewedIds.length > 0) {
+          const placesMap = new Map((recentlyViewedResult.data as Place[]).map((p) => [p.id, p]));
+          recentlyViewedPlaces = recentlyViewedIds
+            .map((id) => placesMap.get(id))
+            .filter((p): p is Place => p !== undefined);
+        }
+        if (mounted) setRecentlyViewed(recentlyViewedPlaces);
+        if (mounted) setCommentsCount(commentsCountData || 0);
+
+        const placeIds = (reactions as any[]).map((r: any) => r.place_id);
+        const addedPlaceIds = addedPlaces.map((p: any) => p.id);
+
+        const [savedPlacesResult, commentsReceivedResult] = await Promise.all([
+          placeIds.length > 0
+            ? supabase
+                .from("places")
+                .select("id,title,city,country,address,cover_url,created_at")
+                .in("id", placeIds)
+                .order("created_at", { ascending: false })
+            : Promise.resolve({ data: [] }),
+          addedPlaceIds.length > 0
+            ? supabase
+                .from("comments")
+                .select("id, text, created_at, place_id, user_id")
+                .in("place_id", addedPlaceIds)
+                .neq("user_id", user.id)
+                .order("created_at", { ascending: false })
+                .limit(20)
+            : Promise.resolve({ data: [] }),
+        ]);
+
+        if (!mounted) return;
+
+        const savedPlaces = (savedPlacesResult.data ?? []) as Place[];
+        if (mounted) setSaved(savedPlaces);
+
+        const commentsReceived = commentsReceivedResult.data ?? [];
+        let reviewsReceivedData: Review[] = [];
+
+        if (commentsReceived.length > 0) {
+          const reviewerIds = Array.from(new Set(commentsReceived.map((c: any) => c.user_id)));
+          const placeIdsForReviews = Array.from(new Set(commentsReceived.map((c: any) => c.place_id)));
+
+          const [profilesData, placesData] = await Promise.all([
+            supabase.from("profiles").select("id, display_name, username, avatar_url").in("id", reviewerIds),
+            supabase.from("places").select("id, title, address").in("id", placeIdsForReviews),
+          ]);
+
+          const profilesMap = new Map();
+          (profilesData.data ?? []).forEach((p: any) => {
+            profilesMap.set(p.id, {
+              name: p.display_name || p.username || "User",
+              avatar: p.avatar_url,
+            });
+          });
+
+          const placesMap = new Map();
+          (placesData.data ?? []).forEach((p: any) => {
+            placesMap.set(p.id, {
+              title: p.title,
+              address: p.address,
+            });
+          });
+
+          reviewsReceivedData = (commentsReceived as any[]).map((c: any) => {
+            const reviewer = profilesMap.get(c.user_id);
+            const place = placesMap.get(c.place_id);
+            return {
+              id: c.id,
+              text: c.text,
+              created_at: c.created_at,
+              place_id: c.place_id,
+              place_title: place?.title ?? null,
+              place_address: place?.address ?? null,
+              reviewer_id: c.user_id,
+              reviewer_name: reviewer?.name ?? "User",
+              reviewer_avatar: reviewer?.avatar ?? null,
+              reviewer_location: null,
+            };
+          });
+        }
+
+        let reviewsWrittenData: Review[] = [];
+        if (commentsWritten.length > 0) {
+          const placeIdsForWritten = Array.from(new Set((commentsWritten as any[]).map((c: any) => c.place_id)));
+          const { data: placesData } = await supabase
+            .from("places")
+            .select("id, title, address, created_by")
+            .in("id", placeIdsForWritten);
+
+          const placesMap = new Map();
+          (placesData ?? []).forEach((p: any) => {
+            placesMap.set(p.id, {
+              title: p.title,
+              address: p.address,
+            });
+          });
+
+          const currentDisplayName = (prof as any)?.display_name || (prof as any)?.username || user.email || "User";
+          const currentAvatar = (prof as any)?.avatar_url ?? null;
+
+          reviewsWrittenData = (commentsWritten as any[]).map((c: any) => {
+            const place = placesMap.get(c.place_id);
+            return {
+              id: c.id,
+              text: c.text,
+              created_at: c.created_at,
+              place_id: c.place_id,
+              place_title: place?.title ?? null,
+              place_address: place?.address ?? null,
+              reviewer_id: user.id,
+              reviewer_name: currentDisplayName,
+              reviewer_avatar: currentAvatar,
+              reviewer_location: null,
+            };
+          });
+        }
+
+        const likesAct: ActivityItem[] = (reactions as any[]).map((r: any) => ({
+          type: "liked",
+          created_at: r.created_at,
+          placeId: r.place_id,
+        }));
+
+        const commentsAct: ActivityItem[] = (comments as any[]).map((c: any) => ({
+          type: "commented",
+          created_at: c.created_at,
+          placeId: c.place_id,
+          commentText: c.text,
+        }));
+
+        const addedAct: ActivityItem[] = addedPlaces.map((p: any) => ({
+          type: "added",
+          created_at: p.created_at,
+          placeId: p.id,
+        }));
+
+        const act = [...likesAct, ...commentsAct, ...addedAct].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+
+        const actPlaceIds = Array.from(new Set(act.map((a) => a.placeId)));
+        const actPlacesMap = new Map<string, { title: string; cover_url: string | null; address: string | null }>();
+
+        if (actPlaceIds.length) {
+          const { data: ps } = await supabase.from("places").select("id,title,cover_url,address").in("id", actPlaceIds);
+          (ps ?? []).forEach((p: any) => actPlacesMap.set(p.id, { title: p.title, cover_url: p.cover_url, address: p.address }));
+        }
+
+        const actWithTitles = act.map((a) => {
+          const place = actPlacesMap.get(a.placeId);
           return {
-            id: c.id,
-            text: c.text,
-            created_at: c.created_at,
-            place_id: c.place_id,
-            place_title: place?.title ?? null,
-            place_address: place?.address ?? null,
-            reviewer_id: c.user_id,
-            reviewer_name: reviewer?.name ?? "User",
-            reviewer_avatar: reviewer?.avatar ?? null,
-            reviewer_location: null,
+            ...a,
+            placeTitle: place?.title ?? "Place",
+            ...(a.type === "added" || a.type === "liked" || a.type === "commented" ? { coverUrl: place?.cover_url ?? null, address: place?.address ?? null } : {}),
           };
         });
-      }
 
-      let reviewsWrittenData: Review[] = [];
-      if (commentsWritten.length > 0) {
-        const placeIdsForWritten = Array.from(new Set((commentsWritten as any[]).map((c: any) => c.place_id)));
-        const { data: placesData } = await supabase
-          .from("places")
-          .select("id, title, address, created_by")
-          .in("id", placeIdsForWritten);
-
-        const placesMap = new Map();
-        (placesData ?? []).forEach((p: any) => {
-          placesMap.set(p.id, {
-            title: p.title,
-            address: p.address,
-          });
-        });
-
-        const currentDisplayName = (prof as any)?.display_name || (prof as any)?.username || user.email || "User";
-        const currentAvatar = (prof as any)?.avatar_url ?? null;
-
-        reviewsWrittenData = (commentsWritten as any[]).map((c: any) => {
-          const place = placesMap.get(c.place_id);
-          return {
-            id: c.id,
-            text: c.text,
-            created_at: c.created_at,
-            place_id: c.place_id,
-            place_title: place?.title ?? null,
-            place_address: place?.address ?? null,
-            reviewer_id: user.id,
-            reviewer_name: currentDisplayName,
-            reviewer_avatar: currentAvatar,
-            reviewer_location: null,
-          };
-        });
-      }
-
-      const likesAct: ActivityItem[] = (reactions as any[]).map((r: any) => ({
-        type: "liked",
-        created_at: r.created_at,
-        placeId: r.place_id,
-      }));
-
-      const commentsAct: ActivityItem[] = (comments as any[]).map((c: any) => ({
-        type: "commented",
-        created_at: c.created_at,
-        placeId: c.place_id,
-        commentText: c.text,
-      }));
-
-      const addedAct: ActivityItem[] = addedPlaces.map((p: any) => ({
-        type: "added",
-        created_at: p.created_at,
-        placeId: p.id,
-      }));
-
-      const act = [...likesAct, ...commentsAct, ...addedAct].sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-
-      const actPlaceIds = Array.from(new Set(act.map((a) => a.placeId)));
-      const placesMap = new Map<string, { title: string; cover_url: string | null; address: string | null }>();
-
-      if (actPlaceIds.length) {
-        const { data: ps } = await supabase.from("places").select("id,title,cover_url,address").in("id", actPlaceIds);
-        (ps ?? []).forEach((p: any) => placesMap.set(p.id, { title: p.title, cover_url: p.cover_url, address: p.address }));
-      }
-
-      const actWithTitles = act.map((a) => {
-        const place = placesMap.get(a.placeId);
-        return {
-          ...a,
-          placeTitle: place?.title ?? "Place",
-          ...(a.type === "added" || a.type === "liked" || a.type === "commented" ? { coverUrl: place?.cover_url ?? null, address: place?.address ?? null } : {}),
-        };
-      });
-
-      if (mounted) {
-        setReviewsReceived(reviewsReceivedData);
-        setReviewsWritten(reviewsWrittenData);
-        setActivity(actWithTitles);
-        setLoading(false);
-      }
+        if (mounted) {
+          setReviewsReceived(reviewsReceivedData);
+          setReviewsWritten(reviewsWrittenData);
+          setActivity(actWithTitles);
+          setExtrasLoading(false);
+        }
+      })();
     })();
 
     return () => {
