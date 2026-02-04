@@ -29,7 +29,23 @@ function hasPremiumAccessFromProfile(profile: {
   return false;
 }
 
+function jsonResponse(body: { error: string; code?: string; details?: string }, status: number) {
+  return NextResponse.json(body, {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 export async function POST(request: NextRequest) {
+  // Check OPENAI_API_KEY first so we always return JSON 503 when missing (no other code runs)
+  const openAiApiKey = process.env.OPENAI_API_KEY;
+  if (!openAiApiKey) {
+    return jsonResponse(
+      { error: "AI description is not available.", code: "MISSING_OPENAI_KEY" },
+      503
+    );
+  }
+
   try {
     const body = await request.json();
     const { place_id, google_place_id, access_token, save } = body as {
@@ -51,14 +67,6 @@ export async function POST(request: NextRequest) {
 
     if (!access_token) {
       return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 });
-    }
-
-    const openAiApiKey = process.env.OPENAI_API_KEY;
-    if (!openAiApiKey) {
-      return NextResponse.json(
-        { error: "AI description is not available.", code: "MISSING_OPENAI_KEY" },
-        { status: 503 }
-      );
     }
 
     const googleApiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
