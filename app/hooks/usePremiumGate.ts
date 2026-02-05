@@ -5,6 +5,7 @@ import { usePremiumStatus } from "./usePremiumStatus";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import type { Place } from "../types";
 import { usePremiumModalContext } from "../contexts/PremiumModalContext";
+import type { AuthModalVariant } from "../components/AuthModal";
 
 type PremiumGateContext = "place" | "collection";
 
@@ -25,6 +26,7 @@ export function usePremiumGate() {
   const [modalCollectionTitle, setModalCollectionTitle] = useState<string | undefined>();
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authRedirectPath, setAuthRedirectPath] = useState<string | undefined>();
+  const [authModalVariant, setAuthModalVariant] = useState<AuthModalVariant>("default");
 
   // Sync local modal state with global context
   useEffect(() => {
@@ -48,7 +50,32 @@ export function usePremiumGate() {
   const closeAuthModal = useCallback(() => {
     setAuthModalOpen(false);
     setAuthRedirectPath(undefined);
+    setAuthModalVariant("default");
   }, []);
+
+  /**
+   * Открыть модалку входа для гостя при клике на «Профиль». После входа — редирект на /profile.
+   */
+  const openAuthForProfile = useCallback(() => {
+    if (loading) return;
+    if (access.role === "guest") {
+      setAuthRedirectPath("/profile");
+      setAuthModalVariant("profile");
+      setAuthModalOpen(true);
+    }
+  }, [loading, access.role]);
+
+  /**
+   * Открыть модалку входа для гостя при клике на «Saved». После входа — редирект на /saved.
+   */
+  const openAuthForSaved = useCallback(() => {
+    if (loading) return;
+    if (access.role === "guest") {
+      setAuthRedirectPath("/saved");
+      setAuthModalVariant("saved");
+      setAuthModalOpen(true);
+    }
+  }, [loading, access.role]);
 
   /**
    * Open the appropriate modal when user clicks a premium location they can't access.
@@ -61,6 +88,7 @@ export function usePremiumGate() {
       if (loading) return;
       if (access.role === "guest") {
         setAuthRedirectPath(placeId ? `/id/${placeId}` : undefined);
+        setAuthModalVariant("default");
         setAuthModalOpen(true);
         return;
       }
@@ -82,6 +110,7 @@ export function usePremiumGate() {
       if (loading) return;
       if (access.role === "guest") {
         setAuthRedirectPath(`/collections/${collectionId}`);
+        setAuthModalVariant("default");
         setAuthModalOpen(true);
         return;
       }
@@ -140,5 +169,8 @@ export function usePremiumGate() {
     modalCollectionTitle,
     authModalOpen,
     authRedirectPath,
+    authModalVariant,
+    openAuthForProfile,
+    openAuthForSaved,
   };
 }

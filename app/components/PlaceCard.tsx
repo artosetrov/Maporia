@@ -91,7 +91,7 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
   }, []);
   
   // Premium gate hook (guest → Auth Modal, free → Premium Modal, premium → open place)
-  const { canAccessPlace, openPremiumLocation, closePremiumModal, closeAuthModal, modalOpen, authModalOpen, authRedirectPath } = usePremiumGate();
+  const { canAccessPlace, openPremiumLocation, closePremiumModal, closeAuthModal, modalOpen, authModalOpen, authRedirectPath, authModalVariant } = usePremiumGate();
 
   useEffect(() => {
     if (!isInView) return;
@@ -656,6 +656,7 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
       isOpen={authModalOpen}
       onClose={closeAuthModal}
       redirectPath={authRedirectPath}
+      variant={authModalVariant}
     />
     {/* Premium Upsell Modal - for logged-in free users clicking premium location */}
     <PremiumUpsellModal

@@ -5,8 +5,10 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import FavoriteIcon from "./FavoriteIcon";
 import Icon from "./Icon";
+import AuthModal from "./AuthModal";
 import { usePremiumModalContext } from "../contexts/PremiumModalContext";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
+import { usePremiumGate } from "../hooks/usePremiumGate";
 
 function initialsFromEmail(email?: string | null) {
   if (!email) return "U";
@@ -29,6 +31,14 @@ export default function BottomNav() {
   const pathname = usePathname();
   const { isPremiumModalOpen } = usePremiumModalContext();
   const { user, profile } = useUserAccessContext();
+  const {
+    authModalOpen,
+    authModalVariant,
+    authRedirectPath,
+    closeAuthModal,
+    openAuthForProfile,
+    openAuthForSaved,
+  } = usePremiumGate();
   const [isVisible, setIsVisible] = useState(true);
   const lastScrollByTarget = useRef<WeakMap<EventTarget, number>>(new WeakMap());
   const rafId = useRef<number | null>(null);
@@ -139,11 +149,12 @@ export default function BottomNav() {
 
   const navItems = [
     { href: "/", label: "Explore", icon: SearchIcon },
-    { href: "/saved", label: "Saved", icon: SavedIcon },
-    { href: "/profile", label: "Profile", icon: ProfileIcon, isProfile: true },
+    { href: "/saved", label: "Saved", icon: SavedIcon, authAction: openAuthForSaved },
+    { href: "/profile", label: "Profile", icon: ProfileIcon, isProfile: true, authAction: openAuthForProfile },
   ];
 
   return (
+    <>
     <div 
       className="fixed left-0 right-0 z-[60] bg-white lg:hidden transition-transform duration-300 ease-in-out"
       style={{
@@ -162,13 +173,16 @@ export default function BottomNav() {
             const isActive = item.href === "/" 
               ? pathname === "/"
               : pathname === item.href || pathname.startsWith(item.href);
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex flex-col items-center gap-1 py-2 px-4 transition"
-              >
+            const IconComponent = item.icon;
+            const isAuthGated = !isAuthenticated && "authAction" in item && item.authAction;
+            const handleClick = isAuthGated
+              ? (e: React.MouseEvent) => {
+                  e.preventDefault();
+                  item.authAction?.();
+                }
+              : undefined;
+            const linkContent = (
+              <>
                 {item.isProfile && isAuthenticated ? (
                   <ProfileAvatarIcon 
                     active={isActive} 
@@ -177,17 +191,34 @@ export default function BottomNav() {
                     userEmail={userEmail}
                   />
                 ) : (
-                  <Icon active={isActive} />
+                  <IconComponent active={isActive} />
                 )}
                 <span className={`text-[10px] font-medium transition-colors ${isActive ? "text-[#8F9E4F]" : "text-[#A8B096]"}`}>
                   {item.label}
                 </span>
+              </>
+            );
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="flex flex-col items-center gap-1 py-2 px-4 transition"
+                onClick={handleClick}
+              >
+                {linkContent}
               </Link>
             );
           })}
         </div>
       </div>
     </div>
+    <AuthModal
+      isOpen={authModalOpen}
+      onClose={closeAuthModal}
+      redirectPath={authRedirectPath}
+      variant={authModalVariant}
+    />
+    </>
   );
 }
 

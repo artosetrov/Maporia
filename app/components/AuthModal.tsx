@@ -8,17 +8,27 @@ import { useRouter } from "next/navigation";
 import { supabase, getAuthRedirectUrl } from "../lib/supabase";
 import Icon from "./Icon";
 
+export type AuthModalVariant = "default" | "profile" | "saved";
+
 type AuthModalProps = {
   isOpen: boolean;
   onClose: () => void;
   redirectPath?: string;
+  /** Контекст открытия: разный подзаголовок для премиум / профиль / сохранённое */
+  variant?: AuthModalVariant;
+};
+
+const VARIANT_SUBTITLE: Record<AuthModalVariant, string> = {
+  default: "Sign in to like, comment, and save your favorite places",
+  profile: "Sign in to view your profile and manage your account",
+  saved: "Sign in to view your saved places",
 };
 
 /**
  * Modal component for authentication (sign up / login)
- * Opens when guests try to perform restricted actions
+ * Opens when guests try to perform restricted actions (premium, profile, saved)
  */
-export default function AuthModal({ isOpen, onClose, redirectPath }: AuthModalProps) {
+export default function AuthModal({ isOpen, onClose, redirectPath, variant = "default" }: AuthModalProps) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -143,7 +153,7 @@ export default function AuthModal({ isOpen, onClose, redirectPath }: AuthModalPr
           <>
             <h2 className="text-2xl font-semibold text-[#1F2A1F] mb-2">Sign in to Maporia</h2>
             <p className="text-[#A8B096] text-sm mb-6">
-              Sign in to like, comment, and save your favorite places
+              {VARIANT_SUBTITLE[variant]}
             </p>
 
             {error && (

@@ -214,14 +214,14 @@ export default function PremiumUpsellModal({
   // Render modal in a portal to ensure it's on top of everything
   const modalContent = (
     <div 
-      className="fixed inset-0 z-[9999] flex items-end lg:items-center justify-center p-0 lg:p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[9999] flex items-end lg:items-center justify-center pt-6 pb-0 lg:py-4 bg-black/60 backdrop-blur-sm"
       style={{ height: dynamicHeight }}
     >
       <div 
-        className="w-full lg:max-w-4xl lg:h-auto lg:max-h-[90vh] rounded-t-3xl lg:rounded-3xl bg-white overflow-hidden relative flex flex-col lg:flex-row animate-slide-up"
+        className="w-full lg:max-w-4xl lg:h-auto lg:max-h-[85vh] rounded-t-3xl lg:rounded-3xl bg-white overflow-hidden relative flex flex-col lg:flex-row animate-slide-up max-h-[calc(100vh-1.5rem)]"
         style={{ 
-          height: typeof window !== 'undefined' && window.innerWidth >= 1024 ? 'auto' : dynamicHeight,
-          maxHeight: typeof window !== 'undefined' && window.innerWidth >= 1024 ? '90vh' : '100%',
+          height: typeof window !== 'undefined' && window.innerWidth >= 1024 ? 'auto' : 'calc(100% - 1.5rem)',
+          maxHeight: typeof window !== 'undefined' && window.innerWidth >= 1024 ? '85vh' : 'calc(100vh - 1.5rem)',
           boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
         }}
       >
@@ -301,8 +301,8 @@ export default function PremiumUpsellModal({
 
         </div>
 
-        {/* Right Pane - Content (2/3 width) */}
-        <div className="w-full lg:w-2/3 flex flex-col relative max-h-[90vh]">
+        {/* Right Pane - Content (2/3 width), no scroll */}
+        <div className="w-full lg:w-2/3 flex flex-col relative max-h-[85vh] min-h-0">
           {/* Close Button */}
           <button
             onClick={onClose}
@@ -312,16 +312,16 @@ export default function PremiumUpsellModal({
             <Icon name="close" size={20} className="text-[#6F7A5A]" />
           </button>
 
-          {/* Scrollable Content */}
+          {/* Content without scroll */}
           <div 
-            className="flex-1 overflow-y-auto p-8 pb-0 lg:pb-8"
+            className="flex-1 overflow-hidden flex flex-col p-8 pb-0 lg:pb-8 min-h-0"
             style={{ 
               paddingBottom: typeof window !== 'undefined' && window.innerWidth < 1024 
                 ? 'env(safe-area-inset-bottom, 0px)' 
                 : undefined 
             }}
           >
-            <div className="space-y-6 pr-4 pb-24 lg:pb-0">
+            <div className="space-y-6 pr-4 pb-24 lg:pb-0 min-h-0">
             {/* Title */}
             {content.title && (
               <h2 className="text-3xl lg:text-4xl font-semibold font-fraunces text-[#1F2A1F]">
@@ -438,12 +438,12 @@ export default function PremiumUpsellModal({
             </div>
           </div>
 
-          {/* Fixed Buttons at Bottom - Mobile only */}
+          {/* Fixed Buttons at Bottom - 32px from bottom */}
           <div 
-            className="sticky bottom-0 bg-white border-t border-[#ECEEE4] p-4 lg:border-0 lg:bg-transparent lg:p-0 lg:px-8 lg:pb-8 lg:static"
+            className="sticky bottom-0 bg-white border-t border-[#ECEEE4] px-4 pt-4 pb-8 lg:border-0 lg:bg-transparent lg:p-0 lg:px-8 lg:pb-8 lg:static"
             style={{ 
               paddingBottom: typeof window !== 'undefined' && window.innerWidth < 1024 
-                ? `max(16px, env(safe-area-inset-bottom, 0px))` 
+                ? `max(32px, env(safe-area-inset-bottom, 0px))` 
                 : undefined 
             }}
           >

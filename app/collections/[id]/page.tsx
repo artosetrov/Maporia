@@ -47,6 +47,7 @@ export default function CollectionDetailPage() {
     modalCollectionTitle,
     authModalOpen,
     authRedirectPath,
+    authModalVariant,
   } = usePremiumGate();
 
   const [collection, setCollection] = useState<Collection | null>(null);
@@ -371,6 +372,7 @@ export default function CollectionDetailPage() {
         isOpen={authModalOpen}
         onClose={closeAuthModal}
         redirectPath={authRedirectPath}
+        variant={authModalVariant}
       />
       <PremiumUpsellModal
         open={modalOpen}

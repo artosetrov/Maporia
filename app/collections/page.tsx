@@ -104,6 +104,7 @@ function CollectionsPageContent() {
     modalCollectionTitle,
     authModalOpen,
     authRedirectPath,
+    authModalVariant,
   } = usePremiumGate();
 
   const activeCollection = useMemo(
@@ -424,6 +425,7 @@ function CollectionsPageContent() {
         isOpen={authModalOpen}
         onClose={closeAuthModal}
         redirectPath={authRedirectPath}
+        variant={authModalVariant}
       />
       <PremiumUpsellModal
         open={modalOpen}
