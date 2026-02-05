@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import type { Database } from "../../types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
@@ -14,6 +14,7 @@ type PlaceIdResult = { data: Pick<PlacesRow, "id"> | null; error: PostgrestError
 
 export default function AddPlacePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { redirectToAuth } = useAuthRedirect();
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const [creating, setCreating] = useState(false);
@@ -77,8 +78,10 @@ export default function AddPlacePage() {
           return;
         }
 
-        // Redirect to editor
-        window.location.href = `/places/${placeData.id}/edit`;
+        // Redirect to editor, passing returnTo so Cancel can send user back
+        const returnTo = searchParams.get("returnTo") || "/profile";
+        const editUrl = `/places/${placeData.id}/edit?returnTo=${encodeURIComponent(returnTo)}`;
+        window.location.href = editUrl;
       } catch (err) {
         console.error("Exception creating place:", err);
         console.error("Exception details:", JSON.stringify(err, null, 2));
@@ -86,7 +89,7 @@ export default function AddPlacePage() {
         setCreating(false);
       }
     })();
-  }, [router, user, access, accessLoading]);
+  }, [router, user, access, accessLoading, searchParams]);
 
   if (creating) {
     return (

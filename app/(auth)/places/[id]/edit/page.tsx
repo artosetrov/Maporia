@@ -46,19 +46,18 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState, useMemo, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../../lib/supabase";
 import type { Database } from "../../../../types/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
-import { isUserAdmin } from "../../../../lib/access";
+import { isUserAdmin, canUserCreatePremiumPlace, type AccessLevel } from "../../../../lib/access";
 
 type PlacePhotoUrlRow = Pick<Database["public"]["Tables"]["place_photos"]["Row"], "url">;
 import { CATEGORIES } from "../../../../constants";
 import Icon from "../../../../components/Icon";
-import UnifiedGoogleImportField from "../../../../components/UnifiedGoogleImportField";
+import PremiumBadge from "../../../../components/PremiumBadge";
 import GoogleImportField from "../../../../components/GoogleImportField";
-import { resolveCity } from "../../../../lib/cityResolver";
 
 type Place = {
   id: string;
@@ -106,8 +105,10 @@ function cx(...a: Array<string | false | undefined | null>) {
 
 export default function PlaceEditorHub() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const params = useParams<{ id: string }>();
   const placeId = params?.id;
+  const returnTo = searchParams.get("returnTo") || "";
 
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const isAdmin = isUserAdmin(access);
@@ -121,6 +122,7 @@ export default function PlaceEditorHub() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [commentsEnabled, setCommentsEnabled] = useState(true); // Default to enabled
   const [togglingComments, setTogglingComments] = useState(false);
+  const [togglingAccess, setTogglingAccess] = useState(false);
   const autoVisibilityEnabledRef = useRef(false); // Track if auto-visibility was already enabled
   const isUpdatingRef = useRef(false); // Track if we're currently updating to prevent reload
 
@@ -538,6 +540,44 @@ export default function PlaceEditorHub() {
     if (navigator.vibrate) navigator.vibrate(10);
   }
 
+  async function handleToggleAccess() {
+    if (!placeId || !user || !place) return;
+
+    const currentIsPremium = place.access_level === "premium";
+    const newLevel: AccessLevel = currentIsPremium ? "public" : "premium";
+
+    const currentIsAdmin = isUserAdmin(access);
+    if (newLevel === "premium" && !canUserCreatePremiumPlace(access) && !currentIsAdmin) {
+      setError("You need a Premium subscription to set a place as Premium.");
+      return;
+    }
+
+    isUpdatingRef.current = true;
+    setTogglingAccess(true);
+    setError(null);
+
+    const updateQuery = supabase
+      .from("places")
+      // @ts-expect-error Supabase generated types infer update payload as never
+      .update({ access_level: newLevel })
+      .eq("id", placeId);
+    if (!currentIsAdmin) updateQuery.eq("created_by", user.id);
+
+    const { error: updateError, data: updateData } = await updateQuery.select();
+    setTogglingAccess(false);
+
+    if (updateError) {
+      setError(updateError.message || "Failed to update access");
+      isUpdatingRef.current = false;
+      return;
+    }
+    if (updateData?.[0]) {
+      setPlace((prev) => (prev ? { ...prev, access_level: newLevel } : prev));
+    }
+    setTimeout(() => { isUpdatingRef.current = false; }, 2000);
+    if (navigator.vibrate) navigator.vibrate(10);
+  }
+
   function openDeleteModal() {
     if (!placeId || !user || !place) return;
     setShowDeleteModal(true);
@@ -622,6 +662,58 @@ export default function PlaceEditorHub() {
     } catch (err) {
       console.error("Exception deleting place:", err);
       setError(err instanceof Error ? err.message : "Failed to delete place");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  /** Cancel Add Gem: delete the new place and go back to returnTo (where user came from). */
+  async function handleCancelAddGem() {
+    if (!placeId || !user || !place) return;
+    setDeleting(true);
+    setError(null);
+    const targetPath = returnTo || "/profile";
+
+    try {
+      const { data: rawPhotos } = await supabase
+        .from("place_photos")
+        .select("url")
+        .eq("place_id", placeId);
+      const photosData = rawPhotos as PlacePhotoUrlRow[] | null;
+      if (photosData && photosData.length > 0) {
+        const photoUrls = photosData.map((p) => p.url).filter(Boolean) as string[];
+        const bucketName = "place-photos";
+        for (const url of photoUrls) {
+          try {
+            if (url.includes("supabase.co/storage")) {
+              const storageMatch = url.match(/\/place-photos\/(.+)$/);
+              if (storageMatch?.[1]) {
+                await supabase.storage.from(bucketName).remove([storageMatch[1]]);
+              }
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+      await Promise.all([
+        supabase.from("place_photos").delete().eq("place_id", placeId),
+        supabase.from("comments").delete().eq("place_id", placeId),
+        supabase.from("reactions").delete().eq("place_id", placeId),
+      ]);
+      const currentIsAdmin = isUserAdmin(access);
+      const deleteQuery = supabase.from("places").delete().eq("id", placeId);
+      if (!currentIsAdmin) deleteQuery.eq("created_by", user.id);
+      const { error: deleteError } = await deleteQuery;
+      if (deleteError) {
+        setError(deleteError.message || "Failed to cancel");
+        setDeleting(false);
+        return;
+      }
+      router.push(targetPath);
+    } catch (err) {
+      console.error("Cancel Add Gem error:", err);
+      setError(err instanceof Error ? err.message : "Failed to cancel");
     } finally {
       setDeleting(false);
     }
@@ -784,25 +876,29 @@ export default function PlaceEditorHub() {
       {/* Top App Bar */}
       <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between h-16 relative">
-            <button
-              onClick={() => router.push("/profile")}
-              className="p-2 -ml-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition"
-              aria-label="Back"
-            >
-              <Icon name="back" size={20} />
-            </button>
-            <div className="absolute left-1/2 -translate-x-1/2 font-semibold font-fraunces text-[#1F2A1F]" style={{ fontSize: '24px' }}>
-              {isNewPlace ? "Add Gem" : "Place editor"}
+          <div className="flex items-center justify-between h-16 gap-2">
+            <div className="font-semibold font-fraunces text-[#1F2A1F] min-w-0 flex-1 truncate" style={{ fontSize: '24px' }}>
+              {isNewPlace ? "New Gem" : (place?.title?.trim() || "")}
             </div>
-            <Link
-              href={`/id/${placeId}`}
-              className="flex items-center gap-2 px-3 py-2 rounded-full bg-[#8F9E4F] text-white text-sm font-medium shadow-sm hover:bg-[#556036] transition"
-              aria-label="View place"
+            <button
+              onClick={() => {
+                if (isNewPlace) {
+                  handleCancelAddGem();
+                } else if (typeof window !== "undefined" && window.history.length > 1) {
+                  router.back();
+                } else {
+                  router.push("/profile");
+                }
+              }}
+              disabled={deleting}
+              className={cx(
+                "p-2 -mr-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition flex-shrink-0",
+                deleting && "opacity-50 cursor-not-allowed"
+              )}
+              aria-label={isNewPlace ? "Cancel and go back" : "Close"}
             >
-              <Icon name="eye" size={16} />
-              View
-            </Link>
+              <Icon name="close" size={20} />
+            </button>
           </div>
         </div>
       </div>
@@ -815,24 +911,12 @@ export default function PlaceEditorHub() {
           </div>
         )}
         <div className="space-y-4">
-            {/* Import from Google Maps (Preview flow) — show at top for Add Gem */}
-            {isNewPlace && user && placeId && (
-              <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
-                <div className="flex items-start justify-between gap-4 mb-2">
-                  <div className="flex-1">
-                    <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">
-                      Import from Google Maps
-                    </h3>
-                    <p className="text-sm text-[#6F7A5A]">
-                      Paste a Google Maps link or type a place name, preview the data, and import it directly into this Gem.
-                    </p>
-                  </div>
-                </div>
-                <GoogleImportField userId={user.id} targetPlaceId={placeId} />
-              </div>
+            {/* Import from Google Maps — самостоятельный блок перед Progress */}
+            {user && placeId && (
+              <GoogleImportField userId={user.id} targetPlaceId={placeId} redirectToPreview />
             )}
 
-            {/* Required Steps Card */}
+            {/* Required Steps Card (Progress) */}
             {incompleteSteps.length > 0 && (
               <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition">
                 <div className="mb-4">
@@ -853,12 +937,6 @@ export default function PlaceEditorHub() {
                 </p>
               </div>
             )}
-
-            <div className="pt-2">
-              <h2 className="font-fraunces font-semibold text-[#1F2A1F] text-base">
-                Tasks to publish
-              </h2>
-            </div>
 
             {/* Photo Tour Card */}
             <Link
@@ -1113,126 +1191,43 @@ export default function PlaceEditorHub() {
               </div>
             </div>
 
-            {/* Access Card */}
-            <Link
-              href={`/places/${placeId}/edit/access`}
-              className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
-            >
+            {/* Access Card — свитч: выключен = Public, включен = Premium */}
+            <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 flex-1">
-                  {/* Status Icon - Access всегда заполнен */}
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-[#7FA35C]">
-                    <Icon 
-                      name="check" 
-                      size={16} 
-                      className="text-white" 
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Access</h3>
-                    <p className="text-sm text-[#6F7A5A]">
-                      {place.access_level === 'premium' ? "Premium" : "Public"}
-                    </p>
-                  </div>
+                <div className="flex-1">
+                  <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Access</h3>
+                  <p className="text-sm text-[#6F7A5A] flex flex-wrap items-center gap-1.5">
+                    {place.access_level === "premium" ? (
+                      <>
+                        <PremiumBadge />
+                        <span>— visible to Premium subscribers.</span>
+                      </>
+                    ) : (
+                      "Public — visible to all users."
+                    )}
+                  </p>
                 </div>
-                <Icon name="forward" size={20} className="text-[#6F7A5A]" />
+                <button
+                  onClick={handleToggleAccess}
+                  disabled={togglingAccess}
+                  className={cx(
+                    "relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] focus:ring-offset-2",
+                    togglingAccess && "opacity-50 cursor-not-allowed",
+                    place.access_level === "premium" ? "bg-[#8F9E4F]" : "bg-[#DADDD0]"
+                  )}
+                  role="switch"
+                  aria-checked={place.access_level === "premium"}
+                  aria-label={place.access_level === "premium" ? "Premium (on)" : "Public (off)"}
+                >
+                  <span
+                    className={cx(
+                      "pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                      place.access_level === "premium" ? "translate-x-5" : "translate-x-0"
+                    )}
+                  />
+                </button>
               </div>
-            </Link>
-
-            {/* Google Import Card (moved below Visibility) */}
-            {user && placeId && (
-              <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
-                <UnifiedGoogleImportField
-                  userId={user.id}
-                  context="place"
-                  onImportSuccess={async (data) => {
-                    // Resolve city to city_id
-                    let cityId: string | null = null;
-                    const cityName = data.city || null;
-                    if (cityName) {
-                      const cityData = await resolveCity(
-                        cityName,
-                        data.city_state || null,
-                        data.city_country || null,
-                        data.lat || null,
-                        data.lng || null
-                      );
-                      if (cityData) {
-                        cityId = cityData.city_id;
-                      }
-                    }
-
-                    // Update place with imported data
-                    const updates: any = {
-                      title: data.name || data.business_name || place?.title || null,
-                      address: data.formatted_address || data.address || place?.address || null,
-                      city: cityName || place?.city || null, // Keep for backward compatibility
-                      city_id: cityId,
-                      city_name_cached: cityName || null,
-                      link: data.website || place?.link || null,
-                      google_place_id: data.place_id || data.google_place_id || place?.google_place_id || null,
-                      lat: data.lat || data.latitude || place?.lat || null,
-                      lng: data.lng || data.longitude || place?.lng || null,
-                    };
-                    // Update categories if types are available
-                    if (data.types && data.types.length > 0) {
-                      const categoryMap: Record<string, string> = {
-                        restaurant: "restaurant",
-                        cafe: "cafe",
-                        bar: "bar",
-                        hotel: "hotel",
-                        museum: "museum",
-                        park: "park",
-                        beach: "beach",
-                        shopping_mall: "shopping",
-                        store: "shopping",
-                      };
-                      const mappedCategories = data.types
-                        .map((type: string) => categoryMap[type])
-                        .filter(Boolean);
-                      if (mappedCategories.length > 0) {
-                        updates.categories = mappedCategories.slice(0, 3);
-                      }
-                    }
-                    // @ts-expect-error Supabase generated types infer update payload as never
-                    const { error: updateError } = await supabase.from("places").update(updates).eq("id", placeId);
-                    
-                    if (updateError) {
-                      console.error("Error updating place after import:", updateError);
-                      throw new Error(updateError.message || "Failed to update place");
-                    }
-                    
-                    // Reload place data to reflect changes
-                    const { data: rawReload, error: reloadError } = await supabase
-                      .from("places")
-                      .select("*")
-                      .eq("id", placeId)
-                      .single();
-
-                    const placeData = rawReload as Place | null;
-                    if (reloadError) {
-                      console.error("Error reloading place after import:", reloadError);
-                    } else if (placeData) {
-                      setPlace(placeData);
-                      // Update hidden state if needed
-                      const hiddenState = placeData.is_hidden === true ||
-                                        placeData.visibility === "hidden" ||
-                                        placeData.visibility === "private";
-                      setIsHidden(hiddenState);
-                    }
-                  }}
-                />
-                <div className="mt-4 pt-4 border-t border-[#ECEEE4]">
-                  <Link
-                    href="/add/google"
-                    className="text-sm text-[#8F9E4F] hover:text-[#556036] underline flex items-center gap-1 transition-colors"
-                  >
-                    <span>Import with preview</span>
-                    <Icon name="external-link" size={14} />
-                  </Link>
-                </div>
-              </div>
-            )}
+            </div>
 
             {/* Danger zone (moved from Place settings) */}
             <div className="rounded-2xl border border-[#C96A5B]/30 bg-[#C96A5B]/5 p-5 shadow-sm">
@@ -1294,10 +1289,22 @@ export default function PlaceEditorHub() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex gap-3">
             <button
-              onClick={() => router.back()}
-              className="flex-1 h-11 rounded-xl border border-[#ECEEE4] bg-white px-5 text-sm font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] transition"
+              onClick={() => {
+                if (isNewPlace) {
+                  handleCancelAddGem();
+                } else if (typeof window !== "undefined" && window.history.length > 1) {
+                  router.back();
+                } else {
+                  router.push("/profile");
+                }
+              }}
+              disabled={deleting}
+              className={cx(
+                "flex-1 h-11 rounded-xl border border-[#ECEEE4] bg-white px-5 text-sm font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] transition",
+                deleting && "opacity-50 cursor-not-allowed"
+              )}
             >
-              Cancel
+              {deleting ? "Cancelling…" : "Cancel"}
             </button>
             <Link
               href={`/id/${placeId}`}

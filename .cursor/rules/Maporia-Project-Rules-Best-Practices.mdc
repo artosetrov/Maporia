@@ -1,0 +1,83 @@
+---
+alwaysApply: true
+---
+
+🔐 Secrets & Environment
+	•	Никогда не хранить API keys в коде, JSON, MCP config
+	•	Все ключи только через .env.local
+	•	В репозитории хранить только .env.example
+	•	Разделять ключи: DEV / STAGING / PROD
+	•	Любой утёкший ключ — сразу revoke и пересоздать
+
+⸻
+
+🧠 Architecture
+	•	Supabase = single source of truth для данных
+	•	Next.js отвечает только за UI и routing
+	•	AI используется как ассистент, не как логика
+	•	Бизнес-правила реализуются на сервере, не в UI
+	•	Каждый домен изолирован: Places, Map, Collections, Profile
+
+⸻
+
+🗺 Data Model Rules
+	•	places — только фактические данные (name, geo, tags, city)
+	•	AI-контент (description, summary) хранить отдельно
+	•	collections — отдельная сущность, связь через join table
+	•	Никаких вычислений на клиенте, если можно сделать в Supabase
+	•	Counts и агрегаты кешировать в БД
+
+⸻
+
+🎨 UI / UX
+	•	Mobile-first всегда
+	•	Bottom bar не должен перекрывать контент
+	•	Map — adaptive / sticky, не фиксированная высота
+	•	Использовать skeletons вместо спиннеров
+	•	Любой экран должен работать на маленьком экране
+
+⸻
+
+⚡ Performance
+	•	Карта загружается после основного UI
+	•	Lazy-load изображений
+	•	Pagination или virtual list для Places
+	•	Минимум запросов при загрузке экрана
+	•	Кешировать часто используемые данные
+
+⸻
+
+🤖 AI Rules
+	•	AI не является источником истины
+	•	Все AI-результаты должны быть пересоздаваемыми
+	•	Генерация — background task
+	•	Хранить логи запросов
+	•	Всегда иметь fallback без AI
+
+⸻
+
+🔐 Access & Premium
+	•	Проверка Free / Premium только на сервере
+	•	UI не принимает решений о доступе
+	•	Premium collections — через allow-list в профиле пользователя
+	•	Не полагаться на client-side флаги
+
+⸻
+
+🧪 Development Process
+	•	Любая задача формулируется как prompt для Cursor
+	•	Маленькие итерации, без больших рефакторов за раз
+	•	Проверять mobile + slow network
+	•	Перед деплоем обязательно:
+	•	lint
+	•	typecheck
+	•	build
+
+⸻
+
+🚫 Anti-Patterns (Запрещено)
+	•	Хардкод категорий и тегов
+	•	Дублирование данных
+	•	Хранение вычисляемых значений в UI
+	•	Завязывать логику на AI без fallback
+	•	Коммитить секреты

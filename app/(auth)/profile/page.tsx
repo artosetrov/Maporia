@@ -2,7 +2,7 @@
 export const dynamic = "force-dynamic";
 import { useEffect, useMemo, useState, useRef, Suspense } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import TopBar from "../../components/TopBar";
 import BottomNav from "../../components/BottomNav";
 import FiltersModal, { ActiveFilters } from "../../components/FiltersModal";
@@ -130,12 +130,13 @@ function cx(...a: Array<string | false | undefined | null>) {
 function ProfileInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const { redirectToAuth, replaceToAuth } = useAuthRedirect();
 
   const [section, setSection] = useState<"about" | "trips" | "added" | "activity" | "users" | "elements" | "history">("about");
   const [profileLoading, setProfileLoading] = useState(true);
   const [extrasLoading, setExtrasLoading] = useState(true);
-  const loading = profileLoading;
+  const loading = profileLoading || extrasLoading;
 
   const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -353,58 +354,54 @@ function ProfileInner() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Load profile and extras when user/session is ready from UserAccessContext (no pathname re-fetch)
   useEffect(() => {
+    if (accessLoading) return;
+    if (!user) {
+      replaceToAuth();
+      return;
+    }
+
     let mounted = true;
+    setProfileLoading(true);
+    setExtrasLoading(true);
+    setUserId(user.id);
+    setUserEmail(user.email ?? null);
+    setUserCreatedAt(user.created_at ?? null);
 
     (async () => {
-      setProfileLoading(true);
-      setExtrasLoading(true);
+      try {
+        // Critical: profile only — unblocks initial render (avatar, name, bio)
+        const { data: prof, error: profError } = await supabase
+          .from("profiles")
+          .select("id, username, display_name, bio, avatar_url, role, is_admin, subscription_status")
+          .eq("id", user.id)
+          .maybeSingle();
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData.session;
-
-      if (!mounted) return;
-
-      if (!session?.user) {
-        replaceToAuth();
-        return;
-      }
-
-      const user = session.user;
-      setUserId(user.id);
-      setUserEmail(user.email ?? null);
-      setUserCreatedAt(user.created_at ?? null);
-
-      // Critical: profile only — unblocks initial render (avatar, name, bio)
-      const { data: prof, error: profError } = await supabase
-        .from("profiles")
-        .select("id, username, display_name, bio, avatar_url, role, is_admin, subscription_status")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (profError) {
-        const msg = profError.message ?? "";
-        const code = profError.code ?? "";
-        if (msg || code) {
-          console.error("Error loading profile:", { message: msg, code });
+        if (profError) {
+          const msg = profError.message ?? "";
+          const code = profError.code ?? "";
+          if (msg || code) {
+            console.error("Error loading profile:", { message: msg, code });
+          }
         }
-      }
 
-      if (mounted) {
-        setProfile((prof as unknown as Profile | null) ?? null);
-        setDisplayNameDraft((prof as any)?.display_name ?? (user.email ?? ""));
-        setBioDraft((prof as any)?.bio ?? "");
-        setAvatarDraft((prof as any)?.avatar_url ?? null);
-        const profileRole = (prof as any)?.role;
-        const profileIsAdmin = (prof as any)?.is_admin === true;
-        setUserRole(profileRole || null);
-        setUserIsAdmin(profileIsAdmin);
-        setProfileLoading(false);
-      }
+        if (mounted) {
+          setProfile((prof as unknown as Profile | null) ?? null);
+          setDisplayNameDraft((prof as any)?.display_name ?? (user.email ?? ""));
+          setBioDraft((prof as any)?.bio ?? "");
+          setAvatarDraft((prof as any)?.avatar_url ?? null);
+          const profileRole = (prof as any)?.role;
+          const profileIsAdmin = (prof as any)?.is_admin === true;
+          setUserRole(profileRole ?? null);
+          setUserIsAdmin(profileIsAdmin);
+          setProfileLoading(false);
+        }
 
-      // Non-critical: load extras in background (do not block UI)
-      (async () => {
-        const recentlyViewedIds = getRecentlyViewedPlaceIds();
+        // Non-critical: load extras in background (do not block UI)
+        (async () => {
+          try {
+            const recentlyViewedIds = getRecentlyViewedPlaceIds();
 
         const [
           addedPlacesResult,
@@ -476,7 +473,7 @@ function ProfileInner() {
           placeIds.length > 0
             ? supabase
                 .from("places")
-                .select("id,title,city,country,address,cover_url,created_at")
+                .select("id,title,city,country,address,cover_url,created_at,categories")
                 .in("id", placeIds)
                 .order("created_at", { ascending: false })
             : Promise.resolve({ data: [] }),
@@ -624,7 +621,20 @@ function ProfileInner() {
           setActivity(actWithTitles);
           setExtrasLoading(false);
         }
-      })();
+          } catch (extrasErr) {
+            if (mounted) setExtrasLoading(false);
+            if (process.env.NODE_ENV === "development") {
+              console.error("Profile extras load error:", extrasErr);
+            }
+          }
+        })();
+      } catch (err) {
+        if (mounted) {
+          setProfileLoading(false);
+          setExtrasLoading(false);
+        }
+        console.error("Profile load error:", err);
+      }
     })();
 
     return () => {
@@ -1256,6 +1266,7 @@ function ProfileInner() {
                         )}
                       </div>
                       <div className="text-sm font-medium text-[#1F2A1F] text-center">My favorites</div>
+                      <div className="text-xs text-[#6F7A5A] text-center mt-0.5">{stats.favoritesCount} {stats.favoritesCount === 1 ? "place" : "places"}</div>
                     </button>
 
                     {/* Added places */}
@@ -1620,6 +1631,7 @@ function AboutSection({
               )}
             </div>
             <div className="text-sm font-medium text-[#1F2A1F] text-center">My favorites</div>
+            <div className="text-xs text-[#6F7A5A] text-center mt-0.5">{stats.favoritesCount} {stats.favoritesCount === 1 ? "place" : "places"}</div>
           </button>
 
           {/* Added places */}
@@ -1958,6 +1970,7 @@ function AddedPlacesSection({
   onPlaceDeleted?: (placeId: string) => void;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { access, user } = useUserAccessContext();
   const [deletingPlaceId, setDeletingPlaceId] = useState<string | null>(null);
   const [menuOpenPlaceId, setMenuOpenPlaceId] = useState<string | null>(null);
@@ -2094,7 +2107,7 @@ function AddedPlacesSection({
           <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F]">Added places</h1>
           {canAddPlace && (
             <Link
-              href="/add"
+              href={`/add?returnTo=${encodeURIComponent(pathname)}`}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#7A8A42] transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2109,7 +2122,7 @@ function AddedPlacesSection({
         {canAddPlace && (
           <div className="lg:hidden mb-6">
             <Link
-              href="/add"
+              href={`/add?returnTo=${encodeURIComponent(pathname)}`}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] active:bg-[#556036] transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2134,7 +2147,7 @@ function AddedPlacesSection({
         <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F]">Added places</h1>
         {canAddPlace && (
           <Link
-            href="/add"
+            href={`/add?returnTo=${encodeURIComponent(pathname)}`}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#7A8A42] transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2149,7 +2162,7 @@ function AddedPlacesSection({
       {canAddPlace && (
         <div className="lg:hidden mb-6">
           <Link
-            href="/add"
+            href={`/add?returnTo=${encodeURIComponent(pathname)}`}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] active:bg-[#556036] transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

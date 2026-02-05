@@ -57,8 +57,14 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
         }
 
         if (sessionError) {
-          // Silently ignore AbortError
+          // Silently ignore AbortError, but still stop loading so UI can render
           if (sessionError.message?.includes('abort') || sessionError.name === 'AbortError') {
+            if (!isUnmounting && currentRequestId === requestId) {
+              setUser(null);
+              setProfile(null);
+              setAccess({ role: "guest", hasPremium: false, isAdmin: false });
+              setLoading(false);
+            }
             return;
           }
           
@@ -138,8 +144,13 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
         }
 
         if (profileError) {
-          // Silently ignore AbortError
+          // Silently ignore AbortError, but still stop loading so UI can render
           if (profileError.message?.includes('abort') || profileError.name === 'AbortError' || (profileError as any).code === 'ECONNABORTED') {
+            if (!isUnmounting && currentRequestId === requestId) {
+              setProfile(null);
+              setAccess(getUserAccess(null));
+              setLoading(false);
+            }
             return;
           }
           // Build a plain object so we never log "{}" (Supabase errors can stringify as empty)
@@ -182,8 +193,11 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
           setLoading(false);
         }
       } catch (err: any) {
-        // Silently ignore AbortError
+        // Silently ignore AbortError, but still stop loading so UI can render
         if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+          if (!isUnmounting && currentRequestId === requestId) {
+            setLoading(false);
+          }
           return;
         }
         

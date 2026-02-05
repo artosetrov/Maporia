@@ -44,13 +44,9 @@ type Place = {
 };
 
 // Result types for Supabase (Database['public']['Tables'][table]['Row'] + Pick)
-type ProfilesRow = Database["public"]["Tables"]["profiles"]["Row"];
 type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
 type ReactionsRow = Database["public"]["Tables"]["reactions"]["Row"];
 type PlacePhotosRow = Database["public"]["Tables"]["place_photos"]["Row"];
-
-type ProfileDisplay = Pick<ProfilesRow, "display_name" | "avatar_url">;
-type ProfileResult = { data: ProfileDisplay | null; error: PostgrestError | null };
 
 type PlacesResult = { data: PlacesRow[] | null; error: PostgrestError | null };
 
@@ -199,41 +195,6 @@ export default function ExplorePage() {
       .map(([tag]) => tag);
     return sortedTags;
   }, [places]);
-
-  async function loadUser() {
-    const { data } = await supabase.auth.getUser();
-    const u = data.user;
-    if (!u) {
-      setUserEmail(null);
-      setUserId(null);
-      setUserDisplayName(null);
-      return;
-    }
-    setUserEmail(u.email ?? null);
-    setUserId(u.id);
-
-    // Загружаем профиль для получения display_name и avatar_url
-    const profileResult = (await supabase
-      .from("profiles")
-      .select("display_name, avatar_url")
-      .eq("id", u.id)
-      .maybeSingle()) as ProfileResult;
-    const { data: profile, error: profileError } = profileResult;
-    
-    if (profileError) {
-      console.error("Error loading user profile:", profileError);
-    }
-    
-    if (profile?.display_name) {
-      setUserDisplayName(profile.display_name);
-    } else {
-      setUserDisplayName(u.email?.split("@")[0] || null);
-    }
-    
-    if (profile?.avatar_url) {
-      setUserAvatar(profile.avatar_url);
-    }
-  }
 
   // Fetch places when filters change
   // DIAGNOSTIC: Does not wait for accessLoading; places request runs on mount alongside useUserAccess.

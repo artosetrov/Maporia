@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
-import TopBar from "../../components/TopBar";
 import BottomNav from "../../components/BottomNav";
 import PlaceCard from "../../components/PlaceCard";
 import Icon from "../../components/Icon";
@@ -33,6 +32,7 @@ type PlaceRow = {
 
 export default function CollectionDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const collectionId = params?.id;
   const { user, access } = useUserAccessContext();
   const premiumGateOpenedRef = useRef(false);
@@ -209,13 +209,29 @@ export default function CollectionDetailPage() {
   if (notFound) {
     return (
       <>
-        <TopBar />
-        <main className="min-h-screen bg-warm-white flex items-center justify-center pt-24">
-          <div className="text-center">
-            <h1 className="text-xl font-semibold font-fraunces text-content-primary mb-2">Collection not found</h1>
-            <Link href="/collections" className="text-olive-primary hover:underline">
-              Back to Collections
-            </Link>
+        <main className="min-h-screen bg-warm-white pb-safe-bottom">
+          <div className="sticky top-0 z-30 bg-white border-b border-border-light">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6">
+              <div className="flex items-center justify-between h-14">
+                <button
+                  onClick={() => router.back()}
+                  className="p-2 -ml-2 text-content-primary hover:bg-warm-white rounded-lg transition"
+                  aria-label="Back"
+                >
+                  <Icon name="back" size={20} />
+                </button>
+                <h1 className="font-fraunces text-lg font-semibold text-content-primary">Collection</h1>
+                <div className="w-9" />
+              </div>
+            </div>
+          </div>
+          <div className="min-h-[60vh] flex items-center justify-center px-4">
+            <div className="text-center">
+              <p className="text-xl font-semibold font-fraunces text-content-primary mb-2">Collection not found</p>
+              <Link href="/collections" className="text-olive-primary hover:underline">
+                Back to Collections
+              </Link>
+            </div>
           </div>
         </main>
         <BottomNav />
@@ -223,21 +239,30 @@ export default function CollectionDetailPage() {
     );
   }
 
+  const pageTitle = collection?.title ?? "Collection";
+
   return (
     <>
-      <TopBar />
-      <main className="min-h-screen bg-warm-white pt-safe-top pb-safe-bottom">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-24 pb-12">
-          <div className="mb-6">
-            <Link
-              href="/collections"
-              className="inline-flex items-center gap-2 text-sm text-content-secondary hover:text-content-primary transition"
-            >
-              <Icon name="back" size={18} />
-              Collections
-            </Link>
+      <main className="min-h-screen bg-warm-white pb-safe-bottom">
+        <div className="sticky top-0 z-30 bg-white border-b border-border-light">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6">
+            <div className="flex items-center justify-between h-14">
+              <button
+                onClick={() => router.back()}
+                className="p-2 -ml-2 text-content-primary hover:bg-warm-white rounded-lg transition"
+                aria-label="Back"
+              >
+                <Icon name="back" size={20} />
+              </button>
+              <h1 className="font-fraunces text-lg font-semibold text-content-primary truncate max-w-[60%]">
+                {pageTitle}
+              </h1>
+              <div className="w-9" />
+            </div>
           </div>
+        </div>
 
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
           {loading ? (
             <div className="space-y-6">
               <div className="aspect-[21/9] rounded-2xl bg-border-light animate-pulse" />

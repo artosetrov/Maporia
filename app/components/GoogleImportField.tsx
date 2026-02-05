@@ -7,22 +7,12 @@ import Icon from "./Icon";
 import { SkeletonBase } from "./Skeleton";
 import ImportPreviewCard from "./ImportPreviewCard";
 import { getGoogleMapsApiKey } from "../config/googleMaps";
+import {
+  GOOGLE_IMPORT_PREVIEW_STORAGE_KEY,
+  type GoogleImportSearchResult,
+} from "../lib/googleImport";
 
-type SearchResult = {
-  title: string | null;
-  address: string | null;
-  description: string | null;
-  photos: Array<{ id: string; url: string; reference: string }>;
-  lat: number | null;
-  lng: number | null;
-  google_place_id: string | null;
-  google_maps_url: string | null;
-  // Extra fields from /api/google/place-import used for Location auto-fill
-  city?: string | null;
-  city_state?: string | null;
-  city_country?: string | null;
-  is_coordinate_only?: boolean; // True if this is a coordinate-only location (no Place ID)
-};
+type SearchResult = GoogleImportSearchResult;
 
 // Helper to generate photo URL from photo reference
 // Returns a URL that can be used directly in img src
@@ -47,11 +37,16 @@ function getPhotoUrl(photoReference: string, maxWidth: number = 800): string {
 
 type GoogleImportFieldProps = {
   userId: string;
-  // If provided, import will update this existing place instead of creating a new one
   targetPlaceId?: string;
+  /** When true, Search redirects to Step 2 Import Preview (separate route) */
+  redirectToPreview?: boolean;
 };
 
-export default function GoogleImportField({ userId, targetPlaceId }: GoogleImportFieldProps) {
+export default function GoogleImportField({
+  userId,
+  targetPlaceId,
+  redirectToPreview = false,
+}: GoogleImportFieldProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
@@ -156,7 +151,7 @@ export default function GoogleImportField({ userId, targetPlaceId }: GoogleImpor
         photoType: typeof photosArray[0],
       });
 
-      const processedPhotos = photosArray.slice(0, 6).map((photo: any, index: number) => {
+      const processedPhotos = photosArray.slice(0, 9).map((photo: any, index: number) => {
         // Handle both formats: {reference: "..."} or string
         const photoRef = typeof photo === 'string' 
           ? photo 
@@ -213,6 +208,24 @@ export default function GoogleImportField({ userId, targetPlaceId }: GoogleImpor
       });
 
       setSearchResult(searchResult);
+
+      // Step 2 flow: redirect to Import Preview page (no inline preview, no AI here)
+      if (redirectToPreview) {
+        try {
+          sessionStorage.setItem(
+            GOOGLE_IMPORT_PREVIEW_STORAGE_KEY,
+            JSON.stringify({
+              result: searchResult,
+              targetPlaceId: targetPlaceId ?? null,
+            })
+          );
+          router.push("/add/google/preview");
+        } catch (e) {
+          console.error("Failed to save preview to sessionStorage", e);
+        }
+        setSearching(false);
+        return;
+      }
 
       // Generate AI description right in the preview (non-blocking)
       if (searchResult.google_place_id) {
@@ -502,9 +515,9 @@ export default function GoogleImportField({ userId, targetPlaceId }: GoogleImpor
       {/* Search Input Card */}
       <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
         <div className="space-y-3">
-          <label className="block text-sm font-medium text-[#1F2A1F]">
-            Google Maps URL or Address
-          </label>
+          <h3 className="font-fraunces font-semibold text-[#1F2A1F]">
+            Enter the name or address
+          </h3>
           <div className="flex gap-2">
             <input
               type="text"
@@ -564,8 +577,8 @@ export default function GoogleImportField({ userId, targetPlaceId }: GoogleImpor
         </div>
       )}
 
-      {/* Preview Card */}
-      {searchResult && !searching && (
+      {/* Preview Card (inline only when not redirecting to Step 2) */}
+      {searchResult && !searching && !redirectToPreview && (
         <ImportPreviewCard
           result={searchResult}
           generatingDescription={generatingDescription}

@@ -318,7 +318,7 @@ export default function TopBar({
           {/* Add Place button - fixed in top right corner (on profile page) */}
           {pathname === "/profile" && shouldShowAddPlace && canAddPlace && (
             <Link
-                href="/add"
+                href={`/add?returnTo=${encodeURIComponent(pathname)}`}
                 onClick={() => { if (navigator.vibrate) navigator.vibrate(10); }}
                 className="absolute top-safe-top top-3 right-4 w-10 h-10 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] transition-colors flex items-center justify-center z-10"
                 aria-label="Add new place"
@@ -431,7 +431,7 @@ export default function TopBar({
                               {/* Add Gem - only for Premium and Admin, first and highlighted */}
                               {canAddPlace && (
                                 <Link
-                                  href="/add"
+                                  href={`/add?returnTo=${encodeURIComponent(pathname)}`}
                                   onClick={() => {
                                     setMenuOpen(false);
                                     setMenuPosition(null);

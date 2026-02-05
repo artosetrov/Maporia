@@ -201,27 +201,42 @@ export default function EditTagsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-warm-white pb-24">
-      <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+    <main className="min-h-screen bg-warm-white pb-24 flex flex-col">
+      {/* Desktop Header */}
+      <div className="hidden lg:block sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16">
             <Link
               href="/profile?section=elements"
-              className="p-2 -ml-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition flex items-center gap-2"
+              className="p-2 -ml-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition flex items-center justify-center"
               aria-label="Back to Elements"
             >
               <Icon name="back" size={20} />
-              <span className="text-sm font-medium">Elements</span>
             </Link>
-            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F] absolute left-1/2 -translate-x-1/2">
-              Edit Tags
-            </h1>
+            <h1 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Edit Tags</h1>
             <div className="w-20" />
           </div>
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
+      {/* Mobile Header — как на других внутренних страницах профиля */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-[#ECEEE4]">
+        <div className="px-4 pt-safe-top pt-4 pb-4 flex items-center justify-between h-[64px]">
+          <Link
+            href="/profile?section=elements"
+            className="w-10 h-10 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] active:bg-[#ECEEE4] transition-colors flex items-center justify-center flex-shrink-0"
+            aria-label="Back to Elements"
+          >
+            <Icon name="back" size={20} className="text-[#1F2A1F]" />
+          </Link>
+          <h1 className="font-semibold text-[#1F2A1F] leading-none" style={{ fontSize: "24px" }}>
+            Edit Tags
+          </h1>
+          <div className="w-10" />
+        </div>
+      </div>
+
+      <div className="max-w-2xl mx-auto w-full px-4 sm:px-6 py-6 pt-[80px] lg:pt-6">
         <p className="text-sm text-[#6F7A5A] mb-6">Manage tags used across all places</p>
 
         {error && (

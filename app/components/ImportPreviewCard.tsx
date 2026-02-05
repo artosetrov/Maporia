@@ -2,18 +2,14 @@
 
 import { useState } from "react";
 import Icon from "./Icon";
+import {
+  getImportFieldsFoundCount,
+  getImportProgressPercent,
+  IMPORT_FIELDS_COUNT,
+  type GoogleImportSearchResult,
+} from "../lib/googleImport";
 
-type SearchResult = {
-  title: string | null;
-  address: string | null;
-  description: string | null;
-  photos: Array<{ id: string; url: string; reference: string }>;
-  lat: number | null;
-  lng: number | null;
-  google_place_id: string | null;
-  google_maps_url: string | null;
-  is_coordinate_only?: boolean; // True if this is a coordinate-only location (no Place ID)
-};
+type SearchResult = GoogleImportSearchResult;
 
 type ImportPreviewCardProps = {
   result: SearchResult;
@@ -26,6 +22,10 @@ type ImportPreviewCardProps = {
     photos: string[];
   }) => void;
   importing: boolean;
+  /** Step 2: Back button — return to Add Gem without saving */
+  onCancel?: () => void;
+  /** Step 2: show progress bar (fields found e.g. 4/5 → 80%) */
+  showProgressBar?: boolean;
 };
 
 export default function ImportPreviewCard({
@@ -34,14 +34,19 @@ export default function ImportPreviewCard({
   descriptionHint = null,
   onImport,
   importing,
+  onCancel,
+  showProgressBar = false,
 }: ImportPreviewCardProps) {
   const [titleSelected, setTitleSelected] = useState(true);
   const [addressSelected, setAddressSelected] = useState(true);
   const [descriptionSelected, setDescriptionSelected] = useState(true);
   const [selectedPhotos, setSelectedPhotos] = useState<string[]>(
-    result.photos.slice(0, 3).map((p) => p.id) // Select first 3 photos by default
+    result.photos.slice(0, 3).map((p) => p.id)
   );
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+
+  const fieldsFound = getImportFieldsFoundCount(result);
+  const progressPercent = getImportProgressPercent(result);
 
   const handleTogglePhoto = (photoId: string) => {
     setSelectedPhotos((prev) =>
@@ -82,9 +87,27 @@ export default function ImportPreviewCard({
           className="text-sm text-[#8F9E4F] hover:text-[#556036] flex items-center gap-1.5 transition-colors"
         >
           <Icon name="external-link" size={14} />
-          <span>View on Google Maps</span>
+          <span>View on Maps</span>
         </a>
       </div>
+
+      {/* Progress bar: fields found (e.g. 4/5 → 80%) */}
+      {showProgressBar && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-[#1F2A1F] font-medium">Fields found</span>
+            <span className="text-[#1F2A1F] font-semibold">
+              {fieldsFound}/{IMPORT_FIELDS_COUNT} — {progressPercent}%
+            </span>
+          </div>
+          <div className="w-full h-2 bg-[#ECEEE4] rounded-full overflow-hidden">
+            <div
+              className="h-full bg-[#8F9E4F] rounded-full transition-all duration-300"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Coordinate-only warning */}
       {isCoordinateOnly && (
@@ -309,19 +332,36 @@ export default function ImportPreviewCard({
         </p>
       </div>
 
-      {/* Import Button */}
-      <button
-        onClick={handleImport}
-        disabled={!hasSelectedFields || importing}
-        className={cx(
-          "w-full rounded-xl px-4 py-3 text-sm font-medium transition",
-          hasSelectedFields && !importing
-            ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
-            : "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
+      {/* Actions: Back (Step 2) + Import Selected */}
+      <div className={cx("flex gap-3", onCancel ? "flex-col sm:flex-row" : "")}>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={importing}
+            className={cx(
+              "rounded-xl px-4 py-3 text-sm font-medium transition border border-[#ECEEE4] bg-white text-[#1F2A1F] hover:bg-[#FAFAF7]",
+              onCancel ? "flex-1 order-2 sm:order-1" : "",
+              importing && "opacity-50 cursor-not-allowed"
+            )}
+          >
+            Back
+          </button>
         )}
-      >
-        {importing ? "Importing..." : "Import Selected"}
-      </button>
+        <button
+          onClick={handleImport}
+          disabled={!hasSelectedFields || importing}
+          className={cx(
+            "rounded-xl px-4 py-3 text-sm font-medium transition",
+            onCancel ? "flex-1 order-1 sm:order-2" : "w-full",
+            hasSelectedFields && !importing
+              ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
+              : "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
+          )}
+        >
+          {importing ? "Importing..." : "Import Selected"}
+        </button>
+      </div>
 
       {/* Google Attribution */}
       <div className="pt-2 border-t border-[#ECEEE4]">

@@ -583,7 +583,7 @@ function normalizePlaceData(placeData: any, originalQuery: string, isUrl: boolea
 
   // Process photos
   // Google Places API v1 returns photos with name field like "places/{place_id}/photos/{photo_reference}"
-  const photos = (placeData.photos || []).slice(0, 6).map((photo: any, index: number) => {
+  const photos = (placeData.photos || []).slice(0, 9).map((photo: any, index: number) => {
     const photoName = photo.name || photo;
     // Extract photo reference from name if it's in format "places/{place_id}/photos/{photo_reference}"
     let photoReference = photoName;

@@ -93,7 +93,7 @@ export default function GoogleImportPage() {
           </p>
         </div>
 
-        <GoogleImportField userId={user.id} />
+        <GoogleImportField userId={user.id} redirectToPreview />
       </div>
     </main>
   );
