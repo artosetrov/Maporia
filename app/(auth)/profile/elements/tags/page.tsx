@@ -14,13 +14,16 @@ export default function EditTagsPage() {
   const { loading: accessLoading, access } = useUserAccessContext();
   const isAdmin = isUserAdmin(access);
 
-  const [tags, setTags] = useState<string[]>([]);
+  type TagRow = { name: string; emoji: string | null };
+  const [tags, setTags] = useState<TagRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingTag, setEditingTag] = useState<string | null>(null);
-  const [editingValue, setEditingValue] = useState("");
+  const [editingName, setEditingName] = useState("");
+  const [editingEmoji, setEditingEmoji] = useState("");
   const [addingTag, setAddingTag] = useState(false);
   const [newTagName, setNewTagName] = useState("");
+  const [newTagEmoji, setNewTagEmoji] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingTag, setDeletingTag] = useState<string | null>(null);
 
@@ -47,7 +50,13 @@ export default function EditTagsPage() {
       }
 
       const data = await response.json();
-      setTags(data.tags || []);
+      const raw = data.tags || [];
+      const normalized: TagRow[] = Array.isArray(raw)
+        ? raw.map((t: string | TagRow) =>
+            typeof t === "string" ? { name: t, emoji: null } : { name: t.name, emoji: t.emoji ?? null }
+          )
+        : [];
+      setTags(normalized);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to load tags";
       console.error("Error loading tags:", err);
@@ -70,7 +79,8 @@ export default function EditTagsPage() {
     if (!newTagName.trim()) return;
 
     const tagName = newTagName.trim();
-    if (tags.some((t) => t.toLowerCase() === tagName.toLowerCase())) {
+    const tagEmoji = newTagEmoji.trim() || null;
+    if (tags.some((t) => t.name.toLowerCase() === tagName.toLowerCase())) {
       setError("Tag already exists");
       return;
     }
@@ -89,7 +99,7 @@ export default function EditTagsPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ name: tagName }),
+        body: JSON.stringify({ name: tagName, emoji: tagEmoji }),
       });
 
       if (!response.ok) {
@@ -100,6 +110,7 @@ export default function EditTagsPage() {
       await response.json();
       await loadTags();
       setNewTagName("");
+      setNewTagEmoji("");
       setAddingTag(false);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to add tag";
@@ -110,15 +121,25 @@ export default function EditTagsPage() {
     }
   }
 
-  async function handleUpdateTag(oldName: string, newName: string) {
-    if (!newName.trim() || oldName === newName.trim()) {
+  async function handleUpdateTag(oldName: string, newName: string, newEmoji: string) {
+    const tagName = newName.trim();
+    const tagEmoji = newEmoji.trim() || null;
+    const nameUnchanged = oldName === tagName;
+    const currentRow = tags.find((t) => t.name === oldName);
+    const emojiUnchanged = currentRow && (currentRow.emoji ?? "") === (tagEmoji ?? "");
+    if (nameUnchanged && emojiUnchanged) {
       setEditingTag(null);
-      setEditingValue("");
+      setEditingName("");
+      setEditingEmoji("");
       return;
     }
 
-    const tagName = newName.trim();
-    if (tags.some((t) => t !== oldName && t.toLowerCase() === tagName.toLowerCase())) {
+    if (!tagName) {
+      setError("Tag name is required");
+      return;
+    }
+
+    if (tags.some((t) => t.name !== oldName && t.name.toLowerCase() === tagName.toLowerCase())) {
       setError("Tag already exists");
       return;
     }
@@ -137,7 +158,7 @@ export default function EditTagsPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ oldName, newName: tagName }),
+        body: JSON.stringify({ oldName, newName: tagName, emoji: tagEmoji }),
       });
 
       if (!response.ok) {
@@ -145,9 +166,16 @@ export default function EditTagsPage() {
         throw new Error(errorData.error || "Failed to update tag");
       }
 
-      setTags(tags.map((t) => (t === oldName ? tagName : t)).sort((a, b) => a.localeCompare(b)));
+      setTags(
+        tags
+          .map((t) =>
+            t.name === oldName ? { name: tagName, emoji: tagEmoji } : t
+          )
+          .sort((a, b) => a.name.localeCompare(b.name))
+      );
       setEditingTag(null);
-      setEditingValue("");
+      setEditingName("");
+      setEditingEmoji("");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to update tag";
       console.error("Error updating tag:", err);
@@ -157,7 +185,8 @@ export default function EditTagsPage() {
     }
   }
 
-  async function handleDeleteTag(tagName: string) {
+  async function handleDeleteTag(tagRow: TagRow) {
+    const tagName = tagRow.name;
     if (!confirm(`Delete tag "${tagName}"? This will remove it from all places.`)) {
       return;
     }
@@ -251,7 +280,18 @@ export default function EditTagsPage() {
           <div className="space-y-4">
             {/* Add new tag */}
             {addingTag ? (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  type="text"
+                  value={newTagEmoji}
+                  onChange={(e) => {
+                    setNewTagEmoji(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder="Emoji (e.g. ☕)"
+                  className="w-14 px-2 py-2 rounded-xl border border-[#ECEEE4] bg-white text-lg text-center text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                  disabled={saving}
+                />
                 <input
                   type="text"
                   value={newTagName}
@@ -265,11 +305,12 @@ export default function EditTagsPage() {
                     } else if (e.key === "Escape") {
                       setAddingTag(false);
                       setNewTagName("");
+                      setNewTagEmoji("");
                     }
                   }}
                   placeholder="Tag name"
                   autoFocus
-                  className="flex-1 px-3 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                  className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
                   disabled={saving}
                 />
                 <button
@@ -283,6 +324,7 @@ export default function EditTagsPage() {
                   onClick={() => {
                     setAddingTag(false);
                     setNewTagName("");
+                    setNewTagEmoji("");
                   }}
                   className="px-4 py-2 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] text-sm font-medium hover:bg-[#FAFAF7] transition"
                 >
@@ -299,36 +341,45 @@ export default function EditTagsPage() {
               </button>
             )}
 
-            {/* Tags list */}
+            {/* Tags list — 3 per row */}
             {tags.length === 0 ? (
               <div className="text-sm text-[#6F7A5A] text-center py-8">No tags yet</div>
             ) : (
-              <div className="space-y-2">
-                {tags.map((tag) => (
+              <div className="grid grid-cols-3 gap-2">
+                {tags.map((tagRow) => (
                   <div
-                    key={tag}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition"
+                    key={tagRow.name}
+                    className={`flex items-center gap-1.5 px-2 py-2 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition min-w-0 ${editingTag === tagRow.name ? "col-span-3" : ""}`}
                   >
-                    {editingTag === tag ? (
+                    {editingTag === tagRow.name ? (
                       <>
                         <input
                           type="text"
-                          value={editingValue}
-                          onChange={(e) => setEditingValue(e.target.value)}
+                          value={editingEmoji}
+                          onChange={(e) => setEditingEmoji(e.target.value)}
+                          placeholder="Emoji"
+                          className="w-12 px-1 py-1 rounded border border-[#ECEEE4] bg-white text-lg text-center text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                          disabled={saving}
+                        />
+                        <input
+                          type="text"
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
-                              handleUpdateTag(tag, editingValue);
+                              handleUpdateTag(tagRow.name, editingName, editingEmoji);
                             } else if (e.key === "Escape") {
                               setEditingTag(null);
-                              setEditingValue("");
+                              setEditingName("");
+                              setEditingEmoji("");
                             }
                           }}
                           autoFocus
-                          className="flex-1 px-2 py-1 rounded border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
+                          className="flex-1 min-w-0 px-2 py-1 rounded border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]"
                           disabled={saving}
                         />
                         <button
-                          onClick={() => handleUpdateTag(tag, editingValue)}
+                          onClick={() => handleUpdateTag(tagRow.name, editingName, editingEmoji)}
                           disabled={saving}
                           className="p-1.5 rounded-lg bg-[#8F9E4F] text-white hover:bg-[#556036] transition disabled:opacity-50"
                           aria-label="Save"
@@ -338,35 +389,37 @@ export default function EditTagsPage() {
                         <button
                           onClick={() => {
                             setEditingTag(null);
-                            setEditingValue("");
+                            setEditingName("");
+                            setEditingEmoji("");
                           }}
                           className="p-1.5 rounded-lg border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition"
                           aria-label="Cancel"
                         >
                           <Icon name="close" size={14} />
                         </button>
+                        <button
+                          onClick={() => handleDeleteTag(tagRow)}
+                          disabled={deletingTag === tagRow.name}
+                          className="p-1.5 rounded-lg border border-[#C96A5B]/30 bg-[#C96A5B]/10 hover:bg-[#C96A5B]/20 text-[#C96A5B] transition disabled:opacity-50"
+                          aria-label="Delete"
+                        >
+                          <Icon name="delete" size={14} />
+                        </button>
                       </>
                     ) : (
                       <>
-                        <span className="text-base leading-none">{getTagEmoji(tag)}</span>
-                        <span className="flex-1 text-sm text-[#1F2A1F]">{tag}</span>
+                        <span className="text-base leading-none flex-shrink-0">{getTagEmoji(tagRow.name, tagRow.emoji)}</span>
+                        <span className="flex-1 text-sm text-[#1F2A1F] truncate min-w-0">{tagRow.name}</span>
                         <button
                           onClick={() => {
-                            setEditingTag(tag);
-                            setEditingValue(tag);
+                            setEditingTag(tagRow.name);
+                            setEditingName(tagRow.name);
+                            setEditingEmoji(tagRow.emoji ?? "");
                           }}
                           className="p-1.5 rounded-lg border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition"
                           aria-label="Edit"
                         >
                           <Icon name="edit" size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteTag(tag)}
-                          disabled={deletingTag === tag}
-                          className="p-1.5 rounded-lg border border-[#C96A5B]/30 bg-[#C96A5B]/10 hover:bg-[#C96A5B]/20 text-[#C96A5B] transition disabled:opacity-50"
-                          aria-label="Delete"
-                        >
-                          <Icon name="delete" size={14} />
                         </button>
                       </>
                     )}

@@ -13,10 +13,14 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
 ```
 
+### Обязательные для админ-функций (Edit Tags, настройки премиум-модалки):
+```bash
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key  # Без неё Edit Tags и другие admin routes вернут 500
+```
+
 ### Опциональные (для серверных функций):
 ```bash
 GOOGLE_MAPS_API_KEY=your_google_maps_api_key  # Для /api/google/place-import
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key  # Для /api/cities/resolve
 ```
 
 **Где найти:**
@@ -117,6 +121,20 @@ console.log('Google Maps Key:', process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? '�
 ```
 
 ## 8. Частые проблемы
+
+### Проблема: "SUPABASE_SERVICE_ROLE_KEY is required for admin routes" (Edit Tags на проде)
+**Причина:** Переменная `SUPABASE_SERVICE_ROLE_KEY` не задана в окружении продакшена.
+
+**Решение:**
+1. Supabase Dashboard → ваш проект → **Settings** → **API**.
+2. Скопируйте **service_role** key (секретный ключ, не anon key).
+3. Vercel: **Project** → **Settings** → **Environment Variables** → добавьте:
+   - **Name:** `SUPABASE_SERVICE_ROLE_KEY`
+   - **Value:** вставьте скопированный service_role key
+   - **Environment:** Production (и при необходимости Preview).
+4. Сделайте **Redeploy** последнего деплоя (Deployments → ⋮ → Redeploy), чтобы переменная подхватилась.
+
+После этого Edit Tags и другие admin-маршруты будут работать.
 
 ### Проблема: "0 places" показывается, но в базе есть места
 **Решение:** Выполните `fix-production-loading-issues.sql` для исправления RLS политик

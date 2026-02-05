@@ -84,19 +84,19 @@ export async function GET(request: NextRequest) {
 
     const { supabase } = access;
 
-    // Try to get tags from tags table first
+    // Try to get tags from tags table first (name + optional emoji)
     const { data: tagsData, error: tagsError } = await supabase
       .from("tags")
-      .select("name")
+      .select("name, emoji")
       .order("name", { ascending: true });
 
     if (!tagsError && tagsData) {
       // Tags table exists, use it
-      const sortedTags = (tagsData as { name?: string | null }[])
-        .map((t: { name?: string | null }) => t.name)
-        .filter((name: string | null | undefined): name is string => typeof name === "string" && name.trim().length > 0)
-        .sort((a: string, b: string) => a.localeCompare(b));
-      return NextResponse.json({ tags: sortedTags });
+      const tagsWithEmoji = (tagsData as { name?: string | null; emoji?: string | null }[])
+        .filter((t): t is { name: string; emoji: string | null } => typeof t.name === "string" && t.name.trim().length > 0)
+        .map((t) => ({ name: t.name.trim(), emoji: typeof t.emoji === "string" && t.emoji.trim() ? t.emoji.trim() : null }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      return NextResponse.json({ tags: tagsWithEmoji });
     }
 
     // Fallback: extract from places.tags (if tags table doesn't exist)
@@ -128,9 +128,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Sort tags alphabetically
-    const sortedTags = Array.from(allTags).sort((a, b) => a.localeCompare(b));
-
+    // Sort tags alphabetically; fallback has no emoji from DB
+    const sortedTags = Array.from(allTags)
+      .sort((a, b) => a.localeCompare(b))
+      .map((name) => ({ name, emoji: null as string | null }));
     return NextResponse.json({ tags: sortedTags });
   } catch (error) {
     console.error("Error fetching tags:", error);
@@ -165,7 +166,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name } = body;
+    const { name, emoji } = body;
 
     if (!name || typeof name !== "string" || name.trim().length === 0) {
       return NextResponse.json(
@@ -175,12 +176,13 @@ export async function POST(request: NextRequest) {
     }
 
     const tagName = name.trim();
+    const tagEmoji = typeof emoji === "string" && emoji.trim() ? emoji.trim() : null;
 
     // Try to insert into tags table first
     const { data: newTag, error: insertError } = await access.supabase
       .from("tags")
-      .insert({ name: tagName })
-      .select("id, name")
+      .insert({ name: tagName, emoji: tagEmoji })
+      .select("id, name, emoji")
       .single();
 
     if (!insertError && newTag) {
@@ -267,7 +269,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { oldName, newName } = body;
+    const { oldName, newName, emoji } = body;
 
     if (!oldName || typeof oldName !== "string" || oldName.trim().length === 0) {
       return NextResponse.json(
@@ -285,10 +287,22 @@ export async function PUT(request: NextRequest) {
 
     const oldTagName = oldName.trim();
     const newTagName = newName.trim();
+    const tagEmoji = emoji === undefined ? undefined : (typeof emoji === "string" && emoji.trim() ? emoji.trim() : null);
 
-    if (oldTagName === newTagName) {
+    if (oldTagName === newTagName && tagEmoji === undefined) {
       return NextResponse.json(
-        { error: "Old and new tag names are the same" },
+        { error: "Old and new tag names are the same and no emoji change" },
+        { status: 400 }
+      );
+    }
+
+    // Build update payload: always update name if changed; include emoji if provided
+    const updatePayload: { name?: string; emoji?: string | null } = {};
+    if (oldTagName !== newTagName) updatePayload.name = newTagName;
+    if (tagEmoji !== undefined) updatePayload.emoji = tagEmoji;
+    if (Object.keys(updatePayload).length === 0) {
+      return NextResponse.json(
+        { error: "Nothing to update" },
         { status: 400 }
       );
     }
@@ -296,9 +310,9 @@ export async function PUT(request: NextRequest) {
     // Try to update in tags table first
     const { data: updatedTag, error: updateTagError } = await access.supabase
       .from("tags")
-      .update({ name: newTagName })
+      .update(updatePayload)
       .eq("name", oldTagName)
-      .select("id, name")
+      .select("id, name, emoji")
       .single();
 
     if (!updateTagError && updatedTag) {

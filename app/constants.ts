@@ -140,7 +140,9 @@ export const CATEGORIES = [
 
   export const DEFAULT_TAG_EMOJI = "🏷️";
 
-  export function getTagEmoji(tag: string): string {
+  /** Returns emoji for tag: customEmoji if provided and non-empty, else from TAG_EMOJI_MAP or default. */
+  export function getTagEmoji(tag: string, customEmoji?: string | null): string {
+    if (typeof customEmoji === "string" && customEmoji.trim()) return customEmoji.trim();
     if (!tag || typeof tag !== "string") return DEFAULT_TAG_EMOJI;
     const key = tag.trim().toLowerCase();
     return TAG_EMOJI_MAP[key] ?? DEFAULT_TAG_EMOJI;
