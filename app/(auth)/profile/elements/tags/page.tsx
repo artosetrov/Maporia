@@ -409,7 +409,7 @@ export default function EditTagsPage() {
                     ) : (
                       <>
                         <span className="text-base leading-none flex-shrink-0">{getTagEmoji(tagRow.name, tagRow.emoji)}</span>
-                        <span className="flex-1 text-sm text-[#1F2A1F] truncate min-w-0">{tagRow.name}</span>
+                        <span className="flex-1 text-sm sm:text-base text-[#1F2A1F] truncate min-w-0">{tagRow.name}</span>
                         <button
                           onClick={() => {
                             setEditingTag(tagRow.name);

@@ -524,7 +524,7 @@ export default function FiltersModal({
                       }`}
                     >
                       <span className="text-base leading-none">{getTagEmoji(tag)}</span>
-                      <span className="text-sm font-medium">{tag}</span>
+                      <span className="text-sm sm:text-base font-medium">{tag}</span>
                       {count !== undefined && (
                         <span className={`text-xs ${isSelected ? "text-[#6F7A5A]" : "text-[#A8B096]"}`}>
                           ({count})

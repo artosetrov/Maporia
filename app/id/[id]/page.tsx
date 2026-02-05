@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { use, useEffect, useMemo, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
 import { CATEGORIES, DEFAULT_CITY } from "../../constants";
@@ -107,10 +107,11 @@ function initialsFromName(displayName?: string | null, username?: string | null)
   return "U";
 }
 
-export default function PlacePage() {
+type PageProps = { params: Promise<{ id: string }> };
+
+export default function PlacePage(props: PageProps) {
   const router = useRouter();
-  const params = useParams<{ id: string }>();
-  const id = params?.id;
+  const { id } = use(props.params);
   const { redirectToAuth } = useAuthRedirect();
 
   const [activeSection, setActiveSection] = useState<"overview" | "photos" | "map" | "comments">("overview");
@@ -1341,7 +1342,7 @@ export default function PlacePage() {
                 {tags.slice(0, 6).map((tag) => (
                   <span
                     key={tag}
-                    className="px-3 py-1.5 rounded-full text-sm text-[#8F9E4F] bg-[#FAFAF7] border border-[#6b7d47]/20"
+                    className="px-3 py-1.5 rounded-full text-base text-[#8F9E4F] bg-[#FAFAF7] border border-[#6b7d47]/20"
                   >
                     {tag}
                   </span>
@@ -1360,7 +1361,7 @@ export default function PlacePage() {
                     href={`/collections/${c.id}`}
                     className="group flex rounded-2xl border border-[#ECEEE4] bg-white overflow-hidden shadow-sm hover:shadow-md transition"
                   >
-                    <div className="w-32 sm:w-40 flex-shrink-0 aspect-[4/3] bg-[#ECEEE4] relative overflow-hidden">
+                    <div className="w-32 sm:w-40 flex-shrink-0 aspect-square bg-[#ECEEE4] relative overflow-hidden">
                       {c.cover_image ? (
                         <img src={c.cover_image} alt="" className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200" />
                       ) : (
@@ -1863,7 +1864,7 @@ export default function PlacePage() {
                   {tags.slice(0, 6).map((tag) => (
                     <span
                       key={tag}
-                      className="px-3 py-1.5 rounded-full text-sm text-[#8F9E4F] bg-[#FAFAF7] border border-[#6b7d47]/20"
+                      className="px-3 py-1.5 rounded-full text-base text-[#8F9E4F] bg-[#FAFAF7] border border-[#6b7d47]/20"
                     >
                       {tag}
                     </span>
@@ -1882,7 +1883,7 @@ export default function PlacePage() {
                       href={`/collections/${c.id}`}
                       className="group flex rounded-2xl border border-[#ECEEE4] bg-white overflow-hidden shadow-sm hover:shadow-md transition"
                     >
-                      <div className="w-28 sm:w-36 flex-shrink-0 aspect-[4/3] bg-[#ECEEE4] relative overflow-hidden">
+                      <div className="w-28 sm:w-36 flex-shrink-0 aspect-square bg-[#ECEEE4] relative overflow-hidden">
                         {c.cover_image ? (
                           <img src={c.cover_image} alt="" className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200" />
                         ) : (

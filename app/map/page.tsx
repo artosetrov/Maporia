@@ -28,7 +28,11 @@ import { DEFAULT_CITY, CATEGORIES, CITIES, getTagEmoji } from "../constants";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
 import { useAuthRedirect } from "../hooks/useAuthRedirect";
 import { useBottomNavVisibility } from "../hooks/useBottomNavVisibility";
+import { useIsDesktop } from "../hooks/useIsDesktop";
+import { usePremiumGate } from "../hooks/usePremiumGate";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
+import AuthModal from "../components/AuthModal";
+import PremiumUpsellModal from "../components/PremiumUpsellModal";
 import Icon from "../components/Icon";
 import { PlaceCardGridSkeleton, MapSkeleton, Empty } from "../components/Skeleton";
 
@@ -183,7 +187,8 @@ function MapPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { redirectToAuth } = useAuthRedirect();
-  
+  const isDesktop = useIsDesktop();
+
   // На странице /map по умолчанию показываем list view (включая мобильные)
   // Всегда начинаем с "list", независимо от устройства
   // Это гарантирует, что на мобильных устройствах по умолчанию открывается список, а не карта
@@ -1761,7 +1766,7 @@ function MapPageContent() {
                         }));
                         setFiltersVersion(prev => prev + 1);
                       }}
-                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
+                      className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-sm sm:text-base font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
                     >
                       <span className="leading-none">{getTagEmoji(tag)}</span>
                       {tag}
@@ -1885,7 +1890,11 @@ function MapPageContent() {
                         }
                         onTagClick={handleTagClick}
                         onPhotoClick={() => {
-                          router.push(`/id/${p.id}`);
+                          if (isDesktop) {
+                            window.open(`/id/${p.id}`, "_blank", "noopener,noreferrer");
+                          } else {
+                            router.push(`/id/${p.id}`);
+                          }
                         }}
                       />
                     </div>
@@ -2009,7 +2018,7 @@ function MapPageContent() {
                             }));
                             setFiltersVersion(prev => prev + 1);
                           }}
-                          className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
+                          className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-sm sm:text-base font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
                         >
                           <span className="leading-none">{getTagEmoji(tag)}</span>
                           {tag}
@@ -2074,7 +2083,11 @@ function MapPageContent() {
                               }
                               onTagClick={handleTagClick}
                               onPhotoClick={() => {
-                                router.push(`/id/${p.id}`);
+                                if (isDesktop) {
+                                  window.open(`/id/${p.id}`, "_blank", "noopener,noreferrer");
+                                } else {
+                                  router.push(`/id/${p.id}`);
+                                }
                               }}
                           />
                         </div>
@@ -2246,6 +2259,9 @@ function MapView({
   userAccess?: UserAccess;
   isMapView?: boolean; // Whether map view is currently active
 }) {
+  const isDesktop = useIsDesktop();
+  const { openPremiumLocation, closeAuthModal, closePremiumModal, modalOpen, modalPlaceTitle, authModalOpen, authRedirectPath, authModalVariant } = usePremiumGate();
+  const defaultAccess: UserAccess = userAccess ?? { role: "guest", hasPremium: false, isAdmin: false };
   const [internalSelectedPlaceId, setInternalSelectedPlaceId] = useState<string | null>(null);
   const [roundIcons, setRoundIcons] = useState<Map<string, string>>(new Map());
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
@@ -2255,7 +2271,7 @@ function MapView({
   const lastReportedStateRef = useRef<{ center: { lat: number; lng: number }; zoom: number } | null>(null);
   const onMapStateChangeRef = useRef(onMapStateChange);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  
+
   // Обновляем ref при изменении callback
   useEffect(() => {
     onMapStateChangeRef.current = onMapStateChange;
@@ -2521,6 +2537,7 @@ function MapView({
   }
 
   return (
+    <>
     <div 
       className="relative h-full w-full transition-all duration-300 overflow-hidden" 
       data-map-container
@@ -2803,7 +2820,7 @@ function MapView({
                     >
                       <div className="w-80 bg-white rounded-xl shadow-xl overflow-hidden">
                         {/* Image Section with Carousel */}
-                        <div className="relative w-full" style={{ paddingBottom: '66.67%' }}>
+                        <div className="relative w-full" style={{ paddingBottom: '100%' }}>
                           {currentPhoto ? (
                             <div className="absolute inset-0">
                               <img
@@ -2891,39 +2908,64 @@ function MapView({
                           )}
                         </div>
                         
-                        {/* Text Content Section */}
-                        <Link
-                          href={`/id/${place.id}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (!externalSelectedPlaceId) {
-                              setInternalSelectedPlaceId(null);
-                            }
-                          }}
-                          className="block p-4"
-                        >
-                          {/* Title Row */}
-                          <div className="flex items-start justify-between mb-1">
-                            <h3 className="text-base font-semibold text-[#2d2d2d] line-clamp-1 flex-1 pr-2">
-                              {place.title}
-                            </h3>
-                            {/* Rating placeholder - можно добавить когда будет рейтинг */}
-                          </div>
-                          
-                          {/* Description */}
-                          {place.description && (
-                            <div className="text-sm text-[#6F7A5A] line-clamp-1 mb-2">
-                              {place.description}
-                            </div>
-                          )}
-                          
-                          {/* City */}
-                          {place.city && (
-                            <div className="text-sm text-[#2d2d2d]">
-                              <span>{place.city}</span>
-                            </div>
-                          )}
-                        </Link>
+                        {/* Text Content Section: для гостя + премиум — модалка входа, иначе ссылка */}
+                        {(() => {
+                          const isPremium = isPlacePremium(place);
+                          const canView = canUserViewPlace(defaultAccess, place);
+                          const isLocked = isPremium && !canView;
+                          const content = (
+                            <>
+                              <div className="flex items-start justify-between mb-1">
+                                <h3 className="text-base font-semibold text-[#2d2d2d] line-clamp-1 flex-1 pr-2">
+                                  {place.title}
+                                </h3>
+                              </div>
+                              {place.description && (
+                                <div className="text-sm text-[#6F7A5A] line-clamp-1 mb-2">
+                                  {place.description}
+                                </div>
+                              )}
+                              {place.city && (
+                                <div className="text-sm text-[#2d2d2d]">
+                                  <span>{place.city}</span>
+                                </div>
+                              )}
+                            </>
+                          );
+                          if (isLocked) {
+                            return (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openPremiumLocation("place", place.title, place.id);
+                                  if (!externalSelectedPlaceId) {
+                                    setInternalSelectedPlaceId(null);
+                                  }
+                                }}
+                                className="block w-full text-left p-4 hover:bg-[#FAFAF7] transition-colors rounded-b-xl"
+                              >
+                                {content}
+                              </button>
+                            );
+                          }
+                          return (
+                            <Link
+                              href={`/id/${place.id}`}
+                              target={isDesktop ? "_blank" : undefined}
+                              rel={isDesktop ? "noopener noreferrer" : undefined}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!externalSelectedPlaceId) {
+                                  setInternalSelectedPlaceId(null);
+                                }
+                              }}
+                              className="block p-4"
+                            >
+                              {content}
+                            </Link>
+                          );
+                        })()}
                       </div>
                     </InfoWindow>
                   );
@@ -2935,5 +2977,18 @@ function MapView({
         )}
       </div>
     </div>
+    <AuthModal
+      isOpen={authModalOpen}
+      onClose={closeAuthModal}
+      redirectPath={authRedirectPath}
+      variant={authModalVariant}
+    />
+    <PremiumUpsellModal
+      open={modalOpen}
+      onClose={closePremiumModal}
+      context="place"
+      placeTitle={modalPlaceTitle}
+    />
+    </>
   );
 }

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { use, useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../../../lib/supabase";
 import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
+import { useIsDesktop } from "../../../../../hooks/useIsDesktop";
 import { isUserAdmin } from "../../../../../lib/access";
 import Icon from "../../../../../components/Icon";
 import type { Collection } from "../../../../../types";
@@ -31,12 +32,14 @@ type PlaceRow = {
   cover_url: string | null;
 };
 
-export default function EditCollectionPage() {
+type PageProps = { params: Promise<{ id: string }> };
+
+export default function EditCollectionPage(props: PageProps) {
   const router = useRouter();
-  const params = useParams<{ id: string }>();
-  const collectionId = params?.id;
+  const { id: collectionId } = use(props.params);
   const { loading: accessLoading, access } = useUserAccessContext();
   const isAdmin = isUserAdmin(access);
+  const isDesktop = useIsDesktop();
 
   const [collection, setCollection] = useState<Collection | null>(null);
   const [placeRows, setPlaceRows] = useState<PlaceCollectionRow[]>([]);
@@ -518,6 +521,8 @@ export default function EditCollectionPage() {
                       <div className="flex-1 min-w-0">
                         <Link
                           href={`/id/${row.place_id}`}
+                          target={isDesktop ? "_blank" : undefined}
+                          rel={isDesktop ? "noopener noreferrer" : undefined}
                           className="font-medium text-[#1F2A1F] hover:underline truncate block"
                         >
                           {place?.title ?? "Place"}

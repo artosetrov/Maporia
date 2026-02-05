@@ -2,8 +2,8 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { use, useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../../../../../lib/supabase";
 import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
@@ -37,10 +37,11 @@ function generateUUID(): string {
   });
 }
 
-export default function PhotosEditorPage() {
+type PageProps = { params: Promise<{ id: string }> };
+
+export default function PhotosEditorPage(props: PageProps) {
   const router = useRouter();
-  const params = useParams<{ id: string }>();
-  const placeId = params?.id;
+  const { id: placeId } = use(props.params);
 
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const [loading, setLoading] = useState(true);

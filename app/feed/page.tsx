@@ -14,6 +14,7 @@ import { DEFAULT_CITY } from "../constants";
 import Icon from "../components/Icon";
 import { ActivityItemSkeleton } from "../components/Skeleton";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
+import { useIsDesktop } from "../hooks/useIsDesktop";
 
 type ProfilesRow = Database["public"]["Tables"]["profiles"]["Row"];
 type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
@@ -61,6 +62,7 @@ function formatTime(iso: string) {
 }
 
 function ActivityCard({ item }: { item: ActivityItem }) {
+  const isDesktop = useIsDesktop();
   const getIcon = () => {
     if (item.type === "liked") {
       return (
@@ -92,6 +94,8 @@ function ActivityCard({ item }: { item: ActivityItem }) {
   return (
     <Link
       href={`/id/${item.placeId}`}
+      target={isDesktop ? "_blank" : undefined}
+      rel={isDesktop ? "noopener noreferrer" : undefined}
       className="block w-full py-5 px-6 hover:bg-[#FAFAF7] transition-colors border-b border-[#ECEEE4] last:border-b-0"
     >
       <div className="flex items-start gap-6">

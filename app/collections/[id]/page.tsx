@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { use, useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import BottomNav from "../../components/BottomNav";
@@ -30,10 +30,11 @@ type PlaceRow = {
   visibility: string | null;
 };
 
-export default function CollectionDetailPage() {
-  const params = useParams<{ id: string }>();
+type PageProps = { params: Promise<{ id: string }> };
+
+export default function CollectionDetailPage(props: PageProps) {
   const router = useRouter();
-  const collectionId = params?.id;
+  const { id: collectionId } = use(props.params);
   const { user, access } = useUserAccessContext();
   const premiumGateOpenedRef = useRef(false);
   const {

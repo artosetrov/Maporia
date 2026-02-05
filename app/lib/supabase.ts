@@ -135,12 +135,20 @@ if (typeof window !== 'undefined') {
     }
   });
 
-  // Listen for unhandled promise rejections related to auth
+  // Listen for unhandled promise rejections related to auth and network
   window.addEventListener('unhandledrejection', (event) => {
     const error = event.reason;
     if (isRefreshTokenError(error)) {
-      event.preventDefault(); // Prevent error from being logged to console
+      event.preventDefault();
       handleRefreshTokenError(error);
+      return;
+    }
+    // Не показывать в консоли сырой "Failed to fetch" — одна понятная подсказка
+    if (error?.name === 'TypeError' && (error?.message === 'Failed to fetch' || String(error?.message || '').includes('fetch'))) {
+      event.preventDefault();
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[Supabase] Сеть недоступна (Failed to fetch). Проверьте интернет и .env.local (NEXT_PUBLIC_SUPABASE_URL).');
+      }
     }
   });
 }

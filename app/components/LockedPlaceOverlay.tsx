@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Icon from "./Icon";
 import PremiumBadge from "./PremiumBadge";
 
 type LockedPlaceOverlayProps = {
@@ -14,17 +15,20 @@ type LockedPlaceOverlayProps = {
  */
 export default function LockedPlaceOverlay({ placeTitle, coverUrl, onUpgradeClick }: LockedPlaceOverlayProps) {
   return (
-    <div className="absolute inset-0 rounded-2xl overflow-hidden bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center p-6 z-30">
+    <div className="absolute inset-0 rounded-2xl overflow-hidden bg-[#1F2A1F]/60 backdrop-blur-[2px] flex flex-col items-center justify-center p-6 z-30">
       {/* Blurred cover image in background */}
       {coverUrl && (
         <div 
-          className="absolute inset-0 bg-cover bg-center opacity-30 blur-md scale-110"
+          className="absolute inset-0 bg-cover bg-center opacity-30 blur-sm scale-110"
           style={{ backgroundImage: `url(${coverUrl})` }}
         />
       )}
       
       {/* Content */}
       <div className="relative z-10 flex flex-col items-center gap-4 text-center">
+        <div className="flex items-center justify-center w-12 h-12 rounded-full bg-white/90 text-[#1F2A1F]">
+          <Icon name="lock" size={24} className="text-[#1F2A1F]" />
+        </div>
         <PremiumBadge />
         
         <div className="text-white">

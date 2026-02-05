@@ -2,8 +2,8 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { use, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../../../lib/supabase";
 import type { Database } from "../../../../../types/supabase";
@@ -17,10 +17,11 @@ type PlaceCollectionInsert = Database["public"]["Tables"]["place_collections"]["
 type PlaceRow = Pick<{ created_by: string | null }, "created_by">;
 type PlaceCollectionRow = { id: string; collection_id: string; place_id: string; sort_order?: number };
 
-export default function PlaceCollectionsEditorPage() {
+type PageProps = { params: Promise<{ id: string }> };
+
+export default function PlaceCollectionsEditorPage(props: PageProps) {
   const router = useRouter();
-  const params = useParams<{ id: string }>();
-  const placeId = params?.id;
+  const { id: placeId } = use(props.params);
 
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const isAdmin = isUserAdmin(access);

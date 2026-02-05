@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { DEFAULT_CITY, CATEGORIES } from "../constants";
+import { useIsDesktop } from "../hooks/useIsDesktop";
 import { getCitiesWithPlaces } from "../lib/cities";
 import { supabase } from "../lib/supabase";
 import Icon from "./Icon";
@@ -107,6 +108,7 @@ export default function SearchModal({
   selectedTags: initialSelectedTags = [],
 }: SearchModalProps) {
   const router = useRouter();
+  const isDesktop = useIsDesktop();
   // Step management: "where" | "vibe"
   const [step, setStep] = useState<"where" | "vibe">("where");
   const [query, setQuery] = useState(initialSearchQuery);
@@ -739,7 +741,11 @@ export default function SearchModal({
                         onCitySelect={handleCitySelect}
                         onQuerySet={setQuery}
                         onPlaceClick={(placeId) => {
-                          router.push(`/id/${placeId}`);
+                          if (isDesktop) {
+                            window.open(`/id/${placeId}`, "_blank", "noopener,noreferrer");
+                          } else {
+                            router.push(`/id/${placeId}`);
+                          }
                         }}
                         onClose={onClose}
                       />

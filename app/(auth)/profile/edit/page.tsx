@@ -258,7 +258,7 @@ export default function ProfileEditorHub() {
                         {profile.favorite_tags.map((tag) => (
                           <span
                             key={tag}
-                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#FAFAF7] text-[#1F2A1F] border border-[#ECEEE4]"
+                            className="inline-flex items-center px-2.5 py-1 rounded-full text-sm font-medium bg-[#FAFAF7] text-[#1F2A1F] border border-[#ECEEE4]"
                           >
                             <span className="leading-none">{getTagEmoji(tag)}</span>
                             <span className="ml-1">{tag}</span>

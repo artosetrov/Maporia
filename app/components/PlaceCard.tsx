@@ -17,6 +17,7 @@ type PlacePhotosResult = { data: PlacePhotoSelect[] | null; error: PostgrestErro
 import PremiumBadge from "./PremiumBadge";
 import Icon from "./Icon";
 import { usePremiumGate } from "../hooks/usePremiumGate";
+import { useIsDesktop } from "../hooks/useIsDesktop";
 import PremiumUpsellModal from "./PremiumUpsellModal";
 import AuthModal from "./AuthModal";
 
@@ -61,9 +62,11 @@ function isValidUUID(str: string): boolean {
 }
 
 function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isFavorite = false, hauntedGemIndex, showPhotoSlider = true, onClick, onTagClick, onPhotoClick, onRemoveFavorite }: PlaceCardProps) {
+  const isDesktop = useIsDesktop();
   const [creatorProfile, setCreatorProfile] = useState<{ display_name: string | null; username: string | null; avatar_url: string | null } | null>(null);
   const loadedUserIdRef = useRef<string | null>(null);
-  const [photos, setPhotos] = useState<string[]>([]);
+  // Инициализируем фото из cover_url сразу, чтобы изображение показывалось до загрузки place_photos
+  const [photos, setPhotos] = useState<string[]>(() => (place.cover_url ? [place.cover_url] : []));
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const touchStartX = useRef<number | null>(null);
@@ -74,10 +77,26 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
   const [failedPhotoUrls, setFailedPhotoUrls] = useState<Set<string>>(new Set());
 
   // Load profile and photos only when card is in viewport to avoid ERR_INSUFFICIENT_RESOURCES
-  // DIAGNOSTIC: If card never enters viewport, creator profile and photos requests never run (expected for lazy load).
   useEffect(() => {
     const el = cardRef.current;
-    if (!el) return;
+    if (!el) {
+      // ref может быть ещё не установлен при первом запуске — повторить на следующем тике
+      const t = setTimeout(() => {
+        const el2 = cardRef.current;
+        if (el2) {
+          const io = new IntersectionObserver(
+            (entries) => {
+              for (const e of entries) {
+                if (e.isIntersecting) setIsInView(true);
+              }
+            },
+            { rootMargin: "100px", threshold: 0.01 }
+          );
+          io.observe(el2);
+        }
+      }, 0);
+      return () => clearTimeout(t);
+    }
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
@@ -342,6 +361,7 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
 
   useEffect(() => {
     setFailedPhotoUrls(new Set());
+    setCurrentPhotoIndex(0);
   }, [place.id, place.cover_url]);
 
   // Unused - kept for potential future use
@@ -376,7 +396,7 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStartX.current || !touchEndX.current || !hasMultiplePhotos) return;
+    if (isLocked || !touchStartX.current || !touchEndX.current || !hasMultiplePhotos) return;
     
     const distance = touchStartX.current - touchEndX.current;
     const minSwipeDistance = 50;
@@ -402,10 +422,13 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
   const hasMultiplePhotos = showPhotoSlider && photos.length > 1;
 
   const handlePhotoError = useCallback(() => {
-    if (rawCurrentPhoto) {
-      setFailedPhotoUrls((prev) => new Set(prev).add(rawCurrentPhoto));
+    if (!rawCurrentPhoto) return;
+    setFailedPhotoUrls((prev) => new Set(prev).add(rawCurrentPhoto));
+    // Переключиться на следующее фото в списке, если есть (чтобы не показывать пусто)
+    if (photos.length > 1) {
+      setCurrentPhotoIndex((prev) => (prev + 1) % photos.length);
     }
-  }, [rawCurrentPhoto]);
+  }, [rawCurrentPhoto, photos.length]);
 
   // Premium access checks using role system
   // Unused - userAccess is passed directly to canAccessPlace
@@ -453,8 +476,11 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
     if (onPhotoClick) {
       onPhotoClick();
     } else {
-      // Default: navigate to place page
-      window.location.href = `/id/${place.id}`;
+      if (isDesktop) {
+        window.open(`/id/${place.id}`, "_blank", "noopener,noreferrer");
+      } else {
+        window.location.href = `/id/${place.id}`;
+      }
     }
   };
 
@@ -513,12 +539,15 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
         ref={cardRef}
         href={isLocked ? "#" : `/id/${place.id}`}
         onClick={handleCardClick}
-        className={`block group relative w-full min-w-0 ${isLocked ? "cursor-pointer" : "cursor-pointer"}`}
+        target={!isLocked && isDesktop ? "_blank" : undefined}
+        rel={!isLocked && isDesktop ? "noopener noreferrer" : undefined}
+        className={`block group relative w-full min-w-0 cursor-pointer`}
+        {...(isLocked && { "aria-label": "Premium place — sign in to view" })}
       >
       {/* Photo with rounded corners */}
       <div 
         className="relative w-full flex-shrink-0 place-card-image mb-2" 
-        style={{ paddingBottom: '75%' }}
+        style={{ paddingBottom: '100%' }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onTouchStart={handleTouchStart}
@@ -535,19 +564,19 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
               alt={displayTitle}
               className={cx(
                 "absolute inset-0 w-full h-full object-cover",
-                isLocked && !isOwner && "blur-sm brightness-75"
+                isLocked && !isOwner && "blur-[2px] brightness-75"
               )}
               style={{ objectFit: 'cover', width: '100%', height: '100%' }}
               onError={handlePhotoError}
             />
             
-            {/* Navigation arrows - показываем только если есть несколько фото и карточка не заблокирована */}
+            {/* Navigation arrows - только на desktop (lg+), на мобильной только пагинация */}
             {hasMultiplePhotos && !isLocked && (
               <>
                 {/* Left arrow */}
                 <button
                   onClick={handlePreviousPhoto}
-                  className={`absolute left-2 top-1/2 -translate-y-1/2 z-20 h-8 w-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center transition-opacity duration-200 ${
+                  className={`hidden lg:flex absolute left-2 top-1/2 -translate-y-1/2 z-20 h-8 w-8 rounded-full bg-white/90 hover:bg-white items-center justify-center transition-opacity duration-200 ${
                     isHovered ? 'opacity-100' : 'opacity-0'
                   }`}
                   style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
@@ -561,7 +590,7 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
                 {/* Right arrow */}
                 <button
                   onClick={handleNextPhoto}
-                  className={`absolute right-2 top-1/2 -translate-y-1/2 z-20 h-8 w-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center transition-opacity duration-200 ${
+                  className={`hidden lg:flex absolute right-2 top-1/2 -translate-y-1/2 z-20 h-8 w-8 rounded-full bg-white/90 hover:bg-white items-center justify-center transition-opacity duration-200 ${
                     isHovered ? 'opacity-100' : 'opacity-0'
                   }`}
                   style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
@@ -600,7 +629,11 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
 
             {/* Locked overlay - shown when user doesn't have premium access */}
             {isLocked && (
-              <div className="absolute inset-0 bg-black/30 z-30 rounded-2xl">
+              <div className="absolute inset-0 bg-[#1F2A1F]/30 z-30 rounded-2xl flex items-center justify-center">
+                {/* Lock icon - center */}
+                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-white/90 text-[#1F2A1F]">
+                  <Icon name="lock" size={24} className="text-[#1F2A1F]" />
+                </div>
                 {/* Premium badge - top left, same position as unlocked cards */}
                 <div className="absolute top-2 left-2 z-20">
                   <PremiumBadge />

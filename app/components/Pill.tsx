@@ -14,7 +14,7 @@ type PillProps = {
 };
 
 export default function Pill({ active = false, onClick, children, variant = "filter" }: PillProps) {
-  const baseStyles = "rounded-full text-xs font-medium transition";
+  const baseStyles = "rounded-full text-sm font-medium transition";
   
   if (variant === "tab") {
     return (

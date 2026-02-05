@@ -2,8 +2,8 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { use, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../../../../../lib/supabase";
 import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
@@ -18,10 +18,11 @@ function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
 }
 
-export default function TitleEditorPage() {
+type PageProps = { params: Promise<{ id: string }> };
+
+export default function TitleEditorPage(props: PageProps) {
   const router = useRouter();
-  const params = useParams<{ id: string }>();
-  const placeId = params?.id;
+  const { id: placeId } = use(props.params);
 
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const isAdmin = isUserAdmin(access);

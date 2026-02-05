@@ -45,9 +45,10 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState, useMemo, useRef } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { use, useEffect, useState, useMemo, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useIsDesktop } from "../../../../hooks/useIsDesktop";
 import { supabase } from "../../../../lib/supabase";
 import type { Database } from "../../../../types/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
@@ -103,15 +104,17 @@ function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
 }
 
-export default function PlaceEditorHub() {
+type PageProps = { params: Promise<{ id: string }> };
+
+export default function PlaceEditorHub(props: PageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const params = useParams<{ id: string }>();
-  const placeId = params?.id;
+  const { id: placeId } = use(props.params);
   const returnTo = searchParams.get("returnTo") || "";
 
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const isAdmin = isUserAdmin(access);
+  const isDesktop = useIsDesktop();
   const [loading, setLoading] = useState(true);
   const [place, setPlace] = useState<Place | null>(null);
   const [photos, setPhotos] = useState<PlacePhoto[]>([]);
@@ -1307,7 +1310,7 @@ export default function PlaceEditorHub() {
               {deleting ? "Cancelling…" : "Cancel"}
             </button>
             <Link
-              href={`/id/${placeId}`}
+              href="/profile?section=added"
               className="flex-1 h-11 rounded-xl bg-[#8F9E4F] text-white px-5 text-sm font-medium text-center hover:bg-[#556036] transition flex items-center justify-center"
             >
               Save

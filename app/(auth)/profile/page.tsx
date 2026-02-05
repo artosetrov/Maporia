@@ -17,6 +17,7 @@ import PlaceCard from "../../components/PlaceCard";
 import FavoriteIcon from "../../components/FavoriteIcon";
 import { useUserAccessContext } from "../../contexts/UserAccessContext";
 import { useAuthRedirect } from "../../hooks/useAuthRedirect";
+import { useIsDesktop } from "../../hooks/useIsDesktop";
 import { isUserAdmin, isPlacePremium, canUserViewPlace, canUserAddPlace, type UserAccess } from "../../lib/access";
 import { DEFAULT_CITY } from "../../constants";
 import PremiumUpsellModal from "../../components/PremiumUpsellModal";
@@ -860,7 +861,17 @@ function ProfileInner() {
                  section === "users" ? "Users" :
                  section === "elements" ? "Elements" : "Profile"}
               </h1>
-              <div className="w-10" /> {/* Spacer for centering */}
+              {section === "added" && canAddPlace ? (
+                <Link
+                  href={`/add?returnTo=${encodeURIComponent("/profile?section=added")}`}
+                  className="w-10 h-10 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] active:bg-[#ECEEE4] transition-colors flex items-center justify-center flex-shrink-0"
+                  aria-label="Add new place"
+                >
+                  <Icon name="add" size={20} className="text-[#1F2A1F]" />
+                </Link>
+              ) : (
+                <div className="w-10" />
+              )}
             </>
           )}
         </div>
@@ -1216,7 +1227,7 @@ function ProfileInner() {
                       onClick={() => setSection("trips")}
                       className="bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md transition group"
                     >
-                      <div className="aspect-[4/3] rounded-xl overflow-visible bg-white mb-3 relative" style={{ minHeight: '120px' }}>
+                      <div className="aspect-square rounded-xl overflow-visible bg-white mb-3 relative" style={{ minHeight: '120px' }}>
                         {saved.length > 0 ? (
                           <div className="relative w-full h-full" style={{ padding: '8px' }}>
                             {/* Display up to 2 overlapping, rotated images */}
@@ -1274,7 +1285,7 @@ function ProfileInner() {
                       onClick={() => setSection("added")}
                       className="bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md transition group"
                     >
-                      <div className="aspect-[4/3] rounded-xl overflow-visible bg-white mb-3 relative" style={{ minHeight: '120px' }}>
+                      <div className="aspect-square rounded-xl overflow-visible bg-white mb-3 relative" style={{ minHeight: '120px' }}>
                         {added.length > 0 ? (
                           <div className="relative w-full h-full" style={{ padding: '8px' }}>
                             {/* Display up to 2 overlapping, rotated images */}
@@ -1331,7 +1342,7 @@ function ProfileInner() {
                       onClick={() => setSection("history")}
                       className="bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md transition group"
                     >
-                      <div className="aspect-[4/3] rounded-xl overflow-visible bg-white mb-3 relative" style={{ minHeight: '120px' }}>
+                      <div className="aspect-square rounded-xl overflow-visible bg-white mb-3 relative" style={{ minHeight: '120px' }}>
                         {recentlyViewed.length > 0 ? (
                           <div className="relative w-full h-full" style={{ padding: '8px' }}>
                             {/* Display up to 2 overlapping, rotated images */}
@@ -1388,7 +1399,7 @@ function ProfileInner() {
                       onClick={() => setSection("activity")}
                       className="bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md transition group"
                     >
-                      <div className="aspect-[4/3] rounded-xl overflow-visible bg-white mb-3 relative flex items-center justify-center" style={{ minHeight: '120px' }}>
+                      <div className="aspect-square rounded-xl overflow-visible bg-white mb-3 relative flex items-center justify-center" style={{ minHeight: '120px' }}>
                         <Icon name="star" size={32} className="text-[#A8B096]" />
                       </div>
                       <div className="text-sm font-medium text-[#1F2A1F] text-center">Activity</div>
@@ -1400,7 +1411,7 @@ function ProfileInner() {
                         onClick={() => setSection("users")}
                         className="bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md transition group"
                       >
-                        <div className="aspect-[4/3] rounded-xl overflow-visible bg-white mb-3 relative flex items-center justify-center" style={{ minHeight: '120px' }}>
+                        <div className="aspect-square rounded-xl overflow-visible bg-white mb-3 relative flex items-center justify-center" style={{ minHeight: '120px' }}>
                           <Icon name="users" size={32} className="text-[#A8B096]" />
                         </div>
                         <div className="text-sm font-medium text-[#1F2A1F] text-center">Users</div>
@@ -1413,7 +1424,7 @@ function ProfileInner() {
                         onClick={() => setSection("elements")}
                         className="bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md transition group"
                       >
-                        <div className="aspect-[4/3] rounded-xl overflow-visible bg-white mb-3 relative flex items-center justify-center" style={{ minHeight: '120px' }}>
+                        <div className="aspect-square rounded-xl overflow-visible bg-white mb-3 relative flex items-center justify-center" style={{ minHeight: '120px' }}>
                           <Icon name="package" size={32} className="text-[#A8B096]" />
                         </div>
                         <div className="text-sm font-medium text-[#1F2A1F] text-center">Elements</div>
@@ -1581,7 +1592,7 @@ function AboutSection({
             onClick={() => onSectionChange("trips")}
             className="bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md transition group"
           >
-            <div className="aspect-[4/3] rounded-xl overflow-visible bg-white mb-3 relative" style={{ minHeight: '120px' }}>
+            <div className="aspect-square rounded-xl overflow-visible bg-white mb-3 relative" style={{ minHeight: '120px' }}>
               {savedPlaces.length > 0 ? (
                 <div className="relative w-full h-full" style={{ padding: '8px' }}>
                   {/* Display up to 2 overlapping, rotated images */}
@@ -1639,7 +1650,7 @@ function AboutSection({
             onClick={() => onSectionChange("added")}
             className="bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md transition group"
           >
-            <div className="aspect-[4/3] rounded-xl overflow-visible bg-white mb-3 relative" style={{ minHeight: '120px' }}>
+            <div className="aspect-square rounded-xl overflow-visible bg-white mb-3 relative" style={{ minHeight: '120px' }}>
               {addedPlaces.length > 0 ? (
                 <div className="relative w-full h-full" style={{ padding: '8px' }}>
                   {/* Display up to 2 overlapping, rotated images */}
@@ -1696,7 +1707,7 @@ function AboutSection({
             onClick={() => onSectionChange("history")}
             className="bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md transition group"
           >
-            <div className="aspect-[4/3] rounded-xl overflow-visible bg-white mb-3 relative" style={{ minHeight: '120px' }}>
+            <div className="aspect-square rounded-xl overflow-visible bg-white mb-3 relative" style={{ minHeight: '120px' }}>
               {recentlyViewedPlaces.length > 0 ? (
                 <div className="relative w-full h-full" style={{ padding: '8px' }}>
                   {/* Display up to 2 overlapping, rotated images */}
@@ -1782,6 +1793,7 @@ function AboutSection({
 }
 
 function ReviewCard({ review }: { review: Review }) {
+  const isDesktop = useIsDesktop();
   return (
     <div className="border-b border-[#ECEEE4] pb-6 last:border-b-0">
       <div className="flex items-start gap-4 mb-3">
@@ -1807,7 +1819,7 @@ function ReviewCard({ review }: { review: Review }) {
       </div>
       <p className="text-[#1F2A1F] mb-2">{review.text}</p>
       {review.place_title && (
-        <Link href={`/id/${review.place_id}`} className="text-sm text-[#6F7A5A] hover:text-[#1F2A1F] transition">
+        <Link href={`/id/${review.place_id}`} target={isDesktop ? "_blank" : undefined} rel={isDesktop ? "noopener noreferrer" : undefined} className="text-sm text-[#6F7A5A] hover:text-[#1F2A1F] transition">
           {review.place_title}
           {review.place_address && ` · ${review.place_address}`}
         </Link>
@@ -1816,9 +1828,9 @@ function ReviewCard({ review }: { review: Review }) {
   );
 }
 
-function TripsSection({ 
-  places, 
-  loading, 
+function TripsSection({
+  places,
+  loading,
   userId,
   onRemoveFavorite,
   searchValue,
@@ -1834,6 +1846,7 @@ function TripsSection({
   activeFilters?: ActiveFilters;
 }) {
   const { access } = useUserAccessContext();
+  const isDesktop = useIsDesktop();
 
   // Calculate locked premium places for Haunted Gem indexing (hooks must not be conditional)
   const defaultUserAccess: UserAccess = access ?? {
@@ -1972,6 +1985,7 @@ function AddedPlacesSection({
   const router = useRouter();
   const pathname = usePathname();
   const { access, user } = useUserAccessContext();
+  const isDesktop = useIsDesktop();
   const [deletingPlaceId, setDeletingPlaceId] = useState<string | null>(null);
   const [menuOpenPlaceId, setMenuOpenPlaceId] = useState<string | null>(null);
   const [deleteConfirmPlace, setDeleteConfirmPlace] = useState<{ id: string; title: string } | null>(null);
@@ -2117,21 +2131,6 @@ function AddedPlacesSection({
             </Link>
           )}
         </div>
-        
-        {/* Mobile: Add new place button */}
-        {canAddPlace && (
-          <div className="lg:hidden mb-6">
-            <Link
-              href={`/add?returnTo=${encodeURIComponent(pathname)}`}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] active:bg-[#556036] transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              <span>Add new place</span>
-            </Link>
-          </div>
-        )}
 
         <div className="text-center py-16 text-[#6F7A5A]">
           {hasFilters ? "No places match your filters" : "You haven't added any places yet"}
@@ -2157,21 +2156,6 @@ function AddedPlacesSection({
           </Link>
         )}
       </div>
-      
-      {/* Mobile: Add new place button */}
-      {canAddPlace && (
-        <div className="lg:hidden mb-6">
-          <Link
-            href={`/add?returnTo=${encodeURIComponent(pathname)}`}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] active:bg-[#556036] transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            <span>Add new place</span>
-          </Link>
-        </div>
-      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         {places.map((place) => {
@@ -2179,8 +2163,8 @@ function AddedPlacesSection({
           const isMenuOpen = menuOpenPlaceId === place.id;
           return (
             <div key={place.id} className="group relative">
-              <Link href={`/id/${place.id}`}>
-                <div className="aspect-[4/3] rounded-xl overflow-hidden bg-[#FAFAF7] mb-2 relative">
+              <Link href={`/id/${place.id}`} target={isDesktop ? "_blank" : undefined} rel={isDesktop ? "noopener noreferrer" : undefined}>
+                <div className="aspect-square rounded-xl overflow-hidden bg-[#FAFAF7] mb-2 relative">
                   {place.cover_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -3447,6 +3431,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
 }
 
 function ActivityCard({ item, userAvatar, userName }: { item: ActivityItem; userAvatar: string | null; userName: string }) {
+  const isDesktop = useIsDesktop();
   const getIcon = () => {
     const iconClass = "w-5 h-5";
     if (item.type === "liked") {
@@ -3479,6 +3464,8 @@ function ActivityCard({ item, userAvatar, userName }: { item: ActivityItem; user
   return (
     <Link
       href={`/id/${item.placeId}`}
+      target={isDesktop ? "_blank" : undefined}
+      rel={isDesktop ? "noopener noreferrer" : undefined}
       className="block w-full py-4 lg:py-5 px-6 hover:bg-[#FAFAF7] transition-colors border-b border-[#ECEEE4] last:border-b-0"
     >
       <div className="flex items-start gap-6">

@@ -2,8 +2,8 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { use, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../../../../../lib/supabase";
 import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
@@ -18,10 +18,11 @@ function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
 }
 
-export default function CategoriesEditorPage() {
+type PageProps = { params: Promise<{ id: string }> };
+
+export default function CategoriesEditorPage(props: PageProps) {
   const router = useRouter();
-  const params = useParams<{ id: string }>();
-  const placeId = params?.id;
+  const { id: placeId } = use(props.params);
 
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const isAdmin = isUserAdmin(access);
@@ -408,7 +409,7 @@ export default function CategoriesEditorPage() {
                 {/* Selected tags */}
                 {tags.length > 0 && (
                   <div className="mb-4">
-                    <p className="text-xs text-[#6F7A5A] mb-2">Selected tags:</p>
+                    <p className="text-sm text-[#6F7A5A] mb-2">Selected tags:</p>
                     <div className="flex flex-wrap gap-2">
                       {tags.map((tag) => (
                         <Pill
@@ -429,7 +430,7 @@ export default function CategoriesEditorPage() {
                 {/* Available tags */}
                 {availableTags.length > 0 && (
                   <div>
-                    <p className="text-xs text-[#6F7A5A] mb-2">Available tags:</p>
+                    <p className="text-sm text-[#6F7A5A] mb-2">Available tags:</p>
                     <div className="flex flex-wrap gap-2">
                       {availableTags.map((tag) => {
                         const isSelected = tags.includes(tag);

@@ -2,8 +2,8 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState } from "react";
-import { useParams, usePathname, useRouter } from "next/navigation";
+import { use, useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import type { Database } from "../../../types/supabase";
 import { useUserAccessContext } from "../../../contexts/UserAccessContext";
@@ -18,10 +18,11 @@ function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
 }
 
-export default function PlaceSettingsPage() {
+type PageProps = { params: Promise<{ id: string }> };
+
+export default function PlaceSettingsPage(props: PageProps) {
   const router = useRouter();
-  const params = useParams<{ id: string }>();
-  const placeId = params?.id;
+  const { id: placeId } = use(props.params);
 
   const pathname = usePathname();
   const { loading: accessLoading, user, access } = useUserAccessContext();

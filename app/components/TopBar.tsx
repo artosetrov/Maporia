@@ -12,7 +12,10 @@ import Icon from "./Icon";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
 import { canUserAddPlace } from "../lib/access";
 import { useAuthRedirect } from "../hooks/useAuthRedirect";
+import { useIsDesktop } from "../hooks/useIsDesktop";
+import { usePremiumGate } from "../hooks/usePremiumGate";
 import AuthCTA from "./AuthCTA";
+import AuthModal from "./AuthModal";
 
 type TopBarProps = {
   // Search bar props (only for /map page) - Airbnb style
@@ -96,6 +99,8 @@ export default function TopBar({
 
   // Получаем права пользователя (from context — single session/profile request)
   const { access } = useUserAccessContext();
+  const isDesktop = useIsDesktop();
+  const { openPremiumLocation, closeAuthModal, authModalOpen, authRedirectPath, authModalVariant } = usePremiumGate();
 
   // Проверяем авторизацию
   useEffect(() => {
@@ -266,8 +271,19 @@ export default function TopBar({
                     </>
                   )}
 
-                  {/* Right: Filter button and View toggle (for map page) */}
+                  {/* Right: Add place (profile), Filter button, View toggle (map page) */}
                   <div className="flex items-center gap-2 ml-auto">
+                    {/* Add new place - profile page, mobile */}
+                    {pathname === "/profile" && shouldShowAddPlace && canAddPlace && (
+                      <Link
+                        href={`/add?returnTo=${encodeURIComponent(pathname)}`}
+                        onClick={() => { if (navigator.vibrate) navigator.vibrate(10); }}
+                        className="w-10 h-10 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] transition-colors flex items-center justify-center flex-shrink-0"
+                        aria-label="Add new place"
+                      >
+                        <Icon name="add" size={20} className="text-[#1F2A1F]" />
+                      </Link>
+                    )}
                     {/* Filter button (other pages, not profile, not home, not place page) */}
                     {pathname !== "/profile" && pathname !== "/" && !pathname.startsWith("/id/") && (
                       <button
@@ -314,18 +330,6 @@ export default function TopBar({
               )}
             </div>
           </div>
-          
-          {/* Add Place button - fixed in top right corner (on profile page) */}
-          {pathname === "/profile" && shouldShowAddPlace && canAddPlace && (
-            <Link
-                href={`/add?returnTo=${encodeURIComponent(pathname)}`}
-                onClick={() => { if (navigator.vibrate) navigator.vibrate(10); }}
-                className="absolute top-safe-top top-3 right-4 w-10 h-10 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] transition-colors flex items-center justify-center z-10"
-                aria-label="Add new place"
-              >
-                <Icon name="add" size={20} className="text-[#1F2A1F]" />
-            </Link>
-          )}
         </div>
 
         {/* Desktop TopBar (>= lg) */}
@@ -359,9 +363,19 @@ export default function TopBar({
 
               {/* Right: Auth area */}
               <div className="flex-shrink-0 flex items-center gap-4 ml-auto">
-                {/* Login Button - visible for unauthenticated users */}
+                {/* Get Started — для неавторизованных. Desktop: модалка входа как при клике на премиум-карточку */}
                 {!isAuthenticated && (
-                  <AuthCTA variant="sign-in" as="link" trigger="topbar_login">Login</AuthCTA>
+                  isDesktop ? (
+                    <button
+                      type="button"
+                      onClick={() => openPremiumLocation("place")}
+                      className="flex items-center justify-center gap-2 text-sm font-medium transition-all rounded-xl px-5 py-2.5 h-11 bg-[#8F9E4F] text-white hover:brightness-110 active:brightness-90"
+                    >
+                      Get Started
+                    </button>
+                  ) : (
+                    <AuthCTA variant="sign-in" as="link" trigger="topbar_login">Get Started</AuthCTA>
+                  )
                 )}
                 {/* Authenticated: Switch to hosting + Avatar + Hamburger menu */}
                 {isAuthenticated && (userAvatar || userDisplayName || userEmail) && (
@@ -536,6 +550,12 @@ export default function TopBar({
         </div>
       </div>
 
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={closeAuthModal}
+        redirectPath={authRedirectPath}
+        variant={authModalVariant}
+      />
     </>
   );
 }

@@ -25,8 +25,8 @@ export function SkeletonShimmer() {
 export function PlaceCardSkeleton() {
   return (
     <div className="w-full">
-      {/* Image skeleton - preserves aspect ratio (75% padding-bottom) */}
-      <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
+      {/* Image skeleton - 1:1 square like PlaceCard */}
+      <div className="relative w-full mb-2" style={{ paddingBottom: '100%' }}>
         <div className="absolute inset-0 rounded-2xl overflow-hidden">
           <SkeletonBase className="h-full w-full rounded-2xl" />
         </div>

@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { use, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 /**
  * Legacy edit route - redirects to new Airbnb-style editor
  * Old path: /id/[id]/edit
  * New path: /places/[id]/edit
  */
-export default function EditPlacePage() {
+type PageProps = { params: Promise<{ id: string }> };
+
+export default function EditPlacePage(props: PageProps) {
   const router = useRouter();
-  const params = useParams<{ id: string }>();
-  const placeId = params?.id;
+  const { id: placeId } = use(props.params);
 
   // Redirect to new editor flow
   useEffect(() => {

@@ -18,6 +18,10 @@ import type { PostgrestError } from "@supabase/supabase-js";
 import { DEFAULT_CITY } from "../constants";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
 import { useAuthRedirect } from "../hooks/useAuthRedirect";
+import { useIsDesktop } from "../hooks/useIsDesktop";
+import { usePremiumGate } from "../hooks/usePremiumGate";
+import AuthModal from "../components/AuthModal";
+import PremiumUpsellModal from "../components/PremiumUpsellModal";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import Icon from "../components/Icon";
 import { PlaceCardGridSkeleton, MapSkeleton, Empty } from "../components/Skeleton";
@@ -86,7 +90,8 @@ function timeAgo(iso: string) {
 export default function ExplorePage() {
   const router = useRouter();
   const { redirectToAuth } = useAuthRedirect();
-  
+  const isDesktop = useIsDesktop();
+
   const [view, setView] = useState<"list" | "map">("list");
   
   const shouldLoadMap = view === "map";
@@ -561,7 +566,7 @@ export default function ExplorePage() {
                       setSearchDraft(chip);
                       setSearchFocused(false);
                     }}
-                    className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] transition whitespace-nowrap"
+                    className="shrink-0 rounded-full px-3 py-1.5 text-sm sm:text-base font-medium text-[#8F9E4F] bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] transition whitespace-nowrap"
                   >
                     {chip}
                   </button>
@@ -572,7 +577,7 @@ export default function ExplorePage() {
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-6 lg:gap-y-7">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="w-full">
-                    <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
+                    <div className="relative w-full mb-2" style={{ paddingBottom: '100%' }}>
                       <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
                     </div>
                     <div className="flex flex-col gap-1">
@@ -639,7 +644,11 @@ export default function ExplorePage() {
                           setFilterOpen(true);
                         }}
                         onPhotoClick={() => {
-                          router.push(`/id/${p.id}`);
+                          if (isDesktop) {
+                            window.open(`/id/${p.id}`, "_blank", "noopener,noreferrer");
+                          } else {
+                            router.push(`/id/${p.id}`);
+                          }
                         }}
                       />
                     </div>
@@ -664,6 +673,7 @@ export default function ExplorePage() {
                   setMapZoom(zoom);
                 }}
                 userId={userId}
+                userAccess={defaultUserAccess}
                 favorites={favorites}
                 onToggleFavorite={toggleFavorite}
               />
@@ -712,7 +722,7 @@ export default function ExplorePage() {
               <div className="grid grid-cols-2 gap-5">
                 {Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="w-full">
-                    <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
+                    <div className="relative w-full mb-2" style={{ paddingBottom: '100%' }}>
                       <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
                     </div>
                     <div className="flex flex-col gap-1">
@@ -762,7 +772,11 @@ export default function ExplorePage() {
                           setFilterOpen(true);
                         }}
                         onPhotoClick={() => {
-                          router.push(`/id/${p.id}`);
+                          if (isDesktop) {
+                            window.open(`/id/${p.id}`, "_blank", "noopener,noreferrer");
+                          } else {
+                            router.push(`/id/${p.id}`);
+                          }
                         }}
                       />
                     </div>
@@ -812,7 +826,7 @@ export default function ExplorePage() {
               <div className="grid grid-cols-1 gap-4">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="w-full">
-                    <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
+                    <div className="relative w-full mb-2" style={{ paddingBottom: '100%' }}>
                       <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
                     </div>
                     <div className="flex flex-col gap-1">
@@ -862,7 +876,11 @@ export default function ExplorePage() {
                           setFilterOpen(true);
                         }}
                         onPhotoClick={() => {
-                          router.push(`/id/${p.id}`);
+                          if (isDesktop) {
+                            window.open(`/id/${p.id}`, "_blank", "noopener,noreferrer");
+                          } else {
+                            router.push(`/id/${p.id}`);
+                          }
                         }}
                       />
                     </div>
@@ -916,7 +934,7 @@ export default function ExplorePage() {
                     setSearchDraft(chip);
                     setQ(chip);
                   }}
-                  className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#556036] bg-white border border-[#6b7d47]/20 hover:bg-[#f5f4f2] transition whitespace-nowrap"
+                  className="shrink-0 rounded-full px-3 py-1.5 text-sm sm:text-base font-medium text-[#556036] bg-white border border-[#6b7d47]/20 hover:bg-[#f5f4f2] transition whitespace-nowrap"
                 >
                   {chip}
                 </button>
@@ -941,6 +959,7 @@ export default function ExplorePage() {
                       setMapZoom(zoom);
                     }}
                     userId={userId}
+                    userAccess={defaultUserAccess}
                     favorites={favorites}
                     onToggleFavorite={toggleFavorite}
                   />
@@ -1023,7 +1042,11 @@ export default function ExplorePage() {
                                 setFilterOpen(true);
                               }}
                               onPhotoClick={() => {
-                                router.push(`/id/${selectedPlace.id}`);
+                                if (isDesktop) {
+                                  window.open(`/id/${selectedPlace.id}`, "_blank", "noopener,noreferrer");
+                                } else {
+                                  router.push(`/id/${selectedPlace.id}`);
+                                }
                               }}
                             />
                           );
@@ -1035,7 +1058,7 @@ export default function ExplorePage() {
                           <div className="grid grid-cols-1 gap-4">
                             {Array.from({ length: 3 }).map((_, i) => (
                               <div key={i} className="w-full">
-                                <div className="relative w-full mb-2" style={{ paddingBottom: '75%' }}>
+                                <div className="relative w-full mb-2" style={{ paddingBottom: '100%' }}>
                                   <div className="absolute inset-0 rounded-2xl bg-[#ECEEE4] animate-pulse" />
                                 </div>
                                 <div className="flex flex-col gap-1">
@@ -1094,7 +1117,11 @@ export default function ExplorePage() {
                                       setFilterOpen(true);
                                     }}
                                     onPhotoClick={() => {
-                                      router.push(`/id/${p.id}`);
+                                      if (isDesktop) {
+                                        window.open(`/id/${p.id}`, "_blank", "noopener,noreferrer");
+                                      } else {
+                                        router.push(`/id/${p.id}`);
+                                      }
                                     }}
                                   />
                                 </div>
@@ -1151,7 +1178,11 @@ export default function ExplorePage() {
                           setFilterOpen(true);
                         }}
                         onPhotoClick={() => {
-                          router.push(`/id/${p.id}`);
+                          if (isDesktop) {
+                            window.open(`/id/${p.id}`, "_blank", "noopener,noreferrer");
+                          } else {
+                            router.push(`/id/${p.id}`);
+                          }
                         }}
                       />
                     );
@@ -1276,9 +1307,9 @@ export default function ExplorePage() {
 
                 {selectedTag && (
                   <div>
-                    <label className="text-xs font-medium text-[#6b7d47] mb-2 block">Selected Tag</label>
+                    <label className="text-sm font-medium text-[#6b7d47] mb-2 block">Selected Tag</label>
                     <div className="flex items-center gap-2">
-                      <span className="rounded-full bg-[#6b7d47]/10 text-[#556036] px-3 py-2 text-sm font-medium border border-[#6b7d47]/20">
+                      <span className="rounded-full bg-[#6b7d47]/10 text-[#556036] px-3 py-2 text-base font-medium border border-[#6b7d47]/20">
                         #{selectedTag}
                       </span>
                       <button
@@ -1371,6 +1402,7 @@ function MapView({
   mapZoom: externalMapZoom,
   onMapStateChange,
   userId,
+  userAccess,
   favorites,
   onToggleFavorite,
 }: {
@@ -1382,9 +1414,13 @@ function MapView({
   mapZoom?: number | null;
   onMapStateChange?: (center: { lat: number; lng: number }, zoom: number) => void;
   userId?: string | null;
+  userAccess?: UserAccess;
   favorites?: Set<string>;
   onToggleFavorite?: (placeId: string, e: React.MouseEvent) => void;
 }) {
+  const isDesktop = useIsDesktop();
+  const { openPremiumLocation, closeAuthModal, closePremiumModal, modalOpen, modalPlaceTitle, authModalOpen, authRedirectPath, authModalVariant } = usePremiumGate();
+  const defaultAccess: UserAccess = userAccess ?? { role: "guest", hasPremium: false, isAdmin: false };
   const [internalSelectedPlaceId, setInternalSelectedPlaceId] = useState<string | null>(null);
   const [roundIcons, setRoundIcons] = useState<Map<string, string>>(new Map());
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
@@ -1395,7 +1431,7 @@ function MapView({
   const lastReportedStateRef = useRef<{ center: { lat: number; lng: number }; zoom: number } | null>(null);
   const onMapStateChangeRef = useRef(onMapStateChange);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  
+
   // Обновляем ref при изменении callback
   useEffect(() => {
     onMapStateChangeRef.current = onMapStateChange;
@@ -1685,6 +1721,7 @@ function MapView({
   }
 
   return (
+    <>
     <div className="relative h-full w-full transition-all duration-300 overflow-hidden" data-map-container>
       {/* Custom Map Controls - Bottom Right Corner on Mobile, Top Right on Desktop */}
       <div 
@@ -1941,7 +1978,7 @@ function MapView({
                     >
                       <div className="w-80 bg-white rounded-xl shadow-xl overflow-hidden">
                         {/* Image Section with Carousel */}
-                        <div className="relative w-full" style={{ paddingBottom: '66.67%' }}>
+                        <div className="relative w-full" style={{ paddingBottom: '100%' }}>
                           {currentPhoto ? (
                             <div className="absolute inset-0">
                               <img
@@ -2028,50 +2065,76 @@ function MapView({
                             </div>
                           )}
                         </div>
-                        {/* Text Content Section */}
-                        <Link
-                          href={`/id/${place.id}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (!externalSelectedPlaceId) {
-                              setInternalSelectedPlaceId(null);
-                            }
-                          }}
-                          className="block p-4"
-                        >
-                          {/* Title Row */}
-                          <div className="flex items-start justify-between mb-1">
-                            <h3 className="text-base font-semibold text-[#2d2d2d] line-clamp-1 flex-1 pr-2">
-                              {place.title}
-                            </h3>
-                            {/* Rating placeholder - можно добавить когда будет рейтинг */}
-                          </div>
-                          
-                          {/* Description */}
-                          {place.description && (
-                            <div className="text-sm text-[#6F7A5A] line-clamp-1 mb-2">
-                              {place.description}
-                            </div>
-                          )}
-                          
-                          {/* City and Tags */}
-                          <div className="flex items-center gap-1.5 text-sm text-[#2d2d2d]">
-                            {place.city && (
-                              <>
-                                <span>{place.city}</span>
-                                {place.tags && place.tags.length > 0 && (
-                                  <span className="text-[#A8B096]">•</span>
+                        {/* Text Content Section: для гостя + премиум — модалка входа, иначе ссылка */}
+                        {(() => {
+                          const isPremium = isPlacePremium(place);
+                          const canView = canUserViewPlace(defaultAccess, place);
+                          const isLocked = isPremium && !canView;
+                          const content = (
+                            <>
+                              {/* Title Row */}
+                              <div className="flex items-start justify-between mb-1">
+                                <h3 className="text-base font-semibold text-[#2d2d2d] line-clamp-1 flex-1 pr-2">
+                                  {place.title}
+                                </h3>
+                              </div>
+                              {place.description && (
+                                <div className="text-sm text-[#6F7A5A] line-clamp-1 mb-2">
+                                  {place.description}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1.5 text-base text-[#2d2d2d]">
+                                {place.city && (
+                                  <>
+                                    <span>{place.city}</span>
+                                    {place.tags && place.tags.length > 0 && (
+                                      <span className="text-[#A8B096]">•</span>
+                                    )}
+                                  </>
                                 )}
-                              </>
-                            )}
-                            {place.tags && place.tags.length > 0 && (
-                              <span className="text-[#6F7A5A]">
-                                {place.tags.slice(0, 2).join(', ')}
-                                {place.tags.length > 2 && ` +${place.tags.length - 2}`}
-                              </span>
-                            )}
-                          </div>
-                        </Link>
+                                {place.tags && place.tags.length > 0 && (
+                                  <span className="text-[#6F7A5A]">
+                                    {place.tags.slice(0, 2).join(", ")}
+                                    {place.tags.length > 2 && ` +${place.tags.length - 2}`}
+                                  </span>
+                                )}
+                              </div>
+                            </>
+                          );
+                          if (isLocked) {
+                            return (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openPremiumLocation("place", place.title, place.id);
+                                  if (!externalSelectedPlaceId) {
+                                    setInternalSelectedPlaceId(null);
+                                  }
+                                }}
+                                className="block w-full text-left p-4 hover:bg-[#FAFAF7] transition-colors rounded-b-xl"
+                              >
+                                {content}
+                              </button>
+                            );
+                          }
+                          return (
+                            <Link
+                              href={`/id/${place.id}`}
+                              target={isDesktop ? "_blank" : undefined}
+                              rel={isDesktop ? "noopener noreferrer" : undefined}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!externalSelectedPlaceId) {
+                                  setInternalSelectedPlaceId(null);
+                                }
+                              }}
+                              className="block p-4"
+                            >
+                              {content}
+                            </Link>
+                          );
+                        })()}
                       </div>
                     </InfoWindow>
                   );
@@ -2083,5 +2146,18 @@ function MapView({
         )}
       </div>
     </div>
+    <AuthModal
+      isOpen={authModalOpen}
+      onClose={closeAuthModal}
+      redirectPath={authRedirectPath}
+      variant={authModalVariant}
+    />
+    <PremiumUpsellModal
+      open={modalOpen}
+      onClose={closePremiumModal}
+      context="place"
+      placeTitle={modalPlaceTitle}
+    />
+    </>
   );
 }

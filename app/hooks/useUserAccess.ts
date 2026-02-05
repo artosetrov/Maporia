@@ -67,7 +67,19 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
             }
             return;
           }
-          
+          // Сетевые ошибки (Failed to fetch) — гость, без сырого лога в консоль
+          if (sessionError.name === 'TypeError' && (sessionError.message === 'Failed to fetch' || String(sessionError.message || '').includes('fetch'))) {
+            if (!isUnmounting && currentRequestId === requestId) {
+              setUser(null);
+              setProfile(null);
+              setAccess({ role: "guest", hasPremium: false, isAdmin: false });
+              setLoading(false);
+            }
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('[useUserAccess] Сеть недоступна (Failed to fetch). Проверьте интернет и NEXT_PUBLIC_SUPABASE_URL.');
+            }
+            return;
+          }
           // Handle refresh token errors
           if (isRefreshTokenError(sessionError)) {
             await handleRefreshTokenError(sessionError);
@@ -153,6 +165,18 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
             }
             return;
           }
+          // Сетевые ошибки (Failed to fetch) — гость, без сырого лога
+          if (profileError.name === 'TypeError' && (profileError.message === 'Failed to fetch' || String(profileError.message || '').includes('fetch'))) {
+            if (!isUnmounting && currentRequestId === requestId) {
+              setProfile(null);
+              setAccess(getUserAccess(null));
+              setLoading(false);
+            }
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('[useUserAccess] Сеть недоступна (Failed to fetch). Проверьте интернет и NEXT_PUBLIC_SUPABASE_URL.');
+            }
+            return;
+          }
           // Build a plain object so we never log "{}" (Supabase errors can stringify as empty)
           const errMsg = profileError.message ? String(profileError.message).trim() : '';
           const errCode = profileError.code ? String(profileError.code).trim() : '';
@@ -197,6 +221,20 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
         if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
           if (!isUnmounting && currentRequestId === requestId) {
             setLoading(false);
+          }
+          return;
+        }
+
+        // Сетевые ошибки (Failed to fetch) — показываем гостя без сырого TypeError в консоли
+        if (err?.name === 'TypeError' && (err?.message === 'Failed to fetch' || err?.message?.includes?.('fetch'))) {
+          if (!isUnmounting && currentRequestId === requestId) {
+            setUser(null);
+            setProfile(null);
+            setAccess({ role: "guest", hasPremium: false, isAdmin: false });
+            setLoading(false);
+          }
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[useUserAccess] Сеть недоступна (Failed to fetch). Проверьте интернет и NEXT_PUBLIC_SUPABASE_URL.');
           }
           return;
         }
