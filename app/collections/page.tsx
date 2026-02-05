@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { Suspense, useEffect, useState, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
@@ -32,7 +32,48 @@ type PlaceRow = {
   visibility: string | null;
 };
 
-export default function CollectionsPage() {
+function CollectionsPageSkeleton() {
+  return (
+    <>
+      <TopBar
+        showSearchBar={true}
+        searchValue=""
+        onSearchChange={() => {}}
+        selectedCity={null}
+        onCityChange={() => {}}
+        onFiltersClick={() => {}}
+        activeFiltersCount={0}
+        userAvatar={null}
+        userDisplayName={null}
+        userEmail={null}
+        onSearchBarClick={() => {}}
+      />
+      <main className="min-h-screen bg-warm-white pt-safe-top pb-safe-bottom">
+        <div className="border-b border-border-light bg-warm-white pt-16 sm:pt-20">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 pb-4">
+            <h1 className="text-xl sm:text-2xl font-semibold font-fraunces text-content-primary mb-3">
+              Collections
+            </h1>
+            <div className="flex gap-4 overflow-hidden">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div
+                  key={i}
+                  className="flex-shrink-0 w-[calc((100%-2rem)/3)] lg:w-[calc((100%-5rem)/6)] aspect-square rounded-lg bg-border-light animate-pulse"
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6 pb-24">
+          <PlaceCardGridSkeleton count={6} columns={2} />
+        </div>
+      </main>
+      <BottomNav />
+    </>
+  );
+}
+
+function CollectionsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabsScrollRef = useRef<HTMLDivElement>(null);
@@ -391,5 +432,13 @@ export default function CollectionsPage() {
         placeTitle={modalContext === "collection" ? modalCollectionTitle : undefined}
       />
     </>
+  );
+}
+
+export default function CollectionsPage() {
+  return (
+    <Suspense fallback={<CollectionsPageSkeleton />}>
+      <CollectionsPageContent />
+    </Suspense>
   );
 }
