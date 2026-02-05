@@ -377,16 +377,10 @@ function MapPageContent() {
           setHasExplicitCityInUrlState(true); // Город явно указан в URL
         }
       } else {
-        // Если city нет в URL, используем DEFAULT_CITY только если appliedCity ещё не установлен
-        // Это позволяет сохранить выбранный город при переходе на страницу без параметра city
-        setHasExplicitCityInUrlState(false); // Город не указан в URL
-        setAppliedCity(prev => {
-          if (!prev) {
-            return DEFAULT_CITY;
-          }
-          return prev;
-        });
-        // Если city нет в URL, устанавливаем selectedCity в null для "Anywhere"
+        // Если city нет в URL — сброс фильтра по городу: показываем все места
+        setHasExplicitCityInUrlState(false);
+        setAppliedCity(DEFAULT_CITY);
+        setAppliedCities([]);
         setSelectedCity(null);
       }
       
@@ -855,6 +849,11 @@ function MapPageContent() {
         if (!cancelled) {
           setPlacesError(e);
           setPlacesData([]);
+          const msg = (e as Error)?.message ?? '';
+          const isNetworkError = (e as Error)?.name === 'TypeError' && (msg.includes('fetch') || msg.includes('network'));
+          if (isNetworkError && process.env.NODE_ENV === 'development') {
+            console.warn('[MapPage] Не удалось загрузить места (сеть или Supabase недоступны). Проверьте интернет и .env.local (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY).');
+          }
         }
       } finally {
         if (!cancelled) setPlacesLoading(false);
@@ -919,17 +918,19 @@ function MapPageContent() {
           );
         }
         
-        // Определяем города для фильтрации
-        const citiesToFilter = appliedCities.filter(city => city !== DEFAULT_CITY);
-        const allCitiesSelected = citiesToFilter.length > 0 && 
-                                 citiesToFilter.length === CITIES.length &&
-                                 CITIES.every(city => citiesToFilter.includes(city));
-        
+        // Определяем города для фильтрации только если пользователь явно задал город (URL или фильтры)
+        // При сбросе города (hasExplicitCityInUrlState === false) не фильтруем по appliedCities, чтобы показывать все места
         let citiesForFilter: string[] | undefined;
-        if (citiesToFilter.length > 0 && !allCitiesSelected) {
-          citiesForFilter = citiesToFilter;
-        } else if (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) && !allCitiesSelected) {
-          citiesForFilter = [appliedCity];
+        if (hasExplicitCityInUrlState) {
+          const citiesToFilter = appliedCities.filter(city => city !== DEFAULT_CITY);
+          const allCitiesSelected = citiesToFilter.length > 0 && 
+                                   citiesToFilter.length === CITIES.length &&
+                                   CITIES.every(city => citiesToFilter.includes(city));
+          if (citiesToFilter.length > 0 && !allCitiesSelected) {
+            citiesForFilter = citiesToFilter;
+          } else if (appliedCity && appliedCity !== DEFAULT_CITY && !allCitiesSelected) {
+            citiesForFilter = [appliedCity];
+          }
         }
         
         // Затем применяем остальные фильтры
@@ -958,7 +959,6 @@ function MapPageContent() {
             outputCount: result.length,
             appliedQ: appliedQ.trim(),
             appliedCities,
-            citiesToFilter,
             citiesForFilter,
             categories: activeFilters.categories,
             sort: activeFilters.sort,

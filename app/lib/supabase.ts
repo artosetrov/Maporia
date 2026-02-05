@@ -173,6 +173,11 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
       if (error.message?.includes('abort') || error.name === 'AbortError') {
         return;
       }
+      // Не дублировать лог при сетевой ошибке (Failed to fetch)
+      if (error.name === 'TypeError' && error.message?.includes('fetch')) {
+        console.warn('[Supabase] Нет доступа к серверу (сеть или CORS). Проверьте NEXT_PUBLIC_SUPABASE_URL и интернет.');
+        return;
+      }
       
       // Handle refresh token errors
       if (isRefreshTokenError(error)) {
@@ -200,6 +205,10 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
           .then(({ data: testData, error: testError, count }) => {
             const testDuration = Date.now() - testQueryStart;
             if (testError) {
+              if (testError.name === 'TypeError' && testError.message?.includes('fetch')) {
+                console.warn('[Supabase] Нет доступа к серверу (сеть или CORS). Проверьте NEXT_PUBLIC_SUPABASE_URL и интернет.');
+                return;
+              }
               // Don't log AbortError
               if (!testError.message?.includes('abort') && testError.name !== 'AbortError' && (testError as any).code !== 'ECONNABORTED') {
                 console.error('[Supabase] Test query failed:', {
@@ -218,9 +227,12 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
             }
           })
           .then(undefined, (testErr: unknown) => {
-            // Silently ignore AbortError
             const err = testErr as { name?: string; message?: string };
             if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+              return;
+            }
+            if (err?.name === 'TypeError' && err?.message?.includes('fetch')) {
+              console.warn('[Supabase] Нет доступа к серверу (сеть или CORS). Проверьте NEXT_PUBLIC_SUPABASE_URL и интернет.');
               return;
             }
             console.error('[Supabase] Test query exception:', {
@@ -235,6 +247,11 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
     clearTimeout(sessionCheckTimeout);
     // Silently ignore AbortError
     if (err?.name === 'AbortError' || err?.message?.includes('abort') || err?.message?.includes('signal is aborted')) {
+      return;
+    }
+    // Одна понятная запись вместо "Failed to fetch"
+    if (err?.name === 'TypeError' && err?.message?.includes('fetch')) {
+      console.warn('[Supabase] Нет доступа к серверу (сеть или CORS). Проверьте NEXT_PUBLIC_SUPABASE_URL и интернет.');
       return;
     }
     

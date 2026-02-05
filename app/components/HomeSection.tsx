@@ -12,6 +12,29 @@ import Icon from "./Icon";
 import { HomeSectionSkeleton } from "./Skeleton";
 import { getRecentlyViewedPlaceIds } from "../utils";
 
+function HomeSectionCollageImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div className={className}>
+        <div className="w-full h-full rounded-lg bg-[#ECEEE4] flex items-center justify-center">
+          <Icon name="photo" size={24} className="text-[#A8B096]" />
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className={className}>
+      <img
+        src={src}
+        alt={alt}
+        className="w-full h-full object-cover"
+        onError={() => setFailed(true)}
+      />
+    </div>
+  );
+}
+
 type ProfileInterests = Pick<Database["public"]["Tables"]["profiles"]["Row"], "favorite_categories" | "favorite_tags">;
 
 type Place = {
@@ -499,16 +522,12 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
                     <div className="absolute inset-0 bg-[#ECEEE4] p-2 flex flex-wrap gap-1">
                       {places.slice(0, 3).map((place, idx) => (
                         place.cover_url ? (
-                          <div 
+                          <HomeSectionCollageImage
                             key={place.id}
+                            src={place.cover_url}
+                            alt={place.title}
                             className={`${idx === 0 ? 'w-full h-1/2' : 'w-[calc(50%-4px)] h-1/2'} rounded-lg overflow-hidden`}
-                          >
-                            <img
-                              src={place.cover_url}
-                              alt={place.title}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
+                          />
                         ) : null
                       ))}
                       {places.length < 3 && (

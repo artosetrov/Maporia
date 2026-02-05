@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ReactNode, useEffect, useState, useRef, memo } from "react";
+import { ReactNode, useCallback, useEffect, useState, useRef, memo } from "react";
 import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
@@ -71,7 +71,8 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
   const cardRef = useRef<HTMLAnchorElement>(null);
   const [isSmallCard, setIsSmallCard] = useState(false);
   const [isInView, setIsInView] = useState(false);
-  
+  const [failedPhotoUrls, setFailedPhotoUrls] = useState<Set<string>>(new Set());
+
   // Load profile and photos only when card is in viewport to avoid ERR_INSUFFICIENT_RESOURCES
   // DIAGNOSTIC: If card never enters viewport, creator profile and photos requests never run (expected for lazy load).
   useEffect(() => {
@@ -339,6 +340,10 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
     };
   }, [place.id, place.cover_url, isInView]);
 
+  useEffect(() => {
+    setFailedPhotoUrls(new Set());
+  }, [place.id, place.cover_url]);
+
   // Unused - kept for potential future use
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _creatorName = creatorProfile?.display_name || creatorProfile?.username || "Unknown";
@@ -392,8 +397,15 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
     touchEndX.current = null;
   };
 
-  const currentPhoto = photos[currentPhotoIndex] || place.cover_url;
+  const rawCurrentPhoto = photos[currentPhotoIndex] || place.cover_url;
+  const currentPhoto = rawCurrentPhoto && !failedPhotoUrls.has(rawCurrentPhoto) ? rawCurrentPhoto : null;
   const hasMultiplePhotos = showPhotoSlider && photos.length > 1;
+
+  const handlePhotoError = useCallback(() => {
+    if (rawCurrentPhoto) {
+      setFailedPhotoUrls((prev) => new Set(prev).add(rawCurrentPhoto));
+    }
+  }, [rawCurrentPhoto]);
 
   // Premium access checks using role system
   // Unused - userAccess is passed directly to canAccessPlace
@@ -526,6 +538,7 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
                 isLocked && !isOwner && "blur-sm brightness-75"
               )}
               style={{ objectFit: 'cover', width: '100%', height: '100%' }}
+              onError={handlePhotoError}
             />
             
             {/* Navigation arrows - показываем только если есть несколько фото и карточка не заблокирована */}
