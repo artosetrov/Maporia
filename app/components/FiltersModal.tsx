@@ -13,6 +13,8 @@ export type ActiveFilters = {
   sort: string | null;
   tags?: string[];
   premium?: boolean;
+  hidden?: boolean;
+  vibe?: boolean;
   // Для обратной совместимости
   premiumOnly?: boolean;
 };
