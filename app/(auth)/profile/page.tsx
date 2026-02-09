@@ -833,11 +833,11 @@ function ProfileInner() {
             <>
               <h1 className="font-semibold text-[#1F2A1F] leading-none" style={{ fontSize: '24px' }}>Profile</h1>
               <Link
-                href="/profile/edit"
+                href="/map"
                 className="w-10 h-10 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] active:bg-[#ECEEE4] transition-colors flex items-center justify-center flex-shrink-0"
-                aria-label="Edit profile"
+                aria-label="Close and go to map"
               >
-                <Icon name="edit" size={20} className="text-[#1F2A1F]" />
+                <Icon name="close" size={20} className="text-[#1F2A1F]" />
               </Link>
             </>
           ) : (
@@ -1431,11 +1431,19 @@ function ProfileInner() {
                     )}
                   </div>
 
-                  {/* Mobile Logout Button */}
-                  <div className="lg:hidden pt-4 border-t border-[#ECEEE4] mt-4">
+                  {/* Mobile Edit & Logout Buttons */}
+                  <div className="lg:hidden pt-4 border-t border-[#ECEEE4] mt-4 flex gap-3">
+                    <Link
+                      href="/profile/edit"
+                      className="flex-1 rounded-lg bg-white border border-[#ECEEE4] text-[#1F2A1F] px-4 py-2.5 text-sm font-medium hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2"
+                      aria-label="Edit profile"
+                    >
+                      <Icon name="edit" size={16} className="text-[#1F2A1F]" />
+                      Edit profile
+                    </Link>
                     <button
                       onClick={handleLogout}
-                      className="w-full rounded-lg bg-white border border-[#ECEEE4] text-[#C96A5B] px-4 py-2.5 text-sm font-medium hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2"
+                      className="flex-1 rounded-lg bg-white border border-[#ECEEE4] text-[#C96A5B] px-4 py-2.5 text-sm font-medium hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2"
                     >
                       <Icon name="logout" size={16} className="text-[#C96A5B]" />
                       Log out
