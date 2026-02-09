@@ -1,55 +1,39 @@
 /**
  * Premium subscription utilities
- * Handles Stripe checkout and premium status updates
+ * Handles Stripe checkout for one-time Premium payment
  */
+
+import { supabase } from "./supabase";
 
 /**
- * Placeholder function to start Stripe checkout
- * TODO: Replace with actual Stripe Checkout URL generation
- * 
- * @returns Promise that resolves when checkout is initiated
+ * Starts Stripe Checkout for Premium purchase.
+ * Redirects the user to Stripe hosted checkout page.
+ *
+ * @throws Error if user is not authenticated or checkout fails
  */
-export async function startPremiumCheckout(): Promise<void> {
-  // TODO: Replace with actual Stripe Checkout implementation
-  // Example:
-  // const response = await fetch('/api/stripe/create-checkout-session', {
-  //   method: 'POST',
-  //   headers: { 'Content-Type': 'application/json' },
-  //   body: JSON.stringify({ plan: 'premium_annual' }),
-  // });
-  // const { url } = await response.json();
-  // window.location.href = url;
+export const startPremiumCheckout = async (): Promise<void> => {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
 
-  // For now, show a message
-  if (typeof window !== "undefined") {
-    // You can replace this with a toast library
-    alert("Stripe checkout is coming soon!");
+  if (!token) {
+    throw new Error("Not authenticated");
   }
-}
 
-/**
- * Update user's premium status
- * This should be called after successful payment (via webhook or manual admin action)
- * 
- * @param userId - User ID to update
- * @param isPremium - Whether to set premium status
- * @returns Promise that resolves when update is complete
- */
-export async function setUserPremium(
-  userId: string,
-  isPremium: boolean
-): Promise<void> {
-  // TODO: Implement actual database update
-  // This should be called from a secure API route or webhook handler
-  // Example:
-  // const { error } = await supabase
-  //   .from('profiles')
-  //   .update({
-  //     subscription_status: isPremium ? 'active' : 'inactive',
-  //     role: isPremium ? 'premium' : 'standard',
-  //   })
-  //   .eq('id', userId);
-  // if (error) throw error;
+  const res = await fetch("/api/stripe/checkout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ access_token: token }),
+  });
 
-  // Intentionally no-op for now (placeholder).
-}
+  const json = await res.json();
+
+  if (!res.ok || json.error) {
+    throw new Error(json.error || "Failed to start checkout");
+  }
+
+  if (!json.url) {
+    throw new Error("No checkout URL returned");
+  }
+
+  window.location.href = json.url;
+};

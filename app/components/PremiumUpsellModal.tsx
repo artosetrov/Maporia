@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { usePremiumModalSettings } from "../hooks/usePremiumModalSettings";
 import Icon from "./Icon";
@@ -9,6 +9,7 @@ import PremiumBadge from "./PremiumBadge";
 import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
 import { isPlacePremium } from "../lib/access";
+import { startPremiumCheckout } from "../lib/premium";
 
 type PlaceCoverRow = Pick<Database["public"]["Tables"]["places"]["Row"], "id" | "cover_url" | "access_level" | "visibility">;
 
@@ -54,6 +55,21 @@ export default function PremiumUpsellModal({
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const slideIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [dynamicHeight, setDynamicHeight] = useState<string>("100dvh");
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  const handleCheckout = useCallback(async () => {
+    setCheckoutLoading(true);
+    setCheckoutError(null);
+    try {
+      await startPremiumCheckout();
+      // User will be redirected to Stripe — no further action needed
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Payment error";
+      setCheckoutError(message);
+      setCheckoutLoading(false);
+    }
+  }, []);
   
   // Handle dynamic viewport height for mobile Chrome and safe areas
   useEffect(() => {
@@ -447,32 +463,35 @@ export default function PremiumUpsellModal({
                 : undefined 
             }}
           >
-            {/* Primary Button */}
-            {content.primaryButtonText && (
-              <div className="mb-3 lg:mb-0">
-                {content.primaryButtonLink ? (
-                  <Link
-                    href={content.primaryButtonLink}
-                    className="w-full px-6 py-4 rounded-xl bg-[#8F9E4F] text-white font-semibold text-base hover:bg-[#7A8A42] transition-colors text-center block flex items-center justify-center gap-2"
-                  >
-                    <span>{content.primaryButtonText}</span>
-                    <div className="w-5 h-5 rounded-full border-2 border-white/80 flex items-center justify-center">
-                      <span className="text-xs font-bold text-white/80">i</span>
-                    </div>
-                  </Link>
-                ) : (
-                  <button
-                    onClick={onClose}
-                    className="w-full px-6 py-4 rounded-xl bg-[#8F9E4F] text-white font-semibold text-base hover:bg-[#7A8A42] transition-colors flex items-center justify-center gap-2"
-                  >
-                    <span>{content.primaryButtonText}</span>
-                    <div className="w-5 h-5 rounded-full border-2 border-white/80 flex items-center justify-center">
-                      <span className="text-xs font-bold text-white/80">i</span>
-                    </div>
-                  </button>
-                )}
+            {/* Checkout Error */}
+            {checkoutError && (
+              <div className="mb-3 px-4 py-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm text-center">
+                {checkoutError}
               </div>
             )}
+
+            {/* Primary Button — Stripe Checkout */}
+            <div className="mb-3 lg:mb-0">
+              <button
+                onClick={handleCheckout}
+                disabled={checkoutLoading}
+                className="w-full px-6 py-4 rounded-xl bg-[#8F9E4F] text-white font-semibold text-base hover:bg-[#7A8A42] transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                aria-label="Get Premium access"
+                tabIndex={0}
+              >
+                {checkoutLoading ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Переход к оплате...</span>
+                  </>
+                ) : (
+                  <span>{content.primaryButtonText || "Получить Premium"}</span>
+                )}
+              </button>
+            </div>
 
             {/* Secondary Button */}
             {content.secondaryButtonText && (

@@ -349,6 +349,50 @@ function ProfileInner() {
     }
   }, [searchParams]);
 
+  // Payment success/cancelled banner state
+  const [paymentBanner, setPaymentBanner] = useState<"success" | "cancelled" | null>(null);
+
+  useEffect(() => {
+    const paymentParam = searchParams?.get("payment");
+    if (paymentParam === "success" || paymentParam === "cancelled") {
+      setPaymentBanner(paymentParam);
+      // Clean up URL query param without reload
+      const url = new URL(window.location.href);
+      url.searchParams.delete("payment");
+      window.history.replaceState({}, "", url.toString());
+
+      // If payment=success, verify and activate premium via server
+      if (paymentParam === "success") {
+        (async () => {
+          try {
+            const { data: sess } = await supabase.auth.getSession();
+            const token = sess.session?.access_token;
+            if (!token) return;
+
+            const res = await fetch("/api/stripe/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ access_token: token }),
+            });
+            const json = await res.json();
+
+            if (json.activated) {
+              // Reload page to reflect new premium status
+              window.location.replace("/profile");
+              return;
+            }
+          } catch (err) {
+            console.error("[profile] Payment verification failed:", err);
+          }
+        })();
+      }
+
+      // Auto-dismiss after 8 seconds
+      const timer = setTimeout(() => setPaymentBanner(null), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams]);
+
   const [displayNameDraft, setDisplayNameDraft] = useState("");
   const [bioDraft, setBioDraft] = useState("");
   const [avatarDraft, setAvatarDraft] = useState<string | null>(null);
@@ -781,6 +825,32 @@ function ProfileInner() {
 
   return (
     <main className="min-h-screen bg-white">
+      {/* Payment result banner */}
+      {paymentBanner === "success" && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] w-[90%] max-w-md px-4 py-3 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium text-center shadow-lg animate-slide-down">
+          Premium активирован! Спасибо за покупку.
+          <button
+            onClick={() => setPaymentBanner(null)}
+            className="ml-3 text-white/80 hover:text-white transition-colors"
+            aria-label="Закрыть"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      {paymentBanner === "cancelled" && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] w-[90%] max-w-md px-4 py-3 rounded-xl bg-[#FAFAF7] border border-[#ECEEE4] text-[#6F7A5A] text-sm font-medium text-center shadow-lg animate-slide-down">
+          Оплата отменена. Вы можете попробовать снова.
+          <button
+            onClick={() => setPaymentBanner(null)}
+            className="ml-3 text-[#6F7A5A]/80 hover:text-[#1F2A1F] transition-colors"
+            aria-label="Закрыть"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Desktop TopBar */}
       <div className="hidden lg:block">
         <TopBar
@@ -2559,10 +2629,10 @@ function ElementsSection() {
     priceSubtext: "Less than $2 a month",
     priceRightTitle: "Full Access",
     priceRightDesc: "All premium places + collections",
-    primaryButtonText: "Coming Soon",
+    primaryButtonText: "Get Premium",
     primaryButtonLink: "",
     secondaryButtonText: "Not now, thanks",
-    footerText: "Cancel anytime. Premium features will unlock instantly when available.",
+    footerText: "One-time payment. Premium features unlock instantly.",
     footerLinkText: "Terms of Service apply.",
     footerLinkUrl: "#",
   };

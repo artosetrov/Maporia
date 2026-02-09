@@ -41,10 +41,10 @@ const defaultSettings: PremiumModalSettings = {
   priceSubtext: "Less than $2 a month",
   priceRightTitle: "Full Access",
   priceRightDesc: "All premium places + collections",
-  primaryButtonText: "Coming Soon",
+  primaryButtonText: "Get Premium",
   primaryButtonLink: "",
   secondaryButtonText: "Not now, thanks",
-  footerText: "Cancel anytime. Premium features will unlock instantly when available.",
+  footerText: "One-time payment. Premium features unlock instantly.",
   footerLinkText: "Terms of Service apply.",
   footerLinkUrl: "#",
 };
