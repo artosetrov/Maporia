@@ -4,7 +4,6 @@ import { use, useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
-import BottomNav from "../../components/BottomNav";
 import PlaceCard from "../../components/PlaceCard";
 import Icon from "../../components/Icon";
 import { usePremiumGate } from "../../hooks/usePremiumGate";
@@ -236,7 +235,6 @@ export default function CollectionDetailPage(props: PageProps) {
             </div>
           </div>
         </main>
-        <BottomNav />
       </>
     );
   }
@@ -367,7 +365,6 @@ export default function CollectionDetailPage(props: PageProps) {
           ) : null}
         </div>
       </main>
-      <BottomNav />
 
       <AuthModal
         isOpen={authModalOpen}

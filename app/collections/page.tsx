@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import TopBar from "../components/TopBar";
-import BottomNav from "../components/BottomNav";
 import PlaceCard from "../components/PlaceCard";
 import Icon from "../components/Icon";
 import { usePremiumGate } from "../hooks/usePremiumGate";
@@ -64,11 +63,10 @@ function CollectionsPageSkeleton() {
             </div>
           </div>
         </div>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6 pb-24">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6 pb-6">
           <PlaceCardGridSkeleton count={6} columns={2} />
         </div>
       </main>
-      <BottomNav />
     </>
   );
 }
@@ -332,7 +330,7 @@ function CollectionsPageContent() {
           </div>
         </div>
 
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6 pb-24">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6 pb-6">
               {error && (
                 <div className="mb-4 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error">
                   {error}
@@ -418,8 +416,6 @@ function CollectionsPageContent() {
               )}
         </div>
       </main>
-
-      <BottomNav />
 
       <AuthModal
         isOpen={authModalOpen}

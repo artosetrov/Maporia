@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
 import { CATEGORIES } from "../constants";
 import TopBar from "../components/TopBar";
-import BottomNav from "../components/BottomNav";
 import PlaceCard from "../components/PlaceCard";
 import FavoriteIcon from "../components/FavoriteIcon";
 import PremiumBadge from "../components/PremiumBadge";
@@ -1342,7 +1341,6 @@ export default function ExplorePage() {
         </div>
       )}
 
-      <BottomNav />
     </main>
   );
 }
@@ -1356,41 +1354,25 @@ function Card({ children }: { children: React.ReactNode }) {
 }
 
 
-// Функция для создания круглого изображения
-function createRoundIcon(imageUrl: string, size: number): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        reject(new Error("Could not get canvas context"));
-        return;
-      }
-      
-      // Создаем круглую обрезку
-      ctx.beginPath();
-      ctx.arc(size / 2, size / 2, size / 2, 0, 2 * Math.PI);
-      ctx.clip();
-      
-      // Рисуем изображение
-      ctx.drawImage(img, 0, 0, size, size);
-      
-      // Добавляем белую обводку
-      ctx.beginPath();
-      ctx.arc(size / 2, size / 2, size / 2 - 2, 0, 2 * Math.PI);
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      
-      resolve(canvas.toDataURL());
-    };
-    img.onerror = reject;
-    img.src = imageUrl;
-  });
+/** Извлекает эмоджи из строки категории вида "🍽 Food & Drinks" */
+function getCategoryEmoji(categories: string[] | null): string {
+  if (!categories || categories.length === 0) return "📍";
+  const first = categories[0];
+  const emoji = first.split(" ")[0];
+  return emoji || "📍";
+}
+
+/** Генерирует SVG data URL маркера с эмоджи внутри круга */
+function createEmojiMarkerSvg(emoji: string, size: number): string {
+  const fontSize = Math.round(size * 0.52);
+  const r = size / 2 - 1;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="white"/>
+    <text x="${size / 2}" y="${size / 2}" text-anchor="middle" dominant-baseline="central" font-size="${fontSize}">${emoji}</text>
+  </svg>`;
+
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
 function MapView({
@@ -1422,7 +1404,6 @@ function MapView({
   const { openPremiumLocation, closeAuthModal, closePremiumModal, modalOpen, modalPlaceTitle, authModalOpen, authRedirectPath, authModalVariant } = usePremiumGate();
   const defaultAccess: UserAccess = userAccess ?? { role: "guest", hasPremium: false, isAdmin: false };
   const [internalSelectedPlaceId, setInternalSelectedPlaceId] = useState<string | null>(null);
-  const [roundIcons, setRoundIcons] = useState<Map<string, string>>(new Map());
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [placePhotos, setPlacePhotos] = useState<Map<string, string[]>>(new Map());
@@ -1560,52 +1541,6 @@ function MapView({
     () => places.filter((p) => p.lat != null && p.lng != null),
     [places]
   );
-
-  // Создаем круглые иконки для всех мест
-  useEffect(() => {
-    if (!isLoaded) return;
-    
-    for (const place of placesWithCoords) {
-      if (place.cover_url) {
-        const smallKey = `${place.id}-small`;
-        const largeKey = `${place.id}-large`;
-        
-        setRoundIcons(prev => {
-          const needsSmall = !prev.has(smallKey);
-          const needsLarge = !prev.has(largeKey);
-          
-          if (needsSmall) {
-            createRoundIcon(place.cover_url!, 36)
-              .then(smallIcon => {
-                setRoundIcons(current => {
-                  if (!current.has(smallKey)) {
-                    return new Map(current).set(smallKey, smallIcon);
-                  }
-                  return current;
-                });
-              })
-              .catch(() => { /* Image load failed (CORS/broken URL) — skip icon silently */ });
-          }
-          
-          if (needsLarge) {
-            createRoundIcon(place.cover_url!, 44)
-              .then(largeIcon => {
-                setRoundIcons(current => {
-                  if (!current.has(largeKey)) {
-                    return new Map(current).set(largeKey, largeIcon);
-                  }
-                  return current;
-                });
-              })
-              .catch(() => { /* Image load failed (CORS/broken URL) — skip icon silently */ });
-          }
-          
-          return prev;
-        });
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placesWithCoords.map(p => `${p.id}-${p.cover_url || ''}`).join(','), isLoaded]);
 
   // Загружаем фото для всех мест одним запросом (batch)
   useEffect(() => {
@@ -1871,42 +1806,16 @@ function MapView({
           {placesWithCoords.map((place) => {
             if (typeof window === "undefined" || !(window as any).google?.maps) return null;
             
-            const coverUrl = place.cover_url;
             const isSelected = selectedPlaceId === place.id;
             const iconSize = isSelected ? 44 : 36;
-            
-            let iconConfig: any;
-            
-            if (coverUrl) {
-              const iconKey = `${place.id}-${isSelected ? "large" : "small"}`;
-              const roundIconUrl = roundIcons.get(iconKey);
-              
-              if (roundIconUrl) {
-                // Используем круглую иконку
-                iconConfig = {
-                  url: roundIconUrl,
-                  scaledSize: new (window as any).google.maps.Size(iconSize, iconSize),
-                  anchor: new (window as any).google.maps.Point(iconSize / 2, iconSize / 2),
-                };
-              } else {
-                // Fallback на обычное изображение пока загружается круглое
-                iconConfig = {
-                  url: coverUrl,
-                  scaledSize: new (window as any).google.maps.Size(iconSize, iconSize),
-                  anchor: new (window as any).google.maps.Point(iconSize / 2, iconSize / 2),
-                };
-              }
-            } else {
-              // Fallback на стандартный маркер
-              iconConfig = {
-                path: (window as any).google?.maps?.SymbolPath?.CIRCLE,
-                scale: isSelected ? 8 : 7,
-                fillColor: isSelected ? "#556036" : "#6b7d47",
-                fillOpacity: 1,
-                strokeColor: "#ffffff",
-                strokeWeight: 2,
-              };
-            }
+            const emoji = getCategoryEmoji(place.categories);
+            const markerUrl = createEmojiMarkerSvg(emoji, iconSize);
+
+            const iconConfig = {
+              url: markerUrl,
+              scaledSize: new (window as any).google.maps.Size(iconSize, iconSize),
+              anchor: new (window as any).google.maps.Point(iconSize / 2, iconSize / 2),
+            };
 
             return (
               <Marker

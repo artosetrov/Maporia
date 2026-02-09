@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import TopBar from "../components/TopBar";
-import BottomNav from "../components/BottomNav";
 import FiltersModal, { ActiveFilters } from "../components/FiltersModal";
 import SearchModal from "../components/SearchModal";
 import { supabase } from "../lib/supabase";
@@ -448,7 +447,7 @@ export default function FeedPage() {
         getFilteredCount={() => 0}
       />
 
-      <div className="flex-1 pt-[64px] pb-20">
+      <div className="flex-1 pt-[64px]">
         <div className="mx-auto max-w-2xl px-4 sm:px-6 pt-4">
           {loading ? (
             <div className="bg-white rounded-2xl border border-[#ECEEE4] overflow-hidden">
@@ -468,7 +467,6 @@ export default function FeedPage() {
         </div>
       </div>
 
-      <BottomNav />
     </main>
   );
 }

@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import TopBar from "../components/TopBar";
-import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
@@ -159,7 +158,7 @@ export default function SettingsPage() {
         selectedTags={selectedTags}
       />
 
-      <div className="flex-1 pt-[80px] pb-20">
+      <div className="flex-1 pt-[80px]">
         <div className="mx-auto max-w-md px-6">
           <div className="space-y-6">
             {/* Account Section */}
@@ -196,7 +195,6 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <BottomNav />
     </main>
   );
 }

@@ -11,7 +11,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 // See: https://developers.google.com/maps/documentation/javascript/advanced-markers/migration
 import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
 import TopBar from "../components/TopBar";
-import BottomNav from "../components/BottomNav";
 import PlaceCard from "../components/PlaceCard";
 import nextDynamic from "next/dynamic";
 import { ActiveFilters } from "../components/FiltersModal";
@@ -27,7 +26,6 @@ import type { PostgrestError } from "@supabase/supabase-js";
 import { DEFAULT_CITY, CATEGORIES, CITIES, getTagEmoji } from "../constants";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
 import { useAuthRedirect } from "../hooks/useAuthRedirect";
-import { useBottomNavVisibility } from "../hooks/useBottomNavVisibility";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { usePremiumGate } from "../hooks/usePremiumGate";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
@@ -192,16 +190,13 @@ function MapPageContent() {
   // На странице /map по умолчанию показываем list view (включая мобильные)
   // Всегда начинаем с "list", независимо от устройства
   // Это гарантирует, что на мобильных устройствах по умолчанию открывается список, а не карта
-  const [view, setView] = useState<"list" | "map">("list");
-  
-  // Убеждаемся, что view всегда начинается с "list" при первой загрузке
+  const viewParam = searchParams?.get('view') === 'map' ? 'map' : 'list';
+  const [view, setView] = useState<"list" | "map">(viewParam);
+
+  // Синхронизируем view с query param при SPA-навигации
   useEffect(() => {
-    // При первой загрузке страницы всегда показываем список
-    // Это предотвращает случайное переключение на карту
-    if (view !== "list" && !searchParams?.get('view')) {
-      setView("list");
-    }
-  }, []); // Пустой массив зависимостей - выполняется только при монтировании
+    setView(viewParam);
+  }, [viewParam]);
   const [hoveredPlaceId, setHoveredPlaceId] = useState<string | null>(null);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
@@ -220,8 +215,6 @@ function MapPageContent() {
   // User access for premium filtering and bootReady gate (from context — single session/profile request)
   const { loading: accessLoading, access } = useUserAccessContext();
   
-  // Track BottomNav visibility for button positioning
-  const bottomNavVisible = useBottomNavVisibility();
   
   // Bootstrap ready state - wait for auth/profile before loading places
   const [bootReady, setBootReady] = useState(false);
@@ -1082,6 +1075,13 @@ function MapPageContent() {
         if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
           return;
         }
+        // Сетевые ошибки — тихо обрабатываем, не засоряя консоль
+        if (err?.name === 'TypeError' && (err?.message === 'Failed to fetch' || err?.message?.includes('fetch'))) {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[MapPage] Не удалось загрузить пользователя (сеть недоступна).');
+          }
+          return;
+        }
         console.error("[MapPage] Error loading user:", err);
       }
     })();
@@ -1116,6 +1116,18 @@ function MapPageContent() {
         if (cancelled) return;
         if (error) return;
         setFavorites(new Set((data || []).map((r) => r.place_id)));
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const e = err as { name?: string; message?: string };
+        if (e?.name === 'AbortError' || e?.message?.includes('abort')) return;
+        if (e?.name === 'TypeError' && e?.message?.includes('fetch')) {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[MapPage] Не удалось загрузить избранное (сеть недоступна).');
+          }
+          return;
+        }
+        console.error('[MapPage] Error loading favorites:', e);
       });
     return () => { cancelled = true; };
   }, [userId]);
@@ -2130,16 +2142,11 @@ function MapPageContent() {
       </div>
 
       {/* Floating View Toggle Button (mobile only, ≤768px) */}
-      {/* Fixed снизу, позиционируется относительно BottomNav с учетом его видимости */}
-      {/* BottomNav высота: ~64px (pt-2.5 + pb-2.5 + py-2 + иконка + текст + gap) + safe-area-inset-bottom */}
       {view === "list" && (
         <button
           onClick={() => setView("map")}
           style={{ 
-            bottom: bottomNavVisible 
-              ? 'calc(64px + 24px + env(safe-area-inset-bottom, 0px))' 
-              : 'calc(24px + env(safe-area-inset-bottom, 0px))',
-            transition: 'bottom 0.3s ease-in-out', // Синхронизировано с BottomNav transition
+            bottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
           }}
           className="fixed left-1/2 transform -translate-x-1/2 z-[60] md:hidden flex items-center gap-2 bg-[#8F9E4F] text-white px-6 py-3 rounded-full shadow-lg hover:bg-[#7A8A3F] transition-all"
         >
@@ -2149,15 +2156,11 @@ function MapPageContent() {
       )}
       
       {/* Back to List Button (mobile only, когда карта открыта) */}
-      {/* Позиционируется относительно BottomNav с учетом его видимости */}
       {view === "map" && (
         <button
           onClick={() => setView("list")}
           style={{ 
-            bottom: bottomNavVisible 
-              ? 'calc(64px + 24px + env(safe-area-inset-bottom, 0px))' 
-              : 'calc(24px + env(safe-area-inset-bottom, 0px))',
-            transition: 'bottom 0.3s ease-in-out', // Синхронизировано с BottomNav transition
+            bottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
           }}
           className="fixed left-1/2 transform -translate-x-1/2 z-[60] md:hidden flex items-center gap-2 bg-[#8F9E4F] text-white px-6 py-3 rounded-full shadow-lg hover:bg-[#7A8A3F] transition-all"
         >
@@ -2165,8 +2168,6 @@ function MapPageContent() {
           <span className="text-sm font-medium">List</span>
         </button>
       )}
-
-      <BottomNav />
     </main>
   );
 }
@@ -2197,41 +2198,26 @@ function Card({ children }: { children: React.ReactNode }) {
 }
 
 
-// Функция для создания круглого изображения
-function createRoundIcon(imageUrl: string, size: number): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        reject(new Error("Could not get canvas context"));
-        return;
-      }
-      
-      // Создаем круглую обрезку
-      ctx.beginPath();
-      ctx.arc(size / 2, size / 2, size / 2, 0, 2 * Math.PI);
-      ctx.clip();
-      
-      // Рисуем изображение
-      ctx.drawImage(img, 0, 0, size, size);
-      
-      // Добавляем белую обводку
-      ctx.beginPath();
-      ctx.arc(size / 2, size / 2, size / 2 - 2, 0, 2 * Math.PI);
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      
-      resolve(canvas.toDataURL());
-    };
-    img.onerror = reject;
-    img.src = imageUrl;
-  });
+/** Извлекает эмоджи из строки категории вида "🍽 Food & Drinks" */
+function getCategoryEmoji(categories: string[] | null): string {
+  if (!categories || categories.length === 0) return "📍";
+  const first = categories[0];
+  // Категории хранятся как "🍽 Food & Drinks" — берём первый символ до пробела
+  const emoji = first.split(" ")[0];
+  return emoji || "📍";
+}
+
+/** Генерирует SVG data URL маркера с эмоджи внутри круга */
+function createEmojiMarkerSvg(emoji: string, size: number): string {
+  const fontSize = Math.round(size * 0.52);
+  const r = size / 2 - 1;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="white"/>
+    <text x="${size / 2}" y="${size / 2}" text-anchor="middle" dominant-baseline="central" font-size="${fontSize}">${emoji}</text>
+  </svg>`;
+
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
 function MapView({
@@ -2263,7 +2249,6 @@ function MapView({
   const { openPremiumLocation, closeAuthModal, closePremiumModal, modalOpen, modalPlaceTitle, authModalOpen, authRedirectPath, authModalVariant } = usePremiumGate();
   const defaultAccess: UserAccess = userAccess ?? { role: "guest", hasPremium: false, isAdmin: false };
   const [internalSelectedPlaceId, setInternalSelectedPlaceId] = useState<string | null>(null);
-  const [roundIcons, setRoundIcons] = useState<Map<string, string>>(new Map());
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
   const [placePhotos, setPlacePhotos] = useState<Map<string, string[]>>(new Map());
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState<Map<string, number>>(new Map());
@@ -2376,52 +2361,6 @@ function MapView({
     },
     [places, defaultUserAccess, userId]
   );
-
-  // Создаем круглые иконки для всех мест
-  useEffect(() => {
-    if (!isLoaded) return;
-    
-    for (const place of placesWithCoords) {
-      if (place.cover_url) {
-        const smallKey = `${place.id}-small`;
-        const largeKey = `${place.id}-large`;
-        
-        setRoundIcons(prev => {
-          const needsSmall = !prev.has(smallKey);
-          const needsLarge = !prev.has(largeKey);
-          
-          if (needsSmall) {
-            createRoundIcon(place.cover_url!, 36)
-              .then(smallIcon => {
-                setRoundIcons(current => {
-                  if (!current.has(smallKey)) {
-                    return new Map(current).set(smallKey, smallIcon);
-                  }
-                  return current;
-                });
-              })
-              .catch(() => { /* Image load failed (CORS/broken URL) — skip icon silently */ });
-          }
-          
-          if (needsLarge) {
-            createRoundIcon(place.cover_url!, 44)
-              .then(largeIcon => {
-                setRoundIcons(current => {
-                  if (!current.has(largeKey)) {
-                    return new Map(current).set(largeKey, largeIcon);
-                  }
-                  return current;
-                });
-              })
-              .catch(() => { /* Image load failed (CORS/broken URL) — skip icon silently */ });
-          }
-          
-          return prev;
-        });
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placesWithCoords.map(p => `${p.id}-${p.cover_url || ''}`).join(','), isLoaded]);
 
   // Загружаем фото для всех мест одним запросом (batch)
   useEffect(() => {
@@ -2713,42 +2652,16 @@ function MapView({
           {placesWithCoords.map((place) => {
             if (typeof window === "undefined" || !(window as any).google?.maps) return null;
             
-            const coverUrl = place.cover_url;
             const isSelected = selectedPlaceId === place.id;
             const iconSize = isSelected ? 44 : 36;
-            
-            let iconConfig: any;
-            
-            if (coverUrl) {
-              const iconKey = `${place.id}-${isSelected ? "large" : "small"}`;
-              const roundIconUrl = roundIcons.get(iconKey);
-              
-              if (roundIconUrl) {
-                // Используем круглую иконку
-                iconConfig = {
-                  url: roundIconUrl,
-                  scaledSize: new (window as any).google.maps.Size(iconSize, iconSize),
-                  anchor: new (window as any).google.maps.Point(iconSize / 2, iconSize / 2),
-                };
-              } else {
-                // Fallback на обычное изображение пока загружается круглое
-                iconConfig = {
-                  url: coverUrl,
-                  scaledSize: new (window as any).google.maps.Size(iconSize, iconSize),
-                  anchor: new (window as any).google.maps.Point(iconSize / 2, iconSize / 2),
-                };
-              }
-            } else {
-              // Fallback на стандартный маркер
-              iconConfig = {
-                path: (window as any).google?.maps?.SymbolPath?.CIRCLE,
-                scale: isSelected ? 8 : 7,
-                fillColor: isSelected ? "#556036" : "#6b7d47",
-                fillOpacity: 1,
-                strokeColor: "#ffffff",
-                strokeWeight: 2,
-              };
-            }
+            const emoji = getCategoryEmoji(place.categories);
+            const markerUrl = createEmojiMarkerSvg(emoji, iconSize);
+
+            const iconConfig = {
+              url: markerUrl,
+              scaledSize: new (window as any).google.maps.Size(iconSize, iconSize),
+              anchor: new (window as any).google.maps.Point(iconSize / 2, iconSize / 2),
+            };
 
             return (
               <Marker

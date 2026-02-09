@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import TopBar from "../../components/TopBar";
-import BottomNav from "../../components/BottomNav";
 import PlaceCard from "../../components/PlaceCard";
 import FavoriteIcon from "../../components/FavoriteIcon";
 import FiltersModal, { ActiveFilters } from "../../components/FiltersModal";
@@ -236,7 +235,7 @@ export default function SavedPage() {
         getFilteredCount={() => 0}
       />
 
-      <div className="flex-1 max-lg:pt-[88px] lg:pt-[80px] pb-20">
+      <div className="flex-1 max-lg:pt-[88px] lg:pt-[80px]">
         <div className="px-6 lg:px-8">
           {/* Header */}
           {!loading && (
@@ -329,7 +328,6 @@ export default function SavedPage() {
         </div>
       </div>
 
-      <BottomNav />
     </main>
   );
 }

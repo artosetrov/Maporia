@@ -5,7 +5,6 @@ import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthRedirect } from "./hooks/useAuthRedirect";
 import TopBar from "./components/TopBar";
-import BottomNav from "./components/BottomNav";
 import HomeSection from "./components/HomeSection";
 import { ActiveFilters } from "./components/FiltersModal";
 import SearchModal from "./components/SearchModal";
@@ -107,10 +106,22 @@ export default function HomePage() {
     if (!bootReady || !hasValidSupabaseConfig) return;
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase.from("places").select("id,tags");
-      if (cancelled) return;
-      if (error) return;
-      setPlacesForTags((data ?? []).map((r: { id: string; tags: string[] | null }) => ({ id: r.id, tags: r.tags ?? null })));
+      try {
+        const { data, error } = await supabase.from("places").select("id,tags");
+        if (cancelled) return;
+        if (error) return;
+        setPlacesForTags((data ?? []).map((r: { id: string; tags: string[] | null }) => ({ id: r.id, tags: r.tags ?? null })));
+      } catch (err: any) {
+        if (cancelled) return;
+        if (err?.name === 'AbortError' || err?.message?.includes('abort')) return;
+        if (err?.name === 'TypeError' && err?.message?.includes('fetch')) {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[HomePage] Не удалось загрузить теги (сеть недоступна).');
+          }
+          return;
+        }
+        console.error('[HomePage] Error loading tags:', err);
+      }
     })();
     return () => { cancelled = true; };
   }, [bootReady]);
@@ -163,7 +174,13 @@ export default function HomePage() {
         if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
           return;
         }
-        
+        // Сетевые ошибки — тихо обрабатываем
+        if (err?.name === 'TypeError' && (err?.message === 'Failed to fetch' || err?.message?.includes('fetch'))) {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[HomePage] Не удалось загрузить избранное (сеть недоступна).');
+          }
+          return;
+        }
         console.error("Exception loading favorites:", err);
       }
     })();
@@ -439,7 +456,7 @@ export default function HomePage() {
         }}
       />
 
-      <div className="flex-1 pt-[64px] pb-20">
+      <div className="flex-1 pt-[64px]">
         <div 
           className="mx-auto pb-6 lg:py-8 max-w-full lg:max-w-[960px] lg:max-w-[1120px] lg:max-w-[1440px] lg:max-w-[1920px]"
           style={{
@@ -472,7 +489,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      <BottomNav />
     </main>
   );
 }

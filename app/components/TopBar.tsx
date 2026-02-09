@@ -157,7 +157,8 @@ export default function TopBar({
   };
 
   const isHome = pathname === "/";
-  const shouldShowBackButton = showBackButton !== undefined ? showBackButton : !isHome;
+  const isMap = pathname === "/map";
+  const shouldShowBackButton = showBackButton !== undefined ? showBackButton : !(isHome || isMap);
   const shouldShowAddPlace = showAddPlaceButton !== undefined ? showAddPlaceButton : isAuthenticated;
 
   return (
@@ -178,8 +179,8 @@ export default function TopBar({
         {/* Mobile TopBar (default, < lg) */}
         <div className="lg:hidden relative">
           <div className="px-4 pt-safe-top pt-3 pb-3">
-            <div className={`flex items-center ${pathname === "/" && showSearchBar && !shouldShowBackButton ? "" : "gap-3"}`}>
-              {/* Left: Back button */}
+            <div className="flex items-center gap-3">
+              {/* Left: Back button or Logo */}
               {shouldShowBackButton ? (
                 <button
                   onClick={() => {
@@ -194,7 +195,20 @@ export default function TopBar({
                 >
                   <Icon name="back" size={24} className="text-[#1F2A1F]" />
                 </button>
-              ) : null}
+              ) : (
+                <Link
+                  href="/"
+                  className="flex-shrink-0"
+                  aria-label="Go to Home"
+                  tabIndex={0}
+                >
+                  <img
+                    src="/Logo_maporia1.svg"
+                    alt="Maporia"
+                    className="h-8 w-auto"
+                  />
+                </Link>
+              )}
 
               {/* Place page: Share and Favorite buttons on the right */}
               {pathname.startsWith("/id/") && onShareClick && onFavoriteClick ? (
@@ -237,18 +251,6 @@ export default function TopBar({
                     </div>
                   ) : (
                     <>
-                      {/* Logo - left of search (hidden on home page and map page) */}
-                      {pathname !== "/profile" && pathname !== "/" && pathname !== "/map" && !pathname.startsWith("/id/") && (
-                        <Link href="/" className="flex-shrink-0 w-10 h-10 rounded-full bg-[#8F9E4F] flex items-center justify-center">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none" className="h-7 w-7">
-                            <g fill="white" fillRule="evenodd" clipRule="evenodd">
-                              <path d="M512 132C391 132 292 231 292 352C292 442 346 516 420 570C458 598 476 636 493 674L512 716L531 674C548 636 566 598 604 570C678 516 732 442 732 352C732 231 633 132 512 132ZM512 232C595 232 662 299 662 382C662 465 595 532 512 532C429 532 362 465 362 382C362 299 429 232 512 232Z"/>
-                              <path d="M232 604C232 574 256 550 286 550L338 550C358 550 376 560 388 576L512 740L636 576C648 560 666 550 686 550L738 550C768 550 792 574 792 604L792 836C792 866 768 890 738 890L706 890C676 890 652 866 652 836L652 702L552 834C542 848 527 856 512 856C497 856 482 848 472 834L372 702L372 836C372 866 348 890 318 890L286 890C256 890 232 866 232 836Z"/>
-                            </g>
-                          </svg>
-                        </Link>
-                      )}
-
                       {/* Center: Search pill (clickable) - hidden when showSearchBar is true, on profile page and place page */}
                       {pathname !== "/profile" && !pathname.startsWith("/id/") && (
                         <button
@@ -271,7 +273,7 @@ export default function TopBar({
                     </>
                   )}
 
-                  {/* Right: Add place (profile), Filter button, View toggle (map page) */}
+                  {/* Right: Profile avatar, Add place (profile), Filter button, View toggle (map page) */}
                   <div className="flex items-center gap-2 ml-auto">
                     {/* Add new place - profile page, mobile */}
                     {pathname === "/profile" && shouldShowAddPlace && canAddPlace && (
@@ -284,8 +286,8 @@ export default function TopBar({
                         <Icon name="add" size={20} className="text-[#1F2A1F]" />
                       </Link>
                     )}
-                    {/* Filter button (other pages, not profile, not home, not place page) */}
-                    {pathname !== "/profile" && pathname !== "/" && !pathname.startsWith("/id/") && (
+                    {/* Filter button (not profile, not place page) */}
+                    {pathname !== "/profile" && !pathname.startsWith("/id/") && (
                       <button
                         onClick={onFiltersClick}
                         className="w-10 h-10 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] transition-colors flex items-center justify-center flex-shrink-0 relative"
@@ -298,6 +300,30 @@ export default function TopBar({
                           </span>
                         )}
                       </button>
+                    )}
+                    {/* Profile avatar - home & map pages, mobile */}
+                    {(pathname === "/" || pathname === "/map") && (
+                      <Link
+                        href="/profile"
+                        className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0"
+                        aria-label="Profile"
+                        tabIndex={0}
+                      >
+                        {userAvatar ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={userAvatar}
+                            alt="Profile"
+                            className="w-full h-full object-cover rounded-full"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[11px] font-semibold rounded-full bg-[#FAFAF7] text-[#6F7A5A] border border-[#ECEEE4]">
+                            {userDisplayName
+                              ? initialsFromName(userDisplayName)
+                              : initialsFromEmail(userEmail)}
+                          </div>
+                        )}
+                      </Link>
                     )}
                     
                     {/* View Toggle - только для страницы Map (скрыт на мобильной версии) */}

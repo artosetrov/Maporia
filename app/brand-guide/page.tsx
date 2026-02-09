@@ -435,7 +435,7 @@ export default function BrandGuidePage() {
             </SubSection>
             <SubSection title="Mobile-first">
               <ul className="text-sm text-[#6F7A5A] space-y-1">
-                <li>Base styles for mobile; lg: for desktop. TopBar/BottomNav behavior: see docs/VISUAL-SCHEMAS.md.</li>
+                <li>Base styles for mobile; lg: for desktop. TopBar behavior: see docs/VISUAL-SCHEMAS.md.</li>
                 <li>Touch targets ≥ 44px. Safe areas: pt-safe-top, pb-safe-bottom where fixed bars exist.</li>
               </ul>
             </SubSection>

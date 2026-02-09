@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import TopBar from "../../components/TopBar";
-import BottomNav from "../../components/BottomNav";
 import FiltersModal, { ActiveFilters } from "../../components/FiltersModal";
 import SearchModal from "../../components/SearchModal";
 import { supabase } from "../../lib/supabase";
@@ -1449,7 +1448,6 @@ function ProfileInner() {
         </div>
       </div>
 
-      <BottomNav />
     </main>
   );
 }

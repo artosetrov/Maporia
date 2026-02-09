@@ -18,7 +18,7 @@ export type UseUserAccessResult = {
  * Hook to load user session, profile, and access level
  * Handles redirects for unauthenticated users or missing profiles
  *
- * DIAGNOSTIC: This hook is used in multiple components per page (e.g. TopBar, page, BottomNav).
+ * DIAGNOSTIC: This hook is used in multiple components per page (e.g. TopBar, page).
  * Each call runs its own effect → separate getSession() + profiles.select() per component.
  * SUGGESTION: Consider a single AuthContext so session/profile are fetched once and consumed everywhere.
  */
