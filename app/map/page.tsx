@@ -24,7 +24,7 @@ import { getCategoryEmoji, createMarkerIcon } from "../lib/mapMarkers";
 import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
-import { DEFAULT_CITY, CATEGORIES, CITIES, getTagEmoji } from "../constants";
+import { DEFAULT_CITY, CATEGORIES, CITIES, getTagEmoji, stripTagEmoji } from "../constants";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
 import { useAuthRedirect } from "../hooks/useAuthRedirect";
 import { useIsDesktop } from "../hooks/useIsDesktop";
@@ -34,7 +34,7 @@ import AuthModal from "../components/AuthModal";
 import PremiumUpsellModal from "../components/PremiumUpsellModal";
 import Icon from "../components/Icon";
 import { PlaceCardGridSkeleton, MapSkeleton, Empty } from "../components/Skeleton";
-import { sanitizePostgrestValue, normalizeCity, isPlaceHidden, isPlaceVibe, cx, initialsFromEmail, timeAgo } from "../utils";
+import { sanitizePostgrestValue, normalizeCity, cx, initialsFromEmail, timeAgo } from "../utils";
 import type { PlaceListItem as Place } from "../types";
 import { buildCityRadiusFilter, getCityCoords, isPlaceWithinCityRadius } from "../lib/cityRadius";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
@@ -43,8 +43,6 @@ import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 type PlaceFilters = {
   premium?: boolean;
   premiumOnly?: boolean;
-  hidden?: boolean;
-  vibe?: boolean;
   cities?: string[];
   categories?: string[];
   tags?: string[];
@@ -80,15 +78,9 @@ type PlacePhotosBatchResult = { data: PlacePhotoPlaceIdUrl[] | null; error: Post
 function filterPlaces(places: Place[], filters: PlaceFilters): Place[] {
   let filtered = [...places];
 
-  // Фильтрация по Top Pills (Premium, Hidden, Vibe) - AND между ними
+  // Фильтрация по Premium
   if (filters.premium) {
     filtered = filtered.filter(place => isPlacePremium(place));
-  }
-  if (filters.hidden) {
-    filtered = filtered.filter(place => isPlaceHidden(place));
-  }
-  if (filters.vibe) {
-    filtered = filtered.filter(place => isPlaceVibe(place));
   }
 
   // Фильтрация по городам с радиусом 10 миль (OR внутри группы)
@@ -312,11 +304,13 @@ function MapPageContent() {
           const decodedCity = decodeURIComponent(city.trim());
           // Всегда устанавливаем город из URL, если он есть
           setAppliedCity(decodedCity);
+          setAppliedCities([decodedCity]);
           setSelectedCity(decodedCity);
           setHasExplicitCityInUrlState(true); // Город явно указан в URL
         } catch (e) {
           const trimmedCity = city.trim();
           setAppliedCity(trimmedCity);
+          setAppliedCities([trimmedCity]);
           setSelectedCity(trimmedCity);
           setHasExplicitCityInUrlState(true); // Город явно указан в URL
         }
@@ -521,13 +515,8 @@ function MapPageContent() {
   const [placesError, setPlacesError] = useState<any>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Уникальные теги из загруженных мест (для фильтра) — после объявления placesData
-  const availableTags = useMemo(() => {
-    if (!placesData || placesData.length === 0) return [];
-    const set = new Set<string>();
-    placesData.forEach((p: Place) => { (p.tags ?? []).forEach((t: string) => set.add(t)); });
-    return Array.from(set).sort();
-  }, [placesData]);
+  // Tags are now loaded dynamically by FiltersModal based on selected categories
+  // (via getAvailableTags callback that queries Supabase tags table with category_ids filter)
 
   // Fetch places when filters or refreshKey change
   useEffect(() => {
@@ -858,13 +847,14 @@ function MapPageContent() {
         // При сбросе города (hasExplicitCityInUrlState === false) не фильтруем по appliedCities, чтобы показывать все места
         let citiesForFilter: string[] | undefined;
         if (hasExplicitCityInUrlState) {
-          const citiesToFilter = appliedCities.filter(city => city !== DEFAULT_CITY);
+          // Не исключаем DEFAULT_CITY — пользователь мог явно выбрать его
+          const citiesToFilter = appliedCities.filter(Boolean);
           const allCitiesSelected = citiesToFilter.length > 0 && 
                                    citiesToFilter.length === CITIES.length &&
                                    CITIES.every(city => citiesToFilter.includes(city));
           if (citiesToFilter.length > 0 && !allCitiesSelected) {
             citiesForFilter = citiesToFilter;
-          } else if (appliedCity && appliedCity !== DEFAULT_CITY && !allCitiesSelected) {
+          } else if (appliedCity && !allCitiesSelected) {
             citiesForFilter = [appliedCity];
           }
         }
@@ -873,8 +863,6 @@ function MapPageContent() {
         result = filterPlaces(result, {
           premium: activeFilters.premium,
           premiumOnly: activeFilters.premiumOnly,
-          hidden: activeFilters.hidden,
-          vibe: activeFilters.vibe,
           categories: activeFilters.categories.length > 0 ? activeFilters.categories : undefined,
           tags: (activeFilters.tags ?? []).length > 0 ? (activeFilters.tags ?? []) : undefined,
           cities: citiesForFilter,
@@ -910,8 +898,6 @@ function MapPageContent() {
         appliedQ, // Добавляем поиск в зависимости
         activeFilters.premium, 
         activeFilters.premiumOnly, 
-        activeFilters.hidden, 
-        activeFilters.vibe,
         activeFilters.sort, // Добавляем сортировку в зависимости
         // Используем строковые ключи для отслеживания изменений массивов
         categoriesKey,
@@ -932,8 +918,6 @@ function MapPageContent() {
             outputCount: filteredPlacesMemo.length,
             filters: {
               premium: activeFilters.premium,
-              hidden: activeFilters.hidden,
-              vibe: activeFilters.vibe,
               categories: activeFilters.categories,
             },
             appliedCities,
@@ -947,7 +931,7 @@ function MapPageContent() {
         // Всегда обновляем состояние, даже если длина не изменилась
         // Это гарантирует перерендер компонентов
         setFilteredPlacesState(filteredPlacesMemo);
-      }, [filteredPlacesMemo, categoriesKey, citiesKey, appliedCities, activeFilters.premium, activeFilters.premiumOnly, activeFilters.hidden, activeFilters.vibe]);
+      }, [filteredPlacesMemo, categoriesKey, citiesKey, appliedCities, activeFilters.premium, activeFilters.premiumOnly]);
       
       // Используем состояние для отображения
       const filteredPlaces = filteredPlacesState;
@@ -971,12 +955,10 @@ function MapPageContent() {
         placesDataLength: placesData?.length || 0,
         activeFilters: {
           premium: activeFilters.premium || activeFilters.premiumOnly,
-          hidden: activeFilters.hidden,
-          vibe: activeFilters.vibe,
         },
       });
     }
-  }, [filteredPlaces.length, placesData?.length || 0, activeFilters.premium, activeFilters.premiumOnly, activeFilters.hidden, activeFilters.vibe]);
+  }, [filteredPlaces.length, placesData?.length || 0, activeFilters.premium, activeFilters.premiumOnly]);
 
   // Handle errors
   useEffect(() => {
@@ -1066,6 +1048,9 @@ function MapPageContent() {
   }
 
   const handleCityChange = (city: string | null) => {
+    // Сбрасываем viewport карты — fitBounds сам определит новые границы
+    setMapCenter(null);
+    setMapZoom(null);
     // Для обратной совместимости
     setAppliedCity(city || DEFAULT_CITY);
     setAppliedCities(city ? [city] : []);
@@ -1096,6 +1081,9 @@ function MapPageContent() {
 
   // Handle filters apply from modal
   const handleFiltersApply = (filters: ActiveFilters) => {
+    // Сбрасываем viewport карты — fitBounds сам определит новые границы
+    setMapCenter(null);
+    setMapZoom(null);
     // Применяем фильтры - это автоматически обновит filteredPlaces через useMemo
     // Модальное окно закрывается автоматически в FiltersModal.handleApply
     // Создаем новый объект с новым массивом категорий для гарантии обновления React
@@ -1352,13 +1340,18 @@ function MapPageContent() {
         onClose={() => setSearchModalOpen(false)}
         onCitySelect={handleCityChange}
         onSearchSubmit={(city, query, tags) => {
+          // Сбрасываем viewport карты — fitBounds сам определит новые границы
+          setMapCenter(null);
+          setMapZoom(null);
           // Update state
           setSelectedCity(city);
           if (city) {
             setAppliedCity(city);
+            setAppliedCities([city]);
             setHasExplicitCityInUrlState(true);
           } else {
             setAppliedCity(DEFAULT_CITY);
+            setAppliedCities([]);
             setHasExplicitCityInUrlState(false);
           }
           setAppliedQ(query);
@@ -1410,11 +1403,28 @@ function MapPageContent() {
         appliedCity={appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) ? appliedCity : null}
         appliedCities={appliedCities.filter(city => city !== DEFAULT_CITY)}
         userAccess={access}
-        getAvailableTags={() => availableTags}
-        getTagCounts={(tags: string[]) => {
+        getAvailableTags={async (categories: string[]) => {
+          if (!categories || categories.length === 0) return [];
+          const result = await supabase
+            .from("tags")
+            .select("name")
+            .overlaps("category_ids", categories)
+            .order("name");
+          const rows = (result.data ?? []) as { name: string | null }[];
+          return rows.map((t) => t.name).filter((n): n is string => Boolean(n));
+        }}
+        getTagCounts={(tags: string[], categories?: string[], premiumOnly?: boolean) => {
           const counts: Record<string, number> = {};
           tags.forEach((t) => (counts[t] = 0));
-          (placesData ?? []).forEach((p: Place) => {
+          let source = categories && categories.length > 0
+            ? (placesData ?? []).filter((p: Place) =>
+                categories.some((cat) => (p.categories ?? []).includes(cat))
+              )
+            : (placesData ?? []);
+          if (premiumOnly) {
+            source = source.filter((p: Place) => isPlacePremium(p));
+          }
+          source.forEach((p: Place) => {
             (p.tags ?? []).forEach((t: string) => {
               if (t in counts) counts[t]++;
             });
@@ -1523,8 +1533,6 @@ function MapPageContent() {
 
             const filtered = filterPlaces(dataToFilter, {
               premium: draftFilters.premium || draftFilters.premiumOnly || false,
-              hidden: draftFilters.hidden || false,
-              vibe: draftFilters.vibe || false,
               cities: selectedCities.length > 0 && !allCitiesSelected ? selectedCities : undefined,
               categories: draftFilters.categories.length > 0 && !allCategoriesSelected ? draftFilters.categories : undefined,
               tags: draftTags.length > 0 && !allTagsSelected ? draftTags : undefined,
@@ -1577,12 +1585,16 @@ function MapPageContent() {
             return 0;
           }
         }}
-        getCategoryCount={async (category: string) => {
+        getCategoryCount={async (category: string, premiumOnly?: boolean) => {
           try {
-            const { count, error } = await supabase
+            let query = supabase
               .from("places")
               .select("*", { count: 'exact', head: true })
               .overlaps("categories", [category]);
+            if (premiumOnly) {
+              query = query.eq("access_level", "premium");
+            }
+            const { count } = await query;
             return count || 0;
           } catch {
             return 0;
@@ -1713,7 +1725,7 @@ function MapPageContent() {
                       className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-sm sm:text-base font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
                     >
                       <span className="leading-none">{getTagEmoji(tag)}</span>
-                      {tag}
+                      {stripTagEmoji(tag)}
                       <svg
                         className="w-3.5 h-3.5 text-[#8F9E4F] flex-shrink-0"
                         fill="none"
@@ -1965,7 +1977,7 @@ function MapPageContent() {
                           className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-sm sm:text-base font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
                         >
                           <span className="leading-none">{getTagEmoji(tag)}</span>
-                          {tag}
+                          {stripTagEmoji(tag)}
                           <svg
                             className="w-3.5 h-3.5 text-[#8F9E4F] flex-shrink-0"
                             fill="none"
@@ -2169,6 +2181,9 @@ function MapView({
   const onMapStateChangeRef = useRef(onMapStateChange);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
 
+  // Ref for tracking places set changes (fitBounds)
+  const prevPlacesIdsRef = useRef<string>("");
+
   // Refs for imperative markers and MarkerClusterer
   const markersRef = useRef<google.maps.Marker[]>([]);
   const clustererRef = useRef<MarkerClusterer | null>(null);
@@ -2362,8 +2377,27 @@ function MapView({
      
   }, [externalMapCenter, externalMapZoom, mapInstance]);
 
-  // Убрали автоматическое перемещение и увеличение карты при выборе места
-  // Теперь карточка просто появляется без изменения масштаба и позиции карты
+  // Auto-fit карты при изменении набора мест (после фильтрации)
+  useEffect(() => {
+    if (!mapInstance || !isLoaded) return;
+    if (isUpdatingFromPropsRef.current) return;
+
+    const currentIds = placesWithCoords.map(p => p.id).sort().join(",");
+    if (currentIds === prevPlacesIdsRef.current) return;
+    prevPlacesIdsRef.current = currentIds;
+
+    if (placesWithCoords.length === 0) return;
+
+    if (placesWithCoords.length === 1) {
+      mapInstance.panTo({ lat: placesWithCoords[0].lat!, lng: placesWithCoords[0].lng! });
+      mapInstance.setZoom(15);
+      return;
+    }
+
+    const bounds = new google.maps.LatLngBounds();
+    placesWithCoords.forEach(p => bounds.extend({ lat: p.lat!, lng: p.lng! }));
+    mapInstance.fitBounds(bounds, { top: 80, bottom: 80, left: 40, right: 40 });
+  }, [mapInstance, isLoaded, placesWithCoords]);
 
   // --- Marker Clustering ---
   // Создаём императивные маркеры и передаём их в MarkerClusterer.

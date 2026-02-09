@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import Link from "next/link";
 import { useAuthRedirect } from "../hooks/useAuthRedirect";
-import { trackAuthRedirect } from "../lib/analytics";
 
 const TOAST_DURATION_MS = 1200;
 
@@ -23,7 +21,7 @@ type AuthCTAProps = {
   variant?: AuthCTAVariant;
   /** Show short message before redirect (no toast lib needed) */
   showToastBeforeRedirect?: boolean;
-  /** Render as link (e.g. TopBar) or button */
+  /** @deprecated Always renders as button now (opens modal). Kept for backward compat. */
   as?: "button" | "link";
   /** Button style: primary (green) or secondary (outline) */
   appearance?: "primary" | "secondary";
@@ -36,25 +34,19 @@ type AuthCTAProps = {
 export default function AuthCTA({
   variant = "sign-in",
   showToastBeforeRedirect = true,
-  as = "button",
   appearance = "primary",
   className,
   children,
   trigger: triggerProp,
 }: AuthCTAProps) {
-  const { authUrl, redirectToAuth } = useAuthRedirect();
+  const { redirectToAuth } = useAuthRedirect();
   const [toast, setToast] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const label = children ?? LABELS[variant];
   const trigger = triggerProp ?? (variant === "unlock" ? "auth_cta_unlock" : "auth_cta_sign_in");
 
-  function handleClick(e: React.MouseEvent) {
-    if (as === "link") {
-      trackAuthRedirect(trigger);
-      return;
-    }
-    e.preventDefault();
+  const handleClick = () => {
     if (timeoutRef.current) return;
     if (showToastBeforeRedirect) {
       setToast(true);
@@ -66,7 +58,7 @@ export default function AuthCTA({
     } else {
       redirectToAuth(trigger);
     }
-  }
+  };
 
   const baseClass =
     "flex items-center justify-center gap-2 text-sm font-medium transition-all rounded-xl";
@@ -75,20 +67,6 @@ export default function AuthCTA({
   const buttonSecondary =
     "h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] text-[#1F2A1F] disabled:opacity-50";
   const buttonClass = appearance === "secondary" ? buttonSecondary : buttonPrimary;
-  const linkClass =
-    "px-5 py-2.5 h-11 bg-[#8F9E4F] text-white hover:brightness-110 active:brightness-90";
-
-  if (as === "link") {
-    return (
-      <Link
-        href={authUrl}
-        onClick={handleClick}
-        className={`${baseClass} ${linkClass} ${className ?? ""}`.trim()}
-      >
-        {label}
-      </Link>
-    );
-  }
 
   return (
     <div className="relative">

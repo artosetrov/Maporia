@@ -79,24 +79,18 @@ export function usePremiumGate() {
 
   /**
    * Open the appropriate modal when user clicks a premium location they can't access.
-   * - guest → Auth Modal (Sign up / Login), optional redirect to place after login
+   * - guest → Premium Purchase Modal (shows value first, auth on checkout click)
    * - logged in + free → Premium Purchase Modal
    * - premium → no-op (caller should not call this when user has access)
    */
   const openPremiumLocation = useCallback(
-    (context: PremiumGateContext = "place", placeTitle?: string, placeId?: string) => {
+    (context: PremiumGateContext = "place", placeTitle?: string, _placeId?: string) => {
       if (loading) return;
-      if (access.role === "guest") {
-        setAuthRedirectPath(placeId ? `/id/${placeId}` : undefined);
-        setAuthModalVariant("default");
-        setAuthModalOpen(true);
-        return;
-      }
       if (!isPremium) {
         openPremiumModal(context, placeTitle);
       }
     },
-    [loading, access.role, isPremium, openPremiumModal]
+    [loading, isPremium, openPremiumModal]
   );
 
   /**
@@ -106,14 +100,8 @@ export function usePremiumGate() {
    * - premium → no-op (caller should navigate to /collections/[id])
    */
   const openPremiumCollection = useCallback(
-    (collectionId: string, collectionTitle?: string) => {
+    (_collectionId: string, collectionTitle?: string) => {
       if (loading) return;
-      if (access.role === "guest") {
-        setAuthRedirectPath(`/collections/${collectionId}`);
-        setAuthModalVariant("default");
-        setAuthModalOpen(true);
-        return;
-      }
       if (!isPremium) {
         setModalContext("collection");
         setModalPlaceTitle(undefined);
@@ -121,7 +109,7 @@ export function usePremiumGate() {
         setModalOpen(true);
       }
     },
-    [loading, access.role, isPremium]
+    [loading, isPremium]
   );
 
   /**

@@ -16,7 +16,7 @@ import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { redirectToAuth } = useAuthRedirect();
+  const { replaceToAuth } = useAuthRedirect();
   const [userId, setUserId] = useState<string | null>(null);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
@@ -47,7 +47,7 @@ export default function SettingsPage() {
     (async () => {
       const { data } = await supabase.auth.getUser();
       if (!data.user) {
-        redirectToAuth();
+        replaceToAuth();
         return;
       }
       setUserId(data.user.id);

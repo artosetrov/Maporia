@@ -71,7 +71,7 @@ ON CONFLICT (category) DO UPDATE SET places_count = places_count + 1;
 
 ```sql
 -- User changes place from city_id = 'abc-123' to 'xyz-456'
--- Categories change from ['🍽 Food & Drinks'] to ['🌅 Scenic & Rooftop Views']
+-- Categories change from ['🍽 Food & Drinks'] to ['🌅 Scenic & Views']
 
 -- Trigger 1: update_city_places_count()
 UPDATE cities SET places_count = GREATEST(0, places_count - 1) WHERE id = 'abc-123';
@@ -81,8 +81,8 @@ UPDATE cities SET places_count = places_count + 1 WHERE id = 'xyz-456';
 -- Removed: '🍽 Food & Drinks'
 UPDATE category_counts SET places_count = GREATEST(0, places_count - 1) WHERE category = '🍽 Food & Drinks';
 
--- Added: '🌅 Scenic & Rooftop Views'
-INSERT INTO category_counts (category, places_count) VALUES ('🌅 Scenic & Rooftop Views', 1)
+-- Added: '🌅 Scenic & Views'
+INSERT INTO category_counts (category, places_count) VALUES ('🌅 Scenic & Views', 1)
 ON CONFLICT (category) DO UPDATE SET places_count = places_count + 1;
 ```
 

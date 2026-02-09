@@ -51,13 +51,13 @@ INSERT INTO category_counts (category, places_count)
 VALUES 
     ('🍽 Food & Drinks', 0),
     ('🍸 Bars & Wine', 0),
-    ('🌅 Scenic & Rooftop Views', 0),
+    ('🌅 Scenic & Views', 0),
     ('🌳 Nature & Walks', 0),
     ('🎭 Culture & History', 0),
     ('🛍 Shops & Markets', 0),
     ('🤫 Hidden & Unique', 0),
     ('✨ Vibe & Atmosphere', 0),
-    ('👻 Crime & Haunted Spots', 0)
+    ('👻 Crime & Haunted', 0)
 ON CONFLICT (category) DO NOTHING;
 
 -- ============================================

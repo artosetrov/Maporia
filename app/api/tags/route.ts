@@ -21,6 +21,10 @@ const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabase
  * GET /api/tags
  * Get all unique tags from tags table (or fallback to places.tags if table doesn't exist)
  * Public read access
+ *
+ * Optional query parameter: categories (comma-separated)
+ *   - If provided, returns only tags that belong to the specified categories
+ *   - Example: /api/tags?categories=🍽+Food+%26+Drinks,🍸+Bars+%26+Wine
  */
 export async function GET(request: NextRequest) {
   try {
@@ -31,14 +35,24 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Parse optional categories filter
+    const { searchParams } = new URL(request.url);
+    const categoriesParam = searchParams.get("categories");
+    const categoriesFilter = categoriesParam
+      ? categoriesParam.split(",").map((c) => c.trim()).filter(Boolean)
+      : [];
+
     // Try to get tags from tags table first
-    const { data: tagsData, error: tagsError } = await supabase
-      .from("tags")
-      .select("name")
-      .order("name", { ascending: true });
+    let query = supabase.from("tags").select("name").order("name", { ascending: true });
+
+    // Apply category filter if provided
+    if (categoriesFilter.length > 0) {
+      query = query.overlaps("category_ids", categoriesFilter);
+    }
+
+    const { data: tagsData, error: tagsError } = await query;
 
     if (!tagsError && tagsData) {
-      // Tags table exists, use it
       const sortedTags = tagsData
         .map((t) => t.name)
         .filter((name): name is string => typeof name === "string" && name.trim().length > 0)
@@ -47,10 +61,16 @@ export async function GET(request: NextRequest) {
     }
 
     // Fallback: extract from places.tags (if tags table doesn't exist)
-    const { data: places, error: placesError } = await supabase
+    let placesQuery = supabase
       .from("places")
-      .select("tags")
+      .select("tags, categories")
       .not("tags", "is", null);
+
+    if (categoriesFilter.length > 0) {
+      placesQuery = placesQuery.overlaps("categories", categoriesFilter);
+    }
+
+    const { data: places, error: placesError } = await placesQuery;
 
     if (placesError) {
       console.error("Error fetching places for tags:", placesError);
@@ -74,7 +94,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Sort tags alphabetically
     const sortedTags = Array.from(allTags).sort((a, b) => a.localeCompare(b));
 
     return NextResponse.json({ tags: sortedTags });

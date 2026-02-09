@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { CATEGORIES, getTagEmoji } from "../constants";
+import { CATEGORIES, getTagEmoji, stripTagEmoji } from "../constants";
 import Icon from "./Icon";
 import { type UserAccess } from "../lib/access";
 
@@ -13,8 +13,6 @@ export type ActiveFilters = {
   sort: string | null;
   tags?: string[];
   premium?: boolean;
-  hidden?: boolean;
-  vibe?: boolean;
   // Для обратной совместимости
   premiumOnly?: boolean;
 };
@@ -41,13 +39,14 @@ type FiltersModalProps = {
   // Optional: get count for each city
   getCityCount?: (city: string) => number | Promise<number>;
   
-  // Optional: get count for each category
-  getCategoryCount?: (category: string) => number | Promise<number>;
+  // Optional: get count for each category. premiumOnly filters to only premium places.
+  getCategoryCount?: (category: string, premiumOnly?: boolean) => number | Promise<number>;
   
-  // Optional: list of available tags (e.g. from places)
-  getAvailableTags?: () => string[] | Promise<string[]>;
+  // Optional: list of available tags filtered by selected categories
+  getAvailableTags?: (categories: string[]) => string[] | Promise<string[]>;
   // Optional: get counts for all tags in one call (batched). Returns map tagName -> count.
-  getTagCounts?: (tags: string[]) => Record<string, number> | Promise<Record<string, number>>;
+  // premiumOnly filters to only premium places.
+  getTagCounts?: (tags: string[], categories?: string[], premiumOnly?: boolean) => Record<string, number> | Promise<Record<string, number>>;
   
   // Optional: user access level - used to determine if Premium filter should be shown
   userAccess?: UserAccess;
@@ -79,8 +78,6 @@ export default function FiltersModal({
     sort: null,
     tags: [],
     premium: false,
-    hidden: false,
-    vibe: false,
     premiumOnly: false, // Для обратной совместимости
   };
   
@@ -132,7 +129,8 @@ export default function FiltersModal({
   }, [isOpen, userAccess]);
 
   
-  // Load category counts
+  // Load category counts (re-triggers when premium toggle changes)
+  const draftPremium = !!draftFilters.premium;
   useEffect(() => {
     if (!isOpen) return;
     
@@ -142,7 +140,7 @@ export default function FiltersModal({
         const counts: Record<string, number> = {};
         for (const category of CATEGORIES) {
           try {
-            const count = await getCategoryCount(category);
+            const count = await getCategoryCount(category, draftPremium);
             counts[category] = count;
           } catch {
             counts[category] = 0;
@@ -152,37 +150,110 @@ export default function FiltersModal({
       };
       loadCategoryCounts();
     }
-  }, [isOpen, getCategoryCount]);
+  }, [isOpen, getCategoryCount, draftPremium]);
 
-  // Load available tags when modal opens
+  // Ref for stable getAvailableTags / getTagCounts to avoid re-triggering on every render
+  const getAvailableTagsRef = useRef(getAvailableTags);
+  useEffect(() => { getAvailableTagsRef.current = getAvailableTags; }, [getAvailableTags]);
+  const getTagCountsRef = useRef(getTagCounts);
+  useEffect(() => { getTagCountsRef.current = getTagCounts; }, [getTagCounts]);
+
+  // Load available tags when categories change (reactive to draftFilters.categories)
+  const draftCategories = draftFilters.categories;
   useEffect(() => {
-    if (!isOpen || !getAvailableTags) return;
+    if (!isOpen) return;
+    const fn = getAvailableTagsRef.current;
+    if (!fn) return;
+
+    // No categories selected → hide tags
+    if (draftCategories.length === 0) {
+      setAvailableTags([]);
+      setTagCounts({});
+      return;
+    }
+
+    let cancelled = false;
     const load = async () => {
       try {
-        const tags = await getAvailableTags();
-        setAvailableTags(Array.isArray(tags) ? tags : []);
+        const tags = await fn(draftCategories);
+        if (cancelled) return;
+        const tagsList = Array.isArray(tags) ? tags : [];
+        setAvailableTags(tagsList);
+
+        // Clean up orphaned selected tags that are no longer available
+        setDraftFilters((prev) => {
+          const currentTags = prev.tags ?? [];
+          if (currentTags.length === 0) return prev;
+          const tagsSet = new Set(tagsList);
+          const filtered = currentTags.filter((t) => tagsSet.has(t));
+          if (filtered.length === currentTags.length) return prev;
+          return { ...prev, tags: filtered };
+        });
       } catch {
-        setAvailableTags([]);
+        if (!cancelled) {
+          setAvailableTags([]);
+        }
       }
     };
     load();
-  }, [isOpen, getAvailableTags]);
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, draftCategories]);
 
-  // Load tag counts in one batch when modal opens and availableTags is set
+  // Load tag counts in one batch when availableTags or premium changes
   useEffect(() => {
-    if (!isOpen || !getTagCounts || availableTags.length === 0) return;
+    if (!isOpen || availableTags.length === 0) return;
+    const fn = getTagCountsRef.current;
+    if (!fn) return;
+
+    let cancelled = false;
     const load = async () => {
       try {
-        const result = getTagCounts(availableTags);
+        const result = fn(availableTags, draftCategories, draftPremium);
         const counts = result instanceof Promise ? await result : result;
-        setTagCounts(typeof counts === "object" && counts !== null ? counts : {});
+        if (!cancelled) {
+          setTagCounts(typeof counts === "object" && counts !== null ? counts : {});
+        }
       } catch {
-        setTagCounts({});
+        if (!cancelled) setTagCounts({});
       }
     };
     load();
-  }, [isOpen, getTagCounts, availableTags.length]);
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, availableTags, draftPremium]);
   
+  // Lock body scroll when modal is open (prevents iOS Safari scroll-through)
+  useEffect(() => {
+    if (!isOpen) return;
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const html = document.documentElement;
+    
+    // Save current styles
+    const originalBodyOverflow = body.style.overflow;
+    const originalBodyPosition = body.style.position;
+    const originalBodyTop = body.style.top;
+    const originalBodyWidth = body.style.width;
+    const originalHtmlOverflow = html.style.overflow;
+    
+    // Lock scroll
+    body.style.overflow = 'hidden';
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.width = '100%';
+    html.style.overflow = 'hidden';
+    
+    return () => {
+      body.style.overflow = originalBodyOverflow;
+      body.style.position = originalBodyPosition;
+      body.style.top = originalBodyTop;
+      body.style.width = originalBodyWidth;
+      html.style.overflow = originalHtmlOverflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [isOpen]);
+
   // Update count when draftFilters change
   useEffect(() => {
     // Всегда вызываем useEffect, но проверяем условия внутри
@@ -252,19 +323,6 @@ export default function FiltersModal({
     }));
   };
 
-  const handleToggleHidden = () => {
-    setDraftFilters((prev) => ({
-      ...prev,
-      hidden: !prev.hidden,
-    }));
-  };
-
-  const handleToggleVibe = () => {
-    setDraftFilters((prev) => ({
-      ...prev,
-      vibe: !prev.vibe,
-    }));
-  };
 
   const handleToggleTag = (tag: string) => {
     setDraftFilters((prev) => {
@@ -288,8 +346,6 @@ export default function FiltersModal({
       sort: null,
       tags: [],
       premium: false,
-      hidden: false,
-      vibe: false,
       premiumOnly: false, // For backward compatibility
     };
     setDraftFilters(clearedFilters);
@@ -300,7 +356,7 @@ export default function FiltersModal({
   
   // Unused - kept for potential future use
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _handleRemoveFilter = (type: "city" | "category" | "premium" | "hidden" | "vibe", value?: string) => {
+  const _handleRemoveFilter = (type: "city" | "category" | "premium", value?: string) => {
     if (type === "category" && value) {
       setDraftFilters((prev) => ({
         ...prev,
@@ -311,16 +367,6 @@ export default function FiltersModal({
         ...prev,
         premium: false,
         premiumOnly: false,
-      }));
-    } else if (type === "hidden") {
-      setDraftFilters((prev) => ({
-        ...prev,
-        hidden: false,
-      }));
-    } else if (type === "vibe") {
-      setDraftFilters((prev) => ({
-        ...prev,
-        vibe: false,
       }));
     }
   };
@@ -355,15 +401,9 @@ export default function FiltersModal({
     JSON.stringify(draftFilters) !== JSON.stringify(safeAppliedFilters);
   
   // Get applied filters for display
-  const appliedFiltersList: Array<{ type: "city" | "category" | "tag" | "premium" | "hidden" | "vibe"; label: string; value?: string }> = [];
+  const appliedFiltersList: Array<{ type: "city" | "category" | "tag" | "premium"; label: string; value?: string }> = [];
   if (draftFilters.premium) {
     appliedFiltersList.push({ type: "premium", label: "Premium" });
-  }
-  if (draftFilters.hidden) {
-    appliedFiltersList.push({ type: "hidden", label: "Hidden" });
-  }
-  if (draftFilters.vibe) {
-    appliedFiltersList.push({ type: "vibe", label: "Vibe" });
   }
   draftFilters.categories.forEach((cat) => {
     appliedFiltersList.push({ type: "category", label: cat, value: cat });
@@ -389,6 +429,8 @@ export default function FiltersModal({
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm lg:bg-black/50"
         onClick={handleClose}
+        onTouchMove={(e) => e.preventDefault()}
+        style={{ touchAction: 'none' }}
       />
 
       {/* Modal - Desktop: centered, Mobile: bottom sheet */}
@@ -420,63 +462,40 @@ export default function FiltersModal({
         </div>
 
         {/* Content (scrollable) */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 min-h-0">
-          {/* Quick Filters Block */}
-          <div>
-            <div className="flex gap-3">
-              {/* Premium Card - Only visible for admin and premium users */}
-              {(userAccess?.hasPremium || userAccess?.isAdmin) && (
-                <button
-                  onClick={() => handleTogglePremium()}
-                  className={`flex-1 flex flex-col items-center justify-center px-4 py-5 rounded-xl border-2 transition-all ${
-                    draftFilters.premium
-                      ? "border-[#8F9E4F] bg-[#F4F6EF]"
-                      : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
+        <div className="flex-1 overflow-y-auto px-6 pt-1.5 pb-6 space-y-6 min-h-0" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
+          {/* Premium Toggle - Only visible for admin and premium users */}
+          {(userAccess?.hasPremium || userAccess?.isAdmin) && (
+            <div>
+              <button
+                onClick={handleTogglePremium}
+                className="w-full flex items-center justify-between px-4 py-4 rounded-xl border-2 border-[#ECEEE4] bg-white transition-all hover:bg-[#FAFAF7]"
+                role="switch"
+                aria-checked={!!draftFilters.premium}
+                aria-label="Only Premium places"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">⭐</span>
+                  <span className="text-sm font-medium text-[#1F2A1F]">Only Premium places</span>
+                </div>
+                <div
+                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                    draftFilters.premium ? "bg-[#8F9E4F]" : "bg-[#D1D5C4]"
                   }`}
                 >
-                  <span className="text-3xl mb-2">⭐</span>
-                  <span className={`text-sm font-medium text-center ${draftFilters.premium ? "text-[#1F2A1F]" : "text-[#1F2A1F]"}`}>
-                    Premium
-                  </span>
-                </button>
-              )}
-
-              {/* Hidden Card */}
-              <button
-                onClick={() => handleToggleHidden()}
-                className={`flex-1 flex flex-col items-center justify-center px-4 py-5 rounded-xl border-2 transition-all ${
-                  draftFilters.hidden
-                    ? "border-[#8F9E4F] bg-[#F4F6EF]"
-                    : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
-                }`}
-              >
-                <span className="text-3xl mb-2">🤫</span>
-                <span className={`text-sm font-medium text-center ${draftFilters.hidden ? "text-[#1F2A1F]" : "text-[#1F2A1F]"}`}>
-                  Hidden
-                </span>
-              </button>
-
-              {/* Vibe Card */}
-              <button
-                onClick={() => handleToggleVibe()}
-                className={`flex-1 flex flex-col items-center justify-center px-4 py-5 rounded-xl border-2 transition-all ${
-                  draftFilters.vibe
-                    ? "border-[#8F9E4F] bg-[#F4F6EF]"
-                    : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
-                }`}
-              >
-                <span className="text-3xl mb-2">✨</span>
-                <span className={`text-sm font-medium text-center ${draftFilters.vibe ? "text-[#1F2A1F]" : "text-[#1F2A1F]"}`}>
-                  Vibe
-                </span>
+                  <div
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                      draftFilters.premium ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </div>
               </button>
             </div>
-          </div>
+          )}
 
           {/* Category Section */}
           <div>
             <h3 className="text-xs font-semibold text-[#6F7A5A] uppercase tracking-wide mb-4">CATEGORY</h3>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-3 gap-3">
               {CATEGORIES.map((category) => {
                 const isSelected = draftFilters.categories.includes(category);
                 const count = categoryCounts[category];
@@ -486,30 +505,30 @@ export default function FiltersModal({
                   <button
                     key={category}
                     onClick={() => handleToggleCategory(category)}
-                    className={`inline-flex items-center gap-2 px-3 py-2 rounded-full border transition-colors whitespace-nowrap ${
+                    className={`relative flex flex-col items-center justify-center px-2 py-4 rounded-xl border-2 transition-all ${
                       isSelected
-                        ? "border-[#8F9E4F] bg-[#F4F6EF] text-[#1F2A1F]"
-                        : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
+                        ? "border-[#8F9E4F] bg-[#F4F6EF]"
+                        : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
                     }`}
                   >
-                    <span className="text-base">{emoji}</span>
-                    <span className="text-sm font-medium">{label}</span>
                     {count !== undefined && (
-                      <span className={`text-xs ${isSelected ? "text-[#6F7A5A]" : "text-[#A8B096]"}`}>
-                        ({count})
+                      <span className={`absolute top-1.5 right-2 text-xs font-medium ${isSelected ? "text-[#6F7A5A]" : "text-[#A8B096]"}`}>
+                        {count}
                       </span>
                     )}
+                    <span className="text-2xl mb-1.5">{emoji}</span>
+                    <span className="text-sm font-medium text-[#1F2A1F] text-center leading-tight">{label}</span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Tags Section */}
-          {getAvailableTags && availableTags.length > 0 && (
+          {/* Tags Section — visible only when categories are selected */}
+          {draftFilters.categories.length > 0 && availableTags.length > 0 && (
             <div>
               <h3 className="text-xs font-semibold text-[#6F7A5A] uppercase tracking-wide mb-4">TAGS</h3>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 {availableTags.map((tag) => {
                   const isSelected = (draftFilters.tags ?? []).includes(tag);
                   const count = tagCounts[tag];
@@ -517,19 +536,19 @@ export default function FiltersModal({
                     <button
                       key={tag}
                       onClick={() => handleToggleTag(tag)}
-                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-full border transition-colors whitespace-nowrap ${
+                      className={`relative flex flex-col items-center justify-center px-1 py-3 rounded-xl border-2 transition-all ${
                         isSelected
-                          ? "border-[#8F9E4F] bg-[#F4F6EF] text-[#1F2A1F]"
-                          : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
+                          ? "border-[#8F9E4F] bg-[#F4F6EF]"
+                          : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
                       }`}
                     >
-                      <span className="text-base leading-none">{getTagEmoji(tag)}</span>
-                      <span className="text-sm sm:text-base font-medium">{tag}</span>
                       {count !== undefined && (
-                        <span className={`text-xs ${isSelected ? "text-[#6F7A5A]" : "text-[#A8B096]"}`}>
-                          ({count})
+                        <span className={`absolute top-1 right-1.5 text-xs font-medium ${isSelected ? "text-[#6F7A5A]" : "text-[#A8B096]"}`}>
+                          {count}
                         </span>
                       )}
+                      <span className="text-lg mb-1">{getTagEmoji(tag)}</span>
+                      <span className="text-sm font-medium text-[#1F2A1F] text-center leading-tight line-clamp-2">{stripTagEmoji(tag)}</span>
                     </button>
                   );
                 })}

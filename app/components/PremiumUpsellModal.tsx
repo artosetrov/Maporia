@@ -10,6 +10,7 @@ import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
 import { isPlacePremium } from "../lib/access";
 import { startPremiumCheckout } from "../lib/premium";
+import { usePremiumModalContext } from "../contexts/PremiumModalContext";
 
 type PlaceCoverRow = Pick<Database["public"]["Tables"]["places"]["Row"], "id" | "cover_url" | "access_level" | "visibility">;
 
@@ -57,8 +58,18 @@ export default function PremiumUpsellModal({
   const [dynamicHeight, setDynamicHeight] = useState<string>("100dvh");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const { openAuthModal } = usePremiumModalContext();
 
   const handleCheckout = useCallback(async () => {
+    // Check if user is logged in first
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) {
+      // Not logged in — close premium modal, open auth modal
+      onClose();
+      openAuthModal("/profile", "default");
+      return;
+    }
+
     setCheckoutLoading(true);
     setCheckoutError(null);
     try {
@@ -69,7 +80,7 @@ export default function PremiumUpsellModal({
       setCheckoutError(message);
       setCheckoutLoading(false);
     }
-  }, []);
+  }, [onClose, openAuthModal]);
   
   // Handle dynamic viewport height for mobile Chrome and safe areas
   useEffect(() => {

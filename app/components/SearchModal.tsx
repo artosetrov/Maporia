@@ -857,21 +857,19 @@ export default function SearchModal({
                       <div className="flex items-center gap-4 flex-1 min-w-0">
                         <span className="text-2xl flex-shrink-0">{emoji}</span>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <div className="text-base font-medium text-[#1F2A1F]">
-                              {label}
-                            </div>
-                            {tempSelectedCity && tagCounts[category] !== undefined && (
-                              <span className="text-sm text-[#6F7A5A]">
-                                ({tagCounts[category]})
-                              </span>
-                            )}
+                          <div className="text-base font-medium text-[#1F2A1F]">
+                            {label}
                           </div>
                         </div>
                       </div>
                       
-                      {/* Right: Selection Indicator */}
-                      <div className="flex-shrink-0 ml-4">
+                      {/* Right: Count + Selection Indicator */}
+                      <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                        {tempSelectedCity && tagCounts[category] !== undefined && (
+                          <span className="text-base text-[#6F7A5A]">
+                            {tagCounts[category]}
+                          </span>
+                        )}
                         {isSelected ? (
                           <div className="w-6 h-6 rounded-full bg-[#8F9E4F] flex items-center justify-center">
                             <Icon name="check" size={14} className="text-white" />
@@ -931,7 +929,11 @@ export default function SearchModal({
             ) : (
               <>
                 <Icon name="search" size={20} className="text-white flex-shrink-0" />
-                <span>Search</span>
+                <span>
+                  {placesCount !== null
+                    ? `Show ${placesCount} ${placesCount === 1 ? 'place' : 'places'}`
+                    : 'Show places'}
+                </span>
               </>
             )}
           </button>

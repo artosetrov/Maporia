@@ -10,8 +10,7 @@ import { useUserAccessContext } from "../../../../../contexts/UserAccessContext"
 import { isUserAdmin } from "../../../../../lib/access";
 
 type PlaceCategoriesRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "categories" | "tags">;
-import { CATEGORIES, getTagEmoji } from "../../../../../constants";
-import Pill from "../../../../../components/Pill";
+import { CATEGORIES, getTagEmoji, stripTagEmoji } from "../../../../../constants";
 import Icon from "../../../../../components/Icon";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
@@ -316,17 +315,19 @@ export default function CategoriesEditorPage(props: PageProps) {
 
         <div className="space-y-6">
           <div>
-            <h2 className="text-sm font-semibold text-[#1F2A1F] mb-3">Main category</h2>
+            <h2 className="text-xs font-semibold text-[#6F7A5A] uppercase tracking-wide mb-4">Category</h2>
             <p className="text-xs text-[#6F7A5A] mb-4">
               Select at least one category that best describes your place.
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-3 gap-3">
               {CATEGORIES.map((cat) => {
                 const isSelected = categories.includes(cat);
+                const emojiMatch = cat.match(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u);
+                const emoji = emojiMatch ? emojiMatch[0] : "📍";
+                const label = cat.replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]+\s*/u, "").trim();
                 return (
-                  <Pill
+                  <button
                     key={cat}
-                    active={isSelected}
                     onClick={() => {
                       if (isSelected) {
                         setCategories((prev) => prev.filter((c) => c !== cat));
@@ -334,9 +335,16 @@ export default function CategoriesEditorPage(props: PageProps) {
                         setCategories((prev) => [...prev, cat]);
                       }
                     }}
+                    className={cx(
+                      "relative flex flex-col items-center justify-center px-2 py-4 rounded-xl border-2 transition-all",
+                      isSelected
+                        ? "border-[#8F9E4F] bg-[#F4F6EF]"
+                        : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
+                    )}
                   >
-                    {cat}
-                  </Pill>
+                    <span className="text-2xl mb-1.5">{emoji}</span>
+                    <span className="text-sm font-medium text-[#1F2A1F] text-center leading-tight">{label}</span>
+                  </button>
                 );
               })}
             </div>
@@ -347,7 +355,7 @@ export default function CategoriesEditorPage(props: PageProps) {
 
           {/* Tags Section */}
           <div>
-            <h2 className="text-sm font-semibold text-[#1F2A1F] mb-3">Tags</h2>
+            <h2 className="text-xs font-semibold text-[#6F7A5A] uppercase tracking-wide mb-4">Tags</h2>
             <p className="text-xs text-[#6F7A5A] mb-4">
               Add tags to help others discover this place. Tags are optional.
             </p>
@@ -400,59 +408,56 @@ export default function CategoriesEditorPage(props: PageProps) {
                 ) : (
                   <button
                     onClick={() => setAddingTag(true)}
-                    className="mb-4 px-4 py-2 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] text-[#1F2A1F] text-sm font-medium hover:bg-white transition flex items-center gap-2"
+                    className="mb-4 px-4 py-2 rounded-xl border border-dashed border-[#ECEEE4] bg-[#FAFAF7] text-[#1F2A1F] text-sm font-medium hover:bg-white hover:border-[#8F9E4F] transition flex items-center gap-2"
                   >
                     <Icon name="add" size={16} />
                     Add new tag
                   </button>
                 )}
 
-                {/* Selected tags */}
-                {tags.length > 0 && (
-                  <div className="mb-4">
-                    <p className="text-sm text-[#6F7A5A] mb-2">Selected tags:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {tags.map((tag) => (
-                        <Pill
+                {/* All tags as a grid (selected + available combined) */}
+                {availableTags.length > 0 && (
+                  <div className="grid grid-cols-4 gap-2">
+                    {availableTags.map((tag) => {
+                      const isSelected = tags.includes(tag);
+                      return (
+                        <button
                           key={tag}
-                          active={true}
                           onClick={() => {
-                            setTags((prev) => prev.filter((t) => t !== tag));
+                            if (isSelected) {
+                              setTags((prev) => prev.filter((t) => t !== tag));
+                            } else {
+                              setTags((prev) => [...prev, tag]);
+                            }
                           }}
+                          className={cx(
+                            "relative flex flex-col items-center justify-center px-1 py-3 rounded-xl border-2 transition-all",
+                            isSelected
+                              ? "border-[#8F9E4F] bg-[#F4F6EF]"
+                              : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
+                          )}
                         >
-                          <span className="leading-none">{getTagEmoji(tag)}</span>
-                          <span className="ml-1">{tag}</span>
-                        </Pill>
-                      ))}
-                    </div>
+                          <span className="text-lg mb-1">{getTagEmoji(tag)}</span>
+                          <span className="text-sm font-medium text-[#1F2A1F] text-center leading-tight line-clamp-2">{stripTagEmoji(tag)}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
-                {/* Available tags */}
-                {availableTags.length > 0 && (
-                  <div>
-                    <p className="text-sm text-[#6F7A5A] mb-2">Available tags:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {availableTags.map((tag) => {
-                        const isSelected = tags.includes(tag);
-                        return (
-                          <Pill
-                            key={tag}
-                            active={isSelected}
-                            onClick={() => {
-                              if (isSelected) {
-                                setTags((prev) => prev.filter((t) => t !== tag));
-                              } else {
-                                setTags((prev) => [...prev, tag]);
-                              }
-                            }}
-                          >
-                            <span className="leading-none">{getTagEmoji(tag)}</span>
-                            <span className="ml-1">{tag}</span>
-                          </Pill>
-                        );
-                      })}
-                    </div>
+                {/* Tags selected but not in availableTags (custom tags) */}
+                {tags.filter((t) => !availableTags.includes(t)).length > 0 && (
+                  <div className="mt-3 grid grid-cols-4 gap-2">
+                    {tags.filter((t) => !availableTags.includes(t)).map((tag) => (
+                      <button
+                        key={tag}
+                        onClick={() => setTags((prev) => prev.filter((t) => t !== tag))}
+                        className="relative flex flex-col items-center justify-center px-1 py-3 rounded-xl border-2 transition-all border-[#8F9E4F] bg-[#F4F6EF]"
+                      >
+                        <span className="text-lg mb-1">{getTagEmoji(tag)}</span>
+                        <span className="text-sm font-medium text-[#1F2A1F] text-center leading-tight line-clamp-2">{stripTagEmoji(tag)}</span>
+                      </button>
+                    ))}
                   </div>
                 )}
 

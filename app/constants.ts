@@ -1,13 +1,13 @@
 export const CATEGORIES = [
     "🍽 Food & Drinks",
     "🍸 Bars & Wine",
-    "🌅 Scenic & Rooftop Views",
+    "🌅 Scenic & Views",
     "🌳 Nature & Walks",
     "🎭 Culture & History",
     "🛍 Shops & Markets",
     "🤫 Hidden & Unique",
     "✨ Vibe & Atmosphere",
-    "👻 Crime & Haunted Spots",
+    "👻 Crime & Haunted",
   ] as const;
   
   export type Category = (typeof CATEGORIES)[number];
@@ -140,10 +140,22 @@ export const CATEGORIES = [
 
   export const DEFAULT_TAG_EMOJI = "🏷️";
 
-  /** Returns emoji for tag: customEmoji if provided and non-empty, else from TAG_EMOJI_MAP or default. */
+  /** Strips leading emoji(s) from a tag name. E.g. "🍣 Sushi" → "Sushi", "Park" → "Park" */
+  export function stripTagEmoji(tag: string): string {
+    if (!tag) return tag;
+    return tag.replace(/^[\p{Extended_Pictographic}\uFE0F\u200D]+\s*/u, "").trim();
+  }
+
+  /** Returns emoji for tag: customEmoji if provided and non-empty, else extracted from tag name, from TAG_EMOJI_MAP, or default. */
   export function getTagEmoji(tag: string, customEmoji?: string | null): string {
     if (typeof customEmoji === "string" && customEmoji.trim()) return customEmoji.trim();
     if (!tag || typeof tag !== "string") return DEFAULT_TAG_EMOJI;
+
+    // If tag starts with an emoji, use it directly
+    const emojiMatch = tag.match(/^[\p{Extended_Pictographic}\uFE0F\u200D]+/u);
+    if (emojiMatch) return emojiMatch[0];
+
+    // Otherwise look up the plain name in the emoji map
     const key = tag.trim().toLowerCase();
     return TAG_EMOJI_MAP[key] ?? DEFAULT_TAG_EMOJI;
   }

@@ -186,9 +186,9 @@ export interface Database {
         Update: { id?: string; name?: string | null }
       }
       tags: {
-        Row: { id: string; name?: string | null }
-        Insert: { id?: string; name?: string | null }
-        Update: { id?: string; name?: string | null }
+        Row: { id: string; name: string | null; emoji: string | null; category_ids: string[] | null }
+        Insert: { id?: string; name?: string | null; emoji?: string | null; category_ids?: string[] | null }
+        Update: { id?: string; name?: string | null; emoji?: string | null; category_ids?: string[] | null }
       }
       collections: {
         Row: {

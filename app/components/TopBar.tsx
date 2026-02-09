@@ -94,6 +94,7 @@ export default function TopBar({
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
+  const mobileAvatarRef = useRef<HTMLButtonElement>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
@@ -129,8 +130,10 @@ export default function TopBar({
   // Close menu when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node) && 
-          hamburgerRef.current && !hamburgerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (menuRef.current && !menuRef.current.contains(target) && 
+          hamburgerRef.current && !hamburgerRef.current.contains(target) &&
+          mobileAvatarRef.current && !mobileAvatarRef.current.contains(target)) {
         setMenuOpen(false);
         setMenuPosition(null);
       }
@@ -142,11 +145,11 @@ export default function TopBar({
     }
   }, [menuOpen]);
 
-  const { redirectToAuth } = useAuthRedirect();
+  const { redirectToAuth, replaceToAuth } = useAuthRedirect();
 
   async function handleLogout() {
     await supabase.auth.signOut();
-    redirectToAuth("topbar_logout");
+    replaceToAuth("topbar_logout");
   }
 
   const isActive = (href: string) => {
@@ -286,8 +289,8 @@ export default function TopBar({
                         <Icon name="add" size={20} className="text-[#1F2A1F]" />
                       </Link>
                     )}
-                    {/* Filter button (not profile, not place page) */}
-                    {pathname !== "/profile" && !pathname.startsWith("/id/") && (
+                    {/* Filter button (not profile, not place page, not when SearchBar pill already has filters) */}
+                    {!showSearchBar && pathname !== "/profile" && !pathname.startsWith("/id/") && (
                       <button
                         onClick={onFiltersClick}
                         className="w-10 h-10 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] transition-colors flex items-center justify-center flex-shrink-0 relative"
@@ -301,12 +304,24 @@ export default function TopBar({
                         )}
                       </button>
                     )}
-                    {/* Profile avatar - home & map pages, mobile */}
+                    {/* Profile avatar / menu button - home & map pages, mobile */}
                     {(pathname === "/" || pathname === "/map") && (
-                      <Link
-                        href="/profile"
+                      <button
+                        ref={mobileAvatarRef}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isAuthenticated) {
+                            redirectToAuth("topbar_mobile_login");
+                            return;
+                          }
+                          if (mobileAvatarRef.current) {
+                            const rect = mobileAvatarRef.current.getBoundingClientRect();
+                            setMenuPosition({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+                          }
+                          setMenuOpen(!menuOpen);
+                        }}
                         className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0"
-                        aria-label="Profile"
+                        aria-label={isAuthenticated ? "Menu" : "Sign in"}
                         tabIndex={0}
                       >
                         {userAvatar ? (
@@ -323,7 +338,7 @@ export default function TopBar({
                               : initialsFromEmail(userEmail)}
                           </div>
                         )}
-                      </Link>
+                      </button>
                     )}
                     
                     {/* View Toggle - только для страницы Map (скрыт на мобильной версии) */}
@@ -389,19 +404,15 @@ export default function TopBar({
 
               {/* Right: Auth area */}
               <div className="flex-shrink-0 flex items-center gap-4 ml-auto">
-                {/* Get Started — для неавторизованных. Desktop: модалка входа как при клике на премиум-карточку */}
+                {/* Get Started — для неавторизованных. Переход на страницу логина */}
                 {!isAuthenticated && (
-                  isDesktop ? (
-                    <button
-                      type="button"
-                      onClick={() => openPremiumLocation("place")}
-                      className="flex items-center justify-center gap-2 text-sm font-medium transition-all rounded-xl px-5 py-2.5 h-11 bg-[#8F9E4F] text-white hover:brightness-110 active:brightness-90"
-                    >
-                      Get Started
-                    </button>
-                  ) : (
-                    <AuthCTA variant="sign-in" as="link" trigger="topbar_login">Get Started</AuthCTA>
-                  )
+                  <button
+                    type="button"
+                    onClick={() => redirectToAuth("topbar_login")}
+                    className="flex items-center justify-center gap-2 text-sm font-medium transition-all rounded-xl px-5 py-2.5 h-11 bg-[#8F9E4F] text-white hover:brightness-110 active:brightness-90"
+                  >
+                    Get Started
+                  </button>
                 )}
                 {/* Authenticated: Switch to hosting + Avatar + Hamburger menu */}
                 {isAuthenticated && (userAvatar || userDisplayName || userEmail) && (
@@ -446,127 +457,6 @@ export default function TopBar({
                         </svg>
                       </button>
 
-                      {/* Dropdown Menu */}
-                      {menuOpen && menuPosition && (
-                        <div className="fixed inset-0 z-50">
-                          <button
-                            className="absolute inset-0 bg-black/20 backdrop-blur-sm"
-                            onClick={() => {
-                              setMenuOpen(false);
-                              setMenuPosition(null);
-                            }}
-                            aria-label="Close menu"
-                          />
-                          <div
-                            ref={menuRef}
-                            className="absolute bg-white rounded-2xl border border-[#ECEEE4] overflow-hidden p-3"
-                            style={{
-                              top: `${menuPosition.top}px`,
-                              right: `${menuPosition.right}px`,
-                              boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
-                              minWidth: '280px',
-                            }}
-                          >
-                            <div className="grid grid-cols-2 gap-2">
-                              {/* Add Gem - only for Premium and Admin, first and highlighted */}
-                              {canAddPlace && (
-                                <Link
-                                  href={`/add?returnTo=${encodeURIComponent(pathname)}`}
-                                  onClick={() => {
-                                    setMenuOpen(false);
-                                    setMenuPosition(null);
-                                  }}
-                                  className="flex flex-col items-center justify-center p-4 rounded-xl bg-[#8F9E4F] hover:bg-[#7A8A42] transition-colors group"
-                                >
-                                  <div className="w-12 h-12 rounded-full bg-white/20 group-hover:bg-white/30 flex items-center justify-center mb-2 transition-colors">
-                                    <Icon name="add" size={24} className="text-white" />
-                                  </div>
-                                  <span className="text-xs font-medium text-white text-center">Add Gem</span>
-                                </Link>
-                              )}
-                              <Link
-                                href="/profile?section=trips"
-                                onClick={() => {
-                                  setMenuOpen(false);
-                                  setMenuPosition(null);
-                                }}
-                                className="flex flex-col items-center justify-center p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
-                              >
-                                <div className="w-12 h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
-                                  <Icon name="favorite" size={24} className="text-[#1F2A1F]" />
-                                </div>
-                                <span className="text-xs font-medium text-[#1F2A1F] text-center">My favorites</span>
-                              </Link>
-                              <Link
-                                href="/collections"
-                                onClick={() => {
-                                  setMenuOpen(false);
-                                  setMenuPosition(null);
-                                }}
-                                className="flex flex-col items-center justify-center p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
-                              >
-                                <div className="w-12 h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
-                                  <Icon name="grid" size={24} className="text-[#1F2A1F]" />
-                                </div>
-                                <span className="text-xs font-medium text-[#1F2A1F] text-center">Collections</span>
-                              </Link>
-                              <Link
-                                href="/profile?section=added"
-                                onClick={() => {
-                                  setMenuOpen(false);
-                                  setMenuPosition(null);
-                                }}
-                                className="flex flex-col items-center justify-center p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
-                              >
-                                <div className="w-12 h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
-                                  <Icon name="location" size={24} className="text-[#1F2A1F]" />
-                                </div>
-                                <span className="text-xs font-medium text-[#1F2A1F] text-center">Added places</span>
-                              </Link>
-                              <Link
-                                href="/profile?section=history"
-                                onClick={() => {
-                                  setMenuOpen(false);
-                                  setMenuPosition(null);
-                                }}
-                                className="flex flex-col items-center justify-center p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
-                              >
-                                <div className="w-12 h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
-                                  <Icon name="clock" size={24} className="text-[#1F2A1F]" />
-                                </div>
-                                <span className="text-xs font-medium text-[#1F2A1F] text-center">History</span>
-                              </Link>
-                              <Link
-                                href="/profile?section=activity"
-                                onClick={() => {
-                                  setMenuOpen(false);
-                                  setMenuPosition(null);
-                                }}
-                                className="flex flex-col items-center justify-center p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
-                              >
-                                <div className="w-12 h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
-                                  <Icon name="star" size={24} className="text-[#1F2A1F]" />
-                                </div>
-                                <span className="text-xs font-medium text-[#1F2A1F] text-center">Activity</span>
-                              </Link>
-                              <button
-                                onClick={async () => {
-                                  await handleLogout();
-                                  setMenuOpen(false);
-                                  setMenuPosition(null);
-                                  router.push("/");
-                                }}
-                                className="flex flex-col items-center justify-center p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
-                              >
-                                <div className="w-12 h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
-                                  <Icon name="logout" size={24} className="text-[#1F2A1F]" />
-                                </div>
-                                <span className="text-xs font-medium text-[#1F2A1F] text-center">Log out</span>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </>
                 )}
@@ -574,6 +464,153 @@ export default function TopBar({
             </div>
           </div>
         </div>
+
+        {/* Dropdown Menu — shared between mobile avatar and desktop hamburger */}
+        {menuOpen && menuPosition && (
+          <div className="fixed inset-0 z-[70]">
+            <button
+              className="absolute inset-0 bg-black/20 backdrop-blur-sm"
+              onClick={() => {
+                setMenuOpen(false);
+                setMenuPosition(null);
+              }}
+              aria-label="Close menu"
+            />
+            <div
+              ref={menuRef}
+              className="absolute bg-white rounded-2xl border border-[#ECEEE4] overflow-hidden p-3 lg:p-3 left-4 right-4 lg:left-auto lg:right-auto"
+              style={{
+                top: `${menuPosition.top}px`,
+                ...( typeof window !== 'undefined' && window.innerWidth >= 1024 ? { right: `${menuPosition.right}px`, minWidth: '280px' } : {}),
+                boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+              }}
+            >
+              <div className="grid grid-cols-2 gap-3 lg:gap-2">
+                {/* Add Gem - only for Premium and Admin, first and highlighted */}
+                {canAddPlace && (
+                  <Link
+                    href={`/add?returnTo=${encodeURIComponent(pathname)}`}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setMenuPosition(null);
+                    }}
+                    className="flex flex-col items-center justify-center p-5 lg:p-4 rounded-xl bg-[#8F9E4F] hover:bg-[#7A8A42] transition-colors group"
+                  >
+                    <div className="w-14 h-14 lg:w-12 lg:h-12 rounded-full bg-white/20 group-hover:bg-white/30 flex items-center justify-center mb-2 transition-colors">
+                      <Icon name="add" size={24} className="text-white" />
+                    </div>
+                    <span className="text-sm lg:text-xs font-medium text-white text-center">Add Gem</span>
+                  </Link>
+                )}
+                <Link
+                  href="/profile"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setMenuPosition(null);
+                  }}
+                  className="flex flex-col items-center justify-center p-5 lg:p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
+                >
+                  <div className="w-14 h-14 lg:w-12 lg:h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors overflow-hidden">
+                    {userAvatar ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={userAvatar}
+                        alt={userDisplayName || "Profile"}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : userDisplayName || userEmail ? (
+                      <span className="text-sm font-semibold text-[#6F7A5A]">
+                        {userDisplayName ? initialsFromName(userDisplayName) : initialsFromEmail(userEmail)}
+                      </span>
+                    ) : (
+                      <Icon name="profile" size={24} className="text-[#1F2A1F]" />
+                    )}
+                  </div>
+                  <span className="text-sm lg:text-xs font-medium text-[#1F2A1F] text-center">Profile</span>
+                </Link>
+                <Link
+                  href="/profile?section=trips"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setMenuPosition(null);
+                  }}
+                  className="flex flex-col items-center justify-center p-5 lg:p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
+                >
+                  <div className="w-14 h-14 lg:w-12 lg:h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
+                    <Icon name="favorite" size={24} className="text-[#1F2A1F]" />
+                  </div>
+                  <span className="text-sm lg:text-xs font-medium text-[#1F2A1F] text-center">My favorites</span>
+                </Link>
+                <Link
+                  href="/collections"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setMenuPosition(null);
+                  }}
+                  className="flex flex-col items-center justify-center p-5 lg:p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
+                >
+                  <div className="w-14 h-14 lg:w-12 lg:h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
+                    <Icon name="grid" size={24} className="text-[#1F2A1F]" />
+                  </div>
+                  <span className="text-sm lg:text-xs font-medium text-[#1F2A1F] text-center">Collections</span>
+                </Link>
+                <Link
+                  href="/profile?section=added"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setMenuPosition(null);
+                  }}
+                  className="flex flex-col items-center justify-center p-5 lg:p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
+                >
+                  <div className="w-14 h-14 lg:w-12 lg:h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
+                    <Icon name="location" size={24} className="text-[#1F2A1F]" />
+                  </div>
+                  <span className="text-sm lg:text-xs font-medium text-[#1F2A1F] text-center">Added places</span>
+                </Link>
+                <Link
+                  href="/profile?section=history"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setMenuPosition(null);
+                  }}
+                  className="flex flex-col items-center justify-center p-5 lg:p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
+                >
+                  <div className="w-14 h-14 lg:w-12 lg:h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
+                    <Icon name="clock" size={24} className="text-[#1F2A1F]" />
+                  </div>
+                  <span className="text-sm lg:text-xs font-medium text-[#1F2A1F] text-center">History</span>
+                </Link>
+                <Link
+                  href="/profile?section=activity"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setMenuPosition(null);
+                  }}
+                  className="flex flex-col items-center justify-center p-5 lg:p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
+                >
+                  <div className="w-14 h-14 lg:w-12 lg:h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
+                    <Icon name="star" size={24} className="text-[#1F2A1F]" />
+                  </div>
+                  <span className="text-sm lg:text-xs font-medium text-[#1F2A1F] text-center">Activity</span>
+                </Link>
+                <button
+                  onClick={async () => {
+                    await handleLogout();
+                    setMenuOpen(false);
+                    setMenuPosition(null);
+                    router.push("/");
+                  }}
+                  className="flex flex-col items-center justify-center p-5 lg:p-4 rounded-xl hover:bg-[#FAFAF7] transition-colors group"
+                >
+                  <div className="w-14 h-14 lg:w-12 lg:h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
+                    <Icon name="logout" size={24} className="text-[#1F2A1F]" />
+                  </div>
+                  <span className="text-sm lg:text-xs font-medium text-[#1F2A1F] text-center">Log out</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <AuthModal

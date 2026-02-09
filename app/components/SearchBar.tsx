@@ -61,28 +61,42 @@ export default function SearchBar({
   const displayCity = selectedCity || DEFAULT_CITY;
   const isAnywhere = !selectedCity; // Только когда selectedCity === null
 
-  // Mobile: clickable trigger that opens SearchModal
-  // The actual input is inside the modal, not in the topbar
+  // Mobile: pill-style bar matching desktop layout ("Where?" | "Filters")
   if (isMobile) {
-    const displayText = searchValue || (selectedCity ? `${selectedCity} · Search by vibe, mood, or place` : "Search by vibe, mood, or place");
-    
     return (
-      <button
-        onClick={() => {
-          // On mobile, clicking search bar opens SearchModal
-          if (onSearchBarClick) {
-            onSearchBarClick();
-          }
-        }}
-        className="w-full h-11 rounded-full border border-[#E5E8DB] bg-white hover:border-[#8F9E4F] transition-colors flex items-center gap-3 px-4 text-left"
-      >
-        <svg className="w-5 h-5 text-[#A8B096] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <span className="flex-1 text-sm text-[#A8B096] truncate">
-          {displayText}
-        </span>
-      </button>
+      <div className="flex items-center gap-0 bg-white rounded-full border border-[#E5E8DB] hover:border-[#8F9E4F] transition-colors w-full">
+        {/* City Selector / Where? */}
+        <button
+          onClick={() => {
+            if (onSearchBarClick) {
+              onSearchBarClick();
+            }
+          }}
+          className="h-11 px-4 rounded-l-full hover:bg-[#FAFAF7] transition-colors flex items-center justify-center border-r border-[#E5E8DB] flex-1 min-w-0"
+          aria-label="Search location"
+          tabIndex={0}
+        >
+          <span className="text-sm font-medium text-[#1F2A1F] truncate">
+            {isAnywhere ? "Where?" : displayCity}
+          </span>
+        </button>
+
+        {/* Filters Button */}
+        <button
+          onClick={onFiltersClick}
+          className="h-11 px-4 rounded-r-full hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 border-l border-[#E5E8DB] flex-shrink-0 relative"
+          aria-label="Filters"
+          tabIndex={0}
+        >
+          <Icon name="filter" size={18} className="text-[#1F2A1F]" />
+          <span className="text-sm font-medium text-[#1F2A1F]">Filters</span>
+          {activeFiltersCount > 0 && (
+            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-[#8F9E4F] text-white text-[10px] font-medium flex items-center justify-center">
+              {activeFiltersCount > 9 ? "9+" : activeFiltersCount}
+            </span>
+          )}
+        </button>
+      </div>
     );
   }
 

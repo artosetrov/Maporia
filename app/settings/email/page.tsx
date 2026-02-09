@@ -30,7 +30,7 @@ function normalizeEmailError(msg: string): string {
 
 function SettingsEmailContent() {
   const searchParams = useSearchParams();
-  const { redirectToAuth } = useAuthRedirect();
+  const { replaceToAuth } = useAuthRedirect();
 
   const [step, setStep] = useState<Step>("form");
   const [currentEmail, setCurrentEmail] = useState<string | null>(null);
@@ -66,7 +66,7 @@ function SettingsEmailContent() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        redirectToAuth();
+        replaceToAuth();
         return;
       }
       if (mounted) {
@@ -76,7 +76,7 @@ function SettingsEmailContent() {
     return () => {
       mounted = false;
     };
-  }, [redirectToAuth, callbackHandled]);
+  }, [replaceToAuth, callbackHandled]);
 
   // Handle email-change callback: PKCE code, hash fragment, or token_hash in query
   const handleCallback = useCallback(async () => {

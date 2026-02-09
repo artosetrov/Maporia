@@ -16,7 +16,7 @@ type PlaceIdResult = { data: Pick<PlacesRow, "id"> | null; error: PostgrestError
 export default function AddPlacePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { redirectToAuth } = useAuthRedirect();
+  const { replaceToAuth } = useAuthRedirect();
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +27,7 @@ export default function AddPlacePage() {
     (async () => {
       // Check authentication
       if (!user) {
-        redirectToAuth();
+        replaceToAuth();
         return;
       }
 

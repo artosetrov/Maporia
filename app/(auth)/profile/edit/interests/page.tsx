@@ -10,7 +10,7 @@ import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
 
 type ProfileInterestsRow = Pick<Database["public"]["Tables"]["profiles"]["Row"], "favorite_categories" | "favorite_tags">;
 import Icon from "../../../../components/Icon";
-import { CATEGORIES, getTagEmoji } from "../../../../constants";
+import { CATEGORIES, getTagEmoji, stripTagEmoji } from "../../../../constants";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 function cx(...a: Array<string | false | undefined | null>) {
@@ -261,7 +261,7 @@ export default function InterestsEditorPage() {
                       )}
                     >
                       <span className="leading-none">{getTagEmoji(tag)}</span>
-                      <span className="ml-1">{tag}</span>
+                      <span className="ml-1">{stripTagEmoji(tag)}</span>
                     </button>
                   );
                 })}

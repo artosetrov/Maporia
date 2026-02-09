@@ -12,7 +12,7 @@ import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 export default function GoogleImportPage() {
   const router = useRouter();
-  const { redirectToAuth } = useAuthRedirect();
+  const { replaceToAuth } = useAuthRedirect();
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const [error, setError] = useState<string | null>(null);
 
@@ -22,7 +22,7 @@ export default function GoogleImportPage() {
     (async () => {
       // Check authentication
       if (!user) {
-        redirectToAuth();
+        replaceToAuth();
         return;
       }
 

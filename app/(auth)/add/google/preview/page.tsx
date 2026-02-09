@@ -23,7 +23,7 @@ function cx(...a: Array<string | false | undefined | null>) {
 
 export default function GoogleImportPreviewPage() {
   const router = useRouter();
-  const { redirectToAuth } = useAuthRedirect();
+  const { replaceToAuth } = useAuthRedirect();
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const [stored, setStored] = useState<GoogleImportPreviewStored | null>(null);
   const [importing, setImporting] = useState(false);
@@ -295,7 +295,7 @@ export default function GoogleImportPreviewPage() {
   useEffect(() => {
     if (accessLoading) return;
     if (!user) {
-      redirectToAuth();
+      replaceToAuth();
       return;
     }
     if (!canUserAddPlace(access)) {
@@ -303,7 +303,7 @@ export default function GoogleImportPreviewPage() {
         "Only Premium users can create places. Please upgrade to Premium to add new places."
       );
     }
-  }, [user, access, accessLoading, redirectToAuth]);
+  }, [user, access, accessLoading, replaceToAuth]);
 
   useEffect(() => {
     if (selectedPhotos.length === 0) {

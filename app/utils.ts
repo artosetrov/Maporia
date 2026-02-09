@@ -106,19 +106,6 @@ export const normalizeCity = (city: string | null | undefined): string => {
   return city.trim().toLowerCase();
 };
 
-/**
- * Checks if a place is "Hidden" (has the "Hidden & Unique" category)
- */
-export const isPlaceHidden = (place: { categories?: string[] | null }): boolean => {
-  return !!(place.categories && place.categories.includes("🤫 Hidden & Unique"));
-};
-
-/**
- * Checks if a place is "Vibe" (has the "Vibe & Atmosphere" category)
- */
-export const isPlaceVibe = (place: { categories?: string[] | null }): boolean => {
-  return !!(place.categories && place.categories.includes("✨ Vibe & Atmosphere"));
-};
 
 /**
  * Converts an Instagram Reel URL to embed format

@@ -7,7 +7,7 @@ import { supabase } from "../../../../lib/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../lib/access";
 import Icon from "../../../../components/Icon";
-import { getTagEmoji } from "../../../../constants";
+import { getTagEmoji, stripTagEmoji } from "../../../../constants";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 export default function EditTagsPage() {
@@ -410,7 +410,7 @@ export default function EditTagsPage() {
                     ) : (
                       <>
                         <span className="text-base leading-none flex-shrink-0">{getTagEmoji(tagRow.name, tagRow.emoji)}</span>
-                        <span className="flex-1 text-sm sm:text-base text-[#1F2A1F] truncate min-w-0">{tagRow.name}</span>
+                        <span className="flex-1 text-sm sm:text-base text-[#1F2A1F] truncate min-w-0">{stripTagEmoji(tagRow.name)}</span>
                         <button
                           onClick={() => {
                             setEditingTag(tagRow.name);

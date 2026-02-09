@@ -38,8 +38,8 @@ export default function HomePage() {
     tags: [],
   });
   const [filterOpen, setFilterOpen] = useState(false);
-  // Places with tags for filter modal (id + tags only)
-  const [placesForTags, setPlacesForTags] = useState<{ id: string; tags: string[] | null }[]>([]);
+  // Places with tags & categories for filter modal
+  const [placesForTags, setPlacesForTags] = useState<{ id: string; tags: string[] | null; categories: string[] | null; access_level: string | null }[]>([]);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
@@ -110,10 +110,10 @@ export default function HomePage() {
     let cancelled = false;
     (async () => {
       try {
-        const { data, error } = await supabase.from("places").select("id,tags");
+        const { data, error } = await supabase.from("places").select("id,tags,categories,access_level");
         if (cancelled) return;
         if (error) return;
-        setPlacesForTags((data ?? []).map((r: { id: string; tags: string[] | null }) => ({ id: r.id, tags: r.tags ?? null })));
+        setPlacesForTags((data ?? []).map((r: { id: string; tags: string[] | null; categories: string[] | null; access_level: string | null }) => ({ id: r.id, tags: r.tags ?? null, categories: r.categories ?? null, access_level: r.access_level ?? null })));
       } catch (err: any) {
         if (cancelled) return;
         if (err?.name === 'AbortError' || err?.message?.includes('abort')) return;
@@ -129,12 +129,8 @@ export default function HomePage() {
     return () => { cancelled = true; };
   }, [bootReady]);
 
-  const availableTags = useMemo(() => {
-    if (!placesForTags.length) return [];
-    const set = new Set<string>();
-    placesForTags.forEach((p) => { (p.tags ?? []).forEach((t) => set.add(t)); });
-    return Array.from(set).sort();
-  }, [placesForTags]);
+  // Tags are now loaded dynamically by FiltersModal based on selected categories
+  // (via getAvailableTags callback that queries Supabase tags table with category_ids filter)
 
   // Загружаем избранное пользователя
   useEffect(() => {
@@ -389,11 +385,43 @@ export default function HomePage() {
         onApply={handleFiltersApply}
         appliedFilters={activeFilters}
         userAccess={access}
-        getAvailableTags={() => availableTags}
-        getTagCounts={(tags: string[]) => {
+        getCategoryCount={async (category: string, premiumOnly?: boolean) => {
+          try {
+            let query = supabase
+              .from("places")
+              .select("*", { count: 'exact', head: true })
+              .overlaps("categories", [category]);
+            if (premiumOnly) {
+              query = query.eq("access_level", "premium");
+            }
+            const { count, error } = await query;
+            if (error) return 0;
+            return count || 0;
+          } catch {
+            return 0;
+          }
+        }}
+        getAvailableTags={async (categories: string[]) => {
+          if (!categories || categories.length === 0) return [];
+          const { data } = await supabase
+            .from("tags")
+            .select("name")
+            .overlaps("category_ids", categories)
+            .order("name") as { data: { name: string | null }[] | null };
+          return (data ?? []).map((t) => t.name).filter((n): n is string => Boolean(n));
+        }}
+        getTagCounts={(tags: string[], categories?: string[], premiumOnly?: boolean) => {
           const counts: Record<string, number> = {};
           tags.forEach((t) => (counts[t] = 0));
-          placesForTags.forEach((p) => {
+          let source = categories && categories.length > 0
+            ? placesForTags.filter((p) =>
+                categories.some((cat) => (p.categories ?? []).includes(cat))
+              )
+            : placesForTags;
+          if (premiumOnly) {
+            source = source.filter((p) => p.access_level === "premium");
+          }
+          source.forEach((p) => {
             (p.tags ?? []).forEach((t) => {
               if (t in counts) counts[t]++;
             });

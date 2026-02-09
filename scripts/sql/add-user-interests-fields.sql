@@ -10,7 +10,7 @@ ALTER TABLE profiles
 ADD COLUMN IF NOT EXISTS favorite_tags TEXT[] DEFAULT '{}';
 
 -- Add comments
-COMMENT ON COLUMN profiles.favorite_categories IS 'Array of category names that user is interested in (e.g., ["🍽 Food & Drinks", "🌅 Scenic & Rooftop Views"])';
+COMMENT ON COLUMN profiles.favorite_categories IS 'Array of category names that user is interested in (e.g., ["🍽 Food & Drinks", "🌅 Scenic & Views"])';
 COMMENT ON COLUMN profiles.favorite_tags IS 'Array of tag names that user is interested in (e.g., ["romantic", "sunset"])';
 
 -- Create indexes for faster queries when filtering by interests

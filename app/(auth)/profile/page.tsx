@@ -820,7 +820,7 @@ function ProfileInner() {
 
   async function handleLogout() {
     await supabase.auth.signOut();
-    redirectToAuth();
+    replaceToAuth();
   }
 
   return (
@@ -1272,17 +1272,17 @@ function ProfileInner() {
                       {/* Right: Stats (≈ 40%) */}
                       <div className="flex-1 min-w-0 flex flex-col justify-center" style={{ width: '40%' }}>
                         <div className="space-y-0">
-                          <div style={{ borderBottom: '1px solid #ECEEE4', display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingTop: '6px', paddingBottom: '6px' }}>
+                          <div style={{ borderBottom: '1px solid #ECEEE4', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingTop: '10px', paddingBottom: '10px' }}>
                             <div className="text-[#1F2A1F] m-0" style={{ fontWeight: 600, fontSize: '19px', lineHeight: '1.1' }}>{stats.placesAdded}</div>
-                            <div className="m-0 text-[#6F7A5A]" style={{ fontSize: '13px', marginTop: '1px', lineHeight: '1.1' }}>Places added</div>
+                            <div className="m-0 text-[#6F7A5A]" style={{ fontSize: '13px', marginTop: '2px', lineHeight: '1.1' }}>Places added</div>
                           </div>
-                          <div style={{ borderBottom: '1px solid #ECEEE4', display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingTop: '6px', paddingBottom: '6px' }}>
+                          <div style={{ borderBottom: '1px solid #ECEEE4', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingTop: '10px', paddingBottom: '10px' }}>
                             <div className="text-[#1F2A1F] m-0" style={{ fontWeight: 600, fontSize: '19px', lineHeight: '1.1' }}>{stats.reviews}</div>
-                            <div className="m-0 text-[#6F7A5A]" style={{ fontSize: '13px', marginTop: '1px', lineHeight: '1.1' }}>Comments</div>
+                            <div className="m-0 text-[#6F7A5A]" style={{ fontSize: '13px', marginTop: '2px', lineHeight: '1.1' }}>Comments</div>
                           </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingTop: '6px', paddingBottom: '6px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingTop: '10px', paddingBottom: '10px' }}>
                             <div className="text-[#1F2A1F] m-0" style={{ fontWeight: 600, fontSize: '19px', lineHeight: '1.1' }}>{stats.favoritesCount}</div>
-                            <div className="m-0 text-[#6F7A5A]" style={{ fontSize: '13px', marginTop: '1px', lineHeight: '1.1' }}>My favorites</div>
+                            <div className="m-0 text-[#6F7A5A]" style={{ fontSize: '13px', marginTop: '2px', lineHeight: '1.1' }}>My favorites</div>
                           </div>
                         </div>
                       </div>
@@ -1343,7 +1343,7 @@ function ProfileInner() {
                                 className="absolute top-2 right-2 bg-white/95 backdrop-blur-sm rounded-lg px-2 py-1 text-xs font-medium text-[#1F2A1F] badge-shadow z-10"
                                 style={{ zIndex: 10 }}
                               >
-                                +{saved.length - 2}
+                                {saved.length}
                               </div>
                             )}
                           </div>
@@ -1401,7 +1401,7 @@ function ProfileInner() {
                                 className="absolute top-2 right-2 bg-white/95 backdrop-blur-sm rounded-lg px-2 py-1 text-xs font-medium text-[#1F2A1F] badge-shadow z-10"
                                 style={{ zIndex: 10 }}
                               >
-                                +{added.length - 2}
+                                {added.length}
                               </div>
                             )}
                           </div>
@@ -1458,7 +1458,7 @@ function ProfileInner() {
                                 className="absolute top-2 right-2 bg-white/95 backdrop-blur-sm rounded-lg px-2 py-1 text-xs font-medium text-[#1F2A1F] badge-shadow z-10"
                                 style={{ zIndex: 10 }}
                               >
-                                +{recentlyViewed.length - 2}
+                                {recentlyViewed.length}
                               </div>
                             )}
                           </div>
@@ -1656,17 +1656,17 @@ function AboutSection({
           {/* Right: Stats (≈ 40%) */}
           <div className="flex-1 min-w-0 flex flex-col justify-center" style={{ width: '40%' }}>
             <div className="space-y-0">
-              <div style={{ borderBottom: '1px solid #ECEEE4', display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingTop: '6px', paddingBottom: '6px' }}>
+              <div style={{ borderBottom: '1px solid #ECEEE4', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingTop: '10px', paddingBottom: '10px' }}>
                 <div className="text-[#1F2A1F] m-0" style={{ fontWeight: 600, fontSize: '19px', lineHeight: '1.1' }}>{stats.placesAdded}</div>
-                <div className="m-0 text-[#6F7A5A]" style={{ fontSize: '13px', marginTop: '1px', lineHeight: '1.1' }}>Places added</div>
+                <div className="m-0 text-[#6F7A5A]" style={{ fontSize: '13px', marginTop: '2px', lineHeight: '1.1' }}>Places added</div>
               </div>
-              <div style={{ borderBottom: '1px solid #ECEEE4', display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingTop: '6px', paddingBottom: '6px' }}>
+              <div style={{ borderBottom: '1px solid #ECEEE4', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingTop: '10px', paddingBottom: '10px' }}>
                 <div className="text-[#1F2A1F] m-0" style={{ fontWeight: 600, fontSize: '19px', lineHeight: '1.1' }}>{stats.reviews}</div>
-                <div className="m-0 text-[#6F7A5A]" style={{ fontSize: '13px', marginTop: '1px', lineHeight: '1.1' }}>Comments</div>
+                <div className="m-0 text-[#6F7A5A]" style={{ fontSize: '13px', marginTop: '2px', lineHeight: '1.1' }}>Comments</div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingTop: '6px', paddingBottom: '6px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingTop: '10px', paddingBottom: '10px' }}>
                 <div className="text-[#1F2A1F] m-0" style={{ fontWeight: 600, fontSize: '19px', lineHeight: '1.1' }}>{stats.favoritesCount}</div>
-                <div className="m-0 text-[#6F7A5A]" style={{ fontSize: '13px', marginTop: '1px', lineHeight: '1.1' }}>My favorites</div>
+                <div className="m-0 text-[#6F7A5A]" style={{ fontSize: '13px', marginTop: '2px', lineHeight: '1.1' }}>My favorites</div>
               </div>
             </div>
           </div>
@@ -1728,7 +1728,7 @@ function AboutSection({
                       className="absolute top-2 right-2 bg-white/95 backdrop-blur-sm rounded-lg px-2 py-1 text-xs font-medium text-[#1F2A1F] badge-shadow z-10"
                       style={{ zIndex: 10 }}
                     >
-                      +{savedPlaces.length - 2}
+                      {savedPlaces.length}
                     </div>
                   )}
                 </div>
@@ -1786,7 +1786,7 @@ function AboutSection({
                       className="absolute top-2 right-2 bg-white/95 backdrop-blur-sm rounded-lg px-2 py-1 text-xs font-medium text-[#1F2A1F] badge-shadow z-10"
                       style={{ zIndex: 10 }}
                     >
-                      +{addedPlaces.length - 2}
+                      {addedPlaces.length}
                     </div>
                   )}
                 </div>
@@ -1843,7 +1843,7 @@ function AboutSection({
                       className="absolute top-2 right-2 bg-white/95 backdrop-blur-sm rounded-lg px-2 py-1 text-xs font-medium text-[#1F2A1F] badge-shadow z-10"
                       style={{ zIndex: 10 }}
                     >
-                      +{recentlyViewedPlaces.length - 2}
+                      {recentlyViewedPlaces.length}
                     </div>
                   )}
                 </div>

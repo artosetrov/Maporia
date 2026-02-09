@@ -35,9 +35,9 @@ export const HOME_SECTIONS: HomeSectionFilter[] = [
     categories: ["✨ Vibe & Atmosphere"],
   },
   {
-    title: "Scenic & Rooftop Views",
+    title: "Scenic & Views",
     city: "Fort Lauderdale",
-    categories: ["🌅 Scenic & Rooftop Views"],
+    categories: ["🌅 Scenic & Views"],
   },
   {
     title: "Nature & Walks Nearby",

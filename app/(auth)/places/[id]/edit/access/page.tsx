@@ -42,7 +42,7 @@ export default function AccessEditorPage(props: PageProps) {
       setLoading(true);
       const { data: rawData, error: placeError } = await supabase
         .from("places")
-        .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, updated_at, lat, lng, access_level, is_premium, premium_only, visibility, google_place_id")
+        .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled")
         .eq("id", placeId)
         .single();
 

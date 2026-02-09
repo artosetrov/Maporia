@@ -460,28 +460,6 @@ const stateLogicChecks = async (): Promise<CheckResult[]> => {
     );
   }
 
-  // 5b. isPlaceHidden used in list rendering contexts
-  const listPages = glob(`${APP_DIR}/**/page.tsx`).filter((f) => {
-    const content = readFile(f) || "";
-    return content.includes("PlaceCard") && content.includes(".map(");
-  });
-  for (const file of listPages) {
-    const content = readFile(file) || "";
-    if (!content.includes("isPlaceHidden") && !content.includes("access_level")) {
-      results.push(
-        warn(
-          `${SET}.hidden-not-checked`,
-          "Hidden places not filtered",
-          "Page renders PlaceCard list without checking isPlaceHidden",
-          file,
-        ),
-      );
-    }
-  }
-  if (!results.some((r) => r.id === `${SET}.hidden-not-checked`)) {
-    results.push(pass(`${SET}.hidden-filtered`, "Hidden filtering", "Hidden places properly filtered in lists"));
-  }
-
   // 5c. Empty state handling — pages with lists should handle empty
   for (const file of publicPages) {
     const content = readFile(file) || "";

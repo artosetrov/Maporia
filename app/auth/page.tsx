@@ -209,9 +209,15 @@ function AuthPageContent() {
     <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center p-6">
       <div className="w-full max-w-md rounded-3xl bg-white border border-[#ECEEE4] p-8 relative"
            style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
-        {/* Close Button */}
+        {/* Close Button — go back to previous page, or fallback to redirectBack / home */}
         <button
-          onClick={() => router.replace(redirectBack || "/")}
+          onClick={() => {
+            if (window.history.length > 1) {
+              router.back();
+            } else {
+              router.replace(redirectBack || "/");
+            }
+          }}
           className="absolute top-4 right-4 h-8 w-8 rounded-full flex items-center justify-center text-[#A8B096] hover:bg-[#FAFAF7] hover:text-[#8F9E4F] transition-colors"
           aria-label="Close"
         >
