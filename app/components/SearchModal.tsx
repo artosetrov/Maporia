@@ -5,9 +5,16 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { DEFAULT_CITY, CATEGORIES } from "../constants";
 import { useIsDesktop } from "../hooks/useIsDesktop";
-import { getCitiesWithPlaces } from "../lib/cities";
+import { getCitiesWithPlaces, type City } from "../lib/cities";
 import { supabase } from "../lib/supabase";
 import Icon from "./Icon";
+import { sanitizePostgrestValue } from "../utils";
+import {
+  CITY_RADIUS_MILES,
+  buildCityRadiusFilter,
+  isPlaceWithinCityRadius,
+  populateCityCoordsCache,
+} from "../lib/cityRadius";
 
 // Component for search result item with image error handling
 function SearchResultItem({ 
@@ -114,7 +121,7 @@ export default function SearchModal({
   const [query, setQuery] = useState(initialSearchQuery);
   const [tempSelectedCity, setTempSelectedCity] = useState<string | null>(selectedCity || null);
   const [tempSelectedTags, setTempSelectedTags] = useState<string[]>(initialSelectedTags);
-  const [cities, setCities] = useState<Array<{ id: string; name: string }>>([]);
+  const [cities, setCities] = useState<City[]>([]);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [placesCount, setPlacesCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -156,7 +163,8 @@ export default function SearchModal({
       try {
         const citiesData = await getCitiesWithPlaces();
         if (isUnmounting) return;
-        setCities(citiesData.map(c => ({ id: c.id, name: c.name })));
+        setCities(citiesData);
+        populateCityCoordsCache(citiesData);
       } catch (err: any) {
         if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
           return;
@@ -195,14 +203,26 @@ export default function SearchModal({
     localStorage.setItem("recentSearches", JSON.stringify(updated));
   }, [recentSearches]);
 
+  // Look up city coordinates from loaded cities
+  const getCityLatLng = useCallback(
+    (cityName: string): { lat: number | null; lng: number | null } => {
+      const match = cities.find(
+        (c) => c.name.toLowerCase() === cityName.toLowerCase(),
+      );
+      return { lat: match?.lat ?? null, lng: match?.lng ?? null };
+    },
+    [cities],
+  );
+
   // Get count for a single tag in a city
   const getTagCount = useCallback(async (city: string | null, tag: string) => {
     try {
       let countQuery = supabase.from("places").select("*", { count: 'exact', head: true });
       
-      // Filter by city
+      // Filter by city (with radius)
       if (city) {
-        countQuery = countQuery.or(`city_name_cached.eq.${city},city.eq.${city}`);
+        const coords = getCityLatLng(city);
+        countQuery = countQuery.or(buildCityRadiusFilter(city, coords.lat, coords.lng));
       }
 
       // Filter by single tag (category)
@@ -235,7 +255,7 @@ export default function SearchModal({
       }
       return 0;
     }
-  }, []);
+  }, [getCityLatLng]);
 
   // Load tag counts when city is selected
   useEffect(() => {
@@ -266,9 +286,10 @@ export default function SearchModal({
     try {
       let countQuery = supabase.from("places").select("*", { count: 'exact', head: true });
       
-      // Filter by city
+      // Filter by city (with radius)
       if (city) {
-        countQuery = countQuery.or(`city_name_cached.eq.${city},city.eq.${city}`);
+        const coords = getCityLatLng(city);
+        countQuery = countQuery.or(buildCityRadiusFilter(city, coords.lat, coords.lng));
       }
 
       // Filter by tags (categories)
@@ -326,7 +347,7 @@ export default function SearchModal({
       }
       return 0;
     }
-  }, []);
+  }, [getCityLatLng]);
 
   // Search places and cities (for search results display)
   const performSearch = useCallback(async (searchQuery: string, city: string | null, tags: string[]) => {
@@ -363,22 +384,22 @@ export default function SearchModal({
 
       // Search places (limit to 10 for display)
       if (searchQuery.trim()) {
-        const placesQuery = supabase
+        let placesQuery = supabase
           .from("places")
-          .select("id,title,city,city_name_cached,cover_url")
-          .or(`title.ilike.%${searchQuery.trim()}%,description.ilike.%${searchQuery.trim()}%`)
-          .limit(20); // Get more to filter client-side if needed
+          .select("id,title,city,city_name_cached,cover_url,lat,lng")
+          .or(`title.ilike.%${sanitizePostgrestValue(searchQuery.trim())}%,description.ilike.%${sanitizePostgrestValue(searchQuery.trim())}%`);
+
+        // Apply city radius filter at DB level
+        if (city) {
+          const coords = getCityLatLng(city);
+          placesQuery = placesQuery.or(buildCityRadiusFilter(city, coords.lat, coords.lng));
+        }
+
+        placesQuery = placesQuery.limit(20);
 
         const { data: placesData } = await placesQuery;
         if (placesData) {
-          // Filter by city client-side if needed (since we can't chain .or() after .or())
-          // Fix: Ensure proper city matching using both city and city_name_cached fields, normalizing for casing and possible nulls
-          const filtered = city
-            ? placesData.filter((p: any) =>
-                (p.city_name_cached?.toLowerCase() === city.toLowerCase()) ||
-                (p.city?.toLowerCase() === city.toLowerCase())
-              )
-            : placesData;
+          const filtered = placesData;
           filtered.slice(0, 10).forEach((place: any) => {
             results.push({
               type: "place",
@@ -406,7 +427,7 @@ export default function SearchModal({
     } finally {
       setLoading(false);
     }
-  }, [cities, getFilteredPlacesCount]);
+  }, [cities, getCityLatLng, getFilteredPlacesCount]);
 
   // Update places count when filters change
   useEffect(() => {
@@ -788,6 +809,9 @@ export default function SearchModal({
                         Searching locations...
                       </div>
                     )}
+                    <div className="text-xs text-[#A8B096] mt-0.5">
+                      Including places within {CITY_RADIUS_MILES} miles
+                    </div>
                   </div>
                   <button
                     onClick={() => setStep("where")}

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { ReactNode, useCallback, useEffect, useState, useRef, memo } from "react";
 import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
@@ -18,8 +19,7 @@ import PremiumBadge from "./PremiumBadge";
 import Icon from "./Icon";
 import { usePremiumGate } from "../hooks/usePremiumGate";
 import { useIsDesktop } from "../hooks/useIsDesktop";
-import PremiumUpsellModal from "./PremiumUpsellModal";
-import AuthModal from "./AuthModal";
+// AuthModal and PremiumUpsellModal are now rendered globally via GlobalModals
 
 type PlaceCardProps = {
   place: {
@@ -49,6 +49,10 @@ type PlaceCardProps = {
   onTagClick?: (tag: string) => void;
   onPhotoClick?: () => void;
   onRemoveFavorite?: (placeId: string, e: React.MouseEvent) => void;
+  priority?: boolean; // Set true for above-the-fold cards to fix LCP warnings
+  // Batch-loaded data (from useBatchPlaceData) — avoids per-card N+1 queries
+  batchPhotos?: string[];
+  batchProfile?: { display_name: string | null; username: string | null; avatar_url: string | null };
 };
 
 function cx(...a: Array<string | false | undefined | null>) {
@@ -61,12 +65,13 @@ function isValidUUID(str: string): boolean {
   return uuidRegex.test(str);
 }
 
-function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isFavorite = false, hauntedGemIndex, showPhotoSlider = true, onClick, onTagClick, onPhotoClick, onRemoveFavorite }: PlaceCardProps) {
+function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isFavorite = false, hauntedGemIndex, showPhotoSlider = true, onClick, onTagClick, onPhotoClick, onRemoveFavorite, priority = false, batchPhotos, batchProfile }: PlaceCardProps) {
   const isDesktop = useIsDesktop();
-  const [creatorProfile, setCreatorProfile] = useState<{ display_name: string | null; username: string | null; avatar_url: string | null } | null>(null);
+  // Use batch-loaded profile if available; otherwise fall back to per-card loading
+  const [creatorProfile, setCreatorProfile] = useState<{ display_name: string | null; username: string | null; avatar_url: string | null } | null>(batchProfile ?? null);
   const loadedUserIdRef = useRef<string | null>(null);
-  // Инициализируем фото из cover_url сразу, чтобы изображение показывалось до загрузки place_photos
-  const [photos, setPhotos] = useState<string[]>(() => (place.cover_url ? [place.cover_url] : []));
+  // Use batch-loaded photos if available; otherwise fall back to cover_url
+  const [photos, setPhotos] = useState<string[]>(() => batchPhotos ?? (place.cover_url ? [place.cover_url] : []));
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const touchStartX = useRef<number | null>(null);
@@ -112,7 +117,21 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
   // Premium gate hook (guest → Auth Modal, free → Premium Modal, premium → open place)
   const { canAccessPlace, openPremiumLocation, closePremiumModal, closeAuthModal, modalOpen, authModalOpen, authRedirectPath, authModalVariant } = usePremiumGate();
 
+  // Sync batch-loaded data when props change
   useEffect(() => {
+    if (batchProfile) setCreatorProfile(batchProfile);
+  }, [batchProfile]);
+
+  useEffect(() => {
+    if (batchPhotos && batchPhotos.length > 0) {
+      setPhotos(batchPhotos);
+      setCurrentPhotoIndex(0);
+    }
+  }, [batchPhotos]);
+
+  useEffect(() => {
+    // Skip per-card profile fetch if batch data was provided
+    if (batchProfile) return;
     if (!isInView) return;
     const userId = place.created_by;
     
@@ -205,7 +224,9 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
   }, [place.created_by, isInView]);
 
   // Загружаем все фото места только когда карточка в viewport
+  // Skip if batch data was provided
   useEffect(() => {
+    if (batchPhotos && batchPhotos.length > 0) return;
     let isUnmounting = false;
     const placeId = place.id; // Capture place.id to check if it changed
 
@@ -559,14 +580,16 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
             onClick={handlePhotoClick}
             className="absolute inset-0 w-full h-full rounded-2xl overflow-hidden bg-[#FAFAF7] cursor-pointer"
           >
-            <img
+            <Image
               src={currentPhoto}
               alt={displayTitle}
+              fill
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               className={cx(
-                "absolute inset-0 w-full h-full object-cover",
+                "object-cover",
                 isLocked && !isOwner && "blur-[2px] brightness-75"
               )}
-              style={{ objectFit: 'cover', width: '100%', height: '100%' }}
+              priority={priority}
               onError={handlePhotoError}
             />
             
@@ -684,20 +707,7 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
       </div>
     </Link>
 
-    {/* Auth Modal - for guests clicking premium location */}
-    <AuthModal
-      isOpen={authModalOpen}
-      onClose={closeAuthModal}
-      redirectPath={authRedirectPath}
-      variant={authModalVariant}
-    />
-    {/* Premium Upsell Modal - for logged-in free users clicking premium location */}
-    <PremiumUpsellModal
-      open={modalOpen}
-      onClose={closePremiumModal}
-      context="place"
-      placeTitle={place.title}
-    />
+    {/* Modals now rendered globally via GlobalModals component (PremiumModalContext) */}
     </>
   );
 }

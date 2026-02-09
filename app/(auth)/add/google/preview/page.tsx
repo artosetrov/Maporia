@@ -15,6 +15,7 @@ import {
   type GoogleImportSearchResult,
 } from "../../../../lib/googleImport";
 import Icon from "../../../../components/Icon";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");

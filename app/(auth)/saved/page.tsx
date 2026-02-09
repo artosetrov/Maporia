@@ -14,6 +14,7 @@ import { useUserAccessContext } from "../../contexts/UserAccessContext";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../../lib/access";
 import { useMemo } from "react";
 import { PlaceCardGridSkeleton } from "../../components/Skeleton";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 type Place = {
   id: string;

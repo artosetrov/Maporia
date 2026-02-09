@@ -11,13 +11,14 @@ import { useUserAccessContext } from "../../../../../contexts/UserAccessContext"
 import { isUserAdmin } from "../../../../../lib/access";
 
 type PlaceLocationRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "address" | "city" | "city_id" | "city_name_cached" | "google_place_id" | "lat" | "lng">;
-import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../../../../../config/googleMaps";
+import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey, getMapOptions } from "../../../../../config/googleMaps";
 import dynamicImport from "next/dynamic";
 import Icon from "../../../../../components/Icon";
 import { resolveCity, extractCityFromAddressComponents } from "../../../../../lib/cityResolver";
 import { getCitiesWithPlaces, type City } from "../../../../../lib/cities";
 import Pill from "../../../../../components/Pill";
 import UnifiedGoogleImportField from "../../../../../components/UnifiedGoogleImportField";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 const AddressAutocomplete = dynamicImport(
   () => import("../../../../../components/AddressAutocomplete"),
@@ -320,17 +321,13 @@ export default function LocationEditorPage(props: PageProps) {
               mapContainerStyle={{ width: "100%", height: "100%" }}
               center={mapCenter}
               zoom={mapZoom}
-              options={{
-                gestureHandling: "greedy",
+              options={getMapOptions({
                 disableDefaultUI: false,
                 zoomControl: true,
                 zoomControlOptions: {
                   position: google.maps.ControlPosition.LEFT_CENTER,
                 },
-                mapTypeControl: false,
-                streetViewControl: false,
-                fullscreenControl: false,
-              }}
+              })}
               onClick={(e) => {
                 if (isDragging && e.latLng) {
                   setLat(e.latLng.lat());
@@ -389,7 +386,7 @@ export default function LocationEditorPage(props: PageProps) {
                       // Find matching city from database
                       const { data: cityRecord } = await supabase
                         .from("cities")
-                        .select("*")
+                        .select("id, name, slug, state, country, lat, lng")
                         .eq("id", cityData.city_id)
                         .single();
                       if (cityRecord) {
@@ -531,7 +528,7 @@ export default function LocationEditorPage(props: PageProps) {
                       // Find matching city from database
                       const { data: cityRecord } = await supabase
                         .from("cities")
-                        .select("*")
+                        .select("id, name, slug, state, country, lat, lng")
                         .eq("id", cityData.city_id)
                         .single();
                       if (cityRecord) {
@@ -592,7 +589,7 @@ export default function LocationEditorPage(props: PageProps) {
                         if (cityData) {
                           const { data: cityRecord } = await supabase
                             .from("cities")
-                            .select("*")
+                            .select("id, name, slug, state, country, lat, lng")
                             .eq("id", cityData.city_id)
                             .single();
                           if (cityRecord) {

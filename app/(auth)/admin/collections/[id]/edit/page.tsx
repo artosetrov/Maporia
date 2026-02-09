@@ -10,6 +10,7 @@ import { useIsDesktop } from "../../../../../hooks/useIsDesktop";
 import { isUserAdmin } from "../../../../../lib/access";
 import Icon from "../../../../../components/Icon";
 import type { Collection } from "../../../../../types";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 type CollectionUpdate = Database["public"]["Tables"]["collections"]["Update"];
 type PlaceCollectionUpdate = Database["public"]["Tables"]["place_collections"]["Update"];

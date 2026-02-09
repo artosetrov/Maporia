@@ -1,12 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
+  // Strict Mode enabled — helps catch bugs in development via double-invoke of effects
+  reactStrictMode: true,
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "*.supabase.co" },
+      { protocol: "https", hostname: "maps.googleapis.com" },
+      { protocol: "https", hostname: "lh3.googleusercontent.com" },
+      { protocol: "https", hostname: "places.googleapis.com" },
+    ],
   },
-  // Temporarily disable Strict Mode to prevent double rendering on production
-  // This may help with AbortError issues on custom domain
-  reactStrictMode: false,
   async redirects() {
     const redirects = [
       { source: "/places", destination: "/", permanent: false },

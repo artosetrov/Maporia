@@ -10,12 +10,12 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabaseServiceKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const isUsingServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error("[ai/generate-description] Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+}
 
 function hasPremiumAccessFromProfile(profile: {
   role?: string | null;
@@ -71,26 +71,24 @@ export async function POST(request: NextRequest) {
 
     const googleApiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
-    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
-    const { data: authData, error: authError } = await supabaseAuth.auth.getUser(access_token);
-    const user = authData?.user;
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 });
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return NextResponse.json(
+        { error: "Server misconfiguration: SUPABASE_SERVICE_ROLE_KEY is required", code: "SERVER_ERROR" },
+        { status: 500 }
+      );
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // When service role is not set, RLS applies — load profile with user's JWT so auth.uid() = user.id
-    const supabaseForProfile = isUsingServiceRole
-      ? supabase
-      : createClient(supabaseUrl, supabaseAnonKey, {
-          global: { headers: { Authorization: `Bearer ${access_token}` } },
-        });
+    const { data: authData, error: authError } = await supabase.auth.getUser(access_token);
+    const user = authData?.user;
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 });
+    }
+
+    const supabaseForProfile = supabase;
 
     // Premium check (defense-in-depth)
     const { data: profile } = await supabaseForProfile
@@ -99,7 +97,7 @@ export async function POST(request: NextRequest) {
       .eq("id", user.id)
       .single();
 
-    if (!hasPremiumAccessFromProfile(profile as any)) {
+    if (!hasPremiumAccessFromProfile(profile)) {
       return NextResponse.json(
         { error: "Premium required to generate descriptions.", code: "PREMIUM_REQUIRED" },
         { status: 403 }
@@ -125,13 +123,13 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const isAdmin = !!(profile as any)?.is_admin || (profile as any)?.role === "admin";
+      const isAdmin = !!profile?.is_admin || profile?.role === "admin";
       if (placeRow.created_by !== user.id && !isAdmin) {
         return NextResponse.json({ error: "Forbidden", code: "FORBIDDEN" }, { status: 403 });
       }
 
-      effectiveGooglePlaceId = effectiveGooglePlaceId || (placeRow as any).google_place_id || null;
-      placeRowForContext = placeRow as any;
+      effectiveGooglePlaceId = effectiveGooglePlaceId || placeRow.google_place_id || null;
+      placeRowForContext = placeRow;
     }
 
     if (!effectiveGooglePlaceId && !placeRowForContext) {
@@ -188,13 +186,7 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      // When service role is not set, RLS applies — use user's JWT so owner update is allowed
-      const supabaseForUpdate = isUsingServiceRole
-        ? supabase
-        : createClient(supabaseUrl, supabaseAnonKey, {
-            global: { headers: { Authorization: `Bearer ${access_token}` } },
-          });
-      const { error: updateError } = await supabaseForUpdate
+      const { error: updateError } = await supabase
         .from("places")
         .update({ description })
         .eq("id", effectivePlaceId);

@@ -19,6 +19,9 @@ type ReactionPlaceId = Pick<Database["public"]["Tables"]["reactions"]["Row"], "p
 type ReactionsPlaceIdResult = { data: ReactionPlaceId[] | null; error: PostgrestError | null };
 import { useUserAccessContext } from "./contexts/UserAccessContext";
 import { HomeSectionSkeleton } from "./components/Skeleton";
+import { SectionErrorBoundary } from "./components/SectionErrorBoundary";
+import { sanitizePostgrestValue } from "./utils";
+import { buildCityRadiusFilter, getCityCoords } from "./lib/cityRadius";
 
 export default function HomePage() {
   const router = useRouter();
@@ -249,7 +252,7 @@ export default function HomePage() {
     if (selectedCity) params.set("city", selectedCity);
     if (value.trim()) params.set("q", value);
     if (activeFilters.categories.length > 0) {
-      params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+      params.set("categories", activeFilters.categories.join(','));
     }
     router.push(`/map?${params.toString()}`);
   }
@@ -259,14 +262,13 @@ export default function HomePage() {
     // Always redirect to /map with city filter
     const params = new URLSearchParams();
     if (city && city.trim()) {
-      // Кодируем город для безопасной передачи в URL
-      params.set("city", encodeURIComponent(city.trim()));
+      params.set("city", city.trim());
     }
     if (searchValue && searchValue.trim()) {
-      params.set("q", encodeURIComponent(searchValue.trim()));
+      params.set("q", searchValue.trim());
     }
     if (activeFilters.categories.length > 0) {
-      params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+      params.set("categories", activeFilters.categories.join(','));
     }
     router.push(`/map?${params.toString()}`);
   }
@@ -403,9 +405,10 @@ export default function HomePage() {
           try {
             let countQuery = supabase.from("places").select("*", { count: 'exact', head: true });
 
-            // Фильтрация по городу (use city_name_cached if available, fallback to city)
+            // Фильтрация по городу с радиусом 10 миль
             if (selectedCity && selectedCity !== DEFAULT_CITY) {
-              countQuery = countQuery.or(`city_name_cached.eq.${selectedCity},city.eq.${selectedCity}`);
+              const coords = await getCityCoords(selectedCity);
+              countQuery = countQuery.or(buildCityRadiusFilter(selectedCity, coords.lat, coords.lng));
             }
 
             // Фильтрация по категориям
@@ -420,7 +423,7 @@ export default function HomePage() {
 
             // Фильтрация по поисковому запросу
             if (searchValue && searchValue.trim()) {
-              const s = searchValue.trim();
+              const s = sanitizePostgrestValue(searchValue.trim());
               countQuery = countQuery.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
             }
 
@@ -474,16 +477,17 @@ export default function HomePage() {
           ) : (
             // Render sections only after bootstrap is ready
             sectionsToRender.map((section, index) => (
-              <HomeSection
-                key={section.title}
-                section={section}
-                userId={userId}
-                userAccess={access}
-                favorites={favorites}
-                onToggleFavorite={toggleFavorite}
-                onTagClick={handleTagClick}
-                isFirst={index === 0}
-              />
+              <SectionErrorBoundary key={section.title}>
+                <HomeSection
+                  section={section}
+                  userId={userId}
+                  userAccess={access}
+                  favorites={favorites}
+                  onToggleFavorite={toggleFavorite}
+                  onTagClick={handleTagClick}
+                  isFirst={index === 0}
+                />
+              </SectionErrorBoundary>
             ))
           )}
         </div>

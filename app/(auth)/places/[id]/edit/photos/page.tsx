@@ -12,6 +12,7 @@ import { isUserAdmin } from "../../../../../lib/access";
 type PlacePhotosPlaceRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "cover_url" | "video_url">;
 type PlacePhotoSelectRow = Pick<Database["public"]["Tables"]["place_photos"]["Row"], "id" | "url" | "sort" | "is_cover">;
 import Icon from "../../../../../components/Icon";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 type Photo = {
   id: string;

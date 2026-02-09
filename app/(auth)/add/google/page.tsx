@@ -8,6 +8,7 @@ import { useAuthRedirect } from "../../../hooks/useAuthRedirect";
 import { canUserAddPlace } from "../../../lib/access";
 import GoogleImportField from "../../../components/GoogleImportField";
 import Icon from "../../../components/Icon";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 export default function GoogleImportPage() {
   const router = useRouter();

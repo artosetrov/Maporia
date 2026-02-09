@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { logger } from "@/app/lib/logger";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -77,7 +78,7 @@ export async function GET(request: NextRequest) {
     if (settingsError) {
       // Check if it's a "table doesn't exist" error
       if (settingsError.code === "PGRST116" || settingsError.message?.includes("does not exist")) {
-        console.warn("app_settings table does not exist. Please run create-premium-modal-settings-table.sql");
+        logger.warn("app_settings table does not exist. Please run create-premium-modal-settings-table.sql");
       } else {
         console.error("Error fetching settings:", settingsError);
       }
@@ -197,7 +198,7 @@ export async function POST(request: NextRequest) {
       
       // Fallback: try direct upsert if RPC function doesn't exist
       if (rpcError.code === "42883" || rpcError.message?.includes("does not exist")) {
-        console.warn("RPC function not found, trying direct upsert...");
+        logger.warn("RPC function not found, trying direct upsert...");
         
         // Try direct upsert with service role client
         const { data, error: upsertError } = await supabaseAdmin

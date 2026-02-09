@@ -10,6 +10,7 @@ import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
 
 type ProfileUsernameRow = Pick<Database["public"]["Tables"]["profiles"]["Row"], "username">;
 import Icon from "../../../../components/Icon";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");

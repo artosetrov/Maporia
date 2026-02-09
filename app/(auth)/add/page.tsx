@@ -8,6 +8,7 @@ import type { PostgrestError } from "@supabase/supabase-js";
 import { useUserAccessContext } from "../../contexts/UserAccessContext";
 import { useAuthRedirect } from "../../hooks/useAuthRedirect";
 import { canUserAddPlace } from "../../lib/access";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
 type PlaceIdResult = { data: Pick<PlacesRow, "id"> | null; error: PostgrestError | null };

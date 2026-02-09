@@ -11,6 +11,7 @@ import { isUserAdmin } from "../../../../../lib/access";
 
 type PlaceDescriptionRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "description">;
 import Icon from "../../../../../components/Icon";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");

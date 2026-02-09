@@ -13,6 +13,7 @@ import AuthModal from "../components/AuthModal";
 import PremiumUpsellModal from "../components/PremiumUpsellModal";
 import { PlaceCardGridSkeleton } from "../components/Skeleton";
 import type { Collection } from "../types";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 type PlaceRow = {
   id: string;
@@ -206,7 +207,7 @@ function CollectionsPageContent() {
       rows.forEach((r, i) => {
         orderMap[r.place_id] = i;
       });
-      const { data: placesData } = await supabase.from("places").select("*").in("id", placeIds);
+      const { data: placesData } = await supabase.from("places").select("id,title,description,city,country,cover_url,categories,tags,created_by,access_level,address").in("id", placeIds);
       if (cancelled) return;
       const rawList = (placesData ?? []) as Record<string, unknown>[];
       const list = rawList.map((p) => ({

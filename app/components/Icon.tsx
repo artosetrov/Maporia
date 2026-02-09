@@ -97,7 +97,8 @@ export type IconName =
   | "briefcase"
   | "calendar-days"
   | "mail"
-  | "alert-circle";
+  | "alert-circle"
+  | "activity";
 
 type IconProps = {
   name: IconName;
@@ -550,6 +551,14 @@ export default function Icon({
         <circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth} />
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth} d="M12 8v4M12 16h.01" />
       </>
+    ),
+    activity: (
+      <polyline
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={strokeWidth}
+        points="22 12 18 12 15 21 9 3 6 12 2 12"
+      />
     ),
   };
 

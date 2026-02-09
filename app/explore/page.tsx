@@ -3,14 +3,17 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
+import { GoogleMap, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
+import { MarkerClusterer } from "@googlemaps/markerclusterer";
+import { MaporiaClusterRenderer } from "../lib/clusterRenderer";
 import { CATEGORIES } from "../constants";
 import TopBar from "../components/TopBar";
 import PlaceCard from "../components/PlaceCard";
 import FavoriteIcon from "../components/FavoriteIcon";
 import PremiumBadge from "../components/PremiumBadge";
 import SearchModal from "../components/SearchModal";
-import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../config/googleMaps";
+import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey, getMapOptions } from "../config/googleMaps";
+import { getCategoryEmoji, createMarkerIcon } from "../lib/mapMarkers";
 import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
@@ -24,27 +27,10 @@ import PremiumUpsellModal from "../components/PremiumUpsellModal";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import Icon from "../components/Icon";
 import { PlaceCardGridSkeleton, MapSkeleton, Empty } from "../components/Skeleton";
-
-type Place = {
-  id: string;
-  title: string;
-  description: string | null;
-  city: string | null;
-  city_name_cached?: string | null;
-  country: string | null;
-  address: string | null;
-  cover_url: string | null;
-  categories: string[] | null;
-  tags: string[] | null;
-  lat: number | null;
-  lng: number | null;
-  created_at: string;
-  created_by?: string | null;
-  access_level?: string | null;
-  is_premium?: boolean | null;
-  premium_only?: boolean | null;
-  visibility?: string | null;
-};
+import { sanitizePostgrestValue, cx, initialsFromEmail, timeAgo } from "../utils";
+import type { PlaceListItem as Place } from "../types";
+import { buildMultiCityRadiusFilter } from "../lib/cityRadius";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 // Result types for Supabase (Database['public']['Tables'][table]['Row'] + Pick)
 type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
@@ -60,31 +46,6 @@ type PlacePhotoUrl = Pick<PlacePhotosRow, "url">;
 type PlacePhotosUrlResult = { data: PlacePhotoUrl[] | null; error: PostgrestError | null };
 type PlacePhotoPlaceIdUrl = Pick<PlacePhotosRow, "place_id" | "url">;
 type PlacePhotosBatchResult = { data: PlacePhotoPlaceIdUrl[] | null; error: PostgrestError | null };
-
-function cx(...a: Array<string | false | undefined | null>) {
-  return a.filter(Boolean).join(" ");
-}
-
-function initialsFromEmail(email?: string | null) {
-  if (!email) return "U";
-  const name = email.split("@")[0] || "U";
-  const parts = name.split(/[.\-_]/).filter(Boolean);
-  const a = (parts[0]?.[0] ?? name[0] ?? "U").toUpperCase();
-  const b = (parts[1]?.[0] ?? name[1] ?? "").toUpperCase();
-  return (a + b).slice(0, 2);
-}
-
-function timeAgo(iso: string) {
-  const d = new Date(iso).getTime();
-  const diff = Date.now() - d;
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const days = Math.floor(h / 24);
-  return `${days}d ago`;
-}
 
 export default function ExplorePage() {
   const router = useRouter();
@@ -207,19 +168,16 @@ export default function ExplorePage() {
     setLoading(true);
     (async () => {
       try {
-        let query = supabase.from("places").select("*").order("created_at", { ascending: false });
+        let query = supabase.from("places").select("id,title,description,city,city_name_cached,lat,lng,cover_url,categories,tags,created_at,created_by,access_level,country,address,visibility").order("created_at", { ascending: false });
         if (selectedCities.length > 0) {
-          const cityFilters = selectedCities.flatMap(city => [
-            `city_name_cached.eq.${city}`,
-            `city.eq.${city}`
-          ]);
-          query = query.or(cityFilters.join(','));
+          const radiusFilter = await buildMultiCityRadiusFilter(selectedCities);
+          query = query.or(radiusFilter);
         }
         if (selectedCategories.length > 0) {
           query = query.overlaps("categories", selectedCategories);
         }
         if (q.trim()) {
-          const s = q.trim();
+          const s = sanitizePostgrestValue(q.trim());
           query = query.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
         }
         if (selectedTag) {
@@ -1354,26 +1312,7 @@ function Card({ children }: { children: React.ReactNode }) {
 }
 
 
-/** Извлекает эмоджи из строки категории вида "🍽 Food & Drinks" */
-function getCategoryEmoji(categories: string[] | null): string {
-  if (!categories || categories.length === 0) return "📍";
-  const first = categories[0];
-  const emoji = first.split(" ")[0];
-  return emoji || "📍";
-}
-
-/** Генерирует SVG data URL маркера с эмоджи внутри круга */
-function createEmojiMarkerSvg(emoji: string, size: number): string {
-  const fontSize = Math.round(size * 0.52);
-  const r = size / 2 - 1;
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
-    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="white"/>
-    <text x="${size / 2}" y="${size / 2}" text-anchor="middle" dominant-baseline="central" font-size="${fontSize}">${emoji}</text>
-  </svg>`;
-
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
-}
+// getCategoryEmoji and createMarkerIcon are imported from ../lib/mapMarkers
 
 function MapView({
   shouldLoadMap = true,
@@ -1412,6 +1351,10 @@ function MapView({
   const lastReportedStateRef = useRef<{ center: { lat: number; lng: number }; zoom: number } | null>(null);
   const onMapStateChangeRef = useRef(onMapStateChange);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Refs for imperative markers and MarkerClusterer
+  const markersRef = useRef<google.maps.Marker[]>([]);
+  const clustererRef = useRef<MarkerClusterer | null>(null);
 
   // Обновляем ref при изменении callback
   useEffect(() => {
@@ -1629,6 +1572,95 @@ function MapView({
   // Убрали автоматическое перемещение и увеличение карты при выборе места
   // Теперь карточка просто появляется без изменения масштаба и позиции карты
 
+  // --- Marker Clustering ---
+  useEffect(() => {
+    if (!mapInstance || !isLoaded) return;
+
+    // Очищаем старые маркеры и кластерер
+    if (clustererRef.current) {
+      clustererRef.current.setMap(null);
+      clustererRef.current = null;
+    }
+    markersRef.current.forEach((m) => {
+      google.maps.event.clearInstanceListeners(m);
+      m.setMap(null);
+    });
+    markersRef.current = [];
+
+    const newMarkers = placesWithCoords.map((place) => {
+      const emoji = getCategoryEmoji(place.categories);
+      const isPremium = isPlacePremium(place);
+
+      const marker = new google.maps.Marker({
+        position: { lat: place.lat!, lng: place.lng! },
+        title: place.title,
+        icon: createMarkerIcon(emoji, "default", isPremium),
+      });
+
+      (marker as any).__placeId = place.id;
+
+      marker.addListener("click", () => {
+        if (!externalSelectedPlaceId) {
+          setInternalSelectedPlaceId(place.id);
+          setCurrentPhotoIndex((prev) => new Map(prev).set(place.id, 0));
+        }
+        if (navigator.vibrate) navigator.vibrate(10);
+      });
+
+      return marker;
+    });
+
+    markersRef.current = newMarkers;
+
+    clustererRef.current = new MarkerClusterer({
+      map: mapInstance,
+      markers: newMarkers,
+      renderer: new MaporiaClusterRenderer(),
+      onClusterClick: (_event, cluster, map) => {
+        if (!externalSelectedPlaceId) {
+          setInternalSelectedPlaceId(null);
+        }
+        const bounds = cluster.bounds;
+        if (bounds) {
+          map.fitBounds(bounds, { top: 60, bottom: 60, left: 60, right: 60 });
+        }
+      },
+    });
+
+    return () => {
+      if (clustererRef.current) {
+        clustererRef.current.setMap(null);
+        clustererRef.current = null;
+      }
+      newMarkers.forEach((m) => {
+        google.maps.event.clearInstanceListeners(m);
+        m.setMap(null);
+      });
+      markersRef.current = [];
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapInstance, isLoaded, placesWithCoords, externalSelectedPlaceId]);
+
+  // Обновляем иконку выбранного маркера без пересоздания кластерера
+  useEffect(() => {
+    if (!isLoaded || markersRef.current.length === 0) return;
+
+    for (const marker of markersRef.current) {
+      const placeId = (marker as any).__placeId as string;
+      const isSelected = placeId === selectedPlaceId;
+      const place = placesWithCoords.find((p) => p.id === placeId);
+      if (!place) continue;
+
+      const emoji = getCategoryEmoji(place.categories);
+      const isPremium = isPlacePremium(place);
+      const state = isSelected ? "active" : "default";
+
+      marker.setIcon(createMarkerIcon(emoji, state, isPremium));
+
+      marker.setZIndex(isSelected ? (google.maps.Marker.MAX_ZINDEX ?? 1000000) + 1 : undefined);
+    }
+  }, [selectedPlaceId, placesWithCoords, isLoaded]);
+
   if (loading) {
     return <MapSkeleton className="h-full w-full" />;
   }
@@ -1697,9 +1729,7 @@ function MapView({
             aria-label="Zoom In"
             title="Zoom In"
           >
-            <svg className="w-5 h-5 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
+            <Icon name="zoom-in" size={20} className="text-[#1F2A1F]" />
           </button>
           <button
             onClick={handleZoomOut}
@@ -1707,9 +1737,7 @@ function MapView({
             aria-label="Zoom Out"
             title="Zoom Out"
           >
-            <svg className="w-5 h-5 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-            </svg>
+            <Icon name="zoom-out" size={20} className="text-[#1F2A1F]" />
           </button>
         </div>
       </div>
@@ -1749,21 +1777,7 @@ function MapView({
               setInternalSelectedPlaceId(null);
             }
           }}
-          options={{
-            gestureHandling: "greedy",
-            disableDefaultUI: true,
-            zoomControl: false,
-            streetViewControl: false,
-            mapTypeControl: false,
-            fullscreenControl: false,
-            styles: [
-              {
-                featureType: "poi",
-                elementType: "labels",
-                stylers: [{ visibility: "off" }],
-              },
-            ],
-          }}
+          options={getMapOptions()}
           onDragEnd={() => {
             if (isUpdatingFromPropsRef.current) return;
             if (mapInstance && onMapStateChangeRef.current) {
@@ -1803,254 +1817,219 @@ function MapView({
             }
           }}
         >
-          {placesWithCoords.map((place) => {
+          {/* InfoWindow для выбранного места (standalone, маркеры управляются императивно через MarkerClusterer) */}
+          {selectedPlaceId && (() => {
+            const place = placesWithCoords.find((p) => p.id === selectedPlaceId);
+            if (!place || !place.lat || !place.lng) return null;
             if (typeof window === "undefined" || !(window as any).google?.maps) return null;
-            
-            const isSelected = selectedPlaceId === place.id;
-            const iconSize = isSelected ? 44 : 36;
-            const emoji = getCategoryEmoji(place.categories);
-            const markerUrl = createEmojiMarkerSvg(emoji, iconSize);
 
-            const iconConfig = {
-              url: markerUrl,
-              scaledSize: new (window as any).google.maps.Size(iconSize, iconSize),
-              anchor: new (window as any).google.maps.Point(iconSize / 2, iconSize / 2),
+            const photos = placePhotos.get(place.id) || (place.cover_url ? [place.cover_url] : []);
+            const currentIndex = currentPhotoIndex.get(place.id) || 0;
+            const currentPhoto = photos[currentIndex] || place.cover_url;
+            const hasMultiplePhotos = photos.length > 1;
+
+            const handlePreviousPhoto = (e: React.MouseEvent) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setCurrentPhotoIndex((prev) => {
+                const newMap = new Map(prev);
+                const current = newMap.get(place.id) || 0;
+                newMap.set(place.id, current > 0 ? current - 1 : photos.length - 1);
+                return newMap;
+              });
+            };
+
+            const handleNextPhoto = (e: React.MouseEvent) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setCurrentPhotoIndex((prev) => {
+                const newMap = new Map(prev);
+                const current = newMap.get(place.id) || 0;
+                newMap.set(place.id, current < photos.length - 1 ? current + 1 : 0);
+                return newMap;
+              });
+            };
+
+            const handleDotClick = (e: React.MouseEvent, index: number) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setCurrentPhotoIndex((prev) => new Map(prev).set(place.id, index));
             };
 
             return (
-              <Marker
-                key={place.id}
-                position={{ lat: place.lat!, lng: place.lng! }}
-                title={place.title}
-                icon={iconConfig}
-                onClick={() => {
+              <InfoWindow
+                position={{ lat: place.lat, lng: place.lng }}
+                onCloseClick={() => {
                   if (!externalSelectedPlaceId) {
-                    setInternalSelectedPlaceId(place.id);
-                    // Reset photo index when opening a new place
-                    setCurrentPhotoIndex(prev => {
-                      const newMap = new Map(prev);
-                      newMap.set(place.id, 0);
-                      return newMap;
-                    });
-                  }
-                  // Haptic feedback simulation
-                  if (navigator.vibrate) {
-                    navigator.vibrate(10);
+                    setInternalSelectedPlaceId(null);
                   }
                 }}
+                options={{
+                  pixelOffset: new (window as any).google.maps.Size(0, -10),
+                }}
               >
-                {selectedPlaceId === place.id && (() => {
-                  const photos = placePhotos.get(place.id) || (place.cover_url ? [place.cover_url] : []);
-                  const currentIndex = currentPhotoIndex.get(place.id) || 0;
-                  const currentPhoto = photos[currentIndex] || place.cover_url;
-                  const hasMultiplePhotos = photos.length > 1;
-                  
-                  const handlePreviousPhoto = (e: React.MouseEvent) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setCurrentPhotoIndex(prev => {
-                      const newMap = new Map(prev);
-                      const current = newMap.get(place.id) || 0;
-                      newMap.set(place.id, current > 0 ? current - 1 : photos.length - 1);
-                      return newMap;
-                    });
-                  };
-                  
-                  const handleNextPhoto = (e: React.MouseEvent) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setCurrentPhotoIndex(prev => {
-                      const newMap = new Map(prev);
-                      const current = newMap.get(place.id) || 0;
-                      newMap.set(place.id, current < photos.length - 1 ? current + 1 : 0);
-                      return newMap;
-                    });
-                  };
-                  
-                  const handleDotClick = (e: React.MouseEvent, index: number) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setCurrentPhotoIndex(prev => new Map(prev).set(place.id, index));
-                  };
-                  
-                  return (
-                    <InfoWindow
-                      position={{ lat: place.lat!, lng: place.lng! }}
-                      onCloseClick={() => {
-                        if (!externalSelectedPlaceId) {
-                          setInternalSelectedPlaceId(null);
-                        }
-                      }}
-                      options={{
-                        pixelOffset: new (window as any).google.maps.Size(0, -10),
-                      }}
-                    >
-                      <div className="w-80 bg-white rounded-xl shadow-xl overflow-hidden">
-                        {/* Image Section with Carousel */}
-                        <div className="relative w-full" style={{ paddingBottom: '100%' }}>
-                          {currentPhoto ? (
-                            <div className="absolute inset-0">
-                              <img
-                                src={currentPhoto}
-                                alt={place.title}
-                                className="absolute inset-0 w-full h-full object-cover rounded-t-xl"
+                <div className="w-80 bg-white rounded-xl shadow-xl overflow-hidden">
+                  {/* Image Section with Carousel */}
+                  <div className="relative w-full" style={{ paddingBottom: '100%' }}>
+                    {currentPhoto ? (
+                      <div className="absolute inset-0">
+                        <img
+                          src={currentPhoto}
+                          alt={place.title}
+                          className="absolute inset-0 w-full h-full object-cover rounded-t-xl"
+                        />
+                        
+                        {/* Premium Badge - Top Left */}
+                        {isPlacePremium(place) && (
+                          <div className="absolute top-3 left-3 z-10">
+                            <PremiumBadge />
+                          </div>
+                        )}
+                        
+                        {/* Top Right Buttons - Favorite Icon Always Visible */}
+                        <div className="absolute top-3 right-3 flex gap-2 z-10">
+                          {userId && onToggleFavorite && (
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onToggleFavorite(place.id, e);
+                              }}
+                              className={`h-8 w-8 rounded-full bg-white border flex items-center justify-center transition shadow-sm ${
+                                favorites?.has(place.id) 
+                                  ? "border-[#8F9E4F] bg-[#FAFAF7]" 
+                                  : "border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F]"
+                              }`}
+                              title={favorites?.has(place.id) ? "Remove from favorites" : "Add to favorites"}
+                              aria-label={favorites?.has(place.id) ? "Remove from favorites" : "Add to favorites"}
+                            >
+                              <FavoriteIcon 
+                                isActive={favorites?.has(place.id) || false} 
+                                size={16}
                               />
-                              
-                              {/* Premium Badge - Top Left */}
-                              {isPlacePremium(place) && (
-                                <div className="absolute top-3 left-3 z-10">
-                                  <PremiumBadge />
-                                </div>
-                              )}
-                              
-                              {/* Top Right Buttons - Favorite Icon Always Visible */}
-                              <div className="absolute top-3 right-3 flex gap-2 z-10">
-                                {userId && onToggleFavorite && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      onToggleFavorite(place.id, e);
-                                    }}
-                                    className={`h-8 w-8 rounded-full bg-white border flex items-center justify-center transition shadow-sm ${
-                                      favorites?.has(place.id) 
-                                        ? "border-[#8F9E4F] bg-[#FAFAF7]" 
-                                        : "border-[#ECEEE4] hover:bg-[#FAFAF7] hover:border-[#8F9E4F]"
-                                    }`}
-                                    title={favorites?.has(place.id) ? "Remove from favorites" : "Add to favorites"}
-                                    aria-label={favorites?.has(place.id) ? "Remove from favorites" : "Add to favorites"}
-                                  >
-                                    <FavoriteIcon 
-                                      isActive={favorites?.has(place.id) || false} 
-                                      size={16}
-                                    />
-                                  </button>
-                                )}
-                              </div>
-                              
-                              {/* Navigation Arrows - круглые как в карточках */}
-                              {hasMultiplePhotos && (
-                                <>
-                                  <button
-                                    onClick={handlePreviousPhoto}
-                                    className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-white/90 hover:bg-white shadow-lg flex items-center justify-center transition-colors z-10"
-                                    aria-label="Previous photo"
-                                  >
-                                    <Icon name="back" size={16} className="text-[#1F2A1F]" />
-                                  </button>
-                                  <button
-                                    onClick={handleNextPhoto}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-white/90 hover:bg-white shadow-lg flex items-center justify-center transition-colors z-10"
-                                    aria-label="Next photo"
-                                  >
-                                    <svg className="w-4 h-4 text-[#2d2d2d]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                    </svg>
-                                  </button>
-                                </>
-                              )}
-                              
-                              {/* Pagination Dots - как в карточках */}
-                              {hasMultiplePhotos && (
-                                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
-                                  {photos.map((_, index) => (
-                                    <button
-                                      key={index}
-                                      onClick={(e) => handleDotClick(e, index)}
-                                      className={`h-1.5 rounded-full transition-all duration-200 ${
-                                        index === currentIndex
-                                          ? 'w-6 bg-white'
-                                          : 'w-1.5 bg-white/60 hover:bg-white/80'
-                                      }`}
-                                      aria-label={`Go to photo ${index + 1}`}
-                                    />
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="absolute inset-0 bg-[#f5f4f2] rounded-t-xl flex items-center justify-center">
-                              <Icon name="photo" size={24} className="text-[#A8B096]" aria-label="No photo available" />
-                            </div>
+                            </button>
                           )}
                         </div>
-                        {/* Text Content Section: для гостя + премиум — модалка входа, иначе ссылка */}
-                        {(() => {
-                          const isPremium = isPlacePremium(place);
-                          const canView = canUserViewPlace(defaultAccess, place);
-                          const isLocked = isPremium && !canView;
-                          const content = (
-                            <>
-                              {/* Title Row */}
-                              <div className="flex items-start justify-between mb-1">
-                                <h3 className="text-base font-semibold text-[#2d2d2d] line-clamp-1 flex-1 pr-2">
-                                  {place.title}
-                                </h3>
-                              </div>
-                              {place.description && (
-                                <div className="text-sm text-[#6F7A5A] line-clamp-1 mb-2">
-                                  {place.description}
-                                </div>
-                              )}
-                              <div className="flex items-center gap-1.5 text-base text-[#2d2d2d]">
-                                {place.city && (
-                                  <>
-                                    <span>{place.city}</span>
-                                    {place.tags && place.tags.length > 0 && (
-                                      <span className="text-[#A8B096]">•</span>
-                                    )}
-                                  </>
-                                )}
-                                {place.tags && place.tags.length > 0 && (
-                                  <span className="text-[#6F7A5A]">
-                                    {place.tags.slice(0, 2).join(", ")}
-                                    {place.tags.length > 2 && ` +${place.tags.length - 2}`}
-                                  </span>
-                                )}
-                              </div>
-                            </>
-                          );
-                          if (isLocked) {
-                            return (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openPremiumLocation("place", place.title, place.id);
-                                  if (!externalSelectedPlaceId) {
-                                    setInternalSelectedPlaceId(null);
-                                  }
-                                }}
-                                className="block w-full text-left p-4 hover:bg-[#FAFAF7] transition-colors rounded-b-xl"
-                              >
-                                {content}
-                              </button>
-                            );
-                          }
-                          return (
-                            <Link
-                              href={`/id/${place.id}`}
-                              target={isDesktop ? "_blank" : undefined}
-                              rel={isDesktop ? "noopener noreferrer" : undefined}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (!externalSelectedPlaceId) {
-                                  setInternalSelectedPlaceId(null);
-                                }
-                              }}
-                              className="block p-4"
+                        
+                        {/* Navigation Arrows */}
+                        {hasMultiplePhotos && (
+                          <>
+                            <button
+                              onClick={handlePreviousPhoto}
+                              className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-white/90 hover:bg-white shadow-lg flex items-center justify-center transition-colors z-10"
+                              aria-label="Previous photo"
                             >
-                              {content}
-                            </Link>
-                          );
-                        })()}
+                              <Icon name="back" size={16} className="text-[#1F2A1F]" />
+                            </button>
+                            <button
+                              onClick={handleNextPhoto}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-white/90 hover:bg-white shadow-lg flex items-center justify-center transition-colors z-10"
+                              aria-label="Next photo"
+                            >
+                              <svg className="w-4 h-4 text-[#2d2d2d]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </button>
+                          </>
+                        )}
+                        
+                        {/* Pagination Dots */}
+                        {hasMultiplePhotos && (
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+                            {photos.map((_, index) => (
+                              <button
+                                key={index}
+                                onClick={(e) => handleDotClick(e, index)}
+                                className={`h-1.5 rounded-full transition-all duration-200 ${
+                                  index === currentIndex
+                                    ? 'w-6 bg-white'
+                                    : 'w-1.5 bg-white/60 hover:bg-white/80'
+                                }`}
+                                aria-label={`Go to photo ${index + 1}`}
+                              />
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    </InfoWindow>
-                  );
-                })()}
-              </Marker>
+                    ) : (
+                      <div className="absolute inset-0 bg-[#f5f4f2] rounded-t-xl flex items-center justify-center">
+                        <Icon name="photo" size={24} className="text-[#A8B096]" aria-label="No photo available" />
+                      </div>
+                    )}
+                  </div>
+                  {/* Text Content Section */}
+                  {(() => {
+                    const isPremium = isPlacePremium(place);
+                    const canView = canUserViewPlace(defaultAccess, place);
+                    const isLocked = isPremium && !canView;
+                    const content = (
+                      <>
+                        <div className="flex items-start justify-between mb-1">
+                          <h3 className="text-base font-semibold text-[#2d2d2d] line-clamp-1 flex-1 pr-2">
+                            {place.title}
+                          </h3>
+                        </div>
+                        {place.description && (
+                          <div className="text-sm text-[#6F7A5A] line-clamp-1 mb-2">
+                            {place.description}
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1.5 text-base text-[#2d2d2d]">
+                          {place.city && (
+                            <>
+                              <span>{place.city}</span>
+                              {place.tags && place.tags.length > 0 && (
+                                <span className="text-[#A8B096]">•</span>
+                              )}
+                            </>
+                          )}
+                          {place.tags && place.tags.length > 0 && (
+                            <span className="text-[#6F7A5A]">
+                              {place.tags.slice(0, 2).join(", ")}
+                              {place.tags.length > 2 && ` +${place.tags.length - 2}`}
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    );
+                    if (isLocked) {
+                      return (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openPremiumLocation("place", place.title, place.id);
+                            if (!externalSelectedPlaceId) {
+                              setInternalSelectedPlaceId(null);
+                            }
+                          }}
+                          className="block w-full text-left p-4 hover:bg-[#FAFAF7] transition-colors rounded-b-xl"
+                        >
+                          {content}
+                        </button>
+                      );
+                    }
+                    return (
+                      <Link
+                        href={`/id/${place.id}`}
+                        target={isDesktop ? "_blank" : undefined}
+                        rel={isDesktop ? "noopener noreferrer" : undefined}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!externalSelectedPlaceId) {
+                            setInternalSelectedPlaceId(null);
+                          }
+                        }}
+                        className="block p-4"
+                      >
+                        {content}
+                      </Link>
+                    );
+                  })()}
+                </div>
+              </InfoWindow>
             );
-          })}
+          })()}
         </GoogleMap>
         )}
       </div>

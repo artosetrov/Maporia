@@ -9,6 +9,7 @@ import Wordmark from "../components/Wordmark";
 import PlaceCard from "../components/PlaceCard";
 import FavoriteIcon from "../components/FavoriteIcon";
 import PremiumUpsellModal from "../components/PremiumUpsellModal";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 // ——— Helpers ———
 

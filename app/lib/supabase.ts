@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../types/supabase";
+import { logger } from "@/app/lib/logger";
 
 // Validate required environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -18,7 +19,7 @@ if (typeof window !== 'undefined') {
   };
   
   if (process.env.NODE_ENV === 'development') {
-    console.log('[Supabase] Environment check:', envCheck);
+    logger.debug('[Supabase] Environment check:', envCheck);
   }
   
   // In production, also log to help debug
@@ -72,14 +73,14 @@ const safeKey = supabaseAnonKey || 'placeholder-key';
 export const supabase = createClient<Database>(safeUrl, safeKey, {
   auth: {
     persistSession: true,
-    autoRefreshToken: true,
+    // IMPORTANT: Disable auto-refresh on init to prevent SDK console.error
+    // when refresh token is stale. We call startAutoRefresh() manually
+    // after validating the session (see initSession below).
+    autoRefreshToken: false,
     detectSessionInUrl: true,
-    // CRITICAL: Don't use default redirect URL - we'll handle redirects manually
-    // This prevents Supabase from redirecting to production
-    flowType: 'pkce', // Use PKCE flow for better security and control
+    flowType: 'pkce',
   },
   global: {
-    // Add headers for better debugging
     headers: {
       'x-client-info': 'maporia-web',
     },
@@ -105,7 +106,7 @@ export function isRefreshTokenError(error: any): boolean {
  */
 export async function handleRefreshTokenError(error: any): Promise<void> {
   if (isRefreshTokenError(error)) {
-    console.warn('[Supabase] Refresh token error detected, clearing invalid session:', {
+    logger.warn('[Supabase] Refresh token error detected, clearing invalid session:', {
       message: error.message || error.error_description,
       error: error.error,
     });
@@ -119,23 +120,9 @@ export async function handleRefreshTokenError(error: any): Promise<void> {
   }
 }
 
-// Set up global error handler for refresh token errors (client-side only)
+// Client-side: validate session, clear stale tokens, then enable auto-refresh
 if (typeof window !== 'undefined') {
-  // Listen for auth state changes to catch refresh token errors
-  supabase.auth.onAuthStateChange(async (event, session) => {
-    // Handle token refresh errors
-    if (event === 'TOKEN_REFRESHED' && !session) {
-      // Token refresh failed - clear invalid session
-      console.warn('[Supabase] Token refresh failed, clearing invalid session');
-      try {
-        await supabase.auth.signOut({ scope: 'local' });
-      } catch {
-        // Ignore sign out errors - we're already cleaning up
-      }
-    }
-  });
-
-  // Listen for unhandled promise rejections related to auth and network
+  // Catch unhandled rejections related to auth/network (safety net)
   window.addEventListener('unhandledrejection', (event) => {
     const error = event.reason;
     if (isRefreshTokenError(error)) {
@@ -143,145 +130,70 @@ if (typeof window !== 'undefined') {
       handleRefreshTokenError(error);
       return;
     }
-    // Не показывать в консоли сырой "Failed to fetch" — одна понятная подсказка
-    if (error?.name === 'TypeError' && (error?.message === 'Failed to fetch' || String(error?.message || '').includes('fetch'))) {
+    if (
+      error?.name === 'TypeError' &&
+      (error?.message === 'Failed to fetch' || String(error?.message || '').includes('fetch'))
+    ) {
       event.preventDefault();
       if (process.env.NODE_ENV === 'development') {
-        console.warn('[Supabase] Сеть недоступна (Failed to fetch). Проверьте интернет и .env.local (NEXT_PUBLIC_SUPABASE_URL).');
+        logger.warn('[Supabase] Сеть недоступна (Failed to fetch). Проверьте интернет и .env.local.');
       }
     }
   });
-}
 
-// Log Supabase client initialization (dev only)
-if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-  console.log('[Supabase] Client initialized:', {
-    url: safeUrl.substring(0, 30) + '...',
-    hasValidConfig: hasValidSupabaseConfig,
-    userAgent: navigator.userAgent.substring(0, 50),
-  });
-  
-  // Test connection immediately with timeout and proper error handling
-  // Use a longer timeout (20 seconds) and make it non-blocking
-  // This is a diagnostic check only - it should not block or warn unnecessarily
-  let sessionCheckCompleted = false;
-  const sessionCheckTimeout = setTimeout(() => {
-    if (!sessionCheckCompleted) {
-      // Only log as info (not warning) - this is expected in some network conditions
-      // The app will continue to work even if this check is slow
-      console.log('[Supabase] Initial session check still in progress (this is normal)');
-    }
-  }, 20000); // Increased to 20 seconds
-  
-  supabase.auth.getSession().then(async ({ data, error }) => {
-    sessionCheckCompleted = true;
-    clearTimeout(sessionCheckTimeout);
-    if (error) {
-      // Silently ignore AbortError
-      if (error.message?.includes('abort') || error.name === 'AbortError') {
+  /**
+   * Session initialization:
+   * 1. Validate current session via getSession() (triggers refresh if expired)
+   * 2. If refresh token is stale → clear session locally
+   * 3. Start auto-refresh AFTER validation so the SDK never hits a stale token
+   */
+  const initSession = async () => {
+    try {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error) {
+        // Ignore abort / network errors — they're transient
+        if (error.message?.includes('abort') || error.name === 'AbortError') return;
+        if (error.name === 'TypeError' && error.message?.includes('fetch')) {
+          if (process.env.NODE_ENV === 'development') {
+            logger.warn('[Supabase] Нет доступа к серверу. Проверьте NEXT_PUBLIC_SUPABASE_URL и интернет.');
+          }
+          return;
+        }
+
+        // Stale refresh token → sign out locally and clear storage
+        if (isRefreshTokenError(error)) {
+          await handleRefreshTokenError(error);
+          return;
+        }
+
+        if (process.env.NODE_ENV === 'development') {
+          logger.warn('[Supabase] Session init error:', error.message);
+        }
+      } else if (process.env.NODE_ENV === 'development') {
+        logger.debug('[Supabase] Session:', data.session ? 'active' : 'none');
+      }
+    } catch (err: unknown) {
+      const e = err as { name?: string; message?: string };
+      if (e?.name === 'AbortError' || e?.message?.includes?.('abort')) return;
+      if (e?.name === 'TypeError' && e?.message?.includes?.('fetch')) return;
+
+      if (isRefreshTokenError(err)) {
+        await handleRefreshTokenError(err);
         return;
       }
-      // Не дублировать лог при сетевой ошибке (Failed to fetch)
-      if (error.name === 'TypeError' && error.message?.includes('fetch')) {
-        console.warn('[Supabase] Нет доступа к серверу (сеть или CORS). Проверьте NEXT_PUBLIC_SUPABASE_URL и интернет.');
-        return;
+
+      if (process.env.NODE_ENV === 'development') {
+        logger.warn('[Supabase] Session init exception:', e?.message);
       }
-      
-      // Handle refresh token errors
-      if (isRefreshTokenError(error)) {
-        await handleRefreshTokenError(error);
-        return;
-      }
-      
-      console.error('[Supabase] Initial session check failed:', {
-        message: error.message,
-        name: error.name,
-      });
-    } else {
-      console.log('[Supabase] Initial session check:', {
-        hasSession: !!data.session,
-        userId: data.session?.user?.id?.substring(0, 8) || null,
-      });
-      
-      // Test a simple query to places table to verify RLS policies
-      if (hasValidSupabaseConfig) {
-        const testQueryStart = Date.now();
-        supabase
-          .from("places")
-          .select("id", { count: 'exact', head: true })
-          .limit(1)
-          .then(({ data: testData, error: testError, count }) => {
-            const testDuration = Date.now() - testQueryStart;
-            if (testError) {
-              if (testError.name === 'TypeError' && testError.message?.includes('fetch')) {
-                console.warn('[Supabase] Нет доступа к серверу (сеть или CORS). Проверьте NEXT_PUBLIC_SUPABASE_URL и интернет.');
-                return;
-              }
-              // Don't log AbortError
-              if (!testError.message?.includes('abort') && testError.name !== 'AbortError' && (testError as any).code !== 'ECONNABORTED') {
-                console.error('[Supabase] Test query failed:', {
-                  message: testError.message,
-                  code: testError.code,
-                  details: testError.details,
-                  hint: testError.hint,
-                  duration: `${testDuration}ms`,
-                });
-              }
-            } else if (process.env.NODE_ENV === 'development') {
-              console.log('[Supabase] Test query success:', {
-                count: count || 0,
-                duration: `${testDuration}ms`,
-              });
-            }
-          })
-          .then(undefined, (testErr: unknown) => {
-            const err = testErr as { name?: string; message?: string };
-            if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
-              return;
-            }
-            if (err?.name === 'TypeError' && err?.message?.includes('fetch')) {
-              console.warn('[Supabase] Нет доступа к серверу (сеть или CORS). Проверьте NEXT_PUBLIC_SUPABASE_URL и интернет.');
-              return;
-            }
-            console.error('[Supabase] Test query exception:', {
-              name: err?.name,
-              message: err?.message,
-            });
-          });
-      }
+    } finally {
+      // Enable auto-refresh AFTER validation.
+      // If the stale session was cleared, auto-refresh becomes a no-op.
+      supabase.auth.startAutoRefresh();
     }
-  }).catch(async (err) => {
-    sessionCheckCompleted = true;
-    clearTimeout(sessionCheckTimeout);
-    // Silently ignore AbortError
-    if (err?.name === 'AbortError' || err?.message?.includes('abort') || err?.message?.includes('signal is aborted')) {
-      return;
-    }
-    // Одна понятная запись вместо "Failed to fetch"
-    if (err?.name === 'TypeError' && err?.message?.includes('fetch')) {
-      console.warn('[Supabase] Нет доступа к серверу (сеть или CORS). Проверьте NEXT_PUBLIC_SUPABASE_URL и интернет.');
-      return;
-    }
-    
-    // Handle refresh token errors
-    if (isRefreshTokenError(err)) {
-      await handleRefreshTokenError(err);
-      return;
-    }
-    
-    // Only log non-abort errors, and make them warnings in production
-    if (process.env.NODE_ENV === 'production') {
-      console.warn('[Supabase] Initial session check exception (non-critical):', {
-        name: err?.name,
-        message: err?.message,
-      });
-    } else {
-      console.error('[Supabase] Initial session check exception:', {
-        name: err?.name,
-        message: err?.message,
-      });
-    }
-  });
+  };
+
+  initSession();
 }
 
 /**
@@ -319,7 +231,7 @@ export function getAuthRedirectUrl(path: string = "/"): string {
   
   // Debug logging (dev only)
   if (process.env.NODE_ENV === 'development') {
-    console.log('[Auth] Redirect URL:', redirectUrl, 'from origin:', origin, 'current URL:', window.location.href);
+    logger.debug('[Auth] Redirect URL:', redirectUrl, 'from origin:', origin, 'current URL:', window.location.href);
   }
   
   return redirectUrl;

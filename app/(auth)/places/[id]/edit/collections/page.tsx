@@ -11,6 +11,7 @@ import { useUserAccessContext } from "../../../../../contexts/UserAccessContext"
 import { isUserAdmin } from "../../../../../lib/access";
 import Icon from "../../../../../components/Icon";
 import type { Collection } from "../../../../../types";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 type PlaceCollectionInsert = Database["public"]["Tables"]["place_collections"]["Insert"];
 

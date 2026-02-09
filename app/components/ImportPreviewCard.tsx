@@ -341,7 +341,7 @@ export default function ImportPreviewCard({
             disabled={importing}
             className={cx(
               "rounded-xl px-4 py-3 text-sm font-medium transition border border-[#ECEEE4] bg-white text-[#1F2A1F] hover:bg-[#FAFAF7]",
-              onCancel ? "flex-1 order-2 sm:order-1" : "",
+              "flex-1 order-2 sm:order-1",
               importing && "opacity-50 cursor-not-allowed"
             )}
           >

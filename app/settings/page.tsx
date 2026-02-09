@@ -12,6 +12,7 @@ type ProfileDisplay = Pick<Database["public"]["Tables"]["profiles"]["Row"], "dis
 type ProfileResult = { data: ProfileDisplay | null; error: PostgrestError | null };
 import { ActiveFilters } from "../components/FiltersModal";
 import SearchModal from "../components/SearchModal";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 export default function SettingsPage() {
   const router = useRouter();

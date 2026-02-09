@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
 import Icon from "../../../../components/Icon";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");

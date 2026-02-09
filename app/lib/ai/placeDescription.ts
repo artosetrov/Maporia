@@ -134,7 +134,7 @@ export async function callOpenAiForDescription(args: {
     const text = await res.text();
     if (!res.ok) {
       // Try to parse OpenAI error shape: { error: { message, type, code, ... } }
-      let parsed: any = null;
+      let parsed: { error?: { message?: string; type?: string; code?: string } } | null = null;
       try {
         parsed = JSON.parse(text);
       } catch {
@@ -157,7 +157,7 @@ export async function callOpenAiForDescription(args: {
       });
     }
 
-    let data: any;
+    let data: { choices?: Array<{ message?: { content?: string } }> };
     try {
       data = JSON.parse(text);
     } catch {
@@ -207,14 +207,27 @@ export async function fetchGooglePlaceAiContext(args: {
     throw new Error(`Google Places error ${res.status}: ${text.slice(0, 300)}`);
   }
 
-  let data: any;
+  type GooglePlaceRaw = {
+    displayName?: { text?: string } | string;
+    types?: string[];
+    formattedAddress?: string;
+    rating?: number;
+    userRatingCount?: number;
+    editorialSummary?: { text?: string } | string;
+    reviews?: Array<{ text?: { text?: string } | string; originalText?: { text?: string } }>;
+  };
+
+  let data: GooglePlaceRaw;
   try {
     data = JSON.parse(text);
   } catch {
     throw new Error("Google Places returned invalid JSON");
   }
 
-  const name = data?.displayName?.text || data?.displayName || null;
+  const displayNameRaw = data?.displayName;
+  const name = typeof displayNameRaw === "object" && displayNameRaw !== null
+    ? displayNameRaw.text ?? null
+    : (displayNameRaw as string) ?? null;
   const types: string[] | null = Array.isArray(data?.types) ? data.types : null;
   const formatted_address = data?.formattedAddress || null;
   const rating = typeof data?.rating === "number" ? data.rating : data?.rating ? Number(data.rating) : null;
@@ -225,20 +238,26 @@ export async function fetchGooglePlaceAiContext(args: {
         ? Number(data.userRatingCount)
         : null;
 
-  const editorial_summary = data?.editorialSummary?.text || data?.editorialSummary || null;
+  const editorialRaw = data?.editorialSummary;
+  const editorial_summary = typeof editorialRaw === "object" && editorialRaw !== null
+    ? editorialRaw.text ?? null
+    : (editorialRaw as string) ?? null;
 
-  const reviewsRaw: any[] = Array.isArray(data?.reviews) ? data.reviews : [];
+  const reviewsRaw = Array.isArray(data?.reviews) ? data.reviews : [];
   const reviews = reviewsRaw
-    .map((r) => r?.text?.text || r?.text || r?.originalText?.text || "")
-    .filter((s: string) => typeof s === "string" && s.trim().length > 0)
+    .map((r) => {
+      const textField = r?.text;
+      return (typeof textField === "object" && textField !== null ? textField.text : textField) || r?.originalText?.text || "";
+    })
+    .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
     .slice(0, 3);
 
   return {
     name,
     types,
     formatted_address,
-    rating: Number.isFinite(rating as any) ? (rating as number) : null,
-    user_ratings_total: Number.isFinite(user_ratings_total as any) ? (user_ratings_total as number) : null,
+    rating: typeof rating === "number" && Number.isFinite(rating) ? rating : null,
+    user_ratings_total: typeof user_ratings_total === "number" && Number.isFinite(user_ratings_total) ? user_ratings_total : null,
     editorial_summary: editorial_summary ? String(editorial_summary) : null,
     reviews,
   };

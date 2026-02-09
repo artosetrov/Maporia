@@ -142,11 +142,9 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
         }
 
         // Load profile with role, subscription, and interests fields
-        // Use select("*") to get all fields including favorite_categories/favorite_tags if they exist
-        // This is safe even if the fields don't exist yet (migration not run)
         const { data: profileData, error: profileError } = await supabase
           .from("profiles")
-          .select("*")
+          .select("id,display_name,username,avatar_url,bio,role,subscription_status,is_admin,favorite_categories,favorite_tags,created_at")
           .eq("id", currentUser.id)
           .maybeSingle();
 
@@ -187,12 +185,12 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
           if (errCode) errorObj.code = errCode;
           if (errDetails) errorObj.details = errDetails;
           if (errHint) errorObj.hint = errHint;
+
           if (Object.keys(errorObj).length > 0) {
-            if (process.env.NODE_ENV === 'production') {
-              console.error('[useUserAccess] Profile error:', errorObj);
-            } else {
-              console.error("Error loading profile:", errorObj);
-            }
+            console.error('[useUserAccess] Profile error:', errorObj);
+          } else if (process.env.NODE_ENV === 'development') {
+            // Supabase вернул ошибку без стандартных полей — логируем сырой объект
+            console.warn('[useUserAccess] Profile error (raw):', JSON.stringify(profileError, Object.getOwnPropertyNames(profileError)));
           }
         }
 

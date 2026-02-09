@@ -8,6 +8,7 @@ import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../lib/access";
 import Icon from "../../../../components/Icon";
 import { getTagEmoji } from "../../../../constants";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 export default function EditTagsPage() {
   const router = useRouter();
@@ -211,7 +212,7 @@ export default function EditTagsPage() {
         throw new Error(errorData.error || "Failed to delete tag");
       }
 
-      setTags(tags.filter((t) => t !== tagName));
+      setTags(tags.filter((t) => t.name !== tagName));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to delete tag";
       console.error("Error deleting tag:", err);

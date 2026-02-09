@@ -2,22 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 // Server-side Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-// Use service role key if available, otherwise use anon key (RPC function uses SECURITY DEFINER)
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+// RPC function get_or_create_city uses SECURITY DEFINER, so anon key is acceptable here
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error("Missing Supabase configuration. NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY) are required.");
-}
-
-// Create client for admin operations
-// Note: RPC function uses SECURITY DEFINER, so it can work with anon key too
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-  },
-});
+const supabaseAdmin = supabaseUrl && supabaseKey
+  ? createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    })
+  : null;
 
 /**
  * Resolve city name to city_id
@@ -25,6 +21,13 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
  */
 export async function POST(request: NextRequest) {
   try {
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { error: "Server configuration error", hint: "NEXT_PUBLIC_SUPABASE_URL and a Supabase key are required" },
+        { status: 500 }
+      );
+    }
+
     const authHeader = request.headers.get("Authorization");
     const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
     if (!token) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { logger } from "@/app/lib/logger";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -100,7 +101,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fallback: extract from places.tags (if tags table doesn't exist)
-    console.warn("Tags table not found, falling back to places.tags extraction");
+    logger.warn("Tags table not found, falling back to places.tags extraction");
     const { data: places, error: placesError } = await supabase
       .from("places")
       .select("tags")
@@ -192,7 +193,7 @@ export async function POST(request: NextRequest) {
 
     // If tags table doesn't exist (PGRST116 = no rows, 42P01 = table doesn't exist)
     if (insertError?.code === "PGRST116" || insertError?.code === "42P01" || insertError?.message?.includes("does not exist")) {
-      console.warn("Tags table not found, tag will be created when added to a place");
+      logger.warn("Tags table not found, tag will be created when added to a place");
       // Fallback: just validate that tag doesn't exist in places
       const { data: places } = await access.supabase
         .from("places")
@@ -358,7 +359,7 @@ export async function PUT(request: NextRequest) {
 
     // Fallback: tags table doesn't exist or old tag not found, use places-based logic
     if (updateTagError?.code === "PGRST116" || updateTagError?.code === "42P01" || updateTagError?.message?.includes("does not exist")) {
-      console.warn("Tags table not found or tag not in table, using places-based update");
+      logger.warn("Tags table not found or tag not in table, using places-based update");
     } else if (updateTagError?.code === "PGRST116") {
       // Tag not found in tags table, but table exists - check if it exists in places
     } else {

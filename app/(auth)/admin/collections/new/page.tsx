@@ -8,6 +8,7 @@ import type { Database } from "../../../../types/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../lib/access";
 import Icon from "../../../../components/Icon";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 type CollectionInsert = Database["public"]["Tables"]["collections"]["Insert"];
 

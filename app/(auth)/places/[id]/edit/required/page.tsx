@@ -13,6 +13,7 @@ import { isUserAdmin } from "../../../../../lib/access";
 type PlaceRequiredRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "cover_url" | "title">;
 type PlacePhotoRow = Pick<Database["public"]["Tables"]["place_photos"]["Row"], "url">;
 import Icon from "../../../../../components/Icon";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 type RequiredStep = {
   id: string;
@@ -41,7 +42,7 @@ export default function RequiredStepsPage(props: PageProps) {
 
       const { data: rawPlace, error: placeError } = await supabase
         .from("places")
-        .select("*")
+        .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, updated_at, lat, lng, access_level, is_premium, premium_only, visibility, google_place_id")
         .eq("id", placeId)
         .single();
 

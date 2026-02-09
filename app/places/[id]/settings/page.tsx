@@ -13,6 +13,7 @@ import { getAuthUrl } from "../../../lib/authRedirect";
 type PlaceSettingsRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by">;
 type PlacePhotoUrlRow = Pick<Database["public"]["Tables"]["place_photos"]["Row"], "url">;
 import Icon from "../../../components/Icon";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");

@@ -59,6 +59,7 @@ import { CATEGORIES } from "../../../../constants";
 import Icon from "../../../../components/Icon";
 import PremiumBadge from "../../../../components/PremiumBadge";
 import GoogleImportField from "../../../../components/GoogleImportField";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 type Place = {
   id: string;
@@ -146,7 +147,7 @@ export default function PlaceEditorHub(props: PageProps) {
       // Load place with all fields including photos count
       const { data: rawPlace, error: placeError } = await supabase
         .from("places")
-        .select("*")
+        .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, updated_at, lat, lng, access_level, is_premium, premium_only, visibility, google_place_id")
         .eq("id", placeId)
         .single();
 
@@ -279,7 +280,7 @@ export default function PlaceEditorHub(props: PageProps) {
         (async () => {
           const { data: rawPlace } = await supabase
             .from("places")
-            .select("*")
+            .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, updated_at, lat, lng, access_level, is_premium, premium_only, visibility, google_place_id")
             .eq("id", placeId)
             .single();
 

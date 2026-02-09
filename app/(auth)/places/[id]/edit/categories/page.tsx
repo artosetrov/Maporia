@@ -13,6 +13,7 @@ type PlaceCategoriesRow = Pick<Database["public"]["Tables"]["places"]["Row"], "c
 import { CATEGORIES, getTagEmoji } from "../../../../../constants";
 import Pill from "../../../../../components/Pill";
 import Icon from "../../../../../components/Icon";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");

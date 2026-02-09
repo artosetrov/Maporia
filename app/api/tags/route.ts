@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Public read endpoint — service role preferred but anon key is acceptable
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.error("Missing Supabase configuration.");
+if (!supabaseUrl || !supabaseKey) {
+  console.error("Missing Supabase configuration: NEXT_PUBLIC_SUPABASE_URL and a Supabase key are required.");
 }
 
 // Create client for server-side operations
-const supabase = supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey, {
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey, {
   auth: {
     autoRefreshToken: false,
     persistSession: false,

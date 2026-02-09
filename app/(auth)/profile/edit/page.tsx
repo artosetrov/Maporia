@@ -10,6 +10,7 @@ import { useUserAccessContext } from "../../../contexts/UserAccessContext";
 import Icon from "../../../components/Icon";
 import type { Profile } from "../../../types";
 import { getTagEmoji } from "../../../constants";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");

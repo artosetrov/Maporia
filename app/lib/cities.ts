@@ -54,7 +54,7 @@ export async function getCitiesWithPlaces(): Promise<City[]> {
 
     if (placesError) {
       // Silently ignore AbortError
-      if (placesError.message?.includes('abort') || placesError.name === 'AbortError' || (placesError as any).code === 'ECONNABORTED') {
+      if (placesError.message?.includes('abort') || placesError.name === 'AbortError' || ('code' in placesError && placesError.code === 'ECONNABORTED')) {
         return [];
       }
       console.error("Error loading places for cities:", placesError);
@@ -62,7 +62,7 @@ export async function getCitiesWithPlaces(): Promise<City[]> {
     }
 
     const cityIds = Array.from(
-      new Set((placesData || []).map((p: any) => p.city_id).filter(Boolean))
+      new Set((placesData || []).map((p: { city_id?: string | null }) => p.city_id).filter(Boolean))
     );
 
     if (cityIds.length === 0) {
@@ -78,7 +78,7 @@ export async function getCitiesWithPlaces(): Promise<City[]> {
 
     if (citiesError) {
       // Silently ignore AbortError
-      if (citiesError.message?.includes('abort') || citiesError.name === 'AbortError' || (citiesError as any).code === 'ECONNABORTED') {
+      if (citiesError.message?.includes('abort') || citiesError.name === 'AbortError' || ('code' in citiesError && citiesError.code === 'ECONNABORTED')) {
         return [];
       }
       console.error("Error loading cities:", citiesError);
@@ -86,9 +86,10 @@ export async function getCitiesWithPlaces(): Promise<City[]> {
     }
 
     return (citiesData || []) as City[];
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Silently ignore AbortError
-    if (error?.name === 'AbortError' || error?.message?.includes('abort')) {
+    const err = error as { name?: string; message?: string };
+    if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
       return [];
     }
     console.error("Exception loading cities with places:", error);

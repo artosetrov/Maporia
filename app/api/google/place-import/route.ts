@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { logger } from "@/app/lib/logger";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -256,7 +257,7 @@ async function findPlaceFromText(apiKey: string, query: string, skipNearbySearch
       if (!variation || variation.length < 2) continue;
       
       // Build request body
-      const requestBody: any = {
+      const requestBody: { textQuery: string; maxResultCount: number; locationBias?: { circle: { center: { latitude: number; longitude: number }; radius: number } } } = {
         textQuery: variation,
         maxResultCount: 5, // Get up to 5 results to find best match
       };
@@ -274,7 +275,7 @@ async function findPlaceFromText(apiKey: string, query: string, skipNearbySearch
         };
       }
 
-      console.log("Trying Find Place API with query:", {
+      logger.debug("Trying Find Place API with query:", {
         query: variation.substring(0, 100),
         hasCoordinates: useCoordinates,
         lat,
@@ -303,7 +304,7 @@ async function findPlaceFromText(apiKey: string, query: string, skipNearbySearch
           } catch {
             errorData = { message: errorText };
           }
-          console.warn("Find Place From Text API error for variation:", {
+          logger.warn("Find Place From Text API error for variation:", {
             status: response.status,
             statusText: response.statusText,
             error: errorData,
@@ -322,7 +323,7 @@ async function findPlaceFromText(apiKey: string, query: string, skipNearbySearch
           if (placeId && typeof placeId === 'string') {
             placeId = placeId.replace(/^places\//, '');
           }
-          console.log("Found place via Find Place API:", {
+          logger.debug("Found place via Find Place API:", {
             placeId,
             displayName: data.places[0].displayName?.text || data.places[0].displayName,
             formattedAddress: data.places[0].formattedAddress,
@@ -332,7 +333,7 @@ async function findPlaceFromText(apiKey: string, query: string, skipNearbySearch
           return placeId;
         }
       } catch (variationError) {
-        console.warn("Error trying query variation:", {
+        logger.warn("Error trying query variation:", {
           error: variationError instanceof Error ? variationError.message : String(variationError),
           query: variation.substring(0, 100),
         });
@@ -343,7 +344,7 @@ async function findPlaceFromText(apiKey: string, query: string, skipNearbySearch
 
     // If we have coordinates but no results from text search, try Nearby Search as fallback
     if (!skipNearbySearch && useCoordinates && lat !== null && lng !== null) {
-      console.log("All Find Place API variations failed, trying Nearby Search with coordinates:", { lat, lng });
+      logger.debug("All Find Place API variations failed, trying Nearby Search with coordinates:", { lat, lng });
       return await findPlaceByCoordinates(apiKey, lat, lng);
     }
 
@@ -361,12 +362,12 @@ async function findPlaceFromText(apiKey: string, query: string, skipNearbySearch
       const looksLikeAddress = hasNumber && (hasStreetIndicator || hasSuiteUnit || hasCityState);
       
       if (looksLikeAddress) {
-        console.log("Query looks like an address, trying Geocoding API:", query.substring(0, 100));
+        logger.debug("Query looks like an address, trying Geocoding API:", query.substring(0, 100));
         return await findPlaceByGeocoding(apiKey, query);
       }
     }
 
-    console.warn("Find Place API returned no results for all query variations:", queryVariations.map(q => q.substring(0, 50)));
+    logger.warn("Find Place API returned no results for all query variations:", queryVariations.map(q => q.substring(0, 50)));
     return null;
   } catch (error) {
     console.error("Find Place From Text API exception:", {
@@ -414,7 +415,7 @@ async function findPlaceByCoordinates(apiKey: string, lat: number, lng: number):
     // Check cache first
     const cached = getCachedPlaceIdForCoordinates(lat, lng);
     if (cached !== undefined) {
-      console.log("Using cached place_id for coordinates:", { lat, lng, placeId: cached });
+      logger.debug("Using cached place_id for coordinates:", { lat, lng, placeId: cached });
       return cached;
     }
     
@@ -424,7 +425,7 @@ async function findPlaceByCoordinates(apiKey: string, lat: number, lng: number):
     const radiuses = [20.0, 50.0, 100.0, 200.0];
     
     for (const radius of radiuses) {
-      console.log("Trying Nearby Search API with radius:", radius, "meters");
+      logger.debug("Trying Nearby Search API with radius:", radius, "meters");
       
       const response = await fetch(
         `https://places.googleapis.com/v1/places:searchNearby`,
@@ -453,7 +454,7 @@ async function findPlaceByCoordinates(apiKey: string, lat: number, lng: number):
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.warn("Nearby Search API error:", {
+        logger.warn("Nearby Search API error:", {
           status: response.status,
           error: errorText,
           radius,
@@ -489,7 +490,7 @@ async function findPlaceByCoordinates(apiKey: string, lat: number, lng: number):
         if (placeId && typeof placeId === 'string') {
           placeId = placeId.replace(/^places\//, '');
         }
-        console.log("Found place via Nearby Search API:", {
+        logger.debug("Found place via Nearby Search API:", {
           placeId,
           displayName: closestPlace.displayName?.text || closestPlace.displayName,
           distance: minDistance.toFixed(0) + "m",
@@ -505,7 +506,7 @@ async function findPlaceByCoordinates(apiKey: string, lat: number, lng: number):
     }
 
     // If Nearby Search fails, try reverse geocoding as last resort
-    console.log("Nearby Search failed, trying reverse geocoding");
+    logger.debug("Nearby Search failed, trying reverse geocoding");
     const reverseGeocodePlaceId = await findPlaceByReverseGeocoding(apiKey, lat, lng);
     
     // Cache the result (even if null, to avoid repeated API calls)
@@ -525,9 +526,16 @@ async function findPlaceByCoordinates(apiKey: string, lat: number, lng: number):
  * Get geocode data from address
  * Returns geocode data and coordinates
  */
-async function getGeocodeData(apiKey: string, address: string): Promise<{ geocodeData: any; lat: number; lng: number } | null> {
+type GeocodeResult = {
+  formatted_address?: string;
+  geometry?: { location?: { lat: number; lng: number } };
+  address_components?: Array<{ types: string[]; long_name?: string; short_name?: string }>;
+  types?: string[];
+};
+
+async function getGeocodeData(apiKey: string, address: string): Promise<{ geocodeData: GeocodeResult; lat: number; lng: number } | null> {
   try {
-    console.log("Geocoding address:", address.substring(0, 100));
+    logger.debug("Geocoding address:", address.substring(0, 100));
     
     // Use Geocoding API to get coordinates from address
     const encodedAddress = encodeURIComponent(address);
@@ -536,7 +544,7 @@ async function getGeocodeData(apiKey: string, address: string): Promise<{ geocod
     );
 
     if (!geocodeResponse.ok) {
-      console.warn("Geocoding API failed:", geocodeResponse.status);
+      logger.warn("Geocoding API failed:", geocodeResponse.status);
       return null;
     }
 
@@ -550,7 +558,7 @@ async function getGeocodeData(apiKey: string, address: string): Promise<{ geocod
         const lat = location.lat;
         const lng = location.lng;
         
-        console.log("Got coordinates from geocoding:", { lat, lng, formatted_address: result.formatted_address });
+        logger.debug("Got coordinates from geocoding:", { lat, lng, formatted_address: result.formatted_address });
         
         return {
           geocodeData: result,
@@ -559,7 +567,7 @@ async function getGeocodeData(apiKey: string, address: string): Promise<{ geocod
         };
       }
     } else {
-      console.warn("Geocoding API returned no results:", {
+      logger.warn("Geocoding API returned no results:", {
         status: geocodeData.status,
         error_message: geocodeData.error_message,
         address: address.substring(0, 100),
@@ -582,7 +590,7 @@ async function getGeocodeData(apiKey: string, address: string): Promise<{ geocod
  */
 async function findPlaceByGeocoding(apiKey: string, address: string): Promise<string | null> {
   try {
-    console.log("Geocoding address:", address.substring(0, 100));
+    logger.debug("Geocoding address:", address.substring(0, 100));
     
     // Use Geocoding API to get coordinates from address
     const encodedAddress = encodeURIComponent(address);
@@ -591,7 +599,7 @@ async function findPlaceByGeocoding(apiKey: string, address: string): Promise<st
     );
 
     if (!geocodeResponse.ok) {
-      console.warn("Geocoding API failed:", geocodeResponse.status);
+      logger.warn("Geocoding API failed:", geocodeResponse.status);
       return null;
     }
 
@@ -605,14 +613,14 @@ async function findPlaceByGeocoding(apiKey: string, address: string): Promise<st
         const lat = location.lat;
         const lng = location.lng;
         
-        console.log("Got coordinates from geocoding:", { lat, lng, formatted_address: result.formatted_address });
+        logger.debug("Got coordinates from geocoding:", { lat, lng, formatted_address: result.formatted_address });
         
         // Try to find place using Nearby Search with these coordinates
         const placeId = await findPlaceByCoordinates(apiKey, lat, lng);
         return placeId;
       }
     } else {
-      console.warn("Geocoding API returned no results:", {
+      logger.warn("Geocoding API returned no results:", {
         status: geocodeData.status,
         error_message: geocodeData.error_message,
         address: address.substring(0, 100),
@@ -641,7 +649,7 @@ async function findPlaceByReverseGeocoding(apiKey: string, lat: number, lng: num
     );
 
     if (!geocodeResponse.ok) {
-      console.warn("Reverse geocoding failed:", geocodeResponse.status);
+      logger.warn("Reverse geocoding failed:", geocodeResponse.status);
       return null;
     }
 
@@ -650,7 +658,7 @@ async function findPlaceByReverseGeocoding(apiKey: string, lat: number, lng: num
     if (geocodeData.results && geocodeData.results.length > 0) {
       // Get formatted address and try to find place using it
       const formattedAddress = geocodeData.results[0].formatted_address;
-      console.log("Got address from reverse geocoding:", formattedAddress);
+      logger.debug("Got address from reverse geocoding:", formattedAddress);
       
       // Try to find place using the formatted address (skip Nearby Search to avoid recursion)
       return await findPlaceFromText(apiKey, formattedAddress, true);
@@ -754,7 +762,7 @@ function cacheResponse(placeId: string, data: unknown) {
  * Normalize Geocoding API data to profile/place format
  * Used when Places API doesn't find a place_id
  */
-function normalizeGeocodeData(geocodeResult: any, originalQuery: string) {
+function normalizeGeocodeData(geocodeResult: GeocodeResult, originalQuery: string) {
   const location = geocodeResult.geometry?.location;
   const lat = location?.lat || null;
   const lng = location?.lng || null;
@@ -835,7 +843,23 @@ function normalizeGeocodeData(geocodeResult: any, originalQuery: string) {
 /**
  * Normalize Google Places data to profile/place format
  */
-function normalizePlaceData(placeData: any, originalQuery: string, isUrl: boolean = false) {
+type PlaceDetailsData = {
+  id?: string;
+  displayName?: { text?: string } | string;
+  formattedAddress?: string;
+  websiteUri?: string;
+  nationalPhoneNumber?: string;
+  rating?: number;
+  userRatingCount?: number;
+  regularOpeningHours?: { weekdayDescriptions?: string[]; periods?: unknown[] };
+  priceLevel?: string;
+  types?: string[];
+  photos?: Array<{ name?: string }>;
+  location?: { latitude?: number; longitude?: number };
+  addressComponents?: Array<{ types: string[]; longText?: string; shortText?: string }>;
+};
+
+function normalizePlaceData(placeData: PlaceDetailsData, originalQuery: string, isUrl: boolean = false) {
   const openingHours = placeData.regularOpeningHours
     ? {
         weekdayText: placeData.regularOpeningHours.weekdayDescriptions || [],
@@ -844,7 +868,8 @@ function normalizePlaceData(placeData: any, originalQuery: string, isUrl: boolea
     : null;
 
   // Extract display name (could be text or string)
-  const displayName = placeData.displayName?.text || placeData.displayName || null;
+  const rawName = placeData.displayName;
+  const displayName = (typeof rawName === "object" && rawName !== null ? rawName.text : rawName) || null;
 
   // Extract coordinates
   const lat = placeData.location?.latitude || null;
@@ -915,13 +940,13 @@ function normalizePlaceData(placeData: any, originalQuery: string, isUrl: boolea
     city_state: state,
     city_country: country,
     // Photo references (URLs need to be generated client-side with API key)
-    photos: placeData.photos?.map((photo: any) => ({
+    photos: placeData.photos?.map((photo) => ({
       reference: photo.name || photo,
       // Note: Photo URLs should be generated client-side or via a server endpoint
       // to avoid exposing API key. For now, we return the reference.
       url: null,
     })) || [],
-    photo_urls: placeData.photos?.map((photo: any) => photo.name || photo) || [], // Alias for backward compatibility
+    photo_urls: placeData.photos?.map((photo) => photo.name || photo) || [], // Alias for backward compatibility
     is_coordinate_only: false, // Has a place_id, so not coordinate-only
   };
 }
@@ -1009,7 +1034,7 @@ export async function POST(request: NextRequest) {
     // Check if query is in format "place_id:ChIJ..." (from Google Maps autocomplete)
     if (trimmedQuery.startsWith("place_id:")) {
       placeId = trimmedQuery.replace("place_id:", "").trim();
-      console.log("Extracted place_id from query format:", placeId.substring(0, 50));
+      logger.debug("Extracted place_id from query format:", placeId.substring(0, 50));
     } else if (queryIsUrl) {
       // First try to extract place_id
       placeId = extractPlaceIdFromUrl(trimmedQuery);
@@ -1018,20 +1043,20 @@ export async function POST(request: NextRequest) {
       if (!placeId) {
         coordinates = extractCoordinatesFromUrl(trimmedQuery);
         if (coordinates) {
-          console.log("Extracted coordinates from URL:", coordinates);
+          logger.debug("Extracted coordinates from URL:", coordinates);
           // Try to resolve coordinates to place_id immediately
           placeId = await findPlaceByCoordinates(googleApiKey, coordinates.lat, coordinates.lng);
           if (placeId) {
-            console.log("Resolved coordinates to place_id:", placeId.substring(0, 50));
+            logger.debug("Resolved coordinates to place_id:", placeId.substring(0, 50));
           }
         }
       }
     }
 
     // Step 2: If no place_id found, use Find Place From Text API
-    let geocodeData: any = null;
+    let geocodeData: GeocodeResult | null = null;
     if (!placeId) {
-      console.log("No place_id extracted from URL, using Find Place API for:", trimmedQuery.substring(0, 100));
+      logger.debug("No place_id extracted from URL, using Find Place API for:", trimmedQuery.substring(0, 100));
       
       // Check if query looks like an address BEFORE trying Find Place API
       // This allows us to use Geocoding API more aggressively for addresses
@@ -1048,13 +1073,13 @@ export async function POST(request: NextRequest) {
         looksLikeAddress = hasNumber && (hasStreetIndicator || hasSuiteUnit || hasCityState || hasComma);
         
         if (looksLikeAddress) {
-          console.log("Query looks like an address, trying Geocoding API first:", trimmedQuery.substring(0, 100));
+          logger.debug("Query looks like an address, trying Geocoding API first:", trimmedQuery.substring(0, 100));
           const geocodeResult = await getGeocodeData(googleApiKey, trimmedQuery);
           if (geocodeResult) {
             geocodeData = geocodeResult.geocodeData;
             // Try to find place_id using coordinates from geocoding
             if (geocodeResult.lat && geocodeResult.lng) {
-              console.log("Trying to find place_id using coordinates from Geocoding API");
+              logger.debug("Trying to find place_id using coordinates from Geocoding API");
               placeId = await findPlaceByCoordinates(googleApiKey, geocodeResult.lat, geocodeResult.lng);
             }
           }
@@ -1088,20 +1113,20 @@ export async function POST(request: NextRequest) {
 
     // Step 3: If we have coordinates but no place_id, try to resolve them
     if (coordinates && !placeId) {
-      console.log("Trying to resolve coordinates to place_id:", coordinates);
+      logger.debug("Trying to resolve coordinates to place_id:", coordinates);
       placeId = await findPlaceByCoordinates(googleApiKey, coordinates.lat, coordinates.lng);
       if (placeId) {
-        console.log("Successfully resolved coordinates to place_id:", placeId.substring(0, 50));
+        logger.debug("Successfully resolved coordinates to place_id:", placeId.substring(0, 50));
       } else {
-        console.log("Could not resolve coordinates to place_id - will return coordinate-only location");
+        logger.debug("Could not resolve coordinates to place_id - will return coordinate-only location");
       }
     }
     
     // Step 4: If we have geocode data but no place_id, use geocode data directly
     if (geocodeData && !placeId) {
-      console.log("Using Geocoding API data directly (no place_id found)");
+      logger.debug("Using Geocoding API data directly (no place_id found)");
       const normalizedData = normalizeGeocodeData(geocodeData, trimmedQuery);
-      console.log("Successfully imported place from Geocoding API:", {
+      logger.debug("Successfully imported place from Geocoding API:", {
         name: normalizedData.name,
         address: normalizedData.formatted_address,
         lat: normalizedData.lat,
@@ -1113,7 +1138,7 @@ export async function POST(request: NextRequest) {
     
     // Step 5: If we have coordinates but no place_id and no geocode data, return coordinate-only
     if (coordinates && !placeId && !geocodeData) {
-      console.log("Returning coordinate-only location (no place found)");
+      logger.debug("Returning coordinate-only location (no place found)");
       const normalizedData = normalizeGeocodeData(
         {
           formatted_address: `${coordinates.lat}, ${coordinates.lng}`,
@@ -1149,12 +1174,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log("Getting place details for place_id:", placeId);
+    logger.debug("Getting place details for place_id:", placeId);
     let placeData;
     try {
       placeData = await getPlaceDetails(googleApiKey, placeId);
-    } catch (error: any) {
-      const errorMessage = error?.message || String(error);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       console.error("Error getting place details:", errorMessage);
       
       // Check for API permission errors
@@ -1186,7 +1211,7 @@ export async function POST(request: NextRequest) {
     // Step 8: Normalize data
     const normalizedData = normalizePlaceData(placeData, trimmedQuery, queryIsUrl);
     normalizedData.is_coordinate_only = false; // Explicitly mark as having a place_id
-    console.log("Successfully imported place:", {
+    logger.debug("Successfully imported place:", {
       placeId: normalizedData.place_id,
       name: normalizedData.name,
       address: normalizedData.formatted_address,

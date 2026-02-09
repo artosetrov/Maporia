@@ -3,6 +3,20 @@
  */
 
 /**
+ * Sanitizes a value for use in PostgREST filter strings (.or(), .eq(), .ilike()).
+ * Escapes special characters that could alter the query semantics.
+ *
+ * Use this whenever interpolating user input into PostgREST filter expressions
+ * to prevent filter injection attacks.
+ */
+export const sanitizePostgrestValue = (value: string): string => {
+  // Escape characters that have special meaning in PostgREST filter syntax:
+  // , separates filters; . separates field/operator/value; () group filters;
+  // " and ' delimit strings; \ is escape char
+  return value.replace(/[,.()"'\\]/g, (char) => `\\${char}`);
+};
+
+/**
  * Combines class names, filtering out falsy values
  */
 export function cx(...classes: Array<string | false | undefined | null>): string {
@@ -83,6 +97,28 @@ export function saveToRecentlyViewed(placeId: string, maxItems: number = 20): vo
     console.error('Error saving recently viewed place:', error);
   }
 }
+
+/**
+ * Normalizes a city name for case-insensitive comparison
+ */
+export const normalizeCity = (city: string | null | undefined): string => {
+  if (!city) return "";
+  return city.trim().toLowerCase();
+};
+
+/**
+ * Checks if a place is "Hidden" (has the "Hidden & Unique" category)
+ */
+export const isPlaceHidden = (place: { categories?: string[] | null }): boolean => {
+  return !!(place.categories && place.categories.includes("🤫 Hidden & Unique"));
+};
+
+/**
+ * Checks if a place is "Vibe" (has the "Vibe & Atmosphere" category)
+ */
+export const isPlaceVibe = (place: { categories?: string[] | null }): boolean => {
+  return !!(place.categories && place.categories.includes("✨ Vibe & Atmosphere"));
+};
 
 /**
  * Converts an Instagram Reel URL to embed format

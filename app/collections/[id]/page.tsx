@@ -11,6 +11,7 @@ import { useUserAccessContext } from "../../contexts/UserAccessContext";
 import AuthModal from "../../components/AuthModal";
 import PremiumUpsellModal from "../../components/PremiumUpsellModal";
 import type { Collection } from "../../types";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 type PlaceRow = {
   id: string;
@@ -157,7 +158,7 @@ export default function CollectionDetailPage(props: PageProps) {
 
         const { data: placesData } = await supabase
           .from("places")
-          .select("*")
+          .select("id,title,description,city,country,cover_url,categories,tags,created_by,access_level,address,lat,lng")
           .in("id", placeIds);
 
         if (cancelled) return;

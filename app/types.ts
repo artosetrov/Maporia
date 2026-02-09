@@ -60,6 +60,8 @@ export type Place = {
   is_premium?: boolean | null;
   premium_only?: boolean | null;
   visibility?: string | null;
+  // Google Maps integration
+  google_place_id?: string | null;
   // For draft state in wizard
   accessLevel?: AccessLevel;
 };
@@ -138,4 +140,33 @@ export type PlaceCollection = {
   collection_id: string;
   sort_order: number;
   created_at?: string;
+};
+
+/**
+ * Lightweight place type for list views (map, explore, home sections).
+ * Contains only the fields needed for rendering cards and filtering.
+ */
+export type PlaceListItem = {
+  id: string;
+  title: string;
+  description: string | null;
+  city: string | null;
+  city_name_cached?: string | null;
+  country: string | null;
+  address: string | null;
+  cover_url: string | null;
+  categories: string[] | null;
+  tags: string[] | null;
+  lat: number | null;
+  lng: number | null;
+  created_at: string;
+  created_by?: string | null;
+  access_level?: string | null;
+  // Optional fields used by some pages
+  is_premium?: boolean | null;
+  premium_only?: boolean | null;
+  visibility?: string | null;
+  // Computed fields (added by some queries)
+  commentsCount?: number;
+  likesCount?: number;
 };

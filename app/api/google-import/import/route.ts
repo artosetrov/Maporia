@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { logger } from "@/app/lib/logger";
 import {
   buildAiPrompt,
   callOpenAiForDescription,
@@ -9,10 +10,9 @@ import {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // Server-side Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-// Use service role key if available for bypassing RLS (or use user token)
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+// Service role key is required for import operations (needs to bypass RLS for place creation)
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 function hasPremiumAccessFromProfile(profile: {
   role?: string | null;
@@ -26,8 +26,9 @@ function hasPremiumAccessFromProfile(profile: {
   return false;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function resolveCityId(
-  supabase: any,
+  supabase: ReturnType<typeof createClient<any>>,
   args: {
     name: string;
     state?: string | null;
@@ -59,7 +60,8 @@ async function resolveCityId(
     .eq("id", cityId)
     .single();
 
-  return { city_id: (cityRow as any)?.id || cityId, name: (cityRow as any)?.name || name };
+  const row = cityRow as { id?: string; name?: string } | null;
+  return { city_id: row?.id || cityId, name: row?.name || name };
 }
 
 export async function POST(request: NextRequest) {
@@ -72,9 +74,9 @@ export async function POST(request: NextRequest) {
       access_token 
     } = body;
 
-    if (!supabaseUrl || !supabaseAnonKey) {
+    if (!supabaseUrl || !supabaseServiceKey) {
       return NextResponse.json(
-        { error: "Supabase configuration is missing", code: "MISSING_SUPABASE_CONFIG" },
+        { error: "Server misconfiguration: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required", code: "MISSING_SUPABASE_CONFIG" },
         { status: 500 }
       );
     }
@@ -99,8 +101,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Create Supabase client with anon key for user verification
-    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+    // Create Supabase client with service role key for all operations
+    // Service role key bypasses RLS — we verify auth and permissions below
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
@@ -108,29 +111,12 @@ export async function POST(request: NextRequest) {
     });
 
     // Verify user authentication
-    const { data: { user: authUser }, error: authError } = await supabaseAuth.auth.getUser(access_token);
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(access_token);
     if (authError || !authUser) {
       console.error("Authentication error:", authError);
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     user = authUser;
-
-    // Check if we're using service role key (must be checked before creating client)
-    const isUsingServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!isUsingServiceRole) {
-      console.warn("⚠️ SUPABASE_SERVICE_ROLE_KEY not set. Using anon key - RLS policies will apply.");
-      console.warn("⚠️ This may cause RLS policy violations. Please set SUPABASE_SERVICE_ROLE_KEY in .env.local");
-    }
-
-    // Create Supabase client with service role key for database operations
-    // This bypasses RLS, but we've already verified the user is authenticated
-    // Note: We ALSO check premium access server-side for security.
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
 
     // Server-side access check (defense-in-depth)
     let isAdmin = false;
@@ -143,20 +129,9 @@ export async function POST(request: NextRequest) {
 
       if (profileError) {
         console.error("Failed to load profile for access check:", profileError);
-        // If service role is misconfigured, this will likely fail — surface a helpful error.
-        if (!isUsingServiceRole) {
-          return NextResponse.json(
-            {
-              error:
-                "Server is missing SUPABASE_SERVICE_ROLE_KEY. Cannot verify permissions to create a place.",
-              code: "MISSING_SERVICE_ROLE_KEY",
-            },
-            { status: 500 }
-          );
-        }
       } else {
-        isAdmin = !!(profile as any)?.is_admin || (profile as any)?.role === "admin";
-        const ok = hasPremiumAccessFromProfile(profile as any);
+        isAdmin = !!profile?.is_admin || profile?.role === "admin";
+        const ok = hasPremiumAccessFromProfile(profile);
         if (!ok) {
           return NextResponse.json(
             {
@@ -175,17 +150,8 @@ export async function POST(request: NextRequest) {
     if (target_place_id && typeof target_place_id === "string") {
       const targetPlaceId = target_place_id;
 
-      // When service role key is not set, RLS applies and auth.uid() is null → update returns 0 rows.
-      // Use a client with the user's JWT so RLS sees auth.uid() = user.id and allows owner update.
-      const supabaseForPlace =
-        isUsingServiceRole
-          ? supabase
-          : createClient(supabaseUrl, supabaseAnonKey, {
-              global: { headers: { Authorization: `Bearer ${access_token}` } },
-            });
-
       // Load target place to verify ownership (unless admin)
-      const { data: targetPlace, error: targetPlaceError } = await supabaseForPlace
+      const { data: targetPlace, error: targetPlaceError } = await supabase
         .from("places")
         .select("id, created_by, description")
         .eq("id", targetPlaceId)
@@ -207,7 +173,7 @@ export async function POST(request: NextRequest) {
       }
 
       // If google_place_id already exists for another place, return duplicate
-      const { data: existingByGoogleId, error: existingByGoogleIdError } = await supabaseForPlace
+      const { data: existingByGoogleId, error: existingByGoogleIdError } = await supabase
         .from("places")
         .select("id, title")
         .eq("google_place_id", google_place_id)
@@ -235,7 +201,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Build update payload (only selected fields + always-included ones)
-      const updates: any = {
+      const updates: Record<string, unknown> = {
         google_place_id,
       };
 
@@ -275,7 +241,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Apply updates (do not use .single() — with RLS, 0 rows can be returned and .single() would throw "Cannot coerce the result to a single JSON object")
-      const { data: updatedRows, error: updateError } = await supabaseForPlace
+      const { data: updatedRows, error: updateError } = await supabase
         .from("places")
         .update(updates)
         .eq("id", targetPlaceId)
@@ -297,7 +263,7 @@ export async function POST(request: NextRequest) {
 
         // If user selected photos, replace Photo tour
         if (photos.length > 0) {
-          const { error: deletePhotosError } = await supabaseForPlace
+          const { error: deletePhotosError } = await supabase
             .from("place_photos")
             .delete()
             .eq("place_id", targetPlaceId);
@@ -314,7 +280,7 @@ export async function POST(request: NextRequest) {
             is_cover: index === 0,
           }));
 
-          const { error: insertPhotosError } = await supabaseForPlace
+          const { error: insertPhotosError } = await supabase
             .from("place_photos")
             .insert(photoInserts);
 
@@ -322,7 +288,7 @@ export async function POST(request: NextRequest) {
             console.error("Failed to insert imported photos:", insertPhotosError);
           } else {
             // Keep legacy cover_url in sync for older parts of the app
-            await supabaseForPlace
+            await supabase
               .from("places")
               .update({ cover_url: photos[0] })
               .eq("id", targetPlaceId);
@@ -334,7 +300,7 @@ export async function POST(request: NextRequest) {
       const importedDescription =
         !!(selectedFields?.description && selectedFields?.descriptionData && String(selectedFields.descriptionData).trim().length > 0);
       const hasExistingDescription =
-        !!(targetPlace as any)?.description && String((targetPlace as any).description).trim().length > 0;
+        !!(targetPlace as { description?: string | null })?.description && String((targetPlace as { description?: string | null }).description).trim().length > 0;
 
       if (!importedDescription && !hasExistingDescription) {
         try {
@@ -347,10 +313,10 @@ export async function POST(request: NextRequest) {
             const prompt = buildAiPrompt(ctx);
             const model = process.env.OPENAI_MODEL || "gpt-4.1";
             const aiText = await callOpenAiForDescription({ openAiApiKey, model, prompt });
-            await supabaseForPlace.from("places").update({ description: aiText }).eq("id", targetPlaceId);
+            await supabase.from("places").update({ description: aiText }).eq("id", targetPlaceId);
           }
         } catch (e) {
-          console.warn("AI description generation failed (non-fatal):", e);
+          logger.warn("AI description generation failed (non-fatal):", e);
         }
       }
 
@@ -385,7 +351,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build place data from selected fields
-    const placeData: any = {
+    const placeData: Record<string, unknown> = {
       created_by: user.id,
       google_place_id: google_place_id,
       // Match Add Gem defaults so the editor shows imported data but keeps it hidden until completed
@@ -435,8 +401,8 @@ export async function POST(request: NextRequest) {
         name: selectedFields.city,
         state: selectedFields.city_state || null,
         country: selectedFields.city_country || null,
-        lat: placeData.lat ?? null,
-        lng: placeData.lng ?? null,
+        lat: (placeData.lat as number | null) ?? null,
+        lng: (placeData.lng as number | null) ?? null,
       });
       if (resolved) {
         placeData.city = resolved.name; // legacy
@@ -454,7 +420,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert place
-    console.log("Inserting place with data:", {
+    logger.debug("Inserting place with data:", {
       hasTitle: !!placeData.title,
       hasAddress: !!placeData.address,
       hasCoords: !!(placeData.lat && placeData.lng),
@@ -476,7 +442,6 @@ export async function POST(request: NextRequest) {
         message: insertError.message,
         details: insertError.details,
         hint: insertError.hint,
-        isUsingServiceRole,
         placeData: {
           ...placeData,
           created_by: "[REDACTED]",
@@ -485,17 +450,6 @@ export async function POST(request: NextRequest) {
 
       // Handle RLS policy violation
       if (insertError.code === "42501" || insertError.message?.includes("row-level security")) {
-        if (!isUsingServiceRole) {
-          return NextResponse.json(
-            { 
-              error: "Failed to create place due to security policy. Please ensure SUPABASE_SERVICE_ROLE_KEY is set in environment variables.",
-              details: insertError.message,
-              code: "RLS_POLICY_VIOLATION"
-            },
-            { status: 500 }
-          );
-        }
-        // Even with service role, RLS might still apply - this shouldn't happen but handle it
         return NextResponse.json(
           { 
             error: "Failed to create place due to security policy violation.",
@@ -546,15 +500,15 @@ export async function POST(request: NextRequest) {
 
     // Handle photos if selected
     if (selectedFields.photos && Array.isArray(selectedFields.photos) && selectedFields.photos.length > 0) {
-      console.log("Inserting photos:", {
+      logger.debug("Inserting photos:", {
         photoCount: selectedFields.photos.length,
         placeId: newPlace.id,
       });
 
       // Filter out invalid photos and map to insert format
       const photoInserts = selectedFields.photos
-        .filter((photo: any) => photo && photo.url && typeof photo.url === 'string')
-        .map((photo: any, index: number) => ({
+        .filter((photo: { url?: string }) => photo && photo.url && typeof photo.url === 'string')
+        .map((photo: { url: string }, index: number) => ({
           place_id: newPlace.id,
           user_id: user.id,
           url: photo.url,
@@ -562,7 +516,7 @@ export async function POST(request: NextRequest) {
           is_cover: index === 0, // First photo is cover
         }));
 
-      console.log("Photo inserts prepared:", {
+      logger.debug("Photo inserts prepared:", {
         count: photoInserts.length,
         urls: photoInserts.map((p: { url: string }) => p.url.substring(0, 50)),
       });
@@ -577,17 +531,17 @@ export async function POST(request: NextRequest) {
           console.error("Error inserting photos:", photosError);
           // Don't fail the request if photos fail, just log it
         } else {
-          console.log("Successfully inserted photos:", {
+          logger.debug("Successfully inserted photos:", {
             count: insertedPhotos?.length || 0,
             photoIds: insertedPhotos?.map(p => p.id),
           });
         }
       }
     } else {
-      console.log("No photos to insert");
+      logger.debug("No photos to insert");
     }
 
-    console.log("Import completed successfully:", {
+    logger.debug("Import completed successfully:", {
       placeId: newPlace.id,
       hasTitle: !!placeData.title,
       hasAddress: !!placeData.address,
@@ -614,7 +568,7 @@ export async function POST(request: NextRequest) {
           await supabase.from("places").update({ description: aiText }).eq("id", newPlace.id);
         }
       } catch (e) {
-        console.warn("AI description generation failed (non-fatal):", e);
+        logger.warn("AI description generation failed (non-fatal):", e);
       }
     }
 

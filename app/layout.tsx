@@ -5,6 +5,7 @@ import { ProductionDiagnostics } from "./components/ProductionDiagnostics";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { PremiumModalProvider } from "./contexts/PremiumModalContext";
 import { UserAccessProvider } from "./contexts/UserAccessContext";
+import GlobalModals from "./components/GlobalModals";
 
 export const metadata: Metadata = {
   title: "Maporia",
@@ -35,6 +36,7 @@ export default function RootLayout({
               <GoogleMapsProvider>
                 {children}
               </GoogleMapsProvider>
+              <GlobalModals />
             </UserAccessProvider>
           </PremiumModalProvider>
         </ErrorBoundary>

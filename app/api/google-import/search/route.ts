@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { logger } from "@/app/lib/logger";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -101,7 +102,14 @@ function isUrl(input: string): boolean {
 /**
  * Get geocode data from address
  */
-async function getGeocodeData(apiKey: string, address: string): Promise<{ geocodeData: any; lat: number; lng: number } | null> {
+type GeocodeResult = {
+  formatted_address?: string;
+  geometry?: { location?: { lat: number; lng: number } };
+  address_components?: Array<{ types: string[]; long_name?: string; short_name?: string }>;
+  types?: string[];
+};
+
+async function getGeocodeData(apiKey: string, address: string): Promise<{ geocodeData: GeocodeResult; lat: number; lng: number } | null> {
   try {
     const encodedAddress = encodeURIComponent(address);
     const geocodeResponse = await fetch(
@@ -264,14 +272,14 @@ async function findPlaceFromText(apiKey: string, query: string): Promise<string 
     if (queryVariations.length === 0) {
       if (query.trim().length >= 2) {
         queryVariations.push(query.trim());
-        console.log("⚠️ No variations generated, using original query:", query.trim().substring(0, 100));
+        logger.debug("⚠️ No variations generated, using original query:", query.trim().substring(0, 100));
       } else {
         console.error("❌ Query too short:", query.trim().length);
         return null;
       }
     }
     
-    console.log("📋 Query variations to try:", {
+    logger.debug("📋 Query variations to try:", {
       count: queryVariations.length,
       variations: queryVariations.map(q => q.substring(0, 50)),
       originalQuery: query.substring(0, 100),
@@ -282,9 +290,9 @@ async function findPlaceFromText(apiKey: string, query: string): Promise<string 
     for (const variation of queryVariations) {
       if (!variation || variation.length < 2) continue;
       
-      console.log("Trying Find Place API with query:", variation.substring(0, 100));
+      logger.debug("Trying Find Place API with query:", variation.substring(0, 100));
       
-      const requestBody: any = {
+      const requestBody: { textQuery: string; maxResultCount: number; locationBias?: { circle: { center: { latitude: number; longitude: number }; radius: number } } } = {
         textQuery: variation,
         maxResultCount: 5, // Get multiple results to find best match
       };
@@ -302,7 +310,7 @@ async function findPlaceFromText(apiKey: string, query: string): Promise<string 
       }
 
       try {
-        console.log("🌐 Calling Find Place API:", {
+        logger.debug("🌐 Calling Find Place API:", {
           url: "https://places.googleapis.com/v1/places:searchText",
           requestBody: JSON.stringify(requestBody),
           hasApiKey: !!apiKey,
@@ -325,7 +333,7 @@ async function findPlaceFromText(apiKey: string, query: string): Promise<string 
         // Read response once
         const responseText = await response.text();
         
-        console.log("📡 Find Place API response:", {
+        logger.debug("📡 Find Place API response:", {
           status: response.status,
           statusText: response.statusText,
           ok: response.ok,
@@ -340,7 +348,7 @@ async function findPlaceFromText(apiKey: string, query: string): Promise<string 
           } catch {
             errorData = { message: responseText };
           }
-          console.warn("❌ Find Place API error for variation:", {
+          logger.warn("❌ Find Place API error for variation:", {
             status: response.status,
             statusText: response.statusText,
             query: variation.substring(0, 100),
@@ -354,7 +362,7 @@ async function findPlaceFromText(apiKey: string, query: string): Promise<string 
         let data;
         try {
           if (!responseText || responseText.trim().length === 0) {
-            console.warn("⚠️ Empty response from Find Place API");
+            logger.warn("⚠️ Empty response from Find Place API");
             continue;
           }
           data = JSON.parse(responseText);
@@ -373,7 +381,7 @@ async function findPlaceFromText(apiKey: string, query: string): Promise<string 
           const firstPlace = data.places[0];
           
           if (!firstPlace || !firstPlace.id) {
-            console.warn("Place result missing id:", {
+            logger.warn("Place result missing id:", {
               place: firstPlace,
               query: variation.substring(0, 100),
             });
@@ -388,7 +396,7 @@ async function findPlaceFromText(apiKey: string, query: string): Promise<string 
           }
           
           const displayName = firstPlace.displayName?.text || firstPlace.displayName || 'Unknown';
-          console.log("✅ Found place via Find Place API:", {
+          logger.debug("✅ Found place via Find Place API:", {
             placeId,
             displayName,
             formattedAddress: firstPlace.formattedAddress || 'No address',
@@ -399,7 +407,7 @@ async function findPlaceFromText(apiKey: string, query: string): Promise<string 
           
           return placeId;
         } else {
-          console.log("⚠️ No places found for variation:", {
+          logger.debug("⚠️ No places found for variation:", {
             query: variation.substring(0, 100),
             responseHasPlaces: !!data?.places,
             placesIsArray: Array.isArray(data?.places),
@@ -409,7 +417,7 @@ async function findPlaceFromText(apiKey: string, query: string): Promise<string 
           });
         }
       } catch (error) {
-        console.warn("Error trying query variation:", {
+        logger.warn("Error trying query variation:", {
           error: error instanceof Error ? error.message : String(error),
           query: variation.substring(0, 100),
         });
@@ -436,7 +444,7 @@ async function findPlaceFromText(apiKey: string, query: string): Promise<string 
       const looksLikeAddress = hasNumber && (hasStreetIndicator || hasSuiteUnit || hasCityState);
       
       if (looksLikeAddress) {
-        console.log("Query looks like an address, trying Geocoding API as fallback");
+        logger.debug("Query looks like an address, trying Geocoding API as fallback");
         const geocodeResult = await getGeocodeData(apiKey, query);
         if (geocodeResult) {
           const placeId = await findPlaceByCoordinates(apiKey, geocodeResult.lat, geocodeResult.lng);
@@ -449,7 +457,7 @@ async function findPlaceFromText(apiKey: string, query: string): Promise<string 
 
     // If we get here, Find Place API didn't find anything for any variation
     // Log all attempted variations for debugging
-    console.warn("❌ Find Place API returned no results for all query variations:", {
+    logger.warn("❌ Find Place API returned no results for all query variations:", {
       originalQuery: query.substring(0, 100),
       variations: queryVariations.map(q => q.substring(0, 50)),
       totalVariations: queryVariations.length,
@@ -471,7 +479,7 @@ async function getPlaceDetails(apiKey: string, placeId: string) {
   try {
     const cleanPlaceId = placeId.replace(/^places\//, '');
     
-    console.log("🔍 Getting place details for place_id:", cleanPlaceId.substring(0, 50));
+    logger.debug("🔍 Getting place details for place_id:", cleanPlaceId.substring(0, 50));
     
     const response = await fetch(
       `https://places.googleapis.com/v1/places/${cleanPlaceId}`,
@@ -513,7 +521,7 @@ async function getPlaceDetails(apiKey: string, placeId: string) {
       throw new Error("Invalid response from Google Places API");
     }
 
-    console.log("✅ Got place details:", {
+    logger.debug("✅ Got place details:", {
       placeId: data.id?.substring(0, 50),
       displayName: data.displayName?.text || data.displayName,
       hasPhotos: !!(data.photos && data.photos.length > 0),
@@ -567,8 +575,18 @@ function getPhotoUrl(apiKey: string, photoName: string, maxWidth: number = 800):
 /**
  * Normalize Google Places data to preview format
  */
-function normalizePlaceData(placeData: any, originalQuery: string, isUrl: boolean, apiKey: string) {
-  const displayName = placeData.displayName?.text || placeData.displayName || null;
+type PlaceDetailsData = {
+  id?: string;
+  displayName?: { text?: string } | string;
+  formattedAddress?: string;
+  types?: string[];
+  photos?: Array<{ name?: string }>;
+  location?: { latitude?: number; longitude?: number };
+};
+
+function normalizePlaceData(placeData: PlaceDetailsData, originalQuery: string, isUrl: boolean, apiKey: string) {
+  const rawName = placeData.displayName;
+  const displayName = (typeof rawName === "object" && rawName !== null ? rawName.text : rawName) || null;
   const formattedAddress = placeData.formattedAddress || null;
   
   // Extract description from types or use formatted address
@@ -583,8 +601,8 @@ function normalizePlaceData(placeData: any, originalQuery: string, isUrl: boolea
 
   // Process photos
   // Google Places API v1 returns photos with name field like "places/{place_id}/photos/{photo_reference}"
-  const photos = (placeData.photos || []).slice(0, 9).map((photo: any, index: number) => {
-    const photoName = photo.name || photo;
+  const photos = (placeData.photos || []).slice(0, 9).map((photo, index: number) => {
+    const photoName = photo.name || "";
     // Extract photo reference from name if it's in format "places/{place_id}/photos/{photo_reference}"
     let photoReference = photoName;
     if (typeof photoName === 'string' && photoName.includes('/photos/')) {
@@ -592,7 +610,7 @@ function normalizePlaceData(placeData: any, originalQuery: string, isUrl: boolea
     }
     return {
       id: `photo_${index}`,
-      url: getPhotoUrl(apiKey, photoName), // Use full name for v1 API
+      url: getPhotoUrl(apiKey, String(photoName)), // Use full name for v1 API
       reference: photoReference,
     };
   });
@@ -616,12 +634,12 @@ function normalizePlaceData(placeData: any, originalQuery: string, isUrl: boolea
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("📥 Received search request");
+    logger.debug("📥 Received search request");
     
     const body = await request.json();
     const { query, access_token } = body;
 
-    console.log("📋 Request body:", {
+    logger.debug("📋 Request body:", {
       hasQuery: !!query,
       queryLength: query?.length || 0,
       queryPreview: query?.substring(0, 100),
@@ -673,21 +691,21 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    console.log("🔑 Google API key found:", googleApiKey.substring(0, 10) + "...");
+    logger.debug("🔑 Google API key found:", googleApiKey.substring(0, 10) + "...");
 
     // Step 1: Try to extract place_id if input is a URL
     let placeId: string | null = null;
     
     if (queryIsUrl) {
-      console.log("🔗 Input is a URL, trying to extract place_id");
+      logger.debug("🔗 Input is a URL, trying to extract place_id");
       placeId = extractPlaceIdFromUrl(trimmedQuery);
       if (placeId) {
-        console.log("✅ Extracted place_id from URL:", placeId.substring(0, 50));
+        logger.debug("✅ Extracted place_id from URL:", placeId.substring(0, 50));
       } else {
-        console.log("⚠️ Could not extract place_id from URL, will use Find Place API");
+        logger.debug("⚠️ Could not extract place_id from URL, will use Find Place API");
       }
     } else {
-      console.log("📝 Input is text (place name or address), will use Find Place API");
+      logger.debug("📝 Input is text (place name or address), will use Find Place API");
     }
 
     // Step 2: If no place_id found, use Find Place From Text API
@@ -698,7 +716,7 @@ export async function POST(request: NextRequest) {
     // - URLs without place_id: Google Maps URLs that don't contain place_id
     // This works for both addresses and place names (e.g., "Cafe Central", "Eiffel Tower")
     if (!placeId) {
-      console.log("🔍 No place_id extracted, using Find Place API for:", trimmedQuery.substring(0, 100));
+      logger.debug("🔍 No place_id extracted, using Find Place API for:", trimmedQuery.substring(0, 100));
       placeId = await findPlaceFromText(googleApiKey, trimmedQuery);
       if (!placeId) {
         console.error("❌ Could not find place from query:", {
@@ -716,7 +734,7 @@ export async function POST(request: NextRequest) {
           { status: 404 }
         );
       } else {
-        console.log("✅ Successfully found place_id:", placeId.substring(0, 50));
+        logger.debug("✅ Successfully found place_id:", placeId.substring(0, 50));
       }
     }
 

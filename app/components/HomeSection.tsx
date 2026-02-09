@@ -10,7 +10,9 @@ import { HomeSectionFilter } from "../constants/homeSections";
 import { type UserAccess, isPlacePremium, canUserViewPlace } from "../lib/access";
 import Icon from "./Icon";
 import { HomeSectionSkeleton } from "./Skeleton";
-import { getRecentlyViewedPlaceIds } from "../utils";
+import { getRecentlyViewedPlaceIds, sanitizePostgrestValue } from "../utils";
+import type { PlaceListItem as Place } from "../types";
+import { buildCityRadiusFilter, getCityCoords } from "../lib/cityRadius";
 
 function HomeSectionCollageImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
   const [failed, setFailed] = useState(false);
@@ -37,25 +39,6 @@ function HomeSectionCollageImage({ src, alt, className }: { src: string; alt: st
 
 type ProfileInterests = Pick<Database["public"]["Tables"]["profiles"]["Row"], "favorite_categories" | "favorite_tags">;
 
-type Place = {
-  id: string;
-  title: string;
-  description: string | null;
-  city: string | null;
-  country: string | null;
-  address: string | null;
-  cover_url: string | null;
-  categories: string[] | null;
-  tags: string[] | null;
-  lat: number | null;
-  lng: number | null;
-  created_at: string;
-  created_by?: string | null;
-  access_level?: string | null;
-  is_premium?: boolean | null;
-  premium_only?: boolean | null;
-  visibility?: string | null;
-};
 
 type HomeSectionProps = {
   section: HomeSectionFilter;
@@ -215,7 +198,8 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
 
         let query = supabase.from("places").select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility");
         if (section.city) {
-          query = query.or(`city_name_cached.eq.${section.city},city.eq.${section.city}`);
+          const coords = await getCityCoords(section.city);
+          query = query.or(buildCityRadiusFilter(section.city, coords.lat, coords.lng));
         }
         if (section.categories && section.categories.length > 0) {
           query = query.overlaps("categories", section.categories);
@@ -267,11 +251,24 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
     return score;
   }
 
-  // Reload when page becomes visible
+  // Reload when page becomes visible, but only if data is stale (5 min TTL)
+  const lastFetchTimeRef = useRef<number>(Date.now());
+  const STALE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+  // Update lastFetchTime when data is loaded
+  useEffect(() => {
+    if (!loading) {
+      lastFetchTimeRef.current = Date.now();
+    }
+  }, [loading]);
+
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        setRefreshKey((k) => k + 1);
+        const isStale = Date.now() - lastFetchTimeRef.current > STALE_TTL_MS;
+        if (isStale) {
+          setRefreshKey((k) => k + 1);
+        }
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -448,7 +445,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
               gap: 'var(--home-carousel-gap, 12px)'
             }}
           >
-            {places.map((place) => {
+            {places.map((place, placeIndex) => {
               const isFavorite = favorites?.has(place.id);
               
               // Get Haunted Gem index for locked premium places
@@ -477,6 +474,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
                       isFavorite={isFavorite}
                       hauntedGemIndex={hauntedGemIndex}
                       showPhotoSlider={false}
+                      priority={isFirst && placeIndex < 4}
                       favoriteButton={
                       userId && onToggleFavorite ? (
                         <button

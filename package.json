@@ -9,7 +9,11 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm run lint && npm run build",
+    "health": "npx tsx scripts/health/index.ts --mode=dev",
+    "health:ci": "npx tsx scripts/health/index.ts --mode=ci",
+    "health:pre": "npx tsx scripts/health/index.ts --mode=prebuild",
+    "health:json": "npx tsx scripts/health/index.ts --mode=ci --json",
+    "check": "npm run health:pre && npm run typecheck && npm run lint && npm run build",
     "fix-rls": "node scripts/fix-rls-policies.mjs",
     "db:pull": "supabase db pull",
     "db:push": "supabase db push",
@@ -20,7 +24,9 @@
     "@fontsource/fraunces": "^5.2.9",
     "@fontsource/inter": "^5.2.8",
     "@fontsource/manrope": "^5.2.8",
+    "@googlemaps/markerclusterer": "^2.6.2",
     "@react-google-maps/api": "^2.20.8",
+    "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.90.1",
     "next": "16.1.1",
     "react": "19.2.3",
@@ -33,7 +39,9 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
+    "fast-glob": "^3.3.3",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

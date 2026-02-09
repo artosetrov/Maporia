@@ -14,6 +14,7 @@ import Icon from "../components/Icon";
 import { ActivityItemSkeleton } from "../components/Skeleton";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
 import { useIsDesktop } from "../hooks/useIsDesktop";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 type ProfilesRow = Database["public"]["Tables"]["profiles"]["Row"];
 type PlacesRow = Database["public"]["Tables"]["places"]["Row"];

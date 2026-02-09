@@ -11,7 +11,8 @@ import MobileCarousel from "../../components/MobileCarousel";
 import FiltersModal, { ActiveFilters } from "../../components/FiltersModal";
 import SearchModal from "../../components/SearchModal";
 import FavoriteIcon from "../../components/FavoriteIcon";
-import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../../config/googleMaps";
+import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey, getMapOptions } from "../../config/googleMaps";
+import { createStaticPinSvg } from "../../lib/mapMarkers";
 import { supabase } from "../../lib/supabase";
 import { PLACE_LAYOUT_CONFIG } from "../../config/placeLayout";
 import { useUserAccessContext } from "../../contexts/UserAccessContext";
@@ -23,6 +24,7 @@ import PremiumBadge from "../../components/PremiumBadge";
 import Icon from "../../components/Icon";
 import { MapSkeleton } from "../../components/Skeleton";
 import { convertInstagramReelToEmbed } from "../../utils";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 type Place = {
   id: string;
@@ -42,6 +44,7 @@ type Place = {
   lng: number | null;
   created_at: string;
   comments_enabled?: boolean | null;
+  google_place_id?: string | null;
 };
 
 type Comment = { 
@@ -452,7 +455,7 @@ export default function PlacePage(props: PageProps) {
     (async () => {
       const { data: placeData, error: pErr } = await supabase
         .from("places")
-        .select("*")
+        .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, updated_at, lat, lng, access_level, is_premium, premium_only, visibility, google_place_id")
         .eq("id", id)
         .single();
 
@@ -707,6 +710,85 @@ export default function PlacePage(props: PageProps) {
       }
     }
   }
+
+  /**
+   * Open Google Maps with proper place card.
+   * If google_place_id exists — uses it directly.
+   * Otherwise resolves via API, saves to DB, then opens.
+   * Falls back to coordinates if resolution fails.
+   */
+  const [resolvingPlaceId, setResolvingPlaceId] = useState(false);
+
+  const handleOpenGoogleMaps = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!place) return;
+
+    const fallbackUrl = place.lat && place.lng
+      ? `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`
+      : place.address
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.address)}`
+        : null;
+
+    // Already have google_place_id — open immediately
+    if (place.google_place_id) {
+      window.open(
+        `https://www.google.com/maps/place/?q=place_id:${place.google_place_id}`,
+        "_blank",
+        "noopener,noreferrer",
+      );
+      return;
+    }
+
+    // No coordinates and no place_id — use address fallback
+    if (!place.lat || !place.lng) {
+      if (fallbackUrl) window.open(fallbackUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    // Try to resolve google_place_id via API
+    setResolvingPlaceId(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token;
+
+      if (!token) {
+        // Not authenticated — fallback to coordinates
+        if (fallbackUrl) window.open(fallbackUrl, "_blank", "noopener,noreferrer");
+        return;
+      }
+
+      const res = await fetch("/api/places/resolve-place-id", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ placeId: place.id }),
+      });
+
+      const data = await res.json();
+
+      if (data.google_place_id) {
+        // Update local state so subsequent clicks are instant
+        setPlace((prev) =>
+          prev ? { ...prev, google_place_id: data.google_place_id } : prev,
+        );
+        window.open(
+          `https://www.google.com/maps/place/?q=place_id:${data.google_place_id}`,
+          "_blank",
+          "noopener,noreferrer",
+        );
+        return;
+      }
+    } catch (err) {
+      console.error("[handleOpenGoogleMaps] Resolution failed:", err);
+    } finally {
+      setResolvingPlaceId(false);
+    }
+
+    // Fallback to coordinates
+    if (fallbackUrl) window.open(fallbackUrl, "_blank", "noopener,noreferrer");
+  };
 
   async function addComment() {
     if (!place || !commentText.trim() || sending) return;
@@ -1219,25 +1301,15 @@ export default function PlacePage(props: PageProps) {
           )}
           {place.address && (
             <div className="mb-4">
-              {place.lat && place.lng ? (
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-base text-[#8F9E4F]/70 hover:text-[#8F9E4F] hover:underline transition"
-                >
-                  {place.address}
-                </a>
-              ) : (
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.address)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-base text-[#8F9E4F]/70 hover:text-[#8F9E4F] hover:underline transition"
-                >
-                  {place.address}
-                </a>
-              )}
+              <a
+                href="#"
+                onClick={handleOpenGoogleMaps}
+                className="text-base text-[#8F9E4F]/70 hover:text-[#8F9E4F] hover:underline transition cursor-pointer"
+                aria-label="Open address in Google Maps"
+                tabIndex={0}
+              >
+                {place.address}
+              </a>
             </div>
           )}
 
@@ -1499,15 +1571,16 @@ export default function PlacePage(props: PageProps) {
               <div className="h-[400px] lg:h-[500px] rounded-xl overflow-hidden bg-[#FAFAF7]">
                 <PlaceMapView place={place} />
               </div>
-              <a
-                href={`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-[#6b7d47]/20 text-[#8F9E4F] text-sm font-medium hover:bg-[#FAFAF7] transition lg:inline-flex max-lg:w-full max-lg:py-3 max-lg:border-[#ECEEE4] max-lg:bg-white max-lg:text-[#1F2A1F] max-lg:text-base max-lg:hover:bg-[#FAFAF7]"
+              <button
+                onClick={handleOpenGoogleMaps}
+                disabled={resolvingPlaceId}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-[#6b7d47]/20 text-[#8F9E4F] text-sm font-medium hover:bg-[#FAFAF7] transition lg:inline-flex max-lg:w-full max-lg:py-3 max-lg:border-[#ECEEE4] max-lg:bg-white max-lg:text-[#1F2A1F] max-lg:text-base max-lg:hover:bg-[#FAFAF7] disabled:opacity-50"
+                aria-label="Open in Google Maps"
+                tabIndex={0}
               >
                 <Icon name="external-link" size={16} />
-                Open in Maps
-              </a>
+                {resolvingPlaceId ? "Opening…" : "Open in Maps"}
+              </button>
             </div>
           ) : (
             <div className="text-center py-12 text-[#8F9E4F]/60">Location not available</div>
@@ -1699,18 +1772,19 @@ export default function PlacePage(props: PageProps) {
 
               {/* Show on Map (Google Link) */}
               {place.lat && place.lng && (
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-[#1F2A1F] font-medium"
+                <button
+                  onClick={handleOpenGoogleMaps}
+                  disabled={resolvingPlaceId}
+                  className="w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-[#1F2A1F] font-medium disabled:opacity-50"
+                  aria-label="Show on Google Maps"
+                  tabIndex={0}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
-                  Show on map
-                </a>
+                  {resolvingPlaceId ? "Opening…" : "Show on map"}
+                </button>
               )}
 
               {/* Share */}
@@ -1736,25 +1810,15 @@ export default function PlacePage(props: PageProps) {
             )}
             {place.address && (
               <div className="mb-4">
-                {place.lat && place.lng ? (
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-base text-[#8F9E4F]/70 hover:text-[#8F9E4F] hover:underline transition"
-                  >
-                    {place.address}
-                  </a>
-                ) : (
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.address)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-base text-[#8F9E4F]/70 hover:text-[#8F9E4F] hover:underline transition"
-                  >
-                    {place.address}
-                  </a>
-                )}
+                <a
+                  href="#"
+                  onClick={handleOpenGoogleMaps}
+                  className="text-base text-[#8F9E4F]/70 hover:text-[#8F9E4F] hover:underline transition cursor-pointer"
+                  aria-label="Open address in Google Maps"
+                  tabIndex={0}
+                >
+                  {place.address}
+                </a>
               </div>
             )}
           </div>
@@ -1955,18 +2019,19 @@ export default function PlacePage(props: PageProps) {
 
                 {/* Show on Map (Google Link) */}
                 {place.lat && place.lng && (
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-[#1F2A1F] font-medium"
+                  <button
+                    onClick={handleOpenGoogleMaps}
+                    disabled={resolvingPlaceId}
+                    className="w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-[#1F2A1F] font-medium disabled:opacity-50"
+                    aria-label="Show on Google Maps"
+                    tabIndex={0}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
-                    Show on map
-                  </a>
+                    {resolvingPlaceId ? "Opening…" : "Show on map"}
+                  </button>
                 )}
 
                 {/* Share */}
@@ -2024,17 +2089,18 @@ export default function PlacePage(props: PageProps) {
                 <div className="h-[400px] rounded-xl overflow-hidden bg-[#FAFAF7]">
                   <PlaceMapView place={place} />
                 </div>
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-[#6b7d47]/20 text-[#8F9E4F] text-sm font-medium hover:bg-[#FAFAF7] transition lg:inline-flex max-lg:w-full max-lg:py-3 max-lg:border-[#ECEEE4] max-lg:bg-white max-lg:text-[#1F2A1F] max-lg:text-base max-lg:hover:bg-[#FAFAF7]"
+                <button
+                  onClick={handleOpenGoogleMaps}
+                  disabled={resolvingPlaceId}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-[#6b7d47]/20 text-[#8F9E4F] text-sm font-medium hover:bg-[#FAFAF7] transition lg:inline-flex max-lg:w-full max-lg:py-3 max-lg:border-[#ECEEE4] max-lg:bg-white max-lg:text-[#1F2A1F] max-lg:text-base max-lg:hover:bg-[#FAFAF7] disabled:opacity-50"
+                  aria-label="Open in Google Maps"
+                  tabIndex={0}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
-                  Open in Maps
-                </a>
+                  {resolvingPlaceId ? "Opening…" : "Open in Maps"}
+                </button>
               </div>
             ) : (
               <div className="text-center py-12 text-[#8F9E4F]/60">Location not available</div>
@@ -2428,25 +2494,19 @@ function PlaceMapView({ place }: { place: Place }) {
         mapContainerStyle={{ width: "100%", height: "100%" }}
         center={{ lat: place.lat, lng: place.lng }}
         zoom={15}
-        options={{
-          gestureHandling: "greedy",
+        options={getMapOptions({
           disableDefaultUI: false,
           zoomControl: true,
-          streetViewControl: false,
-          mapTypeControl: false,
-          fullscreenControl: false,
-          styles: [
-            {
-              featureType: "poi",
-              elementType: "labels",
-              stylers: [{ visibility: "off" }],
-            },
-          ],
-        }}
+        })}
       >
         <Marker
           position={{ lat: place.lat, lng: place.lng }}
           title={place.title}
+          icon={{
+            url: createStaticPinSvg(32),
+            scaledSize: new google.maps.Size(32, 32),
+            anchor: new google.maps.Point(16, 16),
+          }}
         />
       </GoogleMap>
     </div>

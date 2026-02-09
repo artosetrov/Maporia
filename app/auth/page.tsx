@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase, getAuthRedirectUrl } from "../lib/supabase";
 import { getSafeRedirectFrom, getAuthUrl } from "../lib/authRedirect";
 import Icon from "../components/Icon";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 function AuthPageFallback() {
   return (

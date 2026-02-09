@@ -2,6 +2,7 @@
 
 import { use, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 /**
  * Legacy edit route - redirects to new Airbnb-style editor

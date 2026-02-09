@@ -3,7 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/app/types/supabase";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Service role key is required to return all places regardless of RLS (client handles premium gating)
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const supabaseAdmin =
   supabaseUrl && supabaseServiceKey
@@ -124,7 +125,7 @@ export async function GET(
 
     const { data: placesData, error: placesError } = await supabaseAdmin
       .from("places")
-      .select("*")
+      .select("id,title,description,address,city,country,cover_url,categories,tags,created_by,access_level,is_premium,premium_only,visibility")
       .in("id", placeIds);
 
     if (placesError) {

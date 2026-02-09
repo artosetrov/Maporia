@@ -13,6 +13,7 @@ type PlaceTitleRow = Pick<Database["public"]["Tables"]["places"]["Row"], "create
 import Icon from "../../../../../components/Icon";
 import UnifiedGoogleImportField from "../../../../../components/UnifiedGoogleImportField";
 import { resolveCity } from "../../../../../lib/cityResolver";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");

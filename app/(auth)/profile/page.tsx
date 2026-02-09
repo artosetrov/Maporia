@@ -23,6 +23,7 @@ import PremiumUpsellModal from "../../components/PremiumUpsellModal";
 import PremiumBadge from "../../components/PremiumBadge";
 import { getRecentlyViewedPlaceIds } from "../../utils";
 import { ProfileSkeleton, PlaceCardGridSkeleton, SkeletonBase } from "../../components/Skeleton";
+import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 type Place = {
   id: string;
@@ -367,7 +368,7 @@ function ProfileInner() {
     setExtrasLoading(true);
     setUserId(user.id);
     setUserEmail(user.email ?? null);
-    setUserCreatedAt(user.created_at ?? null);
+    setUserCreatedAt((user as { created_at?: string }).created_at ?? null);
 
     (async () => {
       try {
@@ -1034,6 +1035,13 @@ function ProfileInner() {
                       <Icon name="package" size={24} className="flex-shrink-0" />
                       <span>Elements</span>
                     </button>
+                    <Link
+                      href="/admin/health"
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition text-[#6F7A5A] hover:bg-[#FAFAF7]"
+                    >
+                      <Icon name="activity" size={24} className="flex-shrink-0" />
+                      <span>Health</span>
+                    </Link>
                   </>
                 )}
               </nav>
@@ -1428,6 +1436,19 @@ function ProfileInner() {
                         </div>
                         <div className="text-sm font-medium text-[#1F2A1F] text-center">Elements</div>
                       </button>
+                    )}
+
+                    {/* Health - Admin only */}
+                    {isAdmin && (
+                      <Link
+                        href="/admin/health"
+                        className="bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md transition group"
+                      >
+                        <div className="aspect-square rounded-xl overflow-visible bg-white mb-3 relative flex items-center justify-center" style={{ minHeight: '120px' }}>
+                          <Icon name="activity" size={32} className="text-[#A8B096]" />
+                        </div>
+                        <div className="text-sm font-medium text-[#1F2A1F] text-center">Health</div>
+                      </Link>
                     )}
                   </div>
 
@@ -2130,9 +2151,7 @@ function AddedPlacesSection({
               href={`/add?returnTo=${encodeURIComponent(pathname)}`}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#7A8A42] transition-colors"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
+              <Icon name="add" size={20} />
               <span>Add place</span>
             </Link>
           )}
@@ -2151,15 +2170,13 @@ function AddedPlacesSection({
       <div className="hidden lg:flex items-center justify-between mb-8">
         <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F]">Added places</h1>
         {canAddPlace && (
-          <Link
-            href={`/add?returnTo=${encodeURIComponent(pathname)}`}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#7A8A42] transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            <span>Add place</span>
-          </Link>
+            <Link
+              href={`/add?returnTo=${encodeURIComponent(pathname)}`}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#7A8A42] transition-colors"
+            >
+              <Icon name="add" size={20} />
+              <span>Add place</span>
+            </Link>
         )}
       </div>
 
