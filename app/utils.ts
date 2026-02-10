@@ -108,21 +108,15 @@ export const normalizeCity = (city: string | null | undefined): string => {
 
 
 /**
- * Checks if a photo URL is valid and accessible.
- * Filters out dead Google Places API URLs that require a paid API key.
- * Returns true only for Supabase Storage URLs and other non-Google API URLs.
+ * Checks if a photo URL is valid (non-empty string).
  */
 export const isValidPhotoUrl = (url: string | null | undefined): boolean => {
   if (!url || !url.trim()) return false;
-  // Filter out Google Places API photo URLs (dead after API disabled)
-  if (url.includes("places.googleapis.com/") || url.includes("maps.googleapis.com/maps/api/place/photo")) {
-    return false;
-  }
   return true;
 };
 
 /**
- * Filters an array of photo URLs, removing dead Google API URLs.
+ * Filters an array of photo URLs, removing empty/null values.
  */
 export const filterValidPhotos = (urls: (string | null | undefined)[]): string[] =>
   urls.filter((url): url is string => isValidPhotoUrl(url));
