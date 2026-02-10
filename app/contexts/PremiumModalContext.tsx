@@ -14,7 +14,7 @@ type PremiumModalState = {
 type AuthModalState = {
   isOpen: boolean;
   redirectPath?: string;
-  variant?: "default" | "profile" | "saved";
+  variant?: "default" | "profile" | "saved" | "premium";
 };
 
 type PremiumModalContextType = {

@@ -2320,8 +2320,8 @@ export default function PlacePage(props: PageProps) {
                 setPhotoZoom(1);
                 setPhotoPosition({ x: 0, y: 0 });
               }}
-              className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center active:bg-black/70 transition-colors touch-manipulation ml-auto"
-              style={{ minWidth: '48px', minHeight: '48px' }}
+              className="relative w-14 h-14 sm:w-14 sm:h-14 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center active:bg-black/70 transition-colors touch-manipulation ml-auto before:absolute before:content-[''] before:-inset-3 before:rounded-full"
+              style={{ minWidth: '56px', minHeight: '56px' }}
               aria-label="Close"
             >
               <Icon name="close" size={24} className="text-white" />

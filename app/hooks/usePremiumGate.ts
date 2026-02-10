@@ -19,7 +19,7 @@ type PremiumGateContext = "place" | "collection";
  */
 export function usePremiumGate() {
   const { isPremium, loading, access } = usePremiumStatus();
-  const { setPremiumModalOpen } = usePremiumModalContext();
+  const { setPremiumModalOpen, openAuthModal: openGlobalAuthModal } = usePremiumModalContext();
   const [modalOpen, setModalOpen] = useState(false);
   const [modalContext, setModalContext] = useState<PremiumGateContext>("place");
   const [modalPlaceTitle, setModalPlaceTitle] = useState<string | undefined>();
@@ -79,18 +79,22 @@ export function usePremiumGate() {
 
   /**
    * Open the appropriate modal when user clicks a premium location they can't access.
-   * - guest → Premium Purchase Modal (shows value first, auth on checkout click)
+   * - guest → Auth Modal (Sign in to Maporia) via global context
    * - logged in + free → Premium Purchase Modal
    * - premium → no-op (caller should not call this when user has access)
    */
   const openPremiumLocation = useCallback(
     (context: PremiumGateContext = "place", placeTitle?: string, _placeId?: string) => {
       if (loading) return;
+      if (access.role === "guest") {
+        openGlobalAuthModal(undefined, "premium");
+        return;
+      }
       if (!isPremium) {
         openPremiumModal(context, placeTitle);
       }
     },
-    [loading, isPremium, openPremiumModal]
+    [loading, isPremium, access.role, openPremiumModal, openGlobalAuthModal]
   );
 
   /**

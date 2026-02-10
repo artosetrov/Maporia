@@ -18,7 +18,7 @@ import { useUserAccessContext } from "../../contexts/UserAccessContext";
 import { useAuthRedirect } from "../../hooks/useAuthRedirect";
 import { useIsDesktop } from "../../hooks/useIsDesktop";
 import { isUserAdmin, isPlacePremium, canUserViewPlace, canUserAddPlace, type UserAccess } from "../../lib/access";
-import { DEFAULT_CITY } from "../../constants";
+import { DEFAULT_CITY, getTagEmoji, stripTagEmoji } from "../../constants";
 import PremiumUpsellModal from "../../components/PremiumUpsellModal";
 import PremiumBadge from "../../components/PremiumBadge";
 import { getRecentlyViewedPlaceIds } from "../../utils";
@@ -68,6 +68,8 @@ type Profile = {
   role?: string | null;
   subscription_status?: string | null;
   is_admin?: boolean | null;
+  favorite_categories?: string[] | null;
+  favorite_tags?: string[] | null;
 };
 
 function initialsFromEmail(email?: string | null) {
@@ -419,7 +421,7 @@ function ProfileInner() {
         // Critical: profile only — unblocks initial render (avatar, name, bio)
         const { data: prof, error: profError } = await supabase
           .from("profiles")
-          .select("id, username, display_name, bio, avatar_url, role, is_admin, subscription_status")
+          .select("id, username, display_name, bio, avatar_url, role, is_admin, subscription_status, favorite_categories, favorite_tags")
           .eq("id", user.id)
           .maybeSingle();
 
@@ -1297,6 +1299,46 @@ function ProfileInner() {
                     </div>
                   )}
 
+                  {/* Interests Card */}
+                  {(profile?.favorite_categories?.length || profile?.favorite_tags?.length) ? (
+                    <Link
+                      href="/profile/edit/interests"
+                      className="block bg-white rounded-[24px] p-6 border border-[#ECEEE4] shadow-sm hover:shadow-md transition group"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <h2 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Interests</h2>
+                        <Icon name="forward" size={18} className="text-[#6F7A5A] group-hover:text-[#1F2A1F] transition-colors flex-shrink-0" />
+                      </div>
+                      <div className="space-y-2">
+                        {profile.favorite_categories && profile.favorite_categories.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {profile.favorite_categories.map((cat) => (
+                              <span
+                                key={cat}
+                                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#FAFAF7] text-[#1F2A1F] border border-[#ECEEE4]"
+                              >
+                                {cat}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {profile.favorite_tags && profile.favorite_tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {profile.favorite_tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="inline-flex items-center px-2.5 py-1 rounded-full text-sm font-medium bg-[#FAFAF7] text-[#1F2A1F] border border-[#ECEEE4]"
+                              >
+                                <span className="leading-none">{getTagEmoji(tag)}</span>
+                                <span className="ml-1">{stripTagEmoji(tag)}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </Link>
+                  ) : null}
+
                   {/* Quick Access Cards */}
                   <div className="grid grid-cols-2 gap-4">
                     {/* My favorites */}
@@ -1680,6 +1722,46 @@ function AboutSection({
           <p className="text-sm text-[#1F2A1F] leading-relaxed whitespace-pre-line">{bio}</p>
         </div>
       )}
+
+      {/* Interests Card */}
+      {(profile?.favorite_categories?.length || profile?.favorite_tags?.length) ? (
+        <Link
+          href="/profile/edit/interests"
+          className="block bg-white rounded-[24px] p-6 border border-[#ECEEE4] shadow-sm mb-8 hover:shadow-md transition group"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold font-fraunces text-[#1F2A1F]">Interests</h2>
+            <Icon name="forward" size={18} className="text-[#6F7A5A] group-hover:text-[#1F2A1F] transition-colors flex-shrink-0" />
+          </div>
+          <div className="space-y-2">
+            {profile.favorite_categories && profile.favorite_categories.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {profile.favorite_categories.map((cat) => (
+                  <span
+                    key={cat}
+                    className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#FAFAF7] text-[#1F2A1F] border border-[#ECEEE4]"
+                  >
+                    {cat}
+                  </span>
+                ))}
+              </div>
+            )}
+            {profile.favorite_tags && profile.favorite_tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {profile.favorite_tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center px-2.5 py-1 rounded-full text-sm font-medium bg-[#FAFAF7] text-[#1F2A1F] border border-[#ECEEE4]"
+                  >
+                    <span className="leading-none">{getTagEmoji(tag)}</span>
+                    <span className="ml-1">{stripTagEmoji(tag)}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </Link>
+      ) : null}
 
       {/* Quick Access Cards - Desktop only, right after Hero Card */}
       {!mobile && savedPlaces !== undefined && addedPlaces !== undefined && recentlyViewedPlaces !== undefined && onSectionChange && (

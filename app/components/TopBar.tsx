@@ -305,15 +305,11 @@ export default function TopBar({
                       </button>
                     )}
                     {/* Profile avatar / menu button - home & map pages, mobile */}
-                    {(pathname === "/" || pathname === "/map") && (
+                    {(pathname === "/" || pathname === "/map") && isAuthenticated && (
                       <button
                         ref={mobileAvatarRef}
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (!isAuthenticated) {
-                            redirectToAuth("topbar_mobile_login");
-                            return;
-                          }
                           if (mobileAvatarRef.current) {
                             const rect = mobileAvatarRef.current.getBoundingClientRect();
                             setMenuPosition({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
@@ -321,7 +317,7 @@ export default function TopBar({
                           setMenuOpen(!menuOpen);
                         }}
                         className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0"
-                        aria-label={isAuthenticated ? "Menu" : "Sign in"}
+                        aria-label="Menu"
                         tabIndex={0}
                       >
                         {userAvatar ? (
@@ -338,6 +334,18 @@ export default function TopBar({
                               : initialsFromEmail(userEmail)}
                           </div>
                         )}
+                      </button>
+                    )}
+                    {/* Get Started — mobile, unauthenticated */}
+                    {(pathname === "/" || pathname === "/map") && !isAuthenticated && (
+                      <button
+                        type="button"
+                        onClick={() => redirectToAuth("topbar_mobile_login")}
+                        className="flex items-center justify-center text-xs font-medium transition-all rounded-full px-4 py-2 h-10 bg-[#8F9E4F] text-white hover:brightness-110 active:brightness-90 flex-shrink-0"
+                        aria-label="Get Started"
+                        tabIndex={0}
+                      >
+                        Get Started
                       </button>
                     )}
                     

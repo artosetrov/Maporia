@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { supabase, getAuthRedirectUrl } from "../lib/supabase";
 import Icon from "./Icon";
 
-export type AuthModalVariant = "default" | "profile" | "saved";
+export type AuthModalVariant = "default" | "profile" | "saved" | "premium";
 
 type AuthModalProps = {
   isOpen: boolean;
@@ -22,6 +22,7 @@ const VARIANT_SUBTITLE: Record<AuthModalVariant, string> = {
   default: "Sign in to like, comment, and save your favorite places",
   profile: "Sign in to view your profile and manage your account",
   saved: "Sign in to view your saved places",
+  premium: "Sign in to unlock premium places and collections",
 };
 
 /**
