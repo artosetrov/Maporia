@@ -25,14 +25,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Google Places API v1 format: places/{place_id}/photos/{photo_reference}
-    let photoUrl: string;
-    if (reference.startsWith("places/")) {
-      photoUrl = `https://places.googleapis.com/v1/${reference}/media?maxWidthPx=${maxwidth}&key=${apiKey}`;
-    } else {
-      // Fallback to old API format
-      photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxwidth}&photo_reference=${reference}&key=${apiKey}`;
-    }
+    const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxwidth}&photo_reference=${reference}&key=${apiKey}`;
 
     // Return URL as JSON (better for img src)
     return NextResponse.json({ url: photoUrl });

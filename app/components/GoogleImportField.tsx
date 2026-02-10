@@ -14,23 +14,14 @@ import {
 
 type SearchResult = GoogleImportSearchResult;
 
-// Helper to generate photo URL from photo reference
+// Helper to generate photo URL from photo reference (legacy Places API)
 // Returns a URL that can be used directly in img src
 function getPhotoUrl(photoReference: string, maxWidth: number = 800): string {
   try {
-    // Google Places API v1 format: places/{place_id}/photos/{photo_reference}
-    // Use the same API key getter as the rest of the app
     const apiKey = getGoogleMapsApiKey();
-    
-    if (photoReference.startsWith("places/")) {
-      return `https://places.googleapis.com/v1/${photoReference}/media?maxWidthPx=${maxWidth}&key=${apiKey}`;
-    }
-    
-    // Fallback to old API format if it's just a reference
     return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photo_reference=${photoReference}&key=${apiKey}`;
   } catch (error) {
     console.error("Failed to get API key for photo URL:", error);
-    // Fallback: use server proxy endpoint (but this requires additional fetch)
     return `/api/google/photo?reference=${encodeURIComponent(photoReference)}&maxwidth=${maxWidth}`;
   }
 }
@@ -152,33 +143,22 @@ export default function GoogleImportField({
       });
 
       const processedPhotos = photosArray.slice(0, 9).map((photo: any, index: number) => {
-        // Handle both formats: {reference: "..."} or string
+        // Handle both formats: {reference: "..."} or string (photo_reference)
         const photoRef = typeof photo === 'string' 
           ? photo 
-          : (photo?.reference || photo?.name || photo);
+          : (photo?.reference || photo?.photo_reference || photo);
         
-        if (!photoRef) {
+        if (!photoRef || typeof photoRef !== 'string') {
           console.warn("⚠️ Empty photo reference at index", index);
           return null;
         }
         
-        // Extract reference from full path if needed
-        let photoReference = photoRef;
-        if (typeof photoRef === 'string' && photoRef.includes('/photos/')) {
-          photoReference = photoRef.split('/photos/')[1];
-        }
-        
         const photoUrl = getPhotoUrl(photoRef);
-        console.log(`📸 Photo ${index}:`, {
-          ref: photoRef.substring(0, 50),
-          reference: photoReference?.substring(0, 30),
-          url: photoUrl.substring(0, 80),
-        });
         
         return {
           id: `photo_${index}`,
-          url: photoUrl, // Use full path for URL generation
-          reference: photoReference, // Store just the reference part
+          url: photoUrl,
+          reference: photoRef,
         };
       }).filter((p: { id: string; url: string; reference: string } | null): p is { id: string; url: string; reference: string } => p !== null);
 

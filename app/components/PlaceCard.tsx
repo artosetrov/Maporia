@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { isPlacePremium, type UserAccess } from "../lib/access";
+import { filterValidPhotos, isValidPhotoUrl } from "../utils";
 
 type ProfilesRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ProfileSelect = Pick<ProfilesRow, "display_name" | "username" | "avatar_url">;
@@ -301,8 +302,8 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
           // If error is empty object, silently handle it
           
           // Fallback на cover_url
-          if (place.cover_url && !isUnmounting && place.id === placeId) {
-            setPhotos([place.cover_url]);
+          if (isValidPhotoUrl(place.cover_url) && !isUnmounting && place.id === placeId) {
+            setPhotos([place.cover_url!]);
           } else if (!isUnmounting && place.id === placeId) {
             setPhotos([]);
           }
@@ -311,19 +312,17 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
 
         if (!isUnmounting && place.id === placeId) {
           if (photosData && photosData.length > 0) {
-            const urls = photosData
-              .map((p) => p.url)
-              .filter((u: string | null): u is string => typeof u === "string" && u.length > 0);
+            const urls = filterValidPhotos(photosData.map((p) => p.url));
             
             // Если есть cover_url и его нет в списке фотографий, добавляем его в начало
-            if (place.cover_url && !urls.includes(place.cover_url)) {
-              setPhotos([place.cover_url, ...urls]);
+            if (isValidPhotoUrl(place.cover_url) && !urls.includes(place.cover_url!)) {
+              setPhotos([place.cover_url!, ...urls]);
             } else {
               setPhotos(urls);
             }
-          } else if (place.cover_url) {
+          } else if (isValidPhotoUrl(place.cover_url)) {
             // Fallback на cover_url если нет фото в place_photos
-            setPhotos([place.cover_url]);
+            setPhotos([place.cover_url!]);
           } else {
             setPhotos([]);
           }
@@ -340,8 +339,8 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
               errorMessage?.includes('abort') || 
               errorName === 'TypeError' && errorMessage?.includes('Failed to fetch')) {
             // Fallback to cover_url silently
-            if (!isUnmounting && place.id === placeId && place.cover_url) {
-              setPhotos([place.cover_url]);
+            if (!isUnmounting && place.id === placeId && isValidPhotoUrl(place.cover_url)) {
+              setPhotos([place.cover_url!]);
             } else if (!isUnmounting && place.id === placeId) {
               setPhotos([]);
             }
@@ -366,8 +365,8 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
         }
         
         // Fallback на cover_url
-        if (!isUnmounting && place.id === placeId && place.cover_url) {
-          setPhotos([place.cover_url]);
+        if (!isUnmounting && place.id === placeId && isValidPhotoUrl(place.cover_url)) {
+          setPhotos([place.cover_url!]);
         } else if (!isUnmounting && place.id === placeId) {
           setPhotos([]);
         }

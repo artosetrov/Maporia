@@ -255,27 +255,20 @@ async function findPlaceFromText(apiKey: string, query: string, skipNearbySearch
     // Try each query variation
     for (const variation of queryVariations) {
       if (!variation || variation.length < 2) continue;
-      
-      // Build request body
-      const requestBody: { textQuery: string; maxResultCount: number; locationBias?: { circle: { center: { latitude: number; longitude: number }; radius: number } } } = {
-        textQuery: variation,
-        maxResultCount: 5, // Get up to 5 results to find best match
-      };
-      
+
+      // Build legacy Text Search URL
+      const params = new URLSearchParams({
+        query: variation,
+        key: apiKey,
+      });
+
       // If we have coordinates, add location bias to improve accuracy
       if (useCoordinates && lat !== null && lng !== null) {
-        requestBody.locationBias = {
-          circle: {
-            center: {
-              latitude: lat,
-              longitude: lng,
-            },
-            radius: 100.0, // 100 meters radius - increased for better results
-          },
-        };
+        params.set("location", `${lat},${lng}`);
+        params.set("radius", "100"); // 100 meters
       }
 
-      logger.debug("Trying Find Place API with query:", {
+      logger.debug("Trying Text Search API with query:", {
         query: variation.substring(0, 100),
         hasCoordinates: useCoordinates,
         lat,
@@ -283,61 +276,50 @@ async function findPlaceFromText(apiKey: string, query: string, skipNearbySearch
       });
 
       try {
-        const response = await fetch(
-          `https://places.googleapis.com/v1/places:searchText`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Goog-Api-Key": apiKey,
-              "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location",
-            },
-            body: JSON.stringify(requestBody),
-          }
-        );
+        const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?${params.toString()}`;
+        console.log("[place-import] Text Search request:", variation.substring(0, 100));
+
+        const response = await fetch(url);
+        const responseText = await response.text();
+
+        console.log("[place-import] Text Search response:", {
+          status: response.status,
+          bodyLength: responseText.length,
+          bodyPreview: responseText.substring(0, 300),
+        });
 
         if (!response.ok) {
-          const errorText = await response.text();
-          let errorData;
-          try {
-            errorData = JSON.parse(errorText);
-          } catch {
-            errorData = { message: errorText };
-          }
-          logger.warn("Find Place From Text API error for variation:", {
+          logger.warn("Text Search API HTTP error for variation:", {
             status: response.status,
             statusText: response.statusText,
-            error: errorData,
+            error: responseText.substring(0, 300),
             query: variation.substring(0, 100),
           });
-          // Continue to next variation
           continue;
         }
 
-        const data = await response.json();
-        
-        if (data.places && data.places.length > 0) {
-          // Return the first (best match) result
-          // Place ID from Find Place API may have "places/" prefix, remove it if present
-          let placeId = data.places[0].id;
-          if (placeId && typeof placeId === 'string') {
-            placeId = placeId.replace(/^places\//, '');
-          }
-          logger.debug("Found place via Find Place API:", {
-            placeId,
-            displayName: data.places[0].displayName?.text || data.places[0].displayName,
-            formattedAddress: data.places[0].formattedAddress,
-            query: variation.substring(0, 100),
-            totalResults: data.places.length,
-          });
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          console.error("[place-import] Failed to parse Text Search response");
+          continue;
+        }
+
+        console.log("[place-import] Text Search status:", data.status, "results:", data.results?.length ?? 0);
+
+        if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+          console.error("[place-import] Text Search API error:", data.status, data.error_message);
+          continue;
+        }
+
+        if (data.results && data.results.length > 0) {
+          const placeId = data.results[0].place_id;
+          console.log("[place-import] Found place:", placeId, data.results[0].name);
           return placeId;
         }
       } catch (variationError) {
-        logger.warn("Error trying query variation:", {
-          error: variationError instanceof Error ? variationError.message : String(variationError),
-          query: variation.substring(0, 100),
-        });
-        // Continue to next variation
+        console.error("[place-import] Text Search exception:", variationError instanceof Error ? variationError.message : String(variationError));
         continue;
       }
     }
@@ -426,80 +408,68 @@ async function findPlaceByCoordinates(apiKey: string, lat: number, lng: number):
     
     for (const radius of radiuses) {
       logger.debug("Trying Nearby Search API with radius:", radius, "meters");
-      
+
+      const params = new URLSearchParams({
+        location: `${lat},${lng}`,
+        radius: String(radius),
+        key: apiKey,
+      });
+
       const response = await fetch(
-        `https://places.googleapis.com/v1/places:searchNearby`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": apiKey,
-            "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location",
-          },
-          body: JSON.stringify({
-            // Don't restrict by type - search for any place at this location
-            maxResultCount: 5, // Get multiple results to find best match
-            locationRestriction: {
-              circle: {
-                center: {
-                  latitude: lat,
-                  longitude: lng,
-                },
-                radius: radius,
-              },
-            },
-          }),
-        }
+        `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params.toString()}`
       );
 
       if (!response.ok) {
         const errorText = await response.text();
         logger.warn("Nearby Search API error:", {
           status: response.status,
-          error: errorText,
+          error: errorText.substring(0, 200),
           radius,
         });
-        // Try next radius
         continue;
       }
 
       const data = await response.json();
-      
-      if (data.places && data.places.length > 0) {
+
+      if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+        logger.warn("Nearby Search API status error:", {
+          status: data.status,
+          error_message: data.error_message,
+          radius,
+        });
+        continue;
+      }
+
+      if (data.results && data.results.length > 0) {
         // Find the closest place to the coordinates
-        let closestPlace = data.places[0];
+        let closestPlace = data.results[0];
         let minDistance = Infinity;
-        
-        for (const place of data.places) {
-          if (place.location) {
-            const placeLat = place.location.latitude;
-            const placeLng = place.location.longitude;
-            // Calculate distance (simple Euclidean distance)
+
+        for (const place of data.results) {
+          if (place.geometry?.location) {
+            const placeLat = place.geometry.location.lat;
+            const placeLng = place.geometry.location.lng;
             const distance = Math.sqrt(
               Math.pow(placeLat - lat, 2) + Math.pow(placeLng - lng, 2)
-            ) * 111000; // Convert to meters (rough approximation)
-            
+            ) * 111000;
+
             if (distance < minDistance) {
               minDistance = distance;
               closestPlace = place;
             }
           }
         }
-        
-        let placeId = closestPlace.id;
-        if (placeId && typeof placeId === 'string') {
-          placeId = placeId.replace(/^places\//, '');
-        }
+
+        const placeId = closestPlace.place_id;
         logger.debug("Found place via Nearby Search API:", {
           placeId,
-          displayName: closestPlace.displayName?.text || closestPlace.displayName,
+          name: closestPlace.name,
           distance: minDistance.toFixed(0) + "m",
           lat,
           lng,
           radius,
         });
-        
-        // Cache the result
+
         cachePlaceIdForCoordinates(lat, lng, placeId);
         return placeId;
       }
@@ -680,54 +650,62 @@ async function findPlaceByReverseGeocoding(apiKey: string, lat: number, lng: num
  */
 async function getPlaceDetails(apiKey: string, placeId: string) {
   try {
-    // Remove "places/" prefix if present (some APIs return IDs with prefix)
     const cleanPlaceId = placeId.replace(/^places\//, '');
-    
+
+    const fields = [
+      "place_id", "name", "formatted_address", "website",
+      "formatted_phone_number", "rating", "user_ratings_total",
+      "opening_hours", "price_level", "types", "photos",
+      "geometry", "address_components",
+    ].join(",");
+
+    const params = new URLSearchParams({
+      place_id: cleanPlaceId,
+      fields,
+      key: apiKey,
+    });
+
     const response = await fetch(
-      `https://places.googleapis.com/v1/places/${cleanPlaceId}`,
-      {
-        headers: {
-          "X-Goog-Api-Key": apiKey,
-          "X-Goog-FieldMask":
-            "id,displayName,formattedAddress,websiteUri,nationalPhoneNumber,rating,userRatingCount,regularOpeningHours,types,photos,location,addressComponents,priceLevel",
-        },
-      }
+      `https://maps.googleapis.com/maps/api/place/details/json?${params.toString()}`
     );
 
     if (!response.ok) {
       const errorText = await response.text();
-      let errorData;
-      try {
-        errorData = JSON.parse(errorText);
-      } catch {
-        errorData = { message: errorText };
-      }
-      console.error("Place Details API error:", {
+      console.error("Place Details API HTTP error:", {
         status: response.status,
         statusText: response.statusText,
-        error: errorData,
+        error: errorText.substring(0, 300),
         placeId: cleanPlaceId,
       });
-      
-      if (response.status === 404) {
-        throw new Error(`Place not found: ${cleanPlaceId}`);
-      } else if (response.status === 403) {
+
+      if (response.status === 403) {
         throw new Error("Google Maps API key does not have permission to access Places API. Please check API key permissions.");
-      } else if (response.status === 400) {
-        throw new Error(`Invalid place ID format: ${cleanPlaceId}`);
       }
-      
-      throw new Error(`Google Places API error: ${response.status} - ${errorData.message || errorText}`);
+
+      throw new Error(`Google Places API error: ${response.status}`);
     }
 
     const data = await response.json();
-    
-    if (!data || !data.id) {
-      console.error("Place Details API returned invalid data:", { placeId: cleanPlaceId, data });
+
+    if (data.status === "NOT_FOUND" || data.status === "INVALID_REQUEST") {
+      console.error("Place Details API status error:", {
+        status: data.status,
+        error_message: data.error_message,
+        placeId: cleanPlaceId,
+      });
+      throw new Error(`Place not found: ${cleanPlaceId}`);
+    }
+
+    if (data.status === "REQUEST_DENIED") {
+      throw new Error("Google Maps API key does not have permission to access Places API. Please check API key permissions.");
+    }
+
+    if (data.status !== "OK" || !data.result) {
+      console.error("Place Details API returned invalid data:", { placeId: cleanPlaceId, status: data.status });
       throw new Error("Invalid response from Google Places API");
     }
 
-    return data;
+    return data.result;
   } catch (error) {
     console.error("Place Details API exception:", {
       error: error instanceof Error ? error.message : String(error),
@@ -841,113 +819,106 @@ function normalizeGeocodeData(geocodeResult: GeocodeResult, originalQuery: strin
 }
 
 /**
- * Normalize Google Places data to profile/place format
+ * Normalize Google Places data (legacy API format) to profile/place format
  */
 type PlaceDetailsData = {
-  id?: string;
-  displayName?: { text?: string } | string;
-  formattedAddress?: string;
-  websiteUri?: string;
-  nationalPhoneNumber?: string;
+  place_id?: string;
+  name?: string;
+  formatted_address?: string;
+  website?: string;
+  formatted_phone_number?: string;
   rating?: number;
-  userRatingCount?: number;
-  regularOpeningHours?: { weekdayDescriptions?: string[]; periods?: unknown[] };
-  priceLevel?: string;
+  user_ratings_total?: number;
+  opening_hours?: { weekday_text?: string[]; periods?: unknown[] };
+  price_level?: number;
   types?: string[];
-  photos?: Array<{ name?: string }>;
-  location?: { latitude?: number; longitude?: number };
-  addressComponents?: Array<{ types: string[]; longText?: string; shortText?: string }>;
+  photos?: Array<{ photo_reference?: string; height?: number; width?: number }>;
+  geometry?: { location?: { lat: number; lng: number } };
+  address_components?: Array<{ types: string[]; long_name?: string; short_name?: string }>;
 };
 
 function normalizePlaceData(placeData: PlaceDetailsData, originalQuery: string, isUrl: boolean = false) {
-  const openingHours = placeData.regularOpeningHours
+  const openingHours = placeData.opening_hours
     ? {
-        weekdayText: placeData.regularOpeningHours.weekdayDescriptions || [],
-        periods: placeData.regularOpeningHours.periods || [],
+        weekdayText: placeData.opening_hours.weekday_text || [],
+        periods: placeData.opening_hours.periods || [],
       }
     : null;
 
-  // Extract display name (could be text or string)
-  const rawName = placeData.displayName;
-  const displayName = (typeof rawName === "object" && rawName !== null ? rawName.text : rawName) || null;
+  const displayName = placeData.name || null;
 
   // Extract coordinates
-  const lat = placeData.location?.latitude || null;
-  const lng = placeData.location?.longitude || null;
+  const lat = placeData.geometry?.location?.lat || null;
+  const lng = placeData.geometry?.location?.lng || null;
 
   // Extract city, state, country from address components
-  // Prefer locality, fallback to postal_town, then sublocality
   let city = null;
   let state = null;
   let country = null;
-  
-  if (placeData.addressComponents) {
-    for (const comp of placeData.addressComponents) {
+
+  if (placeData.address_components) {
+    for (const comp of placeData.address_components) {
       const types = comp.types || [];
-      
-      // City: prefer locality, fallback to postal_town, then sublocality
+
       if (!city) {
         if (types.includes("locality")) {
-          city = comp.longText || comp.shortText || null;
+          city = comp.long_name || comp.short_name || null;
         } else if (types.includes("postal_town")) {
-          city = comp.longText || comp.shortText || null;
+          city = comp.long_name || comp.short_name || null;
         } else if (types.includes("sublocality") || types.includes("sublocality_level_1")) {
-          city = comp.longText || comp.shortText || null;
+          city = comp.long_name || comp.short_name || null;
         }
       }
-      
-      // State/province
+
       if (!state) {
         if (types.includes("administrative_area_level_1")) {
-          state = comp.shortText || comp.longText || null;
+          state = comp.short_name || comp.long_name || null;
         } else if (types.includes("administrative_area_level_2")) {
-          state = comp.shortText || comp.longText || null;
+          state = comp.short_name || comp.long_name || null;
         }
       }
-      
-      // Country
+
       if (!country) {
         if (types.includes("country")) {
-          country = comp.longText || comp.shortText || null;
+          country = comp.long_name || comp.short_name || null;
         }
       }
     }
   }
 
+  const placeId = placeData.place_id || null;
+
   return {
     name: displayName,
-    business_name: displayName, // Alias for backward compatibility
-    formatted_address: placeData.formattedAddress || null,
-    address: placeData.formattedAddress || null, // Alias
-    website: placeData.websiteUri || null,
-    phone: placeData.nationalPhoneNumber || null,
+    business_name: displayName,
+    formatted_address: placeData.formatted_address || null,
+    address: placeData.formatted_address || null,
+    website: placeData.website || null,
+    phone: placeData.formatted_phone_number || null,
     rating: placeData.rating ? Number(placeData.rating) : null,
-    reviews_count: placeData.userRatingCount ? Number(placeData.userRatingCount) : null,
-    user_ratings_total: placeData.userRatingCount ? Number(placeData.userRatingCount) : null, // Alias
+    reviews_count: placeData.user_ratings_total ? Number(placeData.user_ratings_total) : null,
+    user_ratings_total: placeData.user_ratings_total ? Number(placeData.user_ratings_total) : null,
     opening_hours: openingHours,
-    price_level: placeData.priceLevel || null,
+    price_level: placeData.price_level != null ? placeData.price_level : null,
     category: placeData.types?.[0] || null,
     types: placeData.types || [],
-    categories: placeData.types || [], // Alias
-    place_id: placeData.id || null,
-    google_place_id: placeData.id || null, // Alias
-    google_maps_url: isUrl ? originalQuery : (placeData.id ? `https://www.google.com/maps/place/?q=place_id:${placeData.id}` : null),
+    categories: placeData.types || [],
+    place_id: placeId,
+    google_place_id: placeId,
+    google_maps_url: isUrl ? originalQuery : (placeId ? `https://www.google.com/maps/place/?q=place_id:${placeId}` : null),
     lat: lat ? Number(lat) : null,
     lng: lng ? Number(lng) : null,
-    latitude: lat ? Number(lat) : null, // Alias
-    longitude: lng ? Number(lng) : null, // Alias
+    latitude: lat ? Number(lat) : null,
+    longitude: lng ? Number(lng) : null,
     city: city,
     city_state: state,
     city_country: country,
-    // Photo references (URLs need to be generated client-side with API key)
     photos: placeData.photos?.map((photo) => ({
-      reference: photo.name || photo,
-      // Note: Photo URLs should be generated client-side or via a server endpoint
-      // to avoid exposing API key. For now, we return the reference.
+      reference: photo.photo_reference || null,
       url: null,
     })) || [],
-    photo_urls: placeData.photos?.map((photo) => photo.name || photo) || [], // Alias for backward compatibility
-    is_coordinate_only: false, // Has a place_id, so not coordinate-only
+    photo_urls: placeData.photos?.map((photo) => photo.photo_reference).filter(Boolean) || [],
+    is_coordinate_only: false,
   };
 }
 
@@ -1197,7 +1168,7 @@ export async function POST(request: NextRequest) {
       throw error;
     }
     
-    if (!placeData || !placeData.id) {
+    if (!placeData || !placeData.place_id) {
       console.error("Place details API returned invalid data:", { placeId, placeData });
       return NextResponse.json(
         { 

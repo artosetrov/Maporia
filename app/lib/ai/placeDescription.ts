@@ -184,71 +184,63 @@ export async function fetchGooglePlaceAiContext(args: {
 }): Promise<GooglePlaceAiContext> {
   const placeId = args.googlePlaceId.replace(/^places\//, "");
 
-  const fieldMask = [
-    "id",
-    "displayName",
-    "types",
-    "formattedAddress",
-    "rating",
-    "userRatingCount",
-    "editorialSummary",
-    "reviews",
+  const fields = [
+    "place_id", "name", "types", "formatted_address",
+    "rating", "user_ratings_total", "editorial_summary", "reviews",
   ].join(",");
 
-  const res = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
-    headers: {
-      "X-Goog-Api-Key": args.googleApiKey,
-      "X-Goog-FieldMask": fieldMask,
-    },
+  const params = new URLSearchParams({
+    place_id: placeId,
+    fields,
+    key: args.googleApiKey,
   });
+
+  const res = await fetch(
+    `https://maps.googleapis.com/maps/api/place/details/json?${params.toString()}`
+  );
 
   const text = await res.text();
   if (!res.ok) {
     throw new Error(`Google Places error ${res.status}: ${text.slice(0, 300)}`);
   }
 
-  type GooglePlaceRaw = {
-    displayName?: { text?: string } | string;
-    types?: string[];
-    formattedAddress?: string;
-    rating?: number;
-    userRatingCount?: number;
-    editorialSummary?: { text?: string } | string;
-    reviews?: Array<{ text?: { text?: string } | string; originalText?: { text?: string } }>;
+  type GooglePlaceLegacyRaw = {
+    status: string;
+    result?: {
+      name?: string;
+      types?: string[];
+      formatted_address?: string;
+      rating?: number;
+      user_ratings_total?: number;
+      editorial_summary?: { overview?: string };
+      reviews?: Array<{ text?: string }>;
+    };
+    error_message?: string;
   };
 
-  let data: GooglePlaceRaw;
+  let response: GooglePlaceLegacyRaw;
   try {
-    data = JSON.parse(text);
+    response = JSON.parse(text);
   } catch {
     throw new Error("Google Places returned invalid JSON");
   }
 
-  const displayNameRaw = data?.displayName;
-  const name = typeof displayNameRaw === "object" && displayNameRaw !== null
-    ? displayNameRaw.text ?? null
-    : (displayNameRaw as string) ?? null;
-  const types: string[] | null = Array.isArray(data?.types) ? data.types : null;
-  const formatted_address = data?.formattedAddress || null;
-  const rating = typeof data?.rating === "number" ? data.rating : data?.rating ? Number(data.rating) : null;
-  const user_ratings_total =
-    typeof data?.userRatingCount === "number"
-      ? data.userRatingCount
-      : data?.userRatingCount
-        ? Number(data.userRatingCount)
-        : null;
+  if (response.status !== "OK" || !response.result) {
+    throw new Error(`Google Places error: ${response.status} - ${response.error_message || "no result"}`);
+  }
 
-  const editorialRaw = data?.editorialSummary;
-  const editorial_summary = typeof editorialRaw === "object" && editorialRaw !== null
-    ? editorialRaw.text ?? null
-    : (editorialRaw as string) ?? null;
+  const data = response.result;
 
-  const reviewsRaw = Array.isArray(data?.reviews) ? data.reviews : [];
+  const name = data.name || null;
+  const types: string[] | null = Array.isArray(data.types) ? data.types : null;
+  const formatted_address = data.formatted_address || null;
+  const rating = typeof data.rating === "number" ? data.rating : null;
+  const user_ratings_total = typeof data.user_ratings_total === "number" ? data.user_ratings_total : null;
+  const editorial_summary = data.editorial_summary?.overview || null;
+
+  const reviewsRaw = Array.isArray(data.reviews) ? data.reviews : [];
   const reviews = reviewsRaw
-    .map((r) => {
-      const textField = r?.text;
-      return (typeof textField === "object" && textField !== null ? textField.text : textField) || r?.originalText?.text || "";
-    })
+    .map((r) => r?.text || "")
     .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
     .slice(0, 3);
 

@@ -23,7 +23,7 @@ import LockedPlaceOverlay from "../../components/LockedPlaceOverlay";
 import PremiumBadge from "../../components/PremiumBadge";
 import Icon from "../../components/Icon";
 import { MapSkeleton } from "../../components/Skeleton";
-import { convertInstagramReelToEmbed } from "../../utils";
+import { convertInstagramReelToEmbed, filterValidPhotos, isValidPhotoUrl } from "../../utils";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 type Place = {
@@ -320,7 +320,7 @@ export default function PlacePage(props: PageProps) {
         .order("sort", { ascending: true });
 
       if (!error && photosData && photosData.length > 0) {
-        const urls = photosData.map((p: any) => p.url).filter(Boolean);
+        const urls = filterValidPhotos(photosData.map((p: any) => p.url));
         setLoadedPhotos(urls);
       } else {
         // Fallback: use legacy format
@@ -330,7 +330,7 @@ export default function PlacePage(props: PageProps) {
         } else if (place.cover_url) {
           photos.push(place.cover_url);
         }
-        setLoadedPhotos(photos);
+        setLoadedPhotos(filterValidPhotos(photos));
       }
     })();
   }, [id, place?.id]);
@@ -346,7 +346,7 @@ export default function PlacePage(props: PageProps) {
     } else if (place.cover_url) {
       photos.push(place.cover_url);
     }
-    return photos;
+    return filterValidPhotos(photos);
   }, [loadedPhotos, place?.photo_urls, place?.cover_url]);
 
 

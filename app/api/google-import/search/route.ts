@@ -147,45 +147,27 @@ async function getGeocodeData(apiKey: string, address: string): Promise<{ geocod
  */
 async function findPlaceByCoordinates(apiKey: string, lat: number, lng: number): Promise<string | null> {
   try {
-    const radiuses = [10.0, 50.0, 100.0, 200.0];
-    
+    const radiuses = [10, 50, 100, 200];
+
     for (const radius of radiuses) {
+      const params = new URLSearchParams({
+        location: `${lat},${lng}`,
+        radius: String(radius),
+        key: apiKey,
+      });
+
       const response = await fetch(
-        `https://places.googleapis.com/v1/places:searchNearby`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": apiKey,
-            "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location",
-          },
-          body: JSON.stringify({
-            maxResultCount: 5,
-            locationRestriction: {
-              circle: {
-                center: {
-                  latitude: lat,
-                  longitude: lng,
-                },
-                radius: radius,
-              },
-            },
-          }),
-        }
+        `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params.toString()}`
       );
 
-      if (!response.ok) {
-        continue;
-      }
+      if (!response.ok) continue;
 
       const data = await response.json();
-      
-      if (data.places && data.places.length > 0) {
-        let placeId = data.places[0].id;
-        if (placeId && typeof placeId === 'string') {
-          placeId = placeId.replace(/^places\//, '');
-        }
-        return placeId;
+
+      if (data.status !== "OK") continue;
+
+      if (data.results && data.results.length > 0) {
+        return data.results[0].place_id;
       }
     }
 
@@ -285,135 +267,58 @@ async function findPlaceFromText(apiKey: string, query: string): Promise<string 
       originalQuery: query.substring(0, 100),
     });
 
-    // Try each query variation
-    // This works for both place names (e.g., "Cafe Central") and addresses
+    // Try each query variation using legacy Text Search API
     for (const variation of queryVariations) {
       if (!variation || variation.length < 2) continue;
-      
-      logger.debug("Trying Find Place API with query:", variation.substring(0, 100));
-      
-      const requestBody: { textQuery: string; maxResultCount: number; locationBias?: { circle: { center: { latitude: number; longitude: number }; radius: number } } } = {
-        textQuery: variation,
-        maxResultCount: 5, // Get multiple results to find best match
-      };
-      
+
+      logger.debug("Trying Text Search API with query:", variation.substring(0, 100));
+
+      const params = new URLSearchParams({
+        query: variation,
+        key: apiKey,
+      });
+
       if (useCoordinates && lat !== null && lng !== null) {
-        requestBody.locationBias = {
-          circle: {
-            center: {
-              latitude: lat,
-              longitude: lng,
-            },
-            radius: 100.0,
-          },
-        };
+        params.set("location", `${lat},${lng}`);
+        params.set("radius", "100");
       }
 
       try {
-        logger.debug("🌐 Calling Find Place API:", {
-          url: "https://places.googleapis.com/v1/places:searchText",
-          requestBody: JSON.stringify(requestBody),
-          hasApiKey: !!apiKey,
-          apiKeyPrefix: apiKey ? apiKey.substring(0, 10) + "..." : "missing",
-        });
-        
         const response = await fetch(
-          `https://places.googleapis.com/v1/places:searchText`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Goog-Api-Key": apiKey,
-              "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location",
-            },
-            body: JSON.stringify(requestBody),
-          }
+          `https://maps.googleapis.com/maps/api/place/textsearch/json?${params.toString()}`
         );
-        
-        // Read response once
-        const responseText = await response.text();
-        
-        logger.debug("📡 Find Place API response:", {
-          status: response.status,
-          statusText: response.statusText,
-          ok: response.ok,
-          responseLength: responseText.length,
-          responsePreview: responseText.substring(0, 200),
-        });
 
         if (!response.ok) {
-          let errorData;
-          try {
-            errorData = JSON.parse(responseText);
-          } catch {
-            errorData = { message: responseText };
-          }
-          logger.warn("❌ Find Place API error for variation:", {
+          logger.warn("Text Search API HTTP error:", {
             status: response.status,
-            statusText: response.statusText,
             query: variation.substring(0, 100),
-            error: errorData,
           });
-          // Don't give up on first error - try next variation
           continue;
         }
 
-        // Parse successful response
-        let data;
-        try {
-          if (!responseText || responseText.trim().length === 0) {
-            logger.warn("⚠️ Empty response from Find Place API");
-            continue;
-          }
-          data = JSON.parse(responseText);
-        } catch (parseError) {
-          console.error("❌ Failed to parse Find Place API response:", {
-            error: parseError instanceof Error ? parseError.message : String(parseError),
+        const data = await response.json();
+
+        if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+          logger.warn("Text Search API status error:", {
+            status: data.status,
+            error_message: data.error_message,
             query: variation.substring(0, 100),
-            responsePreview: responseText.substring(0, 500),
           });
           continue;
         }
-        
-        // Check if we have results
-        if (data && data.places && Array.isArray(data.places) && data.places.length > 0) {
-          // Get the first (best match) result
-          const firstPlace = data.places[0];
-          
-          if (!firstPlace || !firstPlace.id) {
-            logger.warn("Place result missing id:", {
-              place: firstPlace,
-              query: variation.substring(0, 100),
-            });
-            continue;
-          }
-          
-          let placeId = firstPlace.id;
-          
-          if (placeId && typeof placeId === 'string') {
-            // Remove "places/" prefix if present
-            placeId = placeId.replace(/^places\//, '');
-          }
-          
-          const displayName = firstPlace.displayName?.text || firstPlace.displayName || 'Unknown';
-          logger.debug("✅ Found place via Find Place API:", {
+
+        if (data.results && data.results.length > 0) {
+          const placeId = data.results[0].place_id;
+          logger.debug("Found place via Text Search API:", {
             placeId,
-            displayName,
-            formattedAddress: firstPlace.formattedAddress || 'No address',
+            name: data.results[0].name,
             query: variation.substring(0, 100),
-            totalResults: data.places.length,
-            matchedVariation: variation.substring(0, 50),
+            totalResults: data.results.length,
           });
-          
           return placeId;
         } else {
-          logger.debug("⚠️ No places found for variation:", {
+          logger.debug("No places found for variation:", {
             query: variation.substring(0, 100),
-            responseHasPlaces: !!data?.places,
-            placesIsArray: Array.isArray(data?.places),
-            placesCount: data?.places?.length || 0,
-            responseKeys: data ? Object.keys(data) : [],
-            fullResponse: JSON.stringify(data).substring(0, 500),
           });
         }
       } catch (error) {
@@ -473,64 +378,55 @@ async function findPlaceFromText(apiKey: string, query: string): Promise<string 
 }
 
 /**
- * Get place details from Google Places API
+ * Get place details from Google Places API (legacy)
  */
 async function getPlaceDetails(apiKey: string, placeId: string) {
   try {
     const cleanPlaceId = placeId.replace(/^places\//, '');
-    
-    logger.debug("🔍 Getting place details for place_id:", cleanPlaceId.substring(0, 50));
-    
+
+    const fields = [
+      "place_id", "name", "formatted_address", "website",
+      "formatted_phone_number", "rating", "user_ratings_total",
+      "opening_hours", "types", "photos", "geometry", "address_components",
+    ].join(",");
+
+    const params = new URLSearchParams({
+      place_id: cleanPlaceId,
+      fields,
+      key: apiKey,
+    });
+
     const response = await fetch(
-      `https://places.googleapis.com/v1/places/${cleanPlaceId}`,
-      {
-        headers: {
-          "X-Goog-Api-Key": apiKey,
-          "X-Goog-FieldMask":
-            "id,displayName,formattedAddress,websiteUri,nationalPhoneNumber,rating,userRatingCount,regularOpeningHours,types,photos,location,addressComponents",
-        },
-      }
+      `https://maps.googleapis.com/maps/api/place/details/json?${params.toString()}`
     );
 
     if (!response.ok) {
       const errorText = await response.text();
-      let errorData;
-      try {
-        errorData = JSON.parse(errorText);
-      } catch {
-        errorData = { message: errorText };
-      }
-      console.error("❌ Place Details API error:", {
+      console.error("Place Details API HTTP error:", {
         status: response.status,
-        statusText: response.statusText,
         placeId: cleanPlaceId.substring(0, 50),
-        error: errorData,
+        error: errorText.substring(0, 300),
       });
-      throw new Error(`Google Places API error: ${response.status} - ${errorData.message || errorText}`);
+      throw new Error(`Google Places API error: ${response.status}`);
     }
 
     const data = await response.json();
-    
-    if (!data || !data.id) {
-      console.error("❌ Invalid Place Details API response:", {
+
+    if (data.status === "REQUEST_DENIED") {
+      throw new Error("Google Maps API key does not have permission to access Places API.");
+    }
+
+    if (data.status !== "OK" || !data.result) {
+      console.error("Place Details API status error:", {
+        status: data.status,
         placeId: cleanPlaceId.substring(0, 50),
-        hasData: !!data,
-        hasId: !!data?.id,
-        dataKeys: data ? Object.keys(data) : [],
       });
       throw new Error("Invalid response from Google Places API");
     }
 
-    logger.debug("✅ Got place details:", {
-      placeId: data.id?.substring(0, 50),
-      displayName: data.displayName?.text || data.displayName,
-      hasPhotos: !!(data.photos && data.photos.length > 0),
-      photoCount: data.photos?.length || 0,
-    });
-
-    return data;
+    return data.result;
   } catch (error) {
-    console.error("❌ Place Details API exception:", {
+    console.error("Place Details API exception:", {
       error: error instanceof Error ? error.message : String(error),
       placeId: placeId.substring(0, 50),
     });
@@ -560,65 +456,43 @@ function cacheResponse(placeId: string, data: unknown) {
 }
 
 /**
- * Generate photo URL from Google Places photo reference
- * Google Places API v1 uses photo name format: places/{place_id}/photos/{photo_reference}
- */
-function getPhotoUrl(apiKey: string, photoName: string, maxWidth: number = 800): string {
-  // Google Places API v1 format: places/{place_id}/photos/{photo_reference}/media
-  if (photoName.startsWith('places/')) {
-    return `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${maxWidth}&key=${apiKey}`;
-  }
-  // Fallback to old API format if it's just a reference
-  return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photo_reference=${photoName}&key=${apiKey}`;
-}
-
-/**
- * Normalize Google Places data to preview format
+ * Normalize Google Places data (legacy format) to preview format
  */
 type PlaceDetailsData = {
-  id?: string;
-  displayName?: { text?: string } | string;
-  formattedAddress?: string;
+  place_id?: string;
+  name?: string;
+  formatted_address?: string;
   types?: string[];
-  photos?: Array<{ name?: string }>;
-  location?: { latitude?: number; longitude?: number };
+  photos?: Array<{ photo_reference?: string; height?: number; width?: number }>;
+  geometry?: { location?: { lat: number; lng: number } };
 };
 
 function normalizePlaceData(placeData: PlaceDetailsData, originalQuery: string, isUrl: boolean, apiKey: string) {
-  const rawName = placeData.displayName;
-  const displayName = (typeof rawName === "object" && rawName !== null ? rawName.text : rawName) || null;
-  const formattedAddress = placeData.formattedAddress || null;
-  
-  // Extract description from types or use formatted address
+  const displayName = placeData.name || null;
+  const formattedAddress = placeData.formatted_address || null;
+
   const types = placeData.types || [];
-  const description = types.length > 0 
+  const description = types.length > 0
     ? types.slice(0, 3).map((t: string) => t.replace(/_/g, ' ')).join(', ')
     : null;
 
-  // Extract coordinates
-  const lat = placeData.location?.latitude || null;
-  const lng = placeData.location?.longitude || null;
+  const lat = placeData.geometry?.location?.lat || null;
+  const lng = placeData.geometry?.location?.lng || null;
 
-  // Process photos
-  // Google Places API v1 returns photos with name field like "places/{place_id}/photos/{photo_reference}"
+  // Process photos — legacy API returns photo_reference
   const photos = (placeData.photos || []).slice(0, 9).map((photo, index: number) => {
-    const photoName = photo.name || "";
-    // Extract photo reference from name if it's in format "places/{place_id}/photos/{photo_reference}"
-    let photoReference = photoName;
-    if (typeof photoName === 'string' && photoName.includes('/photos/')) {
-      photoReference = photoName.split('/photos/')[1];
-    }
+    const ref = photo.photo_reference || "";
     return {
       id: `photo_${index}`,
-      url: getPhotoUrl(apiKey, String(photoName)), // Use full name for v1 API
-      reference: photoReference,
+      url: ref ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${ref}&key=${apiKey}` : "",
+      reference: ref,
     };
-  });
+  }).filter(p => p.reference);
 
-  // Build Google Maps URL
-  const googleMapsUrl = isUrl 
-    ? originalQuery 
-    : (placeData.id ? `https://www.google.com/maps/place/?q=place_id:${placeData.id}` : null);
+  const placeId = placeData.place_id || null;
+  const googleMapsUrl = isUrl
+    ? originalQuery
+    : (placeId ? `https://www.google.com/maps/place/?q=place_id:${placeId}` : null);
 
   return {
     title: displayName,
@@ -627,7 +501,7 @@ function normalizePlaceData(placeData: PlaceDetailsData, originalQuery: string, 
     photos: photos,
     lat: lat ? Number(lat) : null,
     lng: lng ? Number(lng) : null,
-    google_place_id: placeData.id || null,
+    google_place_id: placeId,
     google_maps_url: googleMapsUrl,
   };
 }

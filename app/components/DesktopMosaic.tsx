@@ -2,6 +2,15 @@
 
 import Icon from "./Icon";
 
+/** Hides the image on error and shows branded placeholder */
+const handleImgError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+  const img = e.currentTarget;
+  img.style.display = "none";
+  // Show sibling placeholder if exists
+  const placeholder = img.parentElement?.querySelector("[data-photo-placeholder]") as HTMLElement | null;
+  if (placeholder) placeholder.style.display = "flex";
+};
+
 interface DesktopMosaicProps {
   photos: string[];
   title: string;
@@ -65,12 +74,16 @@ export default function DesktopMosaic({
   if (photos.length === 1) {
     return (
       <div className="w-full aspect-[2/1] grid" style={{ gridTemplateColumns: '1fr 1fr', columnGap: `${gap}px` }}>
-        <div className="relative overflow-hidden aspect-square" style={{ borderRadius: `${radius}px` }}>
+        <div className="relative overflow-hidden aspect-square bg-gradient-to-br from-[#f5f4f2] to-[#e8e6e0]" style={{ borderRadius: `${radius}px` }}>
           <img
             src={photos[0]}
             alt={title}
             className="w-full h-full object-cover"
+            onError={handleImgError}
           />
+          <div data-photo-placeholder className="hidden w-full h-full items-center justify-center absolute inset-0">
+            <Icon name="photo" size={48} className="text-[#A8B096]" strokeWidth={1.5} />
+          </div>
         </div>
         <div className="grid grid-cols-2 grid-rows-2" style={{ gap: `${gap}px` }}>
           {Array.from({ length: 4 }).map((_, i) => (
@@ -116,7 +129,7 @@ export default function DesktopMosaic({
     >
       {/* Left: Hero image (1:1 aspect ratio) */}
       <button
-        className="relative overflow-hidden aspect-square cursor-pointer"
+        className="relative overflow-hidden aspect-square cursor-pointer bg-gradient-to-br from-[#f5f4f2] to-[#e8e6e0]"
         style={{ borderRadius: `${radius}px` }}
         onClick={() => onPhotoClick?.(0)}
       >
@@ -124,7 +137,11 @@ export default function DesktopMosaic({
           src={photos[0]}
           alt={title}
           className="w-full h-full object-cover"
+          onError={handleImgError}
         />
+        <div data-photo-placeholder className="hidden w-full h-full items-center justify-center absolute inset-0">
+          <Icon name="photo" size={48} className="text-[#A8B096]" strokeWidth={1.5} />
+        </div>
       </button>
 
       {/* Right: 2x2 grid (each photo 1:1 aspect ratio) */}
@@ -143,14 +160,18 @@ export default function DesktopMosaic({
               style={{ borderRadius: `${radius}px` }}
             >
               <button
-                className="w-full h-full"
+                className="w-full h-full bg-gradient-to-br from-[#f5f4f2] to-[#e8e6e0]"
                 onClick={() => onPhotoClick?.(photoIndex)}
               >
                 <img
                   src={photo}
                   alt={`${title} - Photo ${index + 2}`}
                   className="w-full h-full object-cover"
+                  onError={handleImgError}
                 />
+                <div data-photo-placeholder className="hidden w-full h-full items-center justify-center">
+                  <Icon name="photo" size={24} className="text-[#A8B096]" strokeWidth={1.5} />
+                </div>
               </button>
               {shouldShowButton && (
                 <button

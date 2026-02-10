@@ -98,12 +98,15 @@ export default function MobileCarousel({
           >
             <button
               onClick={() => onPhotoClick?.(index)}
-              className="w-full h-full"
+              className="w-full h-full bg-gradient-to-br from-[#f5f4f2] to-[#e8e6e0]"
             >
               <img
                 src={photo}
                 alt={`${title} - Photo ${index + 1}`}
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
               />
             </button>
           </div>

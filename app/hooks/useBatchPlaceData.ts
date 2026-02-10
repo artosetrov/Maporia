@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
+import { isValidPhotoUrl } from "../utils";
 import type { CreatorProfile } from "../types";
 
 type PhotoMap = Map<string, string[]>;
@@ -76,9 +77,9 @@ export function useBatchPlaceData(
           };
           const photoMap = new Map<string, string[]>();
           (photosData ?? []).forEach((p) => {
-            if (!p.url) return;
+            if (!isValidPhotoUrl(p.url)) return;
             const existing = photoMap.get(p.place_id) ?? [];
-            existing.push(p.url);
+            existing.push(p.url!);
             photoMap.set(p.place_id, existing);
           });
           setPhotos(photoMap);

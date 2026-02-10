@@ -34,7 +34,7 @@ import AuthModal from "../components/AuthModal";
 import PremiumUpsellModal from "../components/PremiumUpsellModal";
 import Icon from "../components/Icon";
 import { PlaceCardGridSkeleton, MapSkeleton, Empty } from "../components/Skeleton";
-import { sanitizePostgrestValue, normalizeCity, cx, initialsFromEmail, timeAgo } from "../utils";
+import { sanitizePostgrestValue, normalizeCity, cx, initialsFromEmail, timeAgo, isValidPhotoUrl } from "../utils";
 import type { PlaceListItem as Place } from "../types";
 import { buildCityRadiusFilter, getCityCoords, isPlaceWithinCityRadius } from "../lib/cityRadius";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
@@ -2317,14 +2317,14 @@ function MapView({
         const grouped = new Map<string, string[]>();
         if (!error && photosData && photosData.length > 0) {
           for (const row of photosData) {
-            if (!row.place_id || !row.url) continue;
+            if (!row.place_id || !isValidPhotoUrl(row.url)) continue;
             if (!grouped.has(row.place_id)) grouped.set(row.place_id, []);
-            grouped.get(row.place_id)!.push(row.url);
+            grouped.get(row.place_id)!.push(row.url!);
           }
         }
         for (const place of placesWithCoords) {
-          if (!grouped.has(place.id) && place.cover_url) {
-            grouped.set(place.id, [place.cover_url]);
+          if (!grouped.has(place.id) && isValidPhotoUrl(place.cover_url)) {
+            grouped.set(place.id, [place.cover_url!]);
           }
         }
         if (!cancelled) setPlacePhotos(grouped);
@@ -2332,7 +2332,7 @@ function MapView({
         if (cancelled) return;
         const fallback = new Map<string, string[]>();
         for (const place of placesWithCoords) {
-          if (place.cover_url) fallback.set(place.id, [place.cover_url]);
+          if (isValidPhotoUrl(place.cover_url)) fallback.set(place.id, [place.cover_url!]);
         }
         setPlacePhotos(fallback);
       }
@@ -2691,9 +2691,9 @@ function MapView({
             if (!place || !place.lat || !place.lng) return null;
             if (typeof window === "undefined" || !(window as any).google?.maps) return null;
 
-            const photos = placePhotos.get(place.id) || (place.cover_url ? [place.cover_url] : []);
+            const photos = placePhotos.get(place.id) || (isValidPhotoUrl(place.cover_url) ? [place.cover_url!] : []);
             const currentIndex = currentPhotoIndex.get(place.id) || 0;
-            const currentPhoto = photos[currentIndex] || place.cover_url;
+            const currentPhoto = photos[currentIndex] || (isValidPhotoUrl(place.cover_url) ? place.cover_url : undefined);
             const hasMultiplePhotos = photos.length > 1;
 
             const handlePreviousPhoto = (e: React.MouseEvent) => {
