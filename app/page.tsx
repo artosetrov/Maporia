@@ -1,14 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthRedirect } from "./hooks/useAuthRedirect";
 import TopBar from "./components/TopBar";
 import HomeSection from "./components/HomeSection";
 import { ActiveFilters } from "./components/FiltersModal";
-import SearchModal from "./components/SearchModal";
-import FiltersModal from "./components/FiltersModal";
+// Heavy modals — only loaded when the user actually opens them.
+// Same pattern is already used on /map; this keeps the home-page main
+// chunk ~tens of KB lighter and shaves time-to-interactive on first paint.
+import nextDynamic from "next/dynamic";
+const SearchModal = nextDynamic(() => import("./components/SearchModal"), { ssr: false });
+const FiltersModal = nextDynamic(() => import("./components/FiltersModal"), { ssr: false });
 import { HOME_SECTIONS } from "./constants/homeSections";
 import { supabase, hasValidSupabaseConfig } from "./lib/supabase";
 import type { Database } from "./types/supabase";
@@ -18,7 +22,6 @@ import { DEFAULT_CITY } from "./constants";
 type ReactionPlaceId = Pick<Database["public"]["Tables"]["reactions"]["Row"], "place_id">;
 type ReactionsPlaceIdResult = { data: ReactionPlaceId[] | null; error: PostgrestError | null };
 import { useUserAccessContext } from "./contexts/UserAccessContext";
-import { HomeSectionSkeleton } from "./components/Skeleton";
 import { SectionErrorBoundary } from "./components/SectionErrorBoundary";
 import { sanitizePostgrestValue } from "./utils";
 import { buildCityRadiusFilter, getCityCoords } from "./lib/cityRadius";
@@ -44,10 +47,16 @@ export default function HomePage() {
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
   // User access and profile data (from context — single session/profile request)
-  const { loading: accessLoading, access, user, profile } = useUserAccessContext();
-  
-  // Bootstrap ready state - wait for auth/profile before rendering sections
-  const [bootReady, setBootReady] = useState(false);
+  const { access, user, profile } = useUserAccessContext();
+
+  // We deliberately do NOT block rendering of public sections on auth.
+  // 8 of 9 default home sections are public (city/category-based) and don't
+  // depend on `user`/`access`. Showing skeletons until Supabase replies to
+  // getSession() was the dominant visible stall on the home page.
+  // Section components consume `userAccess` reactively — when auth resolves,
+  // they re-render with premium filtering applied.
+  // (Tags-for-filter modal data is loaded lazily on first open instead of
+  // eagerly here — see `ensurePlacesForTagsLoaded` below.)
   
   // Derive display values from profile
   const userId = user?.id ?? null;
@@ -85,49 +94,45 @@ export default function HomePage() {
     }
   }, []);
 
-  // Wait for bootstrap to complete before rendering sections
-  useEffect(() => {
-    if (!accessLoading) {
-      // Auth and profile are ready, allow sections to render
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[HomePage] Bootstrap ready:', {
-          hasUser: !!user,
-          hasProfile: !!profile,
-          access: {
-            role: access.role,
-            hasPremium: access.hasPremium,
-            isAdmin: access.isAdmin,
-          },
-        });
+  // Lazy loader for `placesForTags`. Previously this dragged in the FULL
+  // places table (no LIMIT) on every home-page mount — for sites with
+  // thousands of places this is a multi-MB request blocking nothing the
+  // user can see until they open the Filters modal.
+  // Now we only fetch on first open and cap at 2000 rows.
+  const placesForTagsLoadedRef = useRef(false);
+  const ensurePlacesForTagsLoaded = useCallback(async () => {
+    if (placesForTagsLoadedRef.current) return;
+    if (!hasValidSupabaseConfig) return;
+    placesForTagsLoadedRef.current = true;
+    try {
+      const { data, error } = await supabase
+        .from("places")
+        .select("id,tags,categories,access_level")
+        .limit(2000);
+      if (error) {
+        placesForTagsLoadedRef.current = false; // allow retry on next open
+        return;
       }
-      setBootReady(true);
-    }
-  }, [accessLoading, user, profile, access]);
-
-  // Загружаем места с тегами для модалки фильтров (теги на главной)
-  useEffect(() => {
-    if (!bootReady || !hasValidSupabaseConfig) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data, error } = await supabase.from("places").select("id,tags,categories,access_level");
-        if (cancelled) return;
-        if (error) return;
-        setPlacesForTags((data ?? []).map((r: { id: string; tags: string[] | null; categories: string[] | null; access_level: string | null }) => ({ id: r.id, tags: r.tags ?? null, categories: r.categories ?? null, access_level: r.access_level ?? null })));
-      } catch (err: any) {
-        if (cancelled) return;
-        if (err?.name === 'AbortError' || err?.message?.includes('abort')) return;
-        if (err?.name === 'TypeError' && err?.message?.includes('fetch')) {
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('[HomePage] Не удалось загрузить теги (сеть недоступна).');
-          }
-          return;
+      setPlacesForTags(
+        (data ?? []).map((r: { id: string; tags: string[] | null; categories: string[] | null; access_level: string | null }) => ({
+          id: r.id,
+          tags: r.tags ?? null,
+          categories: r.categories ?? null,
+          access_level: r.access_level ?? null,
+        }))
+      );
+    } catch (err: any) {
+      placesForTagsLoadedRef.current = false; // allow retry on next open
+      if (err?.name === 'AbortError' || err?.message?.includes('abort')) return;
+      if (err?.name === 'TypeError' && err?.message?.includes('fetch')) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[HomePage] Не удалось загрузить теги (сеть недоступна).');
         }
-        console.error('[HomePage] Error loading tags:', err);
+        return;
       }
-    })();
-    return () => { cancelled = true; };
-  }, [bootReady]);
+      console.error('[HomePage] Error loading tags:', err);
+    }
+  }, []);
 
   // Tags are now loaded dynamically by FiltersModal based on selected categories
   // (via getAvailableTags callback that queries Supabase tags table with category_ids filter)
@@ -297,7 +302,9 @@ export default function HomePage() {
   }
 
   function handleFiltersClick() {
-    // Open filters modal
+    // Open filters modal — kick off the lazy tags-data fetch on first click.
+    // Subsequent opens are free (memoised in placesForTagsLoadedRef).
+    ensurePlacesForTagsLoaded();
     setFilterOpen(true);
   }
 
@@ -495,29 +502,25 @@ export default function HomePage() {
             paddingRight: 'var(--home-page-padding, 16px)',
           }}
         >
-          {!bootReady ? (
-            // Show skeleton while bootstrapping
-            <div className="space-y-6 pt-6 lg:pt-8">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <HomeSectionSkeleton key={i} isFirst={i === 0} />
-              ))}
-            </div>
-          ) : (
-            // Render sections only after bootstrap is ready
-            sectionsToRender.map((section, index) => (
-              <SectionErrorBoundary key={section.title}>
-                <HomeSection
-                  section={section}
-                  userId={userId}
-                  userAccess={access}
-                  favorites={favorites}
-                  onToggleFavorite={toggleFavorite}
-                  onTagClick={handleTagClick}
-                  isFirst={index === 0}
-                />
-              </SectionErrorBoundary>
-            ))
-          )}
+          {/*
+            Sections render immediately. Each <HomeSection> kicks off its own
+            Supabase fetch in parallel, independent of auth, so the user sees
+            real content as soon as the cheapest section returns instead of
+            waiting for the full auth round-trip.
+          */}
+          {sectionsToRender.map((section, index) => (
+            <SectionErrorBoundary key={section.title}>
+              <HomeSection
+                section={section}
+                userId={userId}
+                userAccess={access}
+                favorites={favorites}
+                onToggleFavorite={toggleFavorite}
+                onTagClick={handleTagClick}
+                isFirst={index === 0}
+              />
+            </SectionErrorBoundary>
+          ))}
         </div>
       </div>
 

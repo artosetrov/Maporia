@@ -3,7 +3,8 @@
 import { use, useEffect, useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
+import { GoogleMap, Marker } from "@react-google-maps/api";
+import { useGoogleMaps } from "../../providers/GoogleMapsProvider";
 import { CATEGORIES, DEFAULT_CITY } from "../../constants";
 import TopBar from "../../components/TopBar";
 import DesktopMosaic from "../../components/DesktopMosaic";
@@ -11,7 +12,7 @@ import MobileCarousel from "../../components/MobileCarousel";
 import FiltersModal, { ActiveFilters } from "../../components/FiltersModal";
 import SearchModal from "../../components/SearchModal";
 import FavoriteIcon from "../../components/FavoriteIcon";
-import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey, getMapOptions } from "../../config/googleMaps";
+import { getMapOptions } from "../../config/googleMaps";
 import { createStaticPinSvg } from "../../lib/mapMarkers";
 import { supabase } from "../../lib/supabase";
 import { PLACE_LAYOUT_CONFIG } from "../../config/placeLayout";
@@ -2435,13 +2436,10 @@ export default function PlacePage(props: PageProps) {
 function PlaceMapView({ place }: { place: Place }) {
   const shouldLoadMap = true;
   
-  // Always use consistent parameters for useJsApiLoader
-  // This ensures the loader is initialized with the same options every time
-  const { isLoaded } = useJsApiLoader({
-    id: "google-maps-loader",
-    googleMapsApiKey: getGoogleMapsApiKey(),
-    libraries: GOOGLE_MAPS_LIBRARIES,
-  });
+  // SDK already initialized at app shell (see GoogleMapsProvider in RootLayout).
+  // Reading from context means navigation here doesn't re-trigger the SDK
+  // download — it's already on the wire (or done) by the time the user arrives.
+  const { isLoaded } = useGoogleMaps();
 
   // All hooks must be called before any early returns
   const mapContainerRef = useRef<HTMLDivElement | null>(null);

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import PlaceCard from "./PlaceCard";
 import FavoriteIcon from "./FavoriteIcon";
 import { supabase } from "../lib/supabase";
@@ -25,12 +26,18 @@ function HomeSectionCollageImage({ src, alt, className }: { src: string; alt: st
       </div>
     );
   }
+  // Using next/image instead of a raw <img>: server resizes the source
+  // to the rendered width (collage thumbnails are ~110px wide), serves
+  // WebP/AVIF, and lazy-loads off-screen tiles. Cuts cover image weight
+  // for the home page from ~MBs to ~tens of KBs in typical cases.
   return (
-    <div className={className}>
-      <img
+    <div className={`relative ${className ?? ""}`}>
+      <Image
         src={src}
         alt={alt}
-        className="w-full h-full object-cover"
+        fill
+        sizes="(max-width: 640px) 50vw, 220px"
+        className="object-cover"
         onError={() => setFailed(true)}
       />
     </div>
@@ -122,13 +129,28 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
             return;
           }
 
-          // Fetch all places (we'll filter client-side for better control)
-          const query = supabase
+          // Server-side prefilter: only fetch places that overlap with the
+          // user's interests. Previously we fetched 100 rows blind and filtered
+          // on the client — fine for a tiny dataset, painful as soon as the
+          // catalog grows. We over-fetch a bit (40) so the relevance/recency
+          // sort below still has room to choose from.
+          const orParts: string[] = [];
+          if (favoriteCategories.length > 0) {
+            const cats = favoriteCategories.map((c) => `"${c}"`).join(",");
+            orParts.push(`categories.ov.{${cats}}`);
+          }
+          if (favoriteTags.length > 0) {
+            const tags = favoriteTags.map((t) => `"${t}"`).join(",");
+            orParts.push(`tags.ov.{${tags}}`);
+          }
+          let recQuery = supabase
             .from("places")
-            .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility")
-            .limit(100); // Get more to filter and sort
-
-          const { data: allPlaces, error } = await query;
+            .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility");
+          if (orParts.length > 0) {
+            recQuery = recQuery.or(orParts.join(","));
+          }
+          recQuery = recQuery.limit(40);
+          const { data: allPlaces, error } = await recQuery;
           if (error) throw error;
 
           if (!allPlaces) {

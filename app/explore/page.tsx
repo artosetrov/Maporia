@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GoogleMap, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
+import { GoogleMap, InfoWindow } from "@react-google-maps/api";
+import { useGoogleMaps } from "../providers/GoogleMapsProvider";
 import { MarkerClusterer } from "@googlemaps/markerclusterer";
 import { MaporiaClusterRenderer } from "../lib/clusterRenderer";
 import { CATEGORIES } from "../constants";
@@ -12,7 +13,7 @@ import PlaceCard from "../components/PlaceCard";
 import FavoriteIcon from "../components/FavoriteIcon";
 import PremiumBadge from "../components/PremiumBadge";
 import SearchModal from "../components/SearchModal";
-import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey, getMapOptions } from "../config/googleMaps";
+import { getMapOptions } from "../config/googleMaps";
 import { getCategoryEmoji, createMarkerIcon } from "../lib/mapMarkers";
 import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
@@ -1442,13 +1443,9 @@ function MapView({
       document.removeEventListener('msfullscreenchange', handleFullscreenChange);
     };
   }, []);
-  // Always use consistent parameters for useJsApiLoader
-  // The component will only render when shouldLoadMap is true
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: "google-maps-loader",
-    googleMapsApiKey: getGoogleMapsApiKey(),
-    libraries: GOOGLE_MAPS_LIBRARIES,
-  });
+  // SDK loaded once at app shell level (GoogleMapsProvider in RootLayout).
+  // Avoids re-triggering the script tag every time the user navigates here.
+  const { isLoaded, loadError } = useGoogleMaps();
 
   // Log Google Maps loading status (production diagnostics)
   useEffect(() => {

@@ -1,7 +1,62 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, createContext, useContext } from "react";
+import { useJsApiLoader } from "@react-google-maps/api";
+import {
+  GOOGLE_MAPS_LIBRARIES,
+  getGoogleMapsApiKey,
+} from "../config/googleMaps";
 
+type GoogleMapsContextValue = {
+  isLoaded: boolean;
+  loadError: Error | undefined;
+};
+
+const GoogleMapsContext = createContext<GoogleMapsContextValue>({
+  isLoaded: false,
+  loadError: undefined,
+});
+
+/**
+ * Single global loader for the Google Maps JS SDK.
+ *
+ * Why this exists:
+ * - Previously each page that needed maps called useJsApiLoader() locally,
+ *   which re-mounted loader state on every navigation to /map.
+ * - @react-google-maps/api uses a module-level singleton internally, but
+ *   centralising it here gives us:
+ *     1. one consistent (apiKey, libraries) tuple — avoids the
+ *        "Loader must not be called again with different options" error;
+ *     2. SDK script begins downloading on first paint instead of when the
+ *        user opens /map, so the first map render is noticeably faster.
+ *
+ * Consumers read isLoaded / loadError via useGoogleMaps().
+ */
 export default function GoogleMapsProvider({ children }: { children: ReactNode }) {
-  return <>{children}</>;
+  // Defensive: getGoogleMapsApiKey() throws if the env var is missing.
+  // We don't want a missing key to crash the entire app shell — only the map.
+  let apiKey = "";
+  try {
+    apiKey = getGoogleMapsApiKey();
+  } catch (e) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[GoogleMapsProvider] Maps API key missing:", e);
+    }
+  }
+
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: "google-maps-loader",
+    googleMapsApiKey: apiKey,
+    libraries: GOOGLE_MAPS_LIBRARIES,
+  });
+
+  return (
+    <GoogleMapsContext.Provider value={{ isLoaded, loadError }}>
+      {children}
+    </GoogleMapsContext.Provider>
+  );
+}
+
+export function useGoogleMaps(): GoogleMapsContextValue {
+  return useContext(GoogleMapsContext);
 }

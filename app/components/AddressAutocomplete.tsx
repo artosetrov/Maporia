@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useEffect } from "react";
-import { Autocomplete, useJsApiLoader } from "@react-google-maps/api";
-import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey } from "../config/googleMaps";
+import { Autocomplete } from "@react-google-maps/api";
+import { useGoogleMaps } from "../providers/GoogleMapsProvider";
 import { extractCityFromAddressComponents } from "../lib/cityResolver";
 
 type AddressAutocompleteProps = {
@@ -26,11 +26,8 @@ export default function AddressAutocomplete({
 }: AddressAutocompleteProps) {
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
-  const { isLoaded } = useJsApiLoader({
-    id: "google-maps-loader",
-    googleMapsApiKey: getGoogleMapsApiKey(),
-    libraries: GOOGLE_MAPS_LIBRARIES,
-  });
+  // SDK loaded once at app shell (GoogleMapsProvider in RootLayout).
+  const { isLoaded } = useGoogleMaps();
 
   useEffect(() => {
     onAutocompleteRef(autocompleteRef.current);

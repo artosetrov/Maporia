@@ -7,7 +7,8 @@ import { useEffect, useMemo, useState, Suspense, useRef, useCallback } from "rea
 import { useRouter, useSearchParams } from "next/navigation";
 // NOTE: google.maps.Marker is deprecated; full migration to AdvancedMarkerElement is a separate task.
 // mapId and "marker" library are already configured in config/googleMaps.ts.
-import { GoogleMap, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
+import { GoogleMap, InfoWindow } from "@react-google-maps/api";
+import { useGoogleMaps } from "../providers/GoogleMapsProvider";
 import { MarkerClusterer } from "@googlemaps/markerclusterer";
 import { MaporiaClusterRenderer } from "../lib/clusterRenderer";
 import TopBar from "../components/TopBar";
@@ -19,7 +20,7 @@ const FiltersModal = nextDynamic(() => import("../components/FiltersModal"), { s
 const SearchModal = nextDynamic(() => import("../components/SearchModal"), { ssr: false });
 import FavoriteIcon from "../components/FavoriteIcon";
 import PremiumBadge from "../components/PremiumBadge";
-import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey, getMapOptions } from "../config/googleMaps";
+import { getMapOptions } from "../config/googleMaps";
 import { getCategoryEmoji, createMarkerIcon } from "../lib/mapMarkers";
 import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
@@ -2231,14 +2232,12 @@ function MapView({
 
   // Load map when map view is active (no defer)
   const shouldLoadMap = isMapView;
-  
-  // Always use consistent parameters for useJsApiLoader
-  // The component will only render when shouldLoadMap is true
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: "google-maps-loader",
-    googleMapsApiKey: getGoogleMapsApiKey(),
-    libraries: GOOGLE_MAPS_LIBRARIES,
-  });
+
+  // SDK loaded once at app shell level (GoogleMapsProvider in RootLayout).
+  // Reading from context means navigation to /map doesn't re-trigger the
+  // SDK download — it's already on the wire (or done) by the time the user
+  // arrives here.
+  const { isLoaded, loadError } = useGoogleMaps();
 
   useEffect(() => {
     if (loadError) {

@@ -4,14 +4,15 @@ export const dynamic = "force-dynamic";
 
 import { use, useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
+import { GoogleMap, Marker } from "@react-google-maps/api";
+import { useGoogleMaps } from "../../../../../providers/GoogleMapsProvider";
 import { supabase } from "../../../../../lib/supabase";
 import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../../lib/access";
 
 type PlaceLocationRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "address" | "city" | "city_id" | "city_name_cached" | "google_place_id" | "lat" | "lng">;
-import { GOOGLE_MAPS_LIBRARIES, getGoogleMapsApiKey, getMapOptions } from "../../../../../config/googleMaps";
+import { getMapOptions } from "../../../../../config/googleMaps";
 import dynamicImport from "next/dynamic";
 import Icon from "../../../../../components/Icon";
 import { resolveCity, extractCityFromAddressComponents } from "../../../../../lib/cityResolver";
@@ -40,11 +41,8 @@ export default function LocationEditorPage(props: PageProps) {
   const router = useRouter();
   const { id: placeId } = use(props.params);
 
-  const { isLoaded } = useJsApiLoader({
-    id: "google-maps-loader",
-    googleMapsApiKey: getGoogleMapsApiKey(),
-    libraries: GOOGLE_MAPS_LIBRARIES,
-  });
+  // SDK loaded once at app shell level (GoogleMapsProvider in RootLayout).
+  const { isLoaded } = useGoogleMaps();
 
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const [loading, setLoading] = useState(true);
