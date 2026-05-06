@@ -144,12 +144,22 @@ export default function PlaceEditorHub(props: PageProps) {
       setLoading(true);
       setError(null);
 
-      // Load place with all fields including photos count
-      const { data: rawPlace, error: placeError } = await supabase
-        .from("places")
-        .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled")
-        .eq("id", placeId)
-        .single();
+      // Load place + photos in parallel. They're independent and waiting
+      // for place to resolve before kicking off photos was wasting one
+      // round-trip on every editor open.
+      const [placeRes, photosRes] = await Promise.all([
+        supabase
+          .from("places")
+          .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled")
+          .eq("id", placeId)
+          .single(),
+        supabase
+          .from("place_photos")
+          .select("url, sort, is_cover")
+          .eq("place_id", placeId)
+          .order("sort", { ascending: true }),
+      ]);
+      const { data: rawPlace, error: placeError } = placeRes;
 
       const placeData = rawPlace as Place | null;
       if (!mounted) return;
@@ -213,13 +223,8 @@ export default function PlaceEditorHub(props: PageProps) {
         isUpdating: isUpdatingRef.current
       });
 
-      // Load photos
-      const { data: rawPhotos, error: photosError } = await supabase
-        .from("place_photos")
-        .select("url, sort, is_cover")
-        .eq("place_id", placeId)
-        .order("sort", { ascending: true });
-
+      // Photos came back from the parallel fetch above.
+      const { data: rawPhotos, error: photosError } = photosRes;
       const photosData = rawPhotos as PlacePhotoUrlRow[] | null;
       if (!mounted) return;
 
