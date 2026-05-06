@@ -153,7 +153,7 @@ function MapPageContent() {
   const [placePhotosMap, setPlacePhotosMap] = useState<Map<string, string[]>>(new Map());
 
   // User access and profile from context (single session/profile request; no duplicate loadUser)
-  const { loading: accessLoading, access, user, profile } = useUserAccessContext();
+  const { access, user, profile } = useUserAccessContext();
   const userId = user?.id ?? null;
   const userEmail = user?.email ?? null;
   const userDisplayName = profile?.display_name ?? user?.email?.split("@")[0] ?? null;
@@ -205,17 +205,15 @@ function MapPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placeIdsKeyForPhotos]);
 
-  // Bootstrap ready state - wait for auth/profile before loading places
-  const [bootReady, setBootReady] = useState(false);
-  
-  useEffect(() => {
-    if (!accessLoading) {
-      setBootReady(true);
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[MapPage] bootReady set to true');
-      }
-    }
-  }, [accessLoading]);
+  // Previously this gated the places fetch on auth resolution. Removed:
+  // place data doesn't depend on the user (premium filtering happens later
+  // on the client via filterPlaces). Waiting for getSession() before even
+  // starting the places query was adding a full auth round-trip to TTFB
+  // for what is the page's most expensive request.
+  //
+  // `bootReady` is kept as a constant `true` so existing dependency arrays
+  // and tab-visibility hooks below don't need rewiring.
+  const bootReady = true;
 
   // Applied filters (current state, affects data)
   // Инициализируем из URL сразу, чтобы фильтры применялись при первом рендере
