@@ -70,6 +70,10 @@ export default function ExplorePage() {
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  // Batch-loaded place photos: one IN(...) query per `places` change instead
+  // of N parallel requests from each PlaceCard. Keyed by place_id; falls back
+  // to cover_url when there are no photos in `place_photos`.
+  const [placePhotosMap, setPlacePhotosMap] = useState<Map<string, string[]>>(new Map());
 
   // User access and profile from context (single session/profile request; no pathname re-fetch)
   const { loading: accessLoading, access, user, profile } = useUserAccessContext();
@@ -109,6 +113,52 @@ export default function ExplorePage() {
     });
     return map;
   }, [places, defaultUserAccess, userId]);
+
+  // Batch-load photos whenever the `places` list changes. One IN(place_id...)
+  // query replaces what used to be N parallel queries from each <PlaceCard>.
+  // Keyed by joined-and-sorted ids so we don't re-fetch on identical lists.
+  const placeIdsKey = useMemo(() => places.map(p => p.id).sort().join(","), [places]);
+  useEffect(() => {
+    if (places.length === 0) {
+      setPlacePhotosMap(new Map());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("place_photos")
+          .select("place_id,url")
+          .in("place_id", places.map(p => p.id))
+          .order("sort", { ascending: true });
+        if (cancelled) return;
+        const grouped = new Map<string, string[]>();
+        if (!error && data) {
+          for (const row of data as { place_id: string; url: string }[]) {
+            if (!row.place_id || !row.url) continue;
+            if (!grouped.has(row.place_id)) grouped.set(row.place_id, []);
+            grouped.get(row.place_id)!.push(row.url);
+          }
+        }
+        // Fallback to cover_url for places without any rows in place_photos.
+        for (const p of places) {
+          if (!grouped.has(p.id) && p.cover_url) {
+            grouped.set(p.id, [p.cover_url]);
+          }
+        }
+        if (!cancelled) setPlacePhotosMap(grouped);
+      } catch {
+        if (cancelled) return;
+        const fallback = new Map<string, string[]>();
+        for (const p of places) {
+          if (p.cover_url) fallback.set(p.id, [p.cover_url]);
+        }
+        setPlacePhotosMap(fallback);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placeIdsKey]);
 
   // search + filters - инициализируем из query params
   const [searchDraft, setSearchDraft] = useState("");
@@ -577,6 +627,7 @@ export default function ExplorePage() {
                         userAccess={access}
                         userId={userId}
                         isFavorite={isFavorite}
+                        batchPhotos={placePhotosMap.get(p.id)}
                         hauntedGemIndex={hauntedGemIndex}
                         favoriteButton={
                           userId ? (
@@ -705,6 +756,7 @@ export default function ExplorePage() {
                         userAccess={access}
                         userId={userId}
                         isFavorite={isFavorite}
+                        batchPhotos={placePhotosMap.get(p.id)}
                         hauntedGemIndex={lockedPlacesMap.get(p.id)}
                         favoriteButton={
                           userId ? (
@@ -809,6 +861,7 @@ export default function ExplorePage() {
                         userAccess={access}
                         userId={userId}
                         isFavorite={isFavorite}
+                        batchPhotos={placePhotosMap.get(p.id)}
                         hauntedGemIndex={lockedPlacesMap.get(p.id)}
                         favoriteButton={
                           userId ? (
@@ -1112,6 +1165,7 @@ export default function ExplorePage() {
                         userAccess={access}
                         userId={userId}
                         isFavorite={isFavorite}
+                        batchPhotos={placePhotosMap.get(p.id)}
                         hauntedGemIndex={lockedPlacesMap.get(p.id)}
                         favoriteButton={
                           userId ? (

@@ -147,6 +147,10 @@ function MapPageContent() {
   const [loading, setLoading] = useState(true); // Start with true to show skeleton initially
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [filteredPlacesState, setFilteredPlacesState] = useState<Place[]>([]);
+  // Batch-loaded photos: one IN(...) query per `places` change, instead of
+  // per-card fetches. Keyed by place_id; cover_url fallback when there are
+  // no rows in place_photos.
+  const [placePhotosMap, setPlacePhotosMap] = useState<Map<string, string[]>>(new Map());
 
   // User access and profile from context (single session/profile request; no duplicate loadUser)
   const { loading: accessLoading, access, user, profile } = useUserAccessContext();
@@ -156,6 +160,51 @@ function MapPageContent() {
   const userAvatar = profile?.avatar_url ?? null;
   
   
+  // Batch-load photos when `places` changes. One IN(...) query replaces
+  // N parallel queries from each <PlaceCard>. Memoised key avoids re-fetch
+  // on identical lists.
+  const placeIdsKeyForPhotos = useMemo(() => places.map(p => p.id).sort().join(","), [places]);
+  useEffect(() => {
+    if (places.length === 0) {
+      setPlacePhotosMap(new Map());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("place_photos")
+          .select("place_id,url")
+          .in("place_id", places.map(p => p.id))
+          .order("sort", { ascending: true });
+        if (cancelled) return;
+        const grouped = new Map<string, string[]>();
+        if (!error && data) {
+          for (const row of data as { place_id: string; url: string }[]) {
+            if (!row.place_id || !row.url) continue;
+            if (!grouped.has(row.place_id)) grouped.set(row.place_id, []);
+            grouped.get(row.place_id)!.push(row.url);
+          }
+        }
+        for (const p of places) {
+          if (!grouped.has(p.id) && p.cover_url) {
+            grouped.set(p.id, [p.cover_url]);
+          }
+        }
+        if (!cancelled) setPlacePhotosMap(grouped);
+      } catch {
+        if (cancelled) return;
+        const fallback = new Map<string, string[]>();
+        for (const p of places) {
+          if (p.cover_url) fallback.set(p.id, [p.cover_url]);
+        }
+        setPlacePhotosMap(fallback);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placeIdsKeyForPhotos]);
+
   // Bootstrap ready state - wait for auth/profile before loading places
   const [bootReady, setBootReady] = useState(false);
   
@@ -1824,6 +1873,7 @@ function MapPageContent() {
                         userAccess={access}
                         userId={userId}
                         isFavorite={isFavorite}
+                        batchPhotos={placePhotosMap.get(p.id)}
                         hauntedGemIndex={hauntedGemIndex}
                         favoriteButton={
                           userId ? (
@@ -2017,6 +2067,7 @@ function MapPageContent() {
                               userAccess={access}
                               userId={userId}
                               isFavorite={isFavorite}
+                              batchPhotos={placePhotosMap.get(p.id)}
                               hauntedGemIndex={hauntedGemIndex}
                               favoriteButton={
                                 userId ? (
