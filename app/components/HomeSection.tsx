@@ -60,6 +60,10 @@ type HomeSectionProps = {
 export default function HomeSection({ section, userId, favorites, userAccess, onToggleFavorite, onTagClick, isFirst = false }: HomeSectionProps) {
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
+  // Batch-loaded creator profiles: one IN(...) query per section instead of N
+  // separate profile fetches (one per <PlaceCard>). Was the second N+1 on the
+  // home page after photos.
+  const [creatorsMap, setCreatorsMap] = useState<Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const categoriesKey = section.categories ? section.categories.join(",") : "";
@@ -272,6 +276,41 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
     
     return score;
   }
+
+  // Batch-load creator profiles whenever `places` changes. One IN(...) query
+  // replaces N separate per-card profile fetches.
+  useEffect(() => {
+    const userIds = Array.from(
+      new Set(places.map(p => p.created_by).filter((id): id is string => Boolean(id)))
+    );
+    if (userIds.length === 0) {
+      setCreatorsMap(new Map());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, display_name, username, avatar_url")
+          .in("id", userIds);
+        if (cancelled || error || !data) return;
+        const map = new Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>();
+        for (const row of data as Array<{ id: string; display_name: string | null; username: string | null; avatar_url: string | null }>) {
+          map.set(row.id, {
+            display_name: row.display_name,
+            username: row.username,
+            avatar_url: row.avatar_url,
+          });
+        }
+        if (!cancelled) setCreatorsMap(map);
+      } catch {
+        // Silently fall back; PlaceCard will render "Unknown" creator name.
+      }
+    })();
+    return () => { cancelled = true; };
+    // Depend on a key derived from creator ids so we don't refetch on identical sets.
+  }, [places.map(p => p.created_by ?? "").sort().join(",")]);
 
   // Reload when page becomes visible, but only if data is stale (5 min TTL)
   const lastFetchTimeRef = useRef<number>(Date.now());
@@ -494,6 +533,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
                       userAccess={userAccess}
                       userId={userId}
                       isFavorite={isFavorite}
+                      batchProfile={place.created_by ? creatorsMap.get(place.created_by) : undefined}
                       hauntedGemIndex={hauntedGemIndex}
                       showPhotoSlider={false}
                       priority={isFirst && placeIndex < 4}

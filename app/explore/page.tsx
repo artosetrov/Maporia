@@ -74,6 +74,9 @@ export default function ExplorePage() {
   // of N parallel requests from each PlaceCard. Keyed by place_id; falls back
   // to cover_url when there are no photos in `place_photos`.
   const [placePhotosMap, setPlacePhotosMap] = useState<Map<string, string[]>>(new Map());
+  // Batch-loaded creator profiles for cards (display name + avatar). Same
+  // motivation as placePhotosMap but for the profiles table.
+  const [creatorsMap, setCreatorsMap] = useState<Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>>(new Map());
 
   // User access and profile from context (single session/profile request; no pathname re-fetch)
   const { loading: accessLoading, access, user, profile } = useUserAccessContext();
@@ -113,6 +116,38 @@ export default function ExplorePage() {
     });
     return map;
   }, [places, defaultUserAccess, userId]);
+
+  // Batch-load creator profiles whenever the `places` list changes.
+  // One IN(...) query replaces N per-card profile fetches.
+  const creatorIdsKey = useMemo(() => {
+    const ids = Array.from(new Set(places.map(p => p.created_by).filter(Boolean) as string[]));
+    return ids.sort().join(",");
+  }, [places]);
+  useEffect(() => {
+    if (!creatorIdsKey) {
+      setCreatorsMap(new Map());
+      return;
+    }
+    const userIds = creatorIdsKey.split(",");
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, display_name, username, avatar_url")
+          .in("id", userIds);
+        if (cancelled || error || !data) return;
+        const map = new Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>();
+        for (const row of data as Array<{ id: string; display_name: string | null; username: string | null; avatar_url: string | null }>) {
+          map.set(row.id, { display_name: row.display_name, username: row.username, avatar_url: row.avatar_url });
+        }
+        if (!cancelled) setCreatorsMap(map);
+      } catch {
+        // PlaceCard will fall back to "Unknown".
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [creatorIdsKey]);
 
   // Batch-load photos whenever the `places` list changes. One IN(place_id...)
   // query replaces what used to be N parallel queries from each <PlaceCard>.
@@ -628,6 +663,7 @@ export default function ExplorePage() {
                         userId={userId}
                         isFavorite={isFavorite}
                         batchPhotos={placePhotosMap.get(p.id)}
+                        batchProfile={p.created_by ? creatorsMap.get(p.created_by) : undefined}
                         hauntedGemIndex={hauntedGemIndex}
                         favoriteButton={
                           userId ? (
@@ -757,6 +793,7 @@ export default function ExplorePage() {
                         userId={userId}
                         isFavorite={isFavorite}
                         batchPhotos={placePhotosMap.get(p.id)}
+                        batchProfile={p.created_by ? creatorsMap.get(p.created_by) : undefined}
                         hauntedGemIndex={lockedPlacesMap.get(p.id)}
                         favoriteButton={
                           userId ? (
@@ -862,6 +899,7 @@ export default function ExplorePage() {
                         userId={userId}
                         isFavorite={isFavorite}
                         batchPhotos={placePhotosMap.get(p.id)}
+                        batchProfile={p.created_by ? creatorsMap.get(p.created_by) : undefined}
                         hauntedGemIndex={lockedPlacesMap.get(p.id)}
                         favoriteButton={
                           userId ? (
@@ -1166,6 +1204,7 @@ export default function ExplorePage() {
                         userId={userId}
                         isFavorite={isFavorite}
                         batchPhotos={placePhotosMap.get(p.id)}
+                        batchProfile={p.created_by ? creatorsMap.get(p.created_by) : undefined}
                         hauntedGemIndex={lockedPlacesMap.get(p.id)}
                         favoriteButton={
                           userId ? (

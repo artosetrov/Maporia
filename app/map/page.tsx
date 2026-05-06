@@ -151,6 +151,8 @@ function MapPageContent() {
   // per-card fetches. Keyed by place_id; cover_url fallback when there are
   // no rows in place_photos.
   const [placePhotosMap, setPlacePhotosMap] = useState<Map<string, string[]>>(new Map());
+  // Batch-loaded creator profiles. Same motivation as placePhotosMap.
+  const [creatorsMap, setCreatorsMap] = useState<Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>>(new Map());
 
   // User access and profile from context (single session/profile request; no duplicate loadUser)
   const { access, user, profile } = useUserAccessContext();
@@ -160,6 +162,38 @@ function MapPageContent() {
   const userAvatar = profile?.avatar_url ?? null;
   
   
+  // Batch-load creator profiles whenever the `places` list changes.
+  // One IN(...) query replaces N per-card profile fetches.
+  const creatorIdsKeyForMap = useMemo(() => {
+    const ids = Array.from(new Set(places.map(p => p.created_by).filter(Boolean) as string[]));
+    return ids.sort().join(",");
+  }, [places]);
+  useEffect(() => {
+    if (!creatorIdsKeyForMap) {
+      setCreatorsMap(new Map());
+      return;
+    }
+    const userIds = creatorIdsKeyForMap.split(",");
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, display_name, username, avatar_url")
+          .in("id", userIds);
+        if (cancelled || error || !data) return;
+        const map = new Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>();
+        for (const row of data as Array<{ id: string; display_name: string | null; username: string | null; avatar_url: string | null }>) {
+          map.set(row.id, { display_name: row.display_name, username: row.username, avatar_url: row.avatar_url });
+        }
+        if (!cancelled) setCreatorsMap(map);
+      } catch {
+        // PlaceCard will fall back to "Unknown".
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [creatorIdsKeyForMap]);
+
   // Batch-load photos when `places` changes. One IN(...) query replaces
   // N parallel queries from each <PlaceCard>. Memoised key avoids re-fetch
   // on identical lists.
@@ -1872,6 +1906,7 @@ function MapPageContent() {
                         userId={userId}
                         isFavorite={isFavorite}
                         batchPhotos={placePhotosMap.get(p.id)}
+                        batchProfile={p.created_by ? creatorsMap.get(p.created_by) : undefined}
                         hauntedGemIndex={hauntedGemIndex}
                         favoriteButton={
                           userId ? (
@@ -2066,6 +2101,7 @@ function MapPageContent() {
                               userId={userId}
                               isFavorite={isFavorite}
                               batchPhotos={placePhotosMap.get(p.id)}
+                              batchProfile={p.created_by ? creatorsMap.get(p.created_by) : undefined}
                               hauntedGemIndex={hauntedGemIndex}
                               favoriteButton={
                                 userId ? (
