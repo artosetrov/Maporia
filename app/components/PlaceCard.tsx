@@ -228,6 +228,16 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
   // Skip if batch data was provided
   useEffect(() => {
     if (batchPhotos && batchPhotos.length > 0) return;
+    // If the parent doesn't render the slider (e.g. home page), skip the
+    // place_photos fetch entirely — cover_url is the only thing the user
+    // will see. This was the root of the home-page N+1: ~10 cards × 9
+    // sections = up to 90 round-trips for photos that never get displayed.
+    if (!showPhotoSlider) {
+      if (place.cover_url) setPhotos([place.cover_url]);
+      else setPhotos([]);
+      setCurrentPhotoIndex(0);
+      return;
+    }
     let isUnmounting = false;
     const placeId = place.id; // Capture place.id to check if it changed
 
@@ -377,7 +387,7 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
       // Only mark as unmounting on actual unmount, not on dependency change
       isUnmounting = true;
     };
-  }, [place.id, place.cover_url, isInView]);
+  }, [place.id, place.cover_url, isInView, showPhotoSlider, batchPhotos]);
 
   useEffect(() => {
     setFailedPhotoUrls(new Set());

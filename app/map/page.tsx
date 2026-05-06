@@ -31,8 +31,9 @@ import { useAuthRedirect } from "../hooks/useAuthRedirect";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { usePremiumGate } from "../hooks/usePremiumGate";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
-import AuthModal from "../components/AuthModal";
-import PremiumUpsellModal from "../components/PremiumUpsellModal";
+// Heavy modals — only loaded when user opens them.
+const AuthModal = nextDynamic(() => import("../components/AuthModal"), { ssr: false });
+const PremiumUpsellModal = nextDynamic(() => import("../components/PremiumUpsellModal"), { ssr: false });
 import Icon from "../components/Icon";
 import { PlaceCardGridSkeleton, MapSkeleton, Empty } from "../components/Skeleton";
 import { sanitizePostgrestValue, normalizeCity, cx, initialsFromEmail, timeAgo, isValidPhotoUrl } from "../utils";

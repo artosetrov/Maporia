@@ -9,8 +9,11 @@ import { CATEGORIES, DEFAULT_CITY } from "../../constants";
 import TopBar from "../../components/TopBar";
 import DesktopMosaic from "../../components/DesktopMosaic";
 import MobileCarousel from "../../components/MobileCarousel";
-import FiltersModal, { ActiveFilters } from "../../components/FiltersModal";
-import SearchModal from "../../components/SearchModal";
+import { type ActiveFilters } from "../../components/FiltersModal";
+// Heavy modals — only loaded when the user opens them.
+import nextDynamic from "next/dynamic";
+const FiltersModal = nextDynamic(() => import("../../components/FiltersModal"), { ssr: false });
+const SearchModal = nextDynamic(() => import("../../components/SearchModal"), { ssr: false });
 import FavoriteIcon from "../../components/FavoriteIcon";
 import { getMapOptions } from "../../config/googleMaps";
 import { createStaticPinSvg } from "../../lib/mapMarkers";
@@ -454,6 +457,8 @@ export default function PlacePage(props: PageProps) {
     if (!id) return;
 
     (async () => {
+      // Step 1: load the place itself. Everything else depends on `placeData`
+      // existing (if it doesn't, we redirect anyway).
       const { data: placeData, error: pErr } = await supabase
         .from("places")
         .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled")
@@ -467,15 +472,49 @@ export default function PlacePage(props: PageProps) {
       }
       const placeItem = placeData as Place;
       setPlace(placeItem);
-      
-      // Save to recently viewed
       saveToRecentlyViewed(id);
+      setCommentsLoading(true);
 
-      // Load collections this place belongs to (active only)
-      const pcRes = await supabase
-        .from("place_collections")
-        .select("collection_id")
-        .eq("place_id", id);
+      // Step 2: fan out 5 independent queries in parallel.
+      // Previously these were sequential — each waited ~150ms RTT to Supabase,
+      // so the page took ~750ms+ on top of the place fetch before showing
+      // comments / counts / collections / creator. Promise.all collapses that
+      // to one round-trip's worth of latency.
+      const [
+        pcRes,
+        creatorRes,
+        commentRes,
+        favoritesCountRes,
+        commentsCountRes,
+      ] = await Promise.all([
+        supabase
+          .from("place_collections")
+          .select("collection_id")
+          .eq("place_id", id),
+        placeItem.created_by
+          ? supabase
+              .from("profiles")
+              .select("display_name, username, avatar_url")
+              .eq("id", placeItem.created_by)
+              .maybeSingle()
+          : Promise.resolve({ data: null, error: null } as { data: ProfileData | null; error: any }),
+        supabase
+          .from("comments")
+          .select("id,text,created_at,user_id")
+          .eq("place_id", id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("reactions")
+          .select("*", { count: 'exact', head: true })
+          .eq("place_id", id)
+          .eq("reaction", "like"),
+        supabase
+          .from("comments")
+          .select("*", { count: 'exact', head: true })
+          .eq("place_id", id),
+      ]);
+
+      // Process collections (depends on pcRes only).
       const pcData = (pcRes.data ?? []) as { collection_id: string }[];
       const collectionIds = pcRes.error ? [] : pcData.map((r) => r.collection_id).filter(Boolean);
       if (collectionIds.length > 0) {
@@ -489,14 +528,9 @@ export default function PlacePage(props: PageProps) {
         setPlaceCollections([]);
       }
 
-      // Load creator profile
+      // Process creator profile.
       if (placeItem.created_by) {
-        const { data: profileData, error: profileError } = await supabase
-          .from("profiles")
-          .select("display_name, username, avatar_url")
-          .eq("id", placeItem.created_by)
-          .maybeSingle() as { data: ProfileData | null; error: any };
-
+        const { data: profileData, error: profileError } = creatorRes as { data: ProfileData | null; error: any };
         if (profileError) {
           const msg = String(profileError.message ?? "").trim();
           const code = String(profileError.code ?? "").trim();
@@ -504,7 +538,6 @@ export default function PlacePage(props: PageProps) {
             console.error("Error loading creator profile:", [msg, code].filter(Boolean).join(" ") || "Unknown error");
           }
         }
-
         setCreatorProfile({
           display_name: profileData?.display_name ?? null,
           username: profileData?.username ?? null,
@@ -512,30 +545,12 @@ export default function PlacePage(props: PageProps) {
         });
       }
 
-      // Load comments
-      setCommentsLoading(true);
-      const { data: commentData, error: commentErr } = await supabase
-        .from("comments")
-        .select("id,text,created_at,user_id")
-        .eq("place_id", id)
-        .order("created_at", { ascending: false });
-      
-      // Count favorites (reactions with "like")
-      const { count: favoritesCountData } = await supabase
-        .from("reactions")
-        .select("*", { count: 'exact', head: true })
-        .eq("place_id", id)
-        .eq("reaction", "like");
-      
-      // Count comments
-      const { count: commentsCountData } = await supabase
-        .from("comments")
-        .select("*", { count: 'exact', head: true })
-        .eq("place_id", id);
-      
-      setFavoritesCount(favoritesCountData || 0);
-      setCommentsCount(commentsCountData || 0);
+      // Set counts immediately (don't wait for commenter profile lookups).
+      setFavoritesCount(favoritesCountRes.count || 0);
+      setCommentsCount(commentsCountRes.count || 0);
 
+      // Process comments + commenter profiles (last query depends on comments).
+      const { data: commentData, error: commentErr } = commentRes;
       if (commentErr) {
         console.error("Error loading comments:", commentErr);
         if (comments.length === 0) {
