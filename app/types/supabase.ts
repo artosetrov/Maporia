@@ -25,6 +25,34 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+/**
+ * Тип карточки в Maporia.
+ * - location: классическое место на карте (бар, видовая, парк).
+ * - service: услуга (массаж, фотограф, инструктор, химчистка). Цена обязательна.
+ * - experience: впечатление в стиле Airbnb Experiences (тур, мастер-класс, экскурсия).
+ *   Цена + длительность + расписание/даты.
+ */
+export type PlaceKind = 'location' | 'service' | 'experience';
+
+export const PLACE_KINDS: PlaceKind[] = ['location', 'service', 'experience'];
+
+export type PriceUnit =
+  | 'fixed'
+  | 'from'
+  | 'per_hour'
+  | 'per_person'
+  | 'per_day'
+  | 'per_session';
+
+/**
+ * Гибкое расписание / даты для services и experiences.
+ * Намеренно `Json` (jsonb в БД), но с подсказкой по форме:
+ *   { type: 'weekly', days: ['mon','tue'], from: '10:00', to: '18:00' }
+ *   { type: 'dates',  dates: ['2026-06-01','2026-06-08'] }
+ *   { type: 'on_request' }
+ */
+export type PlaceSchedule = Json;
+
 export interface Database {
   public: {
     Tables: {
@@ -102,6 +130,12 @@ export interface Database {
           comments_enabled: boolean | null
           google_place_id: string | null
           is_hidden: boolean | null
+          kind: PlaceKind
+          price_amount: number | null
+          price_currency: string | null
+          price_unit: PriceUnit | null
+          duration_minutes: number | null
+          schedule: PlaceSchedule | null
         }
         Insert: {
           id?: string
@@ -130,6 +164,12 @@ export interface Database {
           comments_enabled?: boolean | null
           google_place_id?: string | null
           is_hidden?: boolean | null
+          kind?: PlaceKind
+          price_amount?: number | null
+          price_currency?: string | null
+          price_unit?: PriceUnit | null
+          duration_minutes?: number | null
+          schedule?: PlaceSchedule | null
         }
         Update: {
           id?: string
@@ -158,6 +198,12 @@ export interface Database {
           comments_enabled?: boolean | null
           google_place_id?: string | null
           is_hidden?: boolean | null
+          kind?: PlaceKind
+          price_amount?: number | null
+          price_currency?: string | null
+          price_unit?: PriceUnit | null
+          duration_minutes?: number | null
+          schedule?: PlaceSchedule | null
         }
       }
       reactions: {

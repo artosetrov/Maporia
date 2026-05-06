@@ -1,7 +1,10 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
+// Was: export const dynamic = "force-dynamic"
+// Removed — this page reads no cookies/headers and has no searchParams.
+// All data is fetched client-side via the supabase client; the page shell
+// can safely prerender (the dynamic [id] segment will still be SSR'd
+// per-request).
 import { use, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";

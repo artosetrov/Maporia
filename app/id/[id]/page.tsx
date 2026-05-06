@@ -33,6 +33,7 @@ import Icon from "../../components/Icon";
 import { MapSkeleton } from "../../components/Skeleton";
 import { convertInstagramReelToEmbed, filterValidPhotos, isValidPhotoUrl } from "../../utils";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
+import OfferPlaceView from "./_views/OfferPlaceView";
 
 type Place = {
   id: string;
@@ -53,6 +54,13 @@ type Place = {
   created_at: string;
   comments_enabled?: boolean | null;
   google_place_id?: string | null;
+  // --- Новые поля для услуг и экспириенсов ---
+  kind?: "location" | "service" | "experience" | null;
+  price_amount?: number | null;
+  price_currency?: string | null;
+  price_unit?: string | null;
+  duration_minutes?: number | null;
+  schedule?: unknown | null; // jsonb — конкретный тип в app/types/supabase.ts (PlaceSchedule)
 };
 
 type Comment = { 
@@ -426,7 +434,7 @@ export default function PlacePage(props: PageProps) {
       // existing (if it doesn't, we redirect anyway).
       const { data: placeData, error: pErr } = await supabase
         .from("places")
-        .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled")
+        .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule")
         .eq("id", id)
         .single();
 
@@ -1012,6 +1020,26 @@ export default function PlacePage(props: PageProps) {
       </main>
     );
   }
+
+  // ── KIND ROUTER ──────────────────────────────────────────────
+  // Для service / experience рендерим отдельный шаблон в стиле Airbnb.
+  // Локации продолжают использовать огромный legacy-вью ниже.
+  if (place.kind === "service" || place.kind === "experience") {
+    return (
+      <OfferPlaceView
+        place={place}
+        kind={place.kind}
+        canEdit={canEdit}
+        userAvatar={userAvatar}
+        userDisplayName={userDisplayName}
+        userEmail={userEmail}
+        isFavorite={isFavorite}
+        favoriteLoading={favoriteLoading}
+        onToggleFavorite={toggleFavorite}
+      />
+    );
+  }
+  // ─────────────────────────────────────────────────────────────
 
   return (
     <main className="min-h-screen bg-white">

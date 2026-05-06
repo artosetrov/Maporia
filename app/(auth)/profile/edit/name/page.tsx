@@ -1,6 +1,6 @@
 "use client";
 
-export const dynamic = "force-dynamic";
+// Removed force-dynamic — page has no searchParams/cookies/headers and can prerender shell
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";

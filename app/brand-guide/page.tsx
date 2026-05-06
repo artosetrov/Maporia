@@ -1,14 +1,18 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
+// Was: export const dynamic = "force-dynamic"
+// Removed — this page is a static design-system showcase. It has no
+// dynamic data, no searchParams, no cookies. force-dynamic was disabling
+// the static-prerender of the page shell for no reason.
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Icon, { type IconName } from "../components/Icon";
 import Wordmark from "../components/Wordmark";
 import PlaceCard from "../components/PlaceCard";
 import FavoriteIcon from "../components/FavoriteIcon";
-import PremiumUpsellModal from "../components/PremiumUpsellModal";
+// Lazy — heavy modal, only loaded when the user opens the upsell sample.
+import nextDynamic from "next/dynamic";
+const PremiumUpsellModal = nextDynamic(() => import("../components/PremiumUpsellModal"), { ssr: false });
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 // ——— Helpers ———
