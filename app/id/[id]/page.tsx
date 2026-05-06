@@ -163,7 +163,7 @@ export default function PlacePage(props: PageProps) {
   const [placeCollections, setPlaceCollections] = useState<{ id: string; title: string; description: string | null; cover_image: string | null; access_type: string }[]>([]);
 
   // User access for premium checks and render gate (from context — single session/profile request)
-  const { loading: accessLoading, access } = useUserAccessContext();
+  const { loading: accessLoading, access, user: ctxUser, profile: ctxProfile } = useUserAccessContext();
   const isAdmin = isUserAdmin(access);
 
   // Close modal on ESC key and prevent body scroll when gallery is open
@@ -310,34 +310,10 @@ export default function PlacePage(props: PageProps) {
   // Owner or admin can edit - compute after place and isAdmin are available
   const canEdit = (place && (isOwner || isAdmin)) || false;
 
-  // Get photos from place_photos table
+  // Photos are now loaded inside the main place useEffect's Promise.all
+  // (see below). This state still exists so the rest of the page can read it,
+  // but it's set from the batched fetch instead of a separate request.
   const [loadedPhotos, setLoadedPhotos] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (!id || !place) return;
-
-    (async () => {
-      const { data: photosData, error } = await supabase
-        .from("place_photos")
-        .select("url")
-        .eq("place_id", id)
-        .order("sort", { ascending: true });
-
-      if (!error && photosData && photosData.length > 0) {
-        const urls = filterValidPhotos(photosData.map((p: any) => p.url));
-        setLoadedPhotos(urls);
-      } else {
-        // Fallback: use legacy format
-        const photos: string[] = [];
-        if (place.photo_urls && Array.isArray(place.photo_urls) && place.photo_urls.length > 0) {
-          photos.push(...place.photo_urls.filter((url): url is string => typeof url === "string" && url.length > 0));
-        } else if (place.cover_url) {
-          photos.push(place.cover_url);
-        }
-        setLoadedPhotos(filterValidPhotos(photos));
-      }
-    })();
-  }, [id, place?.id]);
 
   const allPhotos = useMemo(() => {
     if (loadedPhotos.length > 0) {
@@ -403,33 +379,18 @@ export default function PlacePage(props: PageProps) {
     }
   };
 
+  // Was: a duplicate auth.getUser() + profiles.select() pair. Removed — both
+  // pieces of data are already loaded by UserAccessProvider at app shell
+  // level (RootLayout). We just mirror the context values into local state
+  // so the rest of this file can keep using `userId` / `userDisplayName` /
+  // `userAvatar` unchanged. Saves: one auth round-trip + one profile fetch
+  // per /id/[id] open.
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase.auth.getUser();
-      if (data.user) {
-        setUserId(data.user.id);
-        setUserEmail(data.user.email ?? null);
-
-        // Загружаем профиль пользователя
-        // DIAGNOSTIC: Duplicates useUserAccess (same profile). Page also calls useUserAccess().
-        // SUGGESTION: Derive user/displayName/avatar from useUserAccess and remove this profile fetch.
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("display_name, avatar_url")
-          .eq("id", data.user.id)
-          .maybeSingle() as { data: ProfileData | null; error: any };
-
-        if (profileError) {
-          console.error("Error loading user profile:", profileError);
-        }
-
-        if (profile) {
-          setUserDisplayName(profile.display_name);
-          setUserAvatar(profile.avatar_url);
-        }
-      }
-    })();
-  }, []);
+    setUserId(ctxUser?.id ?? null);
+    setUserEmail(ctxUser?.email ?? null);
+    setUserDisplayName(ctxProfile?.display_name ?? null);
+    setUserAvatar(ctxProfile?.avatar_url ?? null);
+  }, [ctxUser?.id, ctxUser?.email, ctxProfile?.display_name, ctxProfile?.avatar_url]);
 
   // Helper function to save place to recently viewed
   function saveToRecentlyViewed(placeId: string) {
@@ -475,17 +436,18 @@ export default function PlacePage(props: PageProps) {
       saveToRecentlyViewed(id);
       setCommentsLoading(true);
 
-      // Step 2: fan out 5 independent queries in parallel.
+      // Step 2: fan out independent queries in parallel.
       // Previously these were sequential — each waited ~150ms RTT to Supabase,
       // so the page took ~750ms+ on top of the place fetch before showing
-      // comments / counts / collections / creator. Promise.all collapses that
-      // to one round-trip's worth of latency.
+      // comments / counts / collections / creator / photos. Promise.all
+      // collapses that to one round-trip's worth of latency.
       const [
         pcRes,
         creatorRes,
         commentRes,
         favoritesCountRes,
         commentsCountRes,
+        photosRes,
       ] = await Promise.all([
         supabase
           .from("place_collections")
@@ -512,7 +474,30 @@ export default function PlacePage(props: PageProps) {
           .from("comments")
           .select("*", { count: 'exact', head: true })
           .eq("place_id", id),
+        // Photos for the gallery were previously fetched in a separate useEffect
+        // that waited for `place` to be set first — adding ~150ms before the
+        // gallery could render. Pulled into the parallel batch.
+        supabase
+          .from("place_photos")
+          .select("url")
+          .eq("place_id", id)
+          .order("sort", { ascending: true }),
       ]);
+
+      // Process photos immediately (so the gallery doesn't wait on the
+      // dependent comment-profile lookup that runs further down).
+      if (!photosRes.error && photosRes.data && photosRes.data.length > 0) {
+        const urls = filterValidPhotos((photosRes.data as { url: string }[]).map(p => p.url));
+        setLoadedPhotos(urls);
+      } else {
+        const photos: string[] = [];
+        if (placeItem.photo_urls && Array.isArray(placeItem.photo_urls) && placeItem.photo_urls.length > 0) {
+          photos.push(...placeItem.photo_urls.filter((url): url is string => typeof url === "string" && url.length > 0));
+        } else if (placeItem.cover_url) {
+          photos.push(placeItem.cover_url);
+        }
+        setLoadedPhotos(filterValidPhotos(photos));
+      }
 
       // Process collections (depends on pcRes only).
       const pcData = (pcRes.data ?? []) as { collection_id: string }[];
