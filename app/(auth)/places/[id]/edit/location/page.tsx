@@ -4,9 +4,10 @@ export const dynamic = "force-dynamic";
 
 import { use, useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { GoogleMap } from "@react-google-maps/api";
+import { GoogleMap, Marker } from "@react-google-maps/api";
 import { useGoogleMaps } from "../../../../../providers/GoogleMapsProvider";
-import AdvancedPinMarker from "../../../../../components/AdvancedPinMarker";
+// NOTE: AdvancedMarkerElement requires NEXT_PUBLIC_GOOGLE_MAP_ID env var.
+// Reverted to deprecated <Marker> until that's set on Vercel.
 import { supabase } from "../../../../../lib/supabase";
 import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
@@ -335,12 +336,14 @@ export default function LocationEditorPage(props: PageProps) {
               }}
             >
               {lat && lng && (
-                <AdvancedPinMarker
+                <Marker
                   position={{ lat, lng }}
                   draggable={isDragging}
-                  onDragEnd={(newLat, newLng) => {
-                    setLat(newLat);
-                    setLng(newLng);
+                  onDragEnd={(e) => {
+                    if (e.latLng) {
+                      setLat(e.latLng.lat());
+                      setLng(e.latLng.lng());
+                    }
                   }}
                 />
               )}

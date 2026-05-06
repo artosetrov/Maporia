@@ -3,9 +3,13 @@
 import { use, useEffect, useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { GoogleMap } from "@react-google-maps/api";
+import { GoogleMap, Marker } from "@react-google-maps/api";
 import { useGoogleMaps } from "../../providers/GoogleMapsProvider";
-import AdvancedPinMarker from "../../components/AdvancedPinMarker";
+import { createStaticPinSvg } from "../../lib/mapMarkers";
+// NOTE: AdvancedMarkerElement requires NEXT_PUBLIC_GOOGLE_MAP_ID. Until that
+// env var is set on Vercel + a Map ID is provisioned in Google Cloud, we
+// stay on the deprecated <Marker>. See app/components/AdvancedPinMarker.tsx
+// for the ready-to-use replacement.
 import { CATEGORIES, DEFAULT_CITY } from "../../constants";
 import TopBar from "../../components/TopBar";
 import DesktopMosaic from "../../components/DesktopMosaic";
@@ -2498,10 +2502,14 @@ function PlaceMapView({ place }: { place: Place }) {
           zoomControl: true,
         })}
       >
-        <AdvancedPinMarker
+        <Marker
           position={{ lat: place.lat, lng: place.lng }}
           title={place.title}
-          size={32}
+          icon={{
+            url: createStaticPinSvg(32),
+            scaledSize: new google.maps.Size(32, 32),
+            anchor: new google.maps.Point(16, 16),
+          }}
         />
       </GoogleMap>
     </div>
