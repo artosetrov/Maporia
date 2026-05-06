@@ -4,8 +4,9 @@ export const dynamic = "force-dynamic";
 
 import { use, useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { GoogleMap, Marker } from "@react-google-maps/api";
+import { GoogleMap } from "@react-google-maps/api";
 import { useGoogleMaps } from "../../../../../providers/GoogleMapsProvider";
+import AdvancedPinMarker from "../../../../../components/AdvancedPinMarker";
 import { supabase } from "../../../../../lib/supabase";
 import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
@@ -334,14 +335,12 @@ export default function LocationEditorPage(props: PageProps) {
               }}
             >
               {lat && lng && (
-                <Marker
+                <AdvancedPinMarker
                   position={{ lat, lng }}
                   draggable={isDragging}
-                  onDragEnd={(e) => {
-                    if (e.latLng) {
-                      setLat(e.latLng.lat());
-                      setLng(e.latLng.lng());
-                    }
+                  onDragEnd={(newLat, newLng) => {
+                    setLat(newLat);
+                    setLng(newLng);
                   }}
                 />
               )}

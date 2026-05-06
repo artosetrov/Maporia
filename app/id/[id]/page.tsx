@@ -3,8 +3,9 @@
 import { use, useEffect, useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { GoogleMap, Marker } from "@react-google-maps/api";
+import { GoogleMap } from "@react-google-maps/api";
 import { useGoogleMaps } from "../../providers/GoogleMapsProvider";
+import AdvancedPinMarker from "../../components/AdvancedPinMarker";
 import { CATEGORIES, DEFAULT_CITY } from "../../constants";
 import TopBar from "../../components/TopBar";
 import DesktopMosaic from "../../components/DesktopMosaic";
@@ -16,7 +17,6 @@ const FiltersModal = nextDynamic(() => import("../../components/FiltersModal"), 
 const SearchModal = nextDynamic(() => import("../../components/SearchModal"), { ssr: false });
 import FavoriteIcon from "../../components/FavoriteIcon";
 import { getMapOptions } from "../../config/googleMaps";
-import { createStaticPinSvg } from "../../lib/mapMarkers";
 import { supabase } from "../../lib/supabase";
 import { PLACE_LAYOUT_CONFIG } from "../../config/placeLayout";
 import { useUserAccessContext } from "../../contexts/UserAccessContext";
@@ -2498,14 +2498,10 @@ function PlaceMapView({ place }: { place: Place }) {
           zoomControl: true,
         })}
       >
-        <Marker
+        <AdvancedPinMarker
           position={{ lat: place.lat, lng: place.lng }}
           title={place.title}
-          icon={{
-            url: createStaticPinSvg(32),
-            scaledSize: new google.maps.Size(32, 32),
-            anchor: new google.maps.Point(16, 16),
-          }}
+          size={32}
         />
       </GoogleMap>
     </div>
