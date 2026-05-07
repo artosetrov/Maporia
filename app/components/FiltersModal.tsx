@@ -31,8 +31,6 @@ export type ActiveFilters = {
    * отдельно от этого поля.
    */
   kinds?: ('location' | 'service' | 'experience')[];
-  // Для обратной совместимости
-  premiumOnly?: boolean;
 };
 
 type FiltersModalProps = {
@@ -96,6 +94,15 @@ type FiltersModalProps = {
   
   // Optional: callback to reset all filters (cities, categories, tags, search query, premium/hidden/vibe toggles)
   onResetAll?: () => void;
+
+  /**
+   * Скрыть секцию TYPE (Locations/Experiences/Services).
+   * Используется страницами, где тип карточки управляется не модалом, а
+   * чем-то другим (например, главная использует табы `?tab=services|experiences`).
+   * Если TYPE показан, но страница игнорирует `activeFilters.kinds` —
+   * это бага: юзер выбирает «Experiences», а в результатах локации.
+   */
+  hideKindFilter?: boolean;
 };
 
 export default function FiltersModal({
@@ -116,6 +123,7 @@ export default function FiltersModal({
   getFilterPlaces,
   userAccess,
   onResetAll,
+  hideKindFilter,
 }: FiltersModalProps) {
   // Ensure appliedFilters is always defined
   const safeAppliedFilters: ActiveFilters = appliedFilters || {
@@ -123,7 +131,6 @@ export default function FiltersModal({
     sort: null,
     tags: [],
     premium: false,
-    premiumOnly: false, // Для обратной совместимости
   };
   
   // Draft state (changes while modal is open)
@@ -173,7 +180,6 @@ export default function FiltersModal({
         filtersToSet = {
           ...filtersToSet,
           premium: false,
-          premiumOnly: false,
         };
       }
       setDraftFilters(filtersToSet);
@@ -411,6 +417,35 @@ export default function FiltersModal({
     return () => mql.removeEventListener('change', update);
   }, []);
 
+  // Swipe-to-close: drag header вниз. Если ушли > 80px — закрываем.
+  // Привязано к header (а не к content), чтобы не конфликтовать со скроллом
+  // внутри списка категорий и тегов. Только мобайл — на десктопе модал в центре.
+  const [dragOffset, setDragOffset] = useState(0);
+  const dragStartYRef = useRef<number | null>(null);
+  const handleHeaderTouchStart = (e: React.TouchEvent) => {
+    if (prefersReducedMotion) return;
+    dragStartYRef.current = e.touches[0]?.clientY ?? null;
+  };
+  const handleHeaderTouchMove = (e: React.TouchEvent) => {
+    if (dragStartYRef.current === null) return;
+    const dy = (e.touches[0]?.clientY ?? 0) - dragStartYRef.current;
+    if (dy > 0) setDragOffset(dy);
+  };
+  const handleHeaderTouchEnd = () => {
+    if (dragStartYRef.current === null) return;
+    const offset = dragOffset;
+    dragStartYRef.current = null;
+    if (offset > 80) {
+      // Сразу сбрасываем offset, иначе при следующем открытии модал «дёрнется».
+      setDragOffset(0);
+      handleClose();
+    } else {
+      setDragOffset(0);
+    }
+  };
+  // Сбрасываем drag-state при закрытии (на случай race condition).
+  useEffect(() => { if (!isOpen) setDragOffset(0); }, [isOpen]);
+
   // Lock body scroll when modal is open (prevents iOS Safari scroll-through)
   useEffect(() => {
     if (!isOpen) return;
@@ -509,7 +544,6 @@ export default function FiltersModal({
     setDraftFilters((prev) => ({
       ...prev,
       premium: !prev.premium,
-      premiumOnly: !prev.premium, // Для обратной совместимости
     }));
   };
 
@@ -536,7 +570,6 @@ export default function FiltersModal({
       sort: null,
       tags: [],
       premium: false,
-      premiumOnly: false, // For backward compatibility
     };
     setDraftFilters(clearedFilters);
     // Immediately apply cleared filters and close modal
@@ -556,7 +589,6 @@ export default function FiltersModal({
       setDraftFilters((prev) => ({
         ...prev,
         premium: false,
-        premiumOnly: false,
       }));
     }
   };
@@ -601,9 +633,6 @@ export default function FiltersModal({
   (draftFilters.tags ?? []).forEach((tag) => {
     appliedFiltersList.push({ type: "tag", label: tag, value: tag });
   });
-  if (draftFilters.premiumOnly) {
-    appliedFiltersList.push({ type: "premium", label: "Premium" });
-  }
 
   // Get category emoji
   const getCategoryEmoji = (category: string) => {
@@ -624,17 +653,31 @@ export default function FiltersModal({
       />
 
       {/* Modal - Desktop: centered, Mobile: bottom sheet */}
-      <div className="relative w-full lg:w-[600px] lg:max-w-[600px] lg:max-h-[85vh] lg:mx-4 lg:rounded-2xl bg-white flex flex-col border-t lg:border border-[#ECEEE4] transition-transform duration-300 ease-out lg:animate-none shadow-sm"
-           style={{ 
+      <div className="relative w-full lg:w-[600px] lg:max-w-[600px] lg:max-h-[85vh] lg:mx-4 lg:rounded-2xl bg-white flex flex-col border-t lg:border border-[#ECEEE4] lg:animate-none shadow-sm"
+           style={{
              maxHeight: '90vh',
              height: 'auto',
              minHeight: '50vh',
              borderTopLeftRadius: '1rem',
              borderTopRightRadius: '1rem',
+             // На десктопе translateY всегда 0 (window.matchMedia(min-width:1024px)
+             // не нужен — touch events на десктопе не стреляют, dragOffset = 0).
+             transform: dragOffset > 0 ? `translateY(${dragOffset}px)` : undefined,
+             // Анимация slide-up при появлении; во время swipe — мгновенный transform,
+             // после отпускания — плавный возврат за 0.2s. Блокируем при reduced-motion.
+             transition: prefersReducedMotion
+               ? undefined
+               : (dragStartYRef.current === null && dragOffset === 0 ? 'transform 0.2s ease-out' : undefined),
              animation: prefersReducedMotion ? undefined : 'slide-up 0.3s ease-out',
            }}>
-        {/* Header */}
-        <div className="px-6 pt-5 pb-4 border-b border-[#ECEEE4] flex-shrink-0">
+        {/* Header — drag-handle для swipe-to-close на мобайле */}
+        <div
+          className="px-6 pt-5 pb-4 border-b border-[#ECEEE4] flex-shrink-0"
+          onTouchStart={handleHeaderTouchStart}
+          onTouchMove={handleHeaderTouchMove}
+          onTouchEnd={handleHeaderTouchEnd}
+          onTouchCancel={handleHeaderTouchEnd}
+        >
           {/* Mobile: Drag handle */}
           <div className="lg:hidden flex justify-center mb-3">
             <div className="w-12 h-1.5 bg-[#ECEEE4] rounded-full" />
@@ -682,7 +725,9 @@ export default function FiltersModal({
             </div>
           )}
 
-          {/* Kind Section — три типа карточек: Locations / Services / Experiences */}
+          {/* Kind Section — три типа карточек: Locations / Services / Experiences.
+              Скрыта на страницах, которые управляют kind не модалом, а табами (например, главная). */}
+          {!hideKindFilter && (
           <div>
             <h3 className="text-xs font-semibold text-[#6F7A5A] uppercase tracking-wide mb-4">TYPE</h3>
             <div className="grid grid-cols-3 gap-3">
@@ -735,6 +780,7 @@ export default function FiltersModal({
               Leave empty to show all types.
             </p>
           </div>
+          )}
 
           {/* Category Section — секции по выбранному TYPE (Спринт 1.1).
               Если kinds пустой → все три таксономии с подзаголовками PLACES / SERVICES / EXPERIENCES. */}
@@ -863,7 +909,7 @@ export default function FiltersModal({
                     : "bg-[#DADDD0] text-white cursor-not-allowed"
                 }`}
               >
-                {(draftFilters.premium || draftFilters.premiumOnly) && (
+                {draftFilters.premium && (
                   <svg className="w-4 h-4 text-white flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                   </svg>

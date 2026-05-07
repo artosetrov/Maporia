@@ -965,6 +965,9 @@ function ProfileInner() {
         appliedFilters={activeFilters}
         appliedCity={selectedCity}
         userAccess={access}
+        // /profile редиректит на /map — TYPE-фильтр здесь не применяется,
+        // чтобы не путать юзера фантомным выбором.
+        hideKindFilter
         onCityChange={handleCityChange}
         getFilteredCount={async (draftFilters: ActiveFilters) => {
           // Since we redirect to /map, we don't need to count filtered places here
@@ -3376,9 +3379,158 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
   const [deleteConfirmUserId, setDeleteConfirmUserId] = useState<string | null>(null);
   const [pendingRoleChanges, setPendingRoleChanges] = useState<Map<string, AdminAssignable>>(new Map());
 
+  // Admin manage modal state (edit email / password / send reset / send magic link).
+  // Один объект = одна модалка; держим её локальной, чтобы не плодить пропсы.
+  const [manageUserId, setManageUserId] = useState<string | null>(null);
+  const [manageEmail, setManageEmail] = useState<string>("");
+  const [managePassword, setManagePassword] = useState<string>("");
+  const [manageBusyAction, setManageBusyAction] = useState<null | "email" | "password" | "reset" | "magic">(null);
+  const [manageError, setManageError] = useState<string | null>(null);
+  const [manageSuccess, setManageSuccess] = useState<string | null>(null);
+
   useEffect(() => {
     loadUsers();
   }, []);
+
+  // Helper: вызов admin auth API с Bearer-токеном текущей сессии.
+  // Возвращает { ok, data?, error? }, ошибку логируем и кладём в manageError.
+  async function callAdminAuthApi(
+    targetId: string,
+    action: "set_email" | "set_password" | "send_reset_link" | "send_magic_link",
+    payload: Record<string, unknown> = {}
+  ): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+    const {
+      data: { session },
+      error: sessionErr,
+    } = await supabase.auth.getSession();
+    if (sessionErr || !session) {
+      return { ok: false, error: "Не удалось получить admin-сессию" };
+    }
+    try {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(targetId)}/auth`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ action, ...payload }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        return { ok: false, error: body?.error || `HTTP ${res.status}` };
+      }
+      return { ok: true, data: body };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : "Network error",
+      };
+    }
+  }
+
+  async function openManageModal(user: User) {
+    setManageUserId(user.id);
+    setManageEmail(user.email || "");
+    setManagePassword("");
+    setManageBusyAction(null);
+    setManageError(null);
+    setManageSuccess(null);
+
+    // Подтягиваем актуальный email с сервера (в списке он всегда null —
+    // его нельзя отдать клиенту через RLS из profiles).
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(user.id)}/auth`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) return;
+      const body = await res.json();
+      if (body?.email && typeof body.email === "string") {
+        setManageEmail(body.email);
+        // Заодно обновим карточку в списке, чтобы targetEmail был не пустой.
+        setUsers((prev) =>
+          prev.map((u) => (u.id === user.id ? { ...u, email: body.email } : u))
+        );
+      }
+    } catch {
+      // молча — модалка работает и без prefill.
+    }
+  }
+
+  function closeManageModal() {
+    setManageUserId(null);
+    setManageEmail("");
+    setManagePassword("");
+    setManageBusyAction(null);
+    setManageError(null);
+    setManageSuccess(null);
+  }
+
+  async function manageSetEmail() {
+    if (!manageUserId) return;
+    setManageBusyAction("email");
+    setManageError(null);
+    setManageSuccess(null);
+    const r = await callAdminAuthApi(manageUserId, "set_email", { email: manageEmail.trim() });
+    setManageBusyAction(null);
+    if (!r.ok) {
+      setManageError(r.error || "Не удалось обновить email");
+      return;
+    }
+    setManageSuccess("Email обновлён");
+    await loadUsers();
+  }
+
+  async function manageSetPassword() {
+    if (!manageUserId) return;
+    if (managePassword.length < 8) {
+      setManageError("Пароль должен быть минимум 8 символов");
+      return;
+    }
+    setManageBusyAction("password");
+    setManageError(null);
+    setManageSuccess(null);
+    const r = await callAdminAuthApi(manageUserId, "set_password", { password: managePassword });
+    setManageBusyAction(null);
+    if (!r.ok) {
+      setManageError(r.error || "Не удалось задать пароль");
+      return;
+    }
+    setManagePassword("");
+    setManageSuccess("Пароль обновлён");
+  }
+
+  async function manageSendResetLink() {
+    if (!manageUserId) return;
+    setManageBusyAction("reset");
+    setManageError(null);
+    setManageSuccess(null);
+    const r = await callAdminAuthApi(manageUserId, "send_reset_link");
+    setManageBusyAction(null);
+    if (!r.ok) {
+      setManageError(r.error || "Не удалось отправить ссылку");
+      return;
+    }
+    setManageSuccess("Ссылка для сброса пароля отправлена");
+  }
+
+  async function manageSendMagicLink() {
+    if (!manageUserId) return;
+    setManageBusyAction("magic");
+    setManageError(null);
+    setManageSuccess(null);
+    const r = await callAdminAuthApi(manageUserId, "send_magic_link");
+    setManageBusyAction(null);
+    if (!r.ok) {
+      setManageError(r.error || "Не удалось отправить magic-link");
+      return;
+    }
+    setManageSuccess("Magic-link отправлен");
+  }
 
   async function loadUsers() {
     setUsersLoading(true);
@@ -3769,6 +3921,18 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
                     </>
                   )}
 
+                  {/* Manage Auth Button (edit email/password, send reset/magic link) */}
+                  {user.id !== currentUserId && !user.is_admin && !pendingRoleChanges.has(user.id) && (
+                    <button
+                      onClick={() => openManageModal(user)}
+                      className="p-2 rounded-lg border border-[#ECEEE4] text-[#6F7A5A] hover:bg-[#FAFAF7] hover:text-[#8F9E4F] transition"
+                      title="Управление учётными данными"
+                      aria-label="Manage user credentials"
+                    >
+                      <Icon name="lock" size={16} />
+                    </button>
+                  )}
+
                   {/* Impersonate Button */}
                   {user.id !== currentUserId && !user.is_admin && !pendingRoleChanges.has(user.id) && (
                     <button
@@ -3842,6 +4006,189 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
                   className="px-4 py-2.5 rounded-xl bg-[#C96A5B] text-white text-sm font-medium hover:bg-[#B85A4B] transition"
                 >
                   Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Manage user credentials modal */}
+      {manageUserId != null && (() => {
+        const target = users.find((u) => u.id === manageUserId);
+        const displayName = target
+          ? target.display_name || target.username || target.email || "User"
+          : "User";
+        const targetEmail = target?.email || "";
+        const busy = manageBusyAction !== null;
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="manage-user-modal-title"
+          >
+            <div className="w-full max-w-lg rounded-2xl bg-white border border-[#ECEEE4] shadow-lg p-6 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-start justify-between mb-2">
+                <h2
+                  id="manage-user-modal-title"
+                  className="font-fraunces text-xl font-semibold text-[#1F2A1F]"
+                >
+                  Manage credentials
+                </h2>
+                <button
+                  type="button"
+                  onClick={closeManageModal}
+                  className="p-1 rounded-lg text-[#6F7A5A] hover:bg-[#FAFAF7] transition"
+                  aria-label="Close"
+                  disabled={busy}
+                >
+                  <Icon name="close" size={18} />
+                </button>
+              </div>
+              <p className="text-sm text-[#6F7A5A] mb-4">
+                <strong className="text-[#1F2A1F]">{displayName}</strong>
+                {targetEmail ? <span className="text-[#A8B096]"> · {targetEmail}</span> : null}
+              </p>
+
+              {manageError && (
+                <div className="mb-3 p-3 rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 text-[#C96A5B] text-sm">
+                  {manageError}
+                </div>
+              )}
+              {manageSuccess && (
+                <div className="mb-3 p-3 rounded-xl border border-[#8F9E4F]/30 bg-[#8F9E4F]/10 text-[#556036] text-sm">
+                  {manageSuccess}
+                </div>
+              )}
+
+              {/* Section: Email */}
+              <div className="mb-5 pb-5 border-b border-[#ECEEE4]">
+                <label className="block text-xs uppercase tracking-wide text-[#6F7A5A] mb-2">
+                  Email
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={manageEmail}
+                    onChange={(e) => setManageEmail(e.target.value)}
+                    disabled={busy}
+                    placeholder="user@example.com"
+                    className="flex-1 px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    onClick={manageSetEmail}
+                    disabled={busy || !manageEmail.trim() || manageEmail.trim() === targetEmail}
+                    className="px-4 py-2 rounded-lg bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                  >
+                    {manageBusyAction === "email" ? (
+                      <>
+                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>...</span>
+                      </>
+                    ) : (
+                      <span>Save email</span>
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-[#A8B096] mt-2">
+                  Меняется сразу, без подтверждения по почте.
+                </p>
+              </div>
+
+              {/* Section: Password */}
+              <div className="mb-5 pb-5 border-b border-[#ECEEE4]">
+                <label className="block text-xs uppercase tracking-wide text-[#6F7A5A] mb-2">
+                  Set new password
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={managePassword}
+                    onChange={(e) => setManagePassword(e.target.value)}
+                    disabled={busy}
+                    placeholder="min 8 characters"
+                    autoComplete="new-password"
+                    className="flex-1 px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] disabled:opacity-50 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={manageSetPassword}
+                    disabled={busy || managePassword.length < 8}
+                    className="px-4 py-2 rounded-lg bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                  >
+                    {manageBusyAction === "password" ? (
+                      <>
+                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>...</span>
+                      </>
+                    ) : (
+                      <span>Set password</span>
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-[#A8B096] mt-2">
+                  Применяется сразу. Сообщите пользователю новый пароль безопасным каналом.
+                </p>
+              </div>
+
+              {/* Section: Email-based flows */}
+              <div className="mb-2">
+                <label className="block text-xs uppercase tracking-wide text-[#6F7A5A] mb-2">
+                  Email user a link
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={manageSendResetLink}
+                    disabled={busy}
+                    className="flex-1 px-4 py-2 rounded-lg border border-[#ECEEE4] bg-white text-[#1F2A1F] text-sm font-medium hover:bg-[#FAFAF7] transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                  >
+                    {manageBusyAction === "reset" ? (
+                      <>
+                        <div className="w-3 h-3 border-2 border-[#8F9E4F] border-t-transparent rounded-full animate-spin" />
+                        <span>Sending...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Icon name="lock" size={14} />
+                        <span>Send password reset</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={manageSendMagicLink}
+                    disabled={busy}
+                    className="flex-1 px-4 py-2 rounded-lg border border-[#ECEEE4] bg-white text-[#1F2A1F] text-sm font-medium hover:bg-[#FAFAF7] transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                  >
+                    {manageBusyAction === "magic" ? (
+                      <>
+                        <div className="w-3 h-3 border-2 border-[#8F9E4F] border-t-transparent rounded-full animate-spin" />
+                        <span>Sending...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Icon name="mail" size={14} />
+                        <span>Send magic link</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-[#A8B096] mt-2">
+                  Письмо уйдёт через Supabase Auth (шаблоны Reset / Magic).
+                </p>
+              </div>
+
+              <div className="flex justify-end mt-6">
+                <button
+                  type="button"
+                  onClick={closeManageModal}
+                  disabled={busy}
+                  className="px-4 py-2.5 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] text-sm font-medium hover:bg-[#FAFAF7] transition disabled:opacity-50"
+                >
+                  Close
                 </button>
               </div>
             </div>

@@ -4,13 +4,8 @@ import Link from "next/link";
 import { useEffect, useState, useMemo, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-type HomeKind = "location" | "service" | "experience";
-
-const HOME_TABS: { id: HomeKind; label: string; emoji: string }[] = [
-  { id: "location", label: "Locations", emoji: "📍" },
-  { id: "experience", label: "Experiences", emoji: "✨" },
-  { id: "service", label: "Services", emoji: "🛠" },
-];
+import { HOME_TABS, type HomeKind } from "./types/home";
+import { HOME_REDESIGN_ENABLED } from "./config/homeRedesign";
 import { useAuthRedirect } from "./hooks/useAuthRedirect";
 import TopBar from "./components/TopBar";
 import SearchBar from "./components/SearchBar";
@@ -18,6 +13,8 @@ import HomeSection from "./components/HomeSection";
 import Pill from "./components/Pill";
 import CategoryCarousel from "./components/CategoryCarousel";
 import StatsBanner from "./components/StatsBanner";
+import HomeHero from "./components/HomeHero";
+import HomeTabsSegmented from "./components/HomeTabsSegmented";
 import { ActiveFilters } from "./components/FiltersModal";
 // Heavy modals — only loaded when the user actually opens them.
 // Same pattern is already used on /map; this keeps the home-page main
@@ -487,6 +484,10 @@ function HomePageInner() {
         onApply={handleFiltersApply}
         appliedFilters={activeFilters}
         userAccess={access}
+        // На главной типом карточки управляют табы (?tab=services|experiences),
+        // FiltersModal не должен дублировать TYPE — иначе выбор «Experiences»
+        // в модале применяется в activeFilters.kinds, но главная их игнорирует.
+        hideKindFilter
         getCategoryCount={async (category: string, premiumOnly?: boolean) => {
           try {
             let query = supabase
@@ -591,6 +592,14 @@ function HomePageInner() {
 
       <div className="flex-1 pt-[64px]">
         {/*
+          Phase 1 — Hero block (Where to next?). Renders ONLY when
+          HOME_REDESIGN_ENABLED. Sits ABOVE the sticky tabs+search row
+          so it scrolls away on its own — sticky behaviour is unchanged.
+          Cross-link: docs/HOME_REDESIGN_INTEGRATION_PLAN.md.
+        */}
+        {HOME_REDESIGN_ENABLED && <HomeHero />}
+
+        {/*
           Airbnb-style sticky header zone: tabs row → search row.
           Обе строки залипают вместе при скролле, поэтому пользователь
           всегда видит и тип контента, и строку поиска.
@@ -603,26 +612,34 @@ function HomePageInner() {
               paddingRight: 'var(--home-page-padding, 16px)',
             }}
           >
-            {/* Row 1: Tabs — centered, like Airbnb's Homes/Experiences/Services */}
+            {/* Row 1: Tabs — centered, like Airbnb's Homes/Experiences/Services.
+                When the redesign flag is on, render the new segmented control;
+                otherwise fall back to the legacy <Pill> tab strip byte-for-byte. */}
             <div className="flex justify-center">
-              <div className="flex gap-2 overflow-x-auto pt-3 pb-2 max-w-full">
-                {HOME_TABS.map((tab) => {
-                  const isActive = activeKind === tab.id;
-                  return (
-                    <Pill
-                      key={tab.id}
-                      variant="tab"
-                      active={isActive}
-                      onClick={() => setActiveKind(tab.id)}
-                    >
-                      <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                        <span aria-hidden>{tab.emoji}</span>
-                        <span>{tab.label}</span>
-                      </span>
-                    </Pill>
-                  );
-                })}
-              </div>
+              {HOME_REDESIGN_ENABLED ? (
+                <div className="pt-3 pb-2">
+                  <HomeTabsSegmented active={activeKind} onChange={setActiveKind} />
+                </div>
+              ) : (
+                <div className="flex gap-2 overflow-x-auto pt-3 pb-2 max-w-full">
+                  {HOME_TABS.map((tab) => {
+                    const isActive = activeKind === tab.id;
+                    return (
+                      <Pill
+                        key={tab.id}
+                        variant="tab"
+                        active={isActive}
+                        onClick={() => setActiveKind(tab.id)}
+                      >
+                        <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                          <span aria-hidden>{tab.emoji}</span>
+                          <span>{tab.label}</span>
+                        </span>
+                      </Pill>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Row 2: SearchBar — always under the tabs.

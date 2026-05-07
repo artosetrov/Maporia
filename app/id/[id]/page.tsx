@@ -2396,6 +2396,8 @@ export default function PlacePage(props: PageProps) {
         onApply={handleFiltersApply}
         appliedFilters={activeFilters}
         userAccess={access}
+        // /id/[id] не применяет kinds к related places — пока скрываем.
+        hideKindFilter
         getFilteredCount={async (draftFilters: ActiveFilters) => {
           // Подсчитываем количество мест с учетом фильтров
           try {

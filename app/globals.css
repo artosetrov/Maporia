@@ -270,6 +270,22 @@ input[type="radio"]:disabled {
   }
 }
 
+/* StatsBanner — мягкий тёплый shimmer-overlay (Maporia Premium вариант).
+   Не двигает геометрию, только пульсирует прозрачностью янтарного слоя,
+   чтобы карточка «дышала» без агрессивной анимации. */
+@keyframes stats-shimmer {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 1; }
+}
+
+.stats-banner-shimmer {
+  animation: stats-shimmer 6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stats-banner-shimmer { animation: none; opacity: 0.6; }
+}
+
 @keyframes slide-up {
   from {
     transform: translateY(100%);

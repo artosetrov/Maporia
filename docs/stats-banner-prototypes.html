@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maporia · Stats Banner — прототипы</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap"
+/>
+<style>
+  :root {
+    --bg: #F5F4ED;
+    --ink: #1F2A1F;
+    --ink-soft: #6F7A5A;
+    --line: #ECEEE4;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding: 48px 24px 96px;
+  }
+  .page {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .page > header {
+    margin-bottom: 56px;
+  }
+  .page > header h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: clamp(28px, 4vw, 44px);
+    line-height: 1.1;
+    margin: 0 0 8px;
+    letter-spacing: -0.02em;
+  }
+  .page > header p {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 15px;
+    max-width: 640px;
+  }
+  .variant {
+    margin-top: 56px;
+  }
+  .variant-meta {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .variant-meta .num {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 22px;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  .variant-meta .name {
+    font-family: 'Fraunces', serif;
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .variant-meta .desc {
+    font-size: 14px;
+    color: var(--ink-soft);
+    flex: 1;
+    min-width: 280px;
+  }
+
+  /* ──────────── ОБЩЕЕ ДЛЯ БАННЕРОВ ──────────── */
+  .banner {
+    border-radius: 24px;
+    overflow: hidden;
+    position: relative;
+    isolation: isolate;
+  }
+  .banner-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    position: relative;
+    z-index: 2;
+  }
+  @media (max-width: 720px) {
+    .banner-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  .stat {
+    padding: 28px 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+    position: relative;
+  }
+  .stat-row {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .stat-emoji {
+    font-size: 22px;
+    line-height: 1;
+  }
+  .stat-value {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 36px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  /* ───────────────────────────────────────────────
+     V1 · AURORA GLASS — тёмное стекло + aurora
+     ─────────────────────────────────────────────── */
+  .v1 {
+    background:
+      radial-gradient(120% 180% at 0% 0%, rgba(64,255,170,0.35), transparent 55%),
+      radial-gradient(120% 200% at 100% 100%, rgba(120,90,255,0.40), transparent 60%),
+      radial-gradient(80% 120% at 60% 30%, rgba(255,170,90,0.18), transparent 60%),
+      linear-gradient(135deg, #0B1410 0%, #14201A 50%, #0E1814 100%);
+    color: #fff;
+    box-shadow:
+      0 30px 60px -30px rgba(0,0,0,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+  .v1::before {
+    content: "";
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 20% 80%, rgba(80,255,200,0.18), transparent 35%),
+      radial-gradient(circle at 80% 20%, rgba(180,140,255,0.18), transparent 35%);
+    filter: blur(40px);
+    z-index: 1;
+    animation: drift1 18s ease-in-out infinite alternate;
+  }
+  @keyframes drift1 {
+    0%   { transform: translate3d(-3%, -2%, 0) scale(1); }
+    100% { transform: translate3d(3%, 2%, 0) scale(1.1); }
+  }
+  .v1 .stat + .stat::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 25%; bottom: 25%;
+    width: 1px;
+    background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.18), transparent);
+  }
+  .v1 .stat-emoji {
+    filter: drop-shadow(0 0 8px rgba(120,255,200,0.4));
+  }
+  .v1 .stat-value {
+    color: #fff;
+    text-shadow: 0 0 24px rgba(120,255,200,0.25);
+  }
+  .v1 .stat-label {
+    color: rgba(255,255,255,0.6);
+  }
+
+  /* ───────────────────────────────────────────────
+     V2 · MESH SUNSET — яркий mesh, светлый
+     ─────────────────────────────────────────────── */
+  .v2 {
+    background:
+      radial-gradient(80% 120% at 0% 100%, #FFB199 0%, transparent 50%),
+      radial-gradient(80% 120% at 100% 0%, #B196FF 0%, transparent 55%),
+      radial-gradient(60% 100% at 50% 50%, #FFE48A 0%, transparent 55%),
+      linear-gradient(120deg, #FF8FA3 0%, #FFB199 35%, #FFE48A 65%, #9DC9FF 100%);
+    color: #0E0F1A;
+    box-shadow: 0 30px 60px -30px rgba(180, 80, 110, 0.5);
+  }
+  .v2 .stat-emoji {
+    display: inline-grid; place-items: center;
+    width: 36px; height: 36px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6),
+                0 6px 14px -8px rgba(0,0,0,0.25);
+    font-size: 18px;
+  }
+  .v2 .stat-value {
+    color: #1B0F2A;
+  }
+  .v2 .stat-label {
+    color: rgba(20, 12, 30, 0.62);
+  }
+  .v2 .stat + .stat::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 18%; bottom: 18%;
+    width: 1px;
+    background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.6), transparent);
+  }
+
+  /* ───────────────────────────────────────────────
+     V3 · MAPORIA NATIVE PREMIUM
+     В палитре проекта, но с тёплым янтарным glow
+     ─────────────────────────────────────────────── */
+  .v3 {
+    background:
+      radial-gradient(60% 140% at 100% 50%, rgba(220,170,80,0.18), transparent 60%),
+      radial-gradient(70% 140% at 0% 50%, rgba(110,140,80,0.10), transparent 60%),
+      linear-gradient(180deg, #FBFAF3 0%, #F2EFE2 100%);
+    border: 1px solid rgba(180, 150, 90, 0.18);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.8) inset,
+      0 24px 50px -28px rgba(60, 50, 20, 0.25);
+    color: var(--ink);
+  }
+  .v3::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg,
+      transparent 0%, rgba(220,170,80,0.06) 50%, transparent 100%);
+    z-index: 1;
+    animation: shimmer 6s ease-in-out infinite;
+  }
+  @keyframes shimmer {
+    0%, 100% { opacity: 0.4; }
+    50%      { opacity: 1; }
+  }
+  .v3 .stat + .stat::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 22%; bottom: 22%;
+    width: 1px;
+    background: linear-gradient(to bottom, transparent, rgba(180,150,90,0.35), transparent);
+  }
+  .v3 .stat-value {
+    background: linear-gradient(180deg, #2A341F 0%, #4A3E18 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .v3 .stat-label {
+    color: var(--ink-soft);
+  }
+
+  /* ───────────────────────────────────────────────
+     V4 · CONIC HOLO — концентрические conic gradient
+     ─────────────────────────────────────────────── */
+  .v4 {
+    background: #0A0F0C;
+    color: #fff;
+    padding: 1px;
+  }
+  .v4::before {
+    content: "";
+    position: absolute; inset: -1px;
+    background: conic-gradient(
+      from 0deg,
+      #5DFFC3, #7CB6FF, #C29BFF, #FFB6E1,
+      #FFD18A, #C8FF8A, #5DFFC3
+    );
+    z-index: 0;
+    animation: spin 18s linear infinite;
+    filter: blur(0px);
+  }
+  @keyframes spin { to { transform: rotate(1turn); } }
+  .v4-inner {
+    position: relative;
+    z-index: 1;
+    background: linear-gradient(180deg, rgba(10,15,12,0.92), rgba(10,15,12,0.96));
+    border-radius: 23px;
+    overflow: hidden;
+  }
+  .v4-inner::before {
+    content: "";
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(40% 80% at 50% 0%, rgba(180,255,220,0.10), transparent 60%),
+      radial-gradient(40% 80% at 50% 100%, rgba(195,155,255,0.10), transparent 60%);
+    z-index: 0;
+  }
+  .v4 .banner-grid { position: relative; z-index: 1; }
+  .v4 .stat + .stat::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 25%; bottom: 25%;
+    width: 1px;
+    background: linear-gradient(to bottom,
+      transparent, rgba(255,255,255,0.20), transparent);
+  }
+  .v4 .stat-value {
+    background: linear-gradient(135deg, #FFFFFF 0%, #C0F5DD 50%, #C29BFF 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .v4 .stat-label {
+    color: rgba(255,255,255,0.55);
+  }
+
+  /* ───────────────────────────────────────────────
+     V5 · ANIMATED FOREST MESH — тёмный лес + лайм
+     ─────────────────────────────────────────────── */
+  .v5 {
+    background: #0C140E;
+    color: #F2F6EE;
+  }
+  .v5::before {
+    content: "";
+    position: absolute; inset: -20%;
+    background:
+      radial-gradient(28% 28% at 20% 30%, #2D6B3E 0%, transparent 60%),
+      radial-gradient(30% 30% at 80% 70%, #6B7A2E 0%, transparent 60%),
+      radial-gradient(30% 30% at 50% 100%, #1E3A2A 0%, transparent 60%),
+      radial-gradient(25% 25% at 90% 10%, #B5D67A 0%, transparent 65%);
+    filter: blur(60px) saturate(120%);
+    animation: drift5 22s ease-in-out infinite alternate;
+    z-index: 0;
+  }
+  @keyframes drift5 {
+    0%   { transform: translate3d(-2%, 1%, 0) scale(1); }
+    100% { transform: translate3d(3%, -2%, 0) scale(1.08); }
+  }
+  .v5 .banner-grid {
+    background: rgba(10, 18, 12, 0.35);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .v5 .stat + .stat::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 25%; bottom: 25%;
+    width: 1px;
+    background: linear-gradient(to bottom, transparent, rgba(181,214,122,0.25), transparent);
+  }
+  .v5 .stat-value {
+    color: #F2F6EE;
+  }
+  .v5 .stat-emoji {
+    filter: drop-shadow(0 0 10px rgba(181,214,122,0.45));
+  }
+  .v5 .stat-label {
+    color: rgba(242,246,238,0.55);
+  }
+
+  /* выделение «чемпиона» (просто метка) */
+  .pick {
+    display: inline-block;
+    margin-left: 10px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: var(--ink);
+    color: #FBFAF3;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Stats Banner — 5 прототипов</h1>
+    <p>Реальные числа: 1 387 / 276 / 1 / 0. Каждый вариант — отдельное направление: от смелого ярко-градиентного до люксового в палитре Maporia. Открой файл в браузере, чтобы увидеть анимации.</p>
+  </header>
+
+  <!-- ───── V1 ───── -->
+  <section class="variant">
+    <div class="variant-meta">
+      <span class="num">01</span>
+      <span class="name">Aurora Glass</span>
+      <span class="desc">Тёмное стекло + плавающее северное сияние из зелёного и лавандового. Премиально, кинематографично, выгодно подсвечивает большие цифры.</span>
+    </div>
+    <div class="banner v1">
+      <div class="banner-grid">
+        <div class="stat">
+          <div class="stat-row"><span class="stat-emoji">👥</span><span class="stat-value">1,387</span></div>
+          <div class="stat-label">Active users</div>
+        </div>
+        <div class="stat">
+          <div class="stat-row"><span class="stat-emoji">📍</span><span class="stat-value">276</span></div>
+          <div class="stat-label">Unique places</div>
+        </div>
+        <div class="stat">
+          <div class="stat-row"><span class="stat-emoji">🛠</span><span class="stat-value">1</span></div>
+          <div class="stat-label">Services</div>
+        </div>
+        <div class="stat">
+          <div class="stat-row"><span class="stat-emoji">✨</span><span class="stat-value">0</span></div>
+          <div class="stat-label">Experiences</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───── V2 ───── -->
+  <section class="variant">
+    <div class="variant-meta">
+      <span class="num">02</span>
+      <span class="name">Mesh Sunset</span>
+      <span class="desc">Светлый mesh-градиент (peach → coral → lavender → sky). Самый «вау» и самый смелый. Эмодзи в стеклянных квадратиках, чтобы читались на пёстром фоне.</span>
+    </div>
+    <div class="banner v2">
+      <div class="banner-grid">
+        <div class="stat">
+          <div class="stat-row"><span class="stat-emoji">👥</span><span class="stat-value">1,387</span></div>
+          <div class="stat-label">Active users</div>
+        </div>
+        <div class="stat">
+          <div class="stat-row"><span class="stat-emoji">📍</span><span class="stat-value">276</span></div>
+          <div class="stat-label">Unique places</div>
+        </div>
+        <div class="stat">
+          <div class="stat-row"><span class="stat-emoji">🛠</span><span class="stat-value">1</span></div>
+          <div class="stat-label">Services</div>
+        </div>
+        <div class="stat">
+          <div class="stat-row"><span class="stat-emoji">✨</span><span class="stat-value">0</span></div>
+          <div class="stat-label">Experiences</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───── V3 ───── -->
+  <section class="variant">
+    <div class="variant-meta">
+      <span class="num">03</span>
+      <span class="name">Maporia Premium</span>
+      <span class="pick">в палитре проекта</span>
+      <span class="desc">Сохраняем бежево-зелёную айдентику Maporia, но добавляем мягкий янтарный glow и анимированный shimmer. Цифры — тёплый градиент. Идеальная «без потерь» версия.</span>
+    </div>
+    <div class="banner v3">
+      <div class="banner-grid">
+        <div class="stat">
+          <div class="stat-row"><span class="stat-emoji">👥</span><span class="stat-value">1,387</span></div>
+          <div class="stat-label">Active users</div>
+        </div>
+        <div class="stat">
+          <div class="stat-row"><span class="stat-emoji">📍</span><span class="stat-value">276</span></div>
+          <div class="stat-label">Unique places</div>
+        </div>
+        <div class="stat">
+          <div class="stat-row"><span class="stat-emoji">🛠</span><span class="stat-value">1</span></div>
+          <div class="stat-label">Services</div>
+        </div>
+        <div class="stat">
+          <div class="stat-row"><span class="stat-emoji">✨</span><span class="stat-value">0</span></div>
+          <div class="stat-label">Experiences</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───── V4 ───── -->
+  <section class="variant">
+    <div class="variant-meta">
+      <span class="num">04</span>
+      <span class="name">Holo Border</span>
+      <span class="desc">Чёрный фон + вращающийся conic-gradient в роли рамки. Цифры — белый-бирюзовый-фиолетовый градиент. Hi-tech, выглядит как лендинг крипто-проекта (в хорошем смысле).</span>
+    </div>
+    <div class="banner v4">
+      <div class="v4-inner">
+        <div class="banner-grid">
+          <div class="stat">
+            <div class="stat-row"><span class="stat-emoji">👥</span><span class="stat-value">1,387</span></div>
+            <div class="stat-label">Active users</div>
+          </div>
+          <div class="stat">
+            <div class="stat-row"><span class="stat-emoji">📍</span><span class="stat-value">276</span></div>
+            <div class="stat-label">Unique places</div>
+          </div>
+          <div class="stat">
+            <div class="stat-row"><span class="stat-emoji">🛠</span><span class="stat-value">1</span></div>
+            <div class="stat-label">Services</div>
+          </div>
+          <div class="stat">
+            <div class="stat-row"><span class="stat-emoji">✨</span><span class="stat-value">0</span></div>
+            <div class="stat-label">Experiences</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───── V5 ───── -->
+  <section class="variant">
+    <div class="variant-meta">
+      <span class="num">05</span>
+      <span class="name">Forest Aurora</span>
+      <span class="desc">Тёмный лесной фон с мягко плавающими лаймово-зелёными пятнами. Эмодзи светятся как листочки в темноте. Очень «Maporia», только в ночной версии.</span>
+    </div>
+    <div class="banner v5">
+      <div class="banner-grid">
+        <div class="stat">
+          <div class="stat-row"><span class="stat-emoji">👥</span><span class="stat-value">1,387</span></div>
+          <div class="stat-label">Active users</div>
+        </div>
+        <div class="stat">
+          <div class="stat-row"><span class="stat-emoji">📍</span><span class="stat-value">276</span></div>
+          <div class="stat-label">Unique places</div>
+        </div>
+        <div class="stat">
+          <div class="stat-row"><span class="stat-emoji">🛠</span><span class="stat-value">1</span></div>
+          <div class="stat-label">Services</div>
+        </div>
+        <div class="stat">
+          <div class="stat-row"><span class="stat-emoji">✨</span><span class="stat-value">0</span></div>
+          <div class="stat-label">Experiences</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

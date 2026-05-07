@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maporia — UX redesign prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #faf8f1;          /* cream */
+    --surface: #ffffff;
+    --line: #ebe7d8;
+    --ink: #1f2417;
+    --ink-2: #5a5f4d;
+    --muted: #8a8f7d;
+    --brand: #6b7c3d;       /* olive */
+    --brand-ink: #4d5b27;
+    --brand-soft: #eef0e0;
+    --pin: #d34736;         /* red pin */
+    --shadow-1: 0 1px 2px rgba(31,36,23,.04), 0 8px 24px rgba(31,36,23,.06);
+    --shadow-2: 0 4px 16px rgba(31,36,23,.08), 0 24px 48px rgba(31,36,23,.10);
+    --r-sm: 10px;
+    --r-md: 14px;
+    --r-lg: 22px;
+    --r-pill: 999px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--ink);
+    background: #f1ede2;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* ───── page chrome ───── */
+  .page-head {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 32px 32px 12px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .page-title {
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 600;
+    font-size: 22px;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+  .page-sub {
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .canvas {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 16px 32px 80px;
+    display: grid;
+    grid-template-columns: 1fr 392px;
+    gap: 28px;
+    align-items: start;
+  }
+  @media (max-width: 1080px) {
+    .canvas { grid-template-columns: 1fr; }
+  }
+
+  .frame {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: var(--shadow-1);
+  }
+  .frame-label {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 14px 22px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .frame-label span.dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--brand); margin-right: 8px; vertical-align: middle;
+  }
+
+  /* ───── shared atoms ───── */
+  .logo {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: var(--brand);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #f7f3da; font-weight: 700; font-size: 14px;
+    letter-spacing: -0.02em;
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.12);
+  }
+  .logo svg { width: 16px; height: 16px; }
+
+  .avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: #e9e3c8; display: inline-flex; align-items: center; justify-content: center;
+    color: var(--brand-ink); font-weight: 600; font-size: 13px;
+  }
+
+  .icon-btn {
+    width: 40px; height: 40px; border-radius: var(--r-pill);
+    border: 1px solid var(--line); background: var(--surface);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    color: var(--ink);
+  }
+  .icon-btn:hover { border-color: #d8d2bd; }
+
+  .ghost-btn {
+    height: 40px; padding: 0 16px;
+    border-radius: var(--r-pill);
+    border: 1px solid transparent; background: transparent;
+    color: var(--ink); font-weight: 500; font-size: 14px;
+    cursor: pointer;
+  }
+  .ghost-btn:hover { background: rgba(31,36,23,.04); }
+
+  .primary-btn {
+    height: 44px; padding: 0 20px;
+    border-radius: var(--r-pill);
+    border: none; background: var(--brand); color: #f7f3da;
+    font-weight: 600; font-size: 14px;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .primary-btn:hover { background: var(--brand-ink); }
+
+  /* ===================================================================
+     DESKTOP MOCK
+     =================================================================== */
+  .desktop {
+    background: var(--bg);
+    min-height: 720px;
+  }
+
+  .d-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 22px 40px;
+  }
+  .d-nav-right { display: flex; align-items: center; gap: 12px; }
+
+  .d-hero {
+    padding: 40px 40px 24px;
+    text-align: center;
+  }
+  .d-eyebrow {
+    color: var(--brand-ink);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .d-title {
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 600;
+    font-size: 56px;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin: 12px 0 6px;
+  }
+  .d-title em {
+    font-style: italic;
+    color: var(--brand);
+    font-weight: 500;
+  }
+  .d-lede {
+    color: var(--ink-2);
+    font-size: 16px;
+    margin: 0 auto;
+    max-width: 540px;
+  }
+
+  /* segmented tabs */
+  .seg {
+    display: inline-flex;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill);
+    padding: 6px;
+    margin: 28px auto 18px;
+    box-shadow: var(--shadow-1);
+  }
+  .seg button {
+    border: 0; background: transparent; cursor: pointer;
+    height: 40px; padding: 0 22px;
+    border-radius: var(--r-pill);
+    font-size: 14px; font-weight: 500;
+    color: var(--ink-2);
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .seg button.active {
+    background: var(--brand);
+    color: #f7f3da;
+    box-shadow: 0 1px 0 rgba(0,0,0,.06);
+  }
+  .seg button .seg-ico { font-size: 14px; }
+
+  /* hero search */
+  .d-search {
+    margin: 6px auto 0;
+    max-width: 760px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill);
+    padding: 8px 8px 8px 8px;
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1fr auto;
+    align-items: stretch;
+    box-shadow: var(--shadow-2);
+  }
+  .d-search .field {
+    text-align: left;
+    padding: 10px 22px;
+    border-right: 1px solid var(--line);
+    cursor: text;
+  }
+  .d-search .field:last-of-type { border-right: 0; }
+  .d-search .field .lbl {
+    font-size: 11px; font-weight: 600; color: var(--ink);
+    letter-spacing: 0.04em;
+  }
+  .d-search .field .val {
+    font-size: 14px; color: var(--muted);
+    margin-top: 2px;
+  }
+  .d-search .go {
+    align-self: center;
+    margin-right: 4px;
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: var(--brand);
+    color: #f7f3da;
+    border: 0; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .d-search .go:hover { background: var(--brand-ink); }
+
+  /* ticker */
+  .d-ticker {
+    margin: 28px 40px 0;
+    padding: 14px 22px;
+    border-top: 1px solid var(--line);
+    color: var(--ink-2);
+    font-size: 13px;
+    display: flex;
+    justify-content: center;
+    gap: 22px;
+    flex-wrap: wrap;
+  }
+  .d-ticker .pip {
+    color: var(--muted);
+    margin: 0 4px;
+  }
+  .d-ticker b {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  /* preview cards strip below to hint the page continues */
+  .d-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    padding: 22px 40px 40px;
+  }
+  .d-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    height: 168px;
+    box-shadow: var(--shadow-1);
+    overflow: hidden;
+    position: relative;
+  }
+  .d-card .ph {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(120% 80% at 30% 20%, #d6d2bb 0%, transparent 60%),
+      linear-gradient(135deg, #e6e1ca, #cdd2b0 80%);
+  }
+  .d-card .meta {
+    position: absolute; left: 12px; bottom: 12px; right: 12px;
+    color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35);
+    font-size: 12px;
+  }
+  .d-card .meta .t { font-weight: 600; font-size: 14px; }
+
+  /* ===================================================================
+     MOBILE MOCK
+     =================================================================== */
+  .mobile {
+    padding: 22px;
+    display: flex;
+    justify-content: center;
+  }
+  .phone {
+    width: 348px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 36px;
+    padding: 16px 16px 24px;
+    box-shadow: var(--shadow-2);
+    position: relative;
+    overflow: hidden;
+  }
+  .phone::before {
+    content: "";
+    display: block;
+    width: 110px; height: 28px;
+    background: #1c1f15;
+    border-radius: 0 0 16px 16px;
+    margin: -16px auto 14px;
+  }
+
+  .m-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 4px 14px;
+  }
+  .m-nav .icon-btn { width: 36px; height: 36px; }
+
+  .m-hero {
+    padding: 6px 6px 0;
+  }
+  .m-eyebrow {
+    color: var(--brand-ink);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .m-title {
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 600;
+    font-size: 30px;
+    line-height: 1.05;
+    letter-spacing: -0.015em;
+    margin: 6px 0 4px;
+  }
+  .m-title em { font-style: italic; color: var(--brand); font-weight: 500; }
+  .m-lede {
+    color: var(--ink-2);
+    font-size: 13px;
+    margin: 0 0 16px;
+  }
+
+  /* segmented full-width */
+  .m-seg {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill);
+    padding: 4px;
+    margin: 0 0 12px;
+  }
+  .m-seg button {
+    border: 0; background: transparent; cursor: pointer;
+    height: 36px;
+    border-radius: var(--r-pill);
+    font-size: 13px; font-weight: 500;
+    color: var(--ink-2);
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .m-seg button.active { background: var(--brand); color: #f7f3da; }
+
+  /* search field */
+  .m-search {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 12px 12px 12px 16px;
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: var(--shadow-1);
+  }
+  .m-search .pin { color: var(--brand); }
+  .m-search .text { flex: 1; }
+  .m-search .text .lbl { font-size: 12px; color: var(--muted); }
+  .m-search .text .val { font-size: 14px; font-weight: 500; }
+  .m-search .filt {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: var(--brand-soft); border: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--brand-ink); cursor: pointer;
+  }
+
+  .m-cta {
+    margin-top: 12px;
+    width: 100%;
+    height: 48px;
+    border: 0; border-radius: 14px;
+    background: var(--brand); color: #f7f3da;
+    font-weight: 600; font-size: 15px;
+    cursor: pointer;
+  }
+
+  /* horizontal ticker (non-scrolling, compact) */
+  .m-ticker {
+    margin-top: 18px;
+    display: flex; align-items: center; gap: 8px;
+    overflow-x: auto;
+    padding: 4px 2px 8px;
+    scrollbar-width: none;
+  }
+  .m-ticker::-webkit-scrollbar { display: none; }
+  .m-chip {
+    flex: 0 0 auto;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill);
+    padding: 8px 12px;
+    font-size: 12px; color: var(--ink-2);
+    white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .m-chip b { color: var(--ink); font-weight: 600; }
+
+  /* mini card preview */
+  .m-card {
+    margin-top: 18px;
+    border-radius: 16px;
+    height: 180px;
+    background:
+      radial-gradient(120% 80% at 30% 20%, #d6d2bb 0%, transparent 60%),
+      linear-gradient(135deg, #e6e1ca, #cdd2b0 80%);
+    border: 1px solid var(--line);
+    position: relative;
+    overflow: hidden;
+  }
+  .m-card .meta {
+    position: absolute; left: 12px; bottom: 12px;
+    color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35);
+  }
+  .m-card .meta .t { font-weight: 600; font-size: 14px; }
+  .m-card .meta .s { font-size: 12px; opacity: .9; }
+
+  /* ───── annotations ───── */
+  .notes {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 32px 64px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+  @media (max-width: 900px) { .notes { grid-template-columns: 1fr; } }
+  .note {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 18px 20px;
+    box-shadow: var(--shadow-1);
+  }
+  .note h3 {
+    font-family: "Fraunces", Georgia, serif;
+    margin: 0 0 6px;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .note p {
+    margin: 0;
+    color: var(--ink-2);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  /* tiny pin svg helper */
+  .pin-svg { width: 14px; height: 14px; }
+</style>
+</head>
+<body>
+
+  <header class="page-head">
+    <div>
+      <h1 class="page-title">Maporia · UX redesign — v1 prototype</h1>
+      <div class="page-sub">Контент тот же, изменилась только архитектура. Слева — desktop, справа — mobile.</div>
+    </div>
+    <div class="page-sub">07 May 2026</div>
+  </header>
+
+  <main class="canvas">
+
+    <!-- ============== DESKTOP ============== -->
+    <section class="frame">
+      <div class="frame-label"><span><span class="dot"></span>DESKTOP · 1440</span><span>home / discover</span></div>
+
+      <div class="desktop">
+
+        <!-- nav -->
+        <nav class="d-nav">
+          <div style="display:flex;align-items:center;gap:14px;">
+            <span class="logo" aria-label="Maporia">
+              <!-- pin/M mark -->
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2c4 0 7 3 7 7 0 5.2-7 13-7 13S5 14.2 5 9c0-4 3-7 7-7Z" stroke="#f7f3da" stroke-width="2"/>
+                <path d="M9 12V7l3 3 3-3v5" stroke="#f7f3da" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <div style="font-family:'Fraunces',serif;font-weight:600;font-size:18px;letter-spacing:-.01em;">Maporia</div>
+          </div>
+
+          <div class="d-nav-right">
+            <button class="ghost-btn">Map</button>
+            <button class="ghost-btn">List</button>
+            <button class="ghost-btn">Become a provider</button>
+            <span class="avatar">A</span>
+            <button class="icon-btn" aria-label="Menu">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </nav>
+
+        <!-- hero -->
+        <div class="d-hero">
+          <div class="d-eyebrow">Discover · Curated by locals</div>
+          <h2 class="d-title">Where to <em>next</em>?</h2>
+          <p class="d-lede">Найди место, опыт или сервис в один клик — без длинного списка фильтров на старте.</p>
+
+          <!-- segmented -->
+          <div class="seg" role="tablist">
+            <button class="active" role="tab" aria-selected="true">
+              <span class="seg-ico">📍</span> Locations
+            </button>
+            <button role="tab">
+              <span class="seg-ico">✨</span> Experiences
+            </button>
+            <button role="tab">
+              <span class="seg-ico">🛠</span> Services
+            </button>
+          </div>
+
+          <!-- search -->
+          <div class="d-search" role="search">
+            <div class="field">
+              <div class="lbl">Where</div>
+              <div class="val">City, region or vibe…</div>
+            </div>
+            <div class="field">
+              <div class="lbl">When</div>
+              <div class="val">Any time</div>
+            </div>
+            <div class="field">
+              <div class="lbl">Filters</div>
+              <div class="val">Cuisine, price, mood</div>
+            </div>
+            <button class="go" aria-label="Search">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2"/><path d="m20 20-3.2-3.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- ticker stats -->
+        <div class="d-ticker">
+          <span><b>1,387</b> travelers</span>
+          <span class="pip">·</span>
+          <span><b>276</b> places</span>
+          <span class="pip">·</span>
+          <span><b>1</b> service</span>
+          <span class="pip">·</span>
+          <span><b>0</b> experiences</span>
+          <span class="pip">·</span>
+          <span style="color:var(--brand-ink);font-weight:600;">growing daily</span>
+        </div>
+
+        <!-- preview strip (placeholder cards to show page continues) -->
+        <div class="d-strip" aria-hidden="true">
+          <div class="d-card"><div class="ph"></div><div class="meta"><div class="t">Tbilisi · Vake</div>cafés · 24 places</div></div>
+          <div class="d-card"><div class="ph" style="filter:hue-rotate(20deg)"></div><div class="meta"><div class="t">Bali · Canggu</div>experiences · 12</div></div>
+          <div class="d-card"><div class="ph" style="filter:hue-rotate(-20deg)"></div><div class="meta"><div class="t">Lisbon · Alfama</div>local guides</div></div>
+          <div class="d-card"><div class="ph" style="filter:hue-rotate(40deg)"></div><div class="meta"><div class="t">Yerevan</div>weekend trips</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============== MOBILE ============== -->
+    <section class="frame">
+      <div class="frame-label"><span><span class="dot"></span>MOBILE · 375</span><span>home</span></div>
+      <div class="mobile">
+        <div class="phone">
+
+          <nav class="m-nav">
+            <span class="logo" style="width:32px;height:32px;border-radius:7px;">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 2c4 0 7 3 7 7 0 5.2-7 13-7 13S5 14.2 5 9c0-4 3-7 7-7Z" stroke="#f7f3da" stroke-width="2"/></svg>
+            </span>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <span class="avatar" style="width:30px;height:30px;font-size:11px;">A</span>
+              <button class="icon-btn" aria-label="Menu">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+          </nav>
+
+          <div class="m-hero">
+            <div class="m-eyebrow">Discover</div>
+            <h2 class="m-title">Where to <em>next</em>?</h2>
+            <p class="m-lede">Места, опыт и сервисы — без лишних шагов.</p>
+
+            <div class="m-seg" role="tablist">
+              <button class="active">📍 Places</button>
+              <button>✨ Exp.</button>
+              <button>🛠 Serv.</button>
+            </div>
+
+            <div class="m-search">
+              <span class="pin">
+                <svg class="pin-svg" viewBox="0 0 24 24" fill="none"><path d="M12 2c4 0 7 3 7 7 0 5.2-7 13-7 13S5 14.2 5 9c0-4 3-7 7-7Z" stroke="currentColor" stroke-width="2"/></svg>
+              </span>
+              <div class="text">
+                <div class="lbl">Where</div>
+                <div class="val">City, region or vibe…</div>
+              </div>
+              <button class="filt" aria-label="Filters">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M7 12h10M10 18h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+
+            <button class="m-cta">Search nearby</button>
+
+            <!-- ticker as chips -->
+            <div class="m-ticker" role="status" aria-label="Stats">
+              <span class="m-chip">👥 <b>1,387</b> travelers</span>
+              <span class="m-chip">📍 <b>276</b> places</span>
+              <span class="m-chip">🛠 <b>1</b> service</span>
+              <span class="m-chip">✨ <b>0</b> exp.</span>
+            </div>
+
+            <!-- preview card -->
+            <div class="m-card">
+              <div class="meta">
+                <div class="t">Tbilisi · Vake</div>
+                <div class="s">cafés · 24 places nearby</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <section class="notes">
+    <div class="note">
+      <h3>1 · Один центр внимания</h3>
+      <p>Hero ведёт к одному действию — поиску. Tabs становятся переключателем <em>контекста</em> поиска (Places / Experiences / Services), а не отдельным навигационным шагом. Кнопки Where? + Filters слились в одну строку — как у Airbnb / Booking.</p>
+    </div>
+    <div class="note">
+      <h3>2 · Статистика-тикер</h3>
+      <p>4 KPI карточки превратились в одну тонкую строку под поиском. Числа остались (1,387 / 276 / 1 / 0), но не конкурируют с CTA. На мобильном — горизонтальные чипы, легко скроллятся большим пальцем.</p>
+    </div>
+    <div class="note">
+      <h3>3 · Mobile-first ритм</h3>
+      <p>На телефоне Where стало карточкой-полем + отдельная зелёная CTA «Search nearby» в thumb-zone. Tabs ужаты до 3 ровных квадратов. «Become a provider» уехал в меню — на 375px он съедал воздух.</p>
+    </div>
+  </section>
+
+</body>
+</html>

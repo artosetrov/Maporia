@@ -102,7 +102,7 @@ export default function TopBar({
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [becomeProviderOpen, setBecomeProviderOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const hamburgerRef = useRef<HTMLButtonElement>(null);
+  const desktopAvatarRef = useRef<HTMLButtonElement>(null);
   const mobileAvatarRef = useRef<HTMLButtonElement>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -140,8 +140,8 @@ export default function TopBar({
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       const target = event.target as Node;
-      if (menuRef.current && !menuRef.current.contains(target) && 
-          hamburgerRef.current && !hamburgerRef.current.contains(target) &&
+      if (menuRef.current && !menuRef.current.contains(target) &&
+          desktopAvatarRef.current && !desktopAvatarRef.current.contains(target) &&
           mobileAvatarRef.current && !mobileAvatarRef.current.contains(target)) {
         setMenuOpen(false);
         setMenuPosition(null);
@@ -444,51 +444,37 @@ export default function TopBar({
                     Get Started
                   </button>
                 )}
-                {/* Authenticated: Switch to hosting + Avatar + Hamburger menu */}
+                {/* Authenticated: Avatar opens dropdown menu */}
                 {isAuthenticated && (userAvatar || userDisplayName || userEmail) && (
-                  <>
-                    {/* Avatar - link to profile */}
-                    <Link
-                      href="/profile"
-                      className="flex-shrink-0"
-                    >
-                      <div className="w-8 h-8 rounded-full bg-[#FAFAF7] overflow-hidden flex-shrink-0 border border-[#ECEEE4] hover:border-[#8F9E4F] transition-colors">
-                        {userAvatar ? (
-                          <img
-                            src={userAvatar}
-                            alt={userDisplayName || userEmail || "User"}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-xs font-semibold text-[#8F9E4F] flex items-center justify-center h-full">
-                            {userDisplayName ? initialsFromName(userDisplayName) : initialsFromEmail(userEmail)}
-                          </span>
-                        )}
-                      </div>
-                    </Link>
-                    
-                    {/* Hamburger menu button */}
-                    <div className="relative">
-                      <button
-                        ref={hamburgerRef}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (hamburgerRef.current) {
-                            const rect = hamburgerRef.current.getBoundingClientRect();
-                            setMenuPosition({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
-                          }
-                          setMenuOpen(!menuOpen);
-                        }}
-                        className="w-8 h-8 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition-colors flex items-center justify-center flex-shrink-0"
-                        aria-label="Menu"
-                      >
-                        <svg className="w-4 h-4 text-[#1F2A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                        </svg>
-                      </button>
-
+                  <button
+                    ref={desktopAvatarRef}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (desktopAvatarRef.current) {
+                        const rect = desktopAvatarRef.current.getBoundingClientRect();
+                        setMenuPosition({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+                      }
+                      setMenuOpen(!menuOpen);
+                    }}
+                    className="flex-shrink-0"
+                    aria-label="Menu"
+                    aria-expanded={menuOpen}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-[#FAFAF7] overflow-hidden flex-shrink-0 border border-[#ECEEE4] hover:border-[#8F9E4F] transition-colors">
+                      {userAvatar ? (
+                        <img
+                          src={userAvatar}
+                          alt={userDisplayName || userEmail || "User"}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-xs font-semibold text-[#8F9E4F] flex items-center justify-center h-full">
+                          {userDisplayName ? initialsFromName(userDisplayName) : initialsFromEmail(userEmail)}
+                        </span>
+                      )}
                     </div>
-                  </>
+                  </button>
                 )}
               </div>
             </div>

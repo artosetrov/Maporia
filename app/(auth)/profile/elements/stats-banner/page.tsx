@@ -12,10 +12,13 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { supabase } from "../../../../lib/supabase";
+import { supabase, hasValidSupabaseConfig } from "../../../../lib/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../lib/access";
 import Icon from "../../../../components/Icon";
+import StatsBannerView, {
+  type StatsBannerItem,
+} from "../../../../components/StatsBannerView";
 import {
   DEFAULT_STATS_BANNER_SETTINGS,
   type StatsBannerSettings,
@@ -67,6 +70,17 @@ export default function StatsBannerSettingsPage() {
     experiences: "",
   });
 
+  // Live counts для секции "Live preview" — те же запросы, что делает
+  // StatsBanner на главной. Показываем актуальные значения для auto-метрик,
+  // даже если в редакторе сейчас выбран Manual: помогает выбрать число.
+  const [liveCounts, setLiveCounts] = useState<Record<StatsMetricKey, number | null>>({
+    users: null,
+    locations: null,
+    services: null,
+    experiences: null,
+  });
+  const [liveLoading, setLiveLoading] = useState(true);
+
   // Загрузка настроек
   useEffect(() => {
     if (accessLoading) return;
@@ -116,7 +130,82 @@ export default function StatsBannerSettingsPage() {
     };
   }, [accessLoading, isAdmin, router]);
 
+  // Грузим live counts один раз после того, как admin-проверка прошла.
+  // 4 параллельных HEAD-запроса; ошибки одного канала не валят остальные.
+  useEffect(() => {
+    if (accessLoading || !isAdmin) return;
+    if (!hasValidSupabaseConfig) {
+      setLiveLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLiveLoading(true);
+      try {
+        const [u, loc, srv, exp] = await Promise.all([
+          supabase.from("profiles").select("id", { count: "exact", head: true }),
+          supabase
+            .from("places")
+            .select("id", { count: "exact", head: true })
+            .eq("kind", "location")
+            .eq("is_hidden", false),
+          supabase
+            .from("places")
+            .select("id", { count: "exact", head: true })
+            .eq("kind", "service")
+            .eq("is_hidden", false),
+          supabase
+            .from("places")
+            .select("id", { count: "exact", head: true })
+            .eq("kind", "experience")
+            .eq("is_hidden", false),
+        ]);
+        if (cancelled) return;
+        setLiveCounts({
+          users: u.error ? null : u.count ?? 0,
+          locations: loc.error ? null : loc.count ?? 0,
+          services: srv.error ? null : srv.count ?? 0,
+          experiences: exp.error ? null : exp.count ?? 0,
+        });
+      } catch (err: unknown) {
+        // Сеть упала / abort — preview спокойно покажет «—», ошибки в save-bar
+        // не пишем, чтобы не путать редактора (это не блокер сохранения).
+        if (process.env.NODE_ENV !== "production") {
+          const e = err as { message?: string };
+          console.warn("[StatsBannerSettings] preview live counts failed:", e?.message);
+        }
+      } finally {
+        if (!cancelled) setLiveLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessLoading, isAdmin]);
+
   const dirtyHash = useMemo(() => JSON.stringify(settings), [settings]);
+
+  // Превью-ячейки: для каждой видимой метрики берём значение, которое
+  // увидит пользователь — auto → live count из Supabase, manual → актуальный
+  // черновик из input'а. Так редактор сразу видит результат правки.
+  const previewItems: StatsBannerItem[] = METRIC_KEYS
+    .filter((k) => settings.metrics[k].enabled)
+    .map((k) => {
+      const m = settings.metrics[k];
+      const meta = METRIC_META[k];
+      const mode: "auto" | "manual" = m.manual === null ? "auto" : "manual";
+      const value =
+        mode === "auto"
+          ? liveCounts[k]
+          : parseManual(manualDrafts[k], m.manual);
+      return {
+        key: k,
+        emoji: meta.emoji,
+        value,
+        label: m.label || meta.title,
+        loading: mode === "auto" && liveLoading,
+      };
+    });
 
   async function handleSave() {
     try {
@@ -273,6 +362,32 @@ export default function StatsBannerSettingsPage() {
           <div className="text-sm text-[#6F7A5A]">Loading…</div>
         ) : (
           <div className="space-y-6">
+            {/* Live preview — рендерит ровно тот же view, что главная.
+                Auto-метрики тянут live count, manual — текущий черновик
+                input'а, чтобы изменения были видны до сохранения. */}
+            <section>
+              <div className="flex items-baseline justify-between gap-3 mb-3">
+                <h2 className="font-fraunces text-lg font-semibold text-[#1F2A1F]">
+                  Live preview
+                </h2>
+                {!settings.enabled && (
+                  <span className="text-xs text-[#C96A5B]">
+                    Banner is hidden — preview only
+                  </span>
+                )}
+              </div>
+              {previewItems.length > 0 ? (
+                <StatsBannerView
+                  items={previewItems}
+                  ariaLabel="Stats banner preview"
+                />
+              ) : (
+                <div className="rounded-2xl border border-dashed border-[#ECEEE4] p-6 text-center text-sm text-[#6F7A5A]">
+                  All metrics are off — banner won&apos;t render on the homepage.
+                </div>
+              )}
+            </section>
+
             {/* Master toggle */}
             <section className="rounded-2xl border border-[#ECEEE4] bg-white p-5">
               <label className="flex items-start gap-4 cursor-pointer select-none">

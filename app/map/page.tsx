@@ -279,7 +279,6 @@ function MapPageContent() {
     premium: false,
     hidden: false,
     vibe: false,
-    premiumOnly: false, // Для обратной совместимости
   });
   
   // Счётчик версий фильтров для принудительного обновления списка
@@ -901,7 +900,6 @@ function MapPageContent() {
         const activeKinds = activeFilters.kinds ?? [];
         result = filterPlaces(result, {
           premium: activeFilters.premium,
-          premiumOnly: activeFilters.premiumOnly,
           categories: activeFilters.categories.length > 0 ? activeFilters.categories : undefined,
           tags: (activeFilters.tags ?? []).length > 0 ? (activeFilters.tags ?? []) : undefined,
           kinds: activeKinds.length > 0 ? activeKinds : undefined,
@@ -934,10 +932,9 @@ function MapPageContent() {
         
         return result;
       }, [
-        placesData, 
+        placesData,
         appliedQ, // Добавляем поиск в зависимости
-        activeFilters.premium, 
-        activeFilters.premiumOnly, 
+        activeFilters.premium,
         activeFilters.sort, // Добавляем сортировку в зависимости
         // Используем строковые ключи для отслеживания изменений массивов
         categoriesKey,
@@ -971,7 +968,7 @@ function MapPageContent() {
         // Всегда обновляем состояние, даже если длина не изменилась
         // Это гарантирует перерендер компонентов
         setFilteredPlacesState(filteredPlacesMemo);
-      }, [filteredPlacesMemo, categoriesKey, citiesKey, appliedCities, activeFilters.premium, activeFilters.premiumOnly]);
+      }, [filteredPlacesMemo, categoriesKey, citiesKey, appliedCities, activeFilters.premium]);
       
       // Используем состояние для отображения
       const filteredPlaces = filteredPlacesState;
@@ -994,11 +991,11 @@ function MapPageContent() {
         length: filteredPlaces.length,
         placesDataLength: placesData?.length || 0,
         activeFilters: {
-          premium: activeFilters.premium || activeFilters.premiumOnly,
+          premium: activeFilters.premium,
         },
       });
     }
-  }, [filteredPlaces.length, placesData?.length || 0, activeFilters.premium, activeFilters.premiumOnly]);
+  }, [filteredPlaces.length, placesData?.length || 0, activeFilters.premium]);
 
   // Handle errors
   useEffect(() => {
@@ -1285,7 +1282,6 @@ function MapPageContent() {
       premium: false,
       hidden: false,
       vibe: false,
-      premiumOnly: false,
     });
     
     // Очищаем URL параметры и перезапускаем query без параметров

@@ -6,21 +6,24 @@ import {
   useStatsBannerSettings,
   type StatsMetricKey,
 } from "../hooks/useStatsBannerSettings";
+import StatsBannerView, { type StatsBannerItem } from "./StatsBannerView";
 
 /**
  * StatsBanner — горизонтальная полоска с до 4 живыми счётчиками для главной:
  *   👥 explorers · 📍 locations · 🛠 services · ✨ experiences
  *
- * Источник данных:
+ * Этот компонент отвечает ТОЛЬКО за данные:
  *  - Сами числа: либо live из Supabase (`count: 'exact', head: true`), либо
  *    ручное значение из админских настроек (`metric.manual !== null`).
  *  - Конфиг: app_settings(id='stats_banner') через `useStatsBannerSettings`.
  *    Из настроек берутся: глобальный enabled, per-metric enabled, manual
  *    override и редактируемые подписи (label).
  *
- * Если все 4 метрики отключены — компонент возвращает null. Если master
- * `enabled=false` — тоже null. Это позволяет админу временно «погасить»
- * полоску без правки кода.
+ * Визуал — в `StatsBannerView`. Тот же view используется в админском
+ * Live preview (`/profile/elements/stats-banner`), чтобы редактор видел
+ * ровно то, что увидит пользователь на главной.
+ *
+ * Если master `enabled=false` или все 4 метрики отключены — возвращаем null.
  *
  * Live-запросы делаются ТОЛЬКО для тех метрик, у которых нет manual override
  * — лишние round-trip'ы не выполняем. Если запрос упал — ячейка показывает
@@ -45,19 +48,6 @@ const EMOJI: Record<StatsMetricKey, string> = {
 };
 
 const ORDER: StatsMetricKey[] = ["users", "locations", "services", "experiences"];
-
-const fmt = (n: number) => new Intl.NumberFormat("en-US").format(n);
-
-/**
- * Tailwind grid-cols-* должен быть статичной строкой, иначе JIT-компилятор
- * не сгенерирует класс. Поэтому мапим число «видимых» метрик в литерал.
- */
-const GRID_COLS_SM: Record<1 | 2 | 3 | 4, string> = {
-  1: "sm:grid-cols-1",
-  2: "sm:grid-cols-2",
-  3: "sm:grid-cols-3",
-  4: "sm:grid-cols-4",
-};
 
 export default function StatsBanner() {
   const { settings, loading: settingsLoading } = useStatsBannerSettings();
@@ -128,51 +118,29 @@ export default function StatsBanner() {
   if (!settings.enabled) return null;
   if (visibleKeys.length === 0) return null;
 
-  const cols = (Math.min(visibleKeys.length, 4) as 1 | 2 | 3 | 4);
-  // На мобильном: 1 колонка для одной метрики, иначе 2x2 (или 2x1).
-  const mobileGrid = visibleKeys.length === 1 ? "grid-cols-1" : "grid-cols-2";
+  // Собираем входные данные для презентационного слоя.
+  // - manual !== null → используем ручное число
+  // - manual === null + есть live → live count
+  // - manual === null + ещё нет live + есть Supabase → loading=true (skeleton)
+  // - manual === null + нет Supabase → "—"
+  const items: StatsBannerItem[] = visibleKeys.map((key) => {
+    const cfg = settings.metrics[key];
+    const value = cfg.manual !== null ? cfg.manual : live[key];
+    const isLoading =
+      value === null && hasValidSupabaseConfig && (settingsLoading || cfg.manual === null);
+    return {
+      key,
+      emoji: EMOJI[key],
+      value,
+      label: cfg.label,
+      loading: isLoading,
+    };
+  });
 
   return (
-    <section
-      aria-label="Maporia by the numbers"
-      className="mt-4 mb-6 sm:mt-6 sm:mb-8 rounded-2xl border border-[#ECEEE4] bg-white/80 backdrop-blur-[2px] overflow-hidden"
-    >
-      <ul className={`grid ${mobileGrid} ${GRID_COLS_SM[cols]} sm:divide-x sm:divide-[#ECEEE4]`}>
-        {visibleKeys.map((key, idx) => {
-          const cfg = settings.metrics[key];
-          const value = cfg.manual !== null ? cfg.manual : live[key];
-          // Skeleton пока не пришли ни настройки, ни ответ Supabase для Auto-метрики.
-          const isLoading =
-            value === null && hasValidSupabaseConfig && (settingsLoading || cfg.manual === null);
-          // Тонкая горизонтальная граница для нижнего ряда на мобиле, когда 2x2.
-          const mobileRowBorder =
-            visibleKeys.length > 2 && idx >= 2 ? "border-t border-[#ECEEE4] sm:border-t-0" : "";
-          return (
-            <li
-              key={key}
-              className={`flex flex-col items-center justify-center text-center px-3 py-4 sm:py-5 ${mobileRowBorder}`}
-            >
-              <div className="flex items-baseline gap-2">
-                <span aria-hidden className="text-xl sm:text-2xl leading-none">
-                  {EMOJI[key]}
-                </span>
-                <span className="font-fraunces text-[26px] sm:text-3xl font-semibold text-[#1F2A1F] tabular-nums leading-none">
-                  {isLoading ? (
-                    <span className="inline-block w-14 h-6 sm:h-7 bg-[#ECEEE4] rounded animate-pulse align-middle" />
-                  ) : value === null ? (
-                    <span className="text-[#A8B096]">—</span>
-                  ) : (
-                    fmt(value)
-                  )}
-                </span>
-              </div>
-              <span className="mt-1.5 text-[11px] sm:text-[12px] font-medium text-[#6F7A5A] uppercase tracking-[0.08em]">
-                {cfg.label}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
+    <StatsBannerView
+      items={items}
+      className="mt-4 mb-6 sm:mt-6 sm:mb-8"
+    />
   );
 }

@@ -218,6 +218,8 @@ export default function SavedPage() {
         isOpen={filterOpen}
         onClose={() => setFilterOpen(false)}
         userAccess={access}
+        // /saved редиректит на /map; URL params пока не несут kinds.
+        hideKindFilter
         onApply={(filters) => {
           setActiveFilters(filters);
           // Always redirect to /map with applied filters

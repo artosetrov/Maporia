@@ -445,6 +445,9 @@ export default function FeedPage() {
         isOpen={filterOpen}
         onClose={() => setFilterOpen(false)}
         userAccess={access}
+        // /feed редиректит на /map; URL params пока не несут kinds —
+        // скрываем TYPE, чтобы не было фантомного выбора.
+        hideKindFilter
         onApply={(filters) => {
           setActiveFilters(filters);
           // Always redirect to /map with applied filters
