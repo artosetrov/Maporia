@@ -21,7 +21,9 @@ import type { Database, PlaceKind } from "../../types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { useUserAccessContext } from "../../contexts/UserAccessContext";
 import { useAuthRedirect } from "../../hooks/useAuthRedirect";
-import { canUserAddPlace } from "../../lib/access";
+import { canUserAddPlace, canUserCreate, checkQuota } from "../../lib/access";
+import type { QuotaCheck } from "../../lib/access";
+import { EXTRA_LISTING, PLAN_CONFIG, formatPrice, suggestPlanForKind } from "../../lib/plans";
 import Icon from "../../components/Icon";
 
 type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
@@ -39,23 +41,23 @@ const KIND_OPTIONS: KindOption[] = [
   {
     kind: "location",
     emoji: "📍",
-    title: "Локация",
-    subtitle: "Место на карте — кафе, видовая, парк, спот.",
-    examples: "Бар на крыше, секретный пляж, кофейня",
+    title: "Location",
+    subtitle: "A spot on the map — café, viewpoint, park, hidden gem.",
+    examples: "Rooftop bar, secret beach, coffee shop",
   },
   {
     kind: "service",
     emoji: "🛠",
-    title: "Услуга",
-    subtitle: "То, что кто-то делает: с ценой и режимом работы.",
-    examples: "Массаж, фотограф, инструктор по сёрфу",
+    title: "Service",
+    subtitle: "Something someone does — with a price and hours.",
+    examples: "Massage, photographer, surf instructor",
   },
   {
     kind: "experience",
     emoji: "✨",
-    title: "Экспириенс",
-    subtitle: "Впечатление с расписанием и длительностью (как Airbnb).",
-    examples: "Гастро-тур, мастер-класс, экскурсия",
+    title: "Experience",
+    subtitle: "An event with a schedule and duration (Airbnb-style).",
+    examples: "Food tour, workshop, guided trip",
   },
 ];
 
@@ -70,6 +72,14 @@ export default function AddPlacePage() {
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Если пользователь нажал на тип без нужного тарифа — показываем модалку. */
+  const [paywallKind, setPaywallKind] = useState<PlaceKind | null>(null);
+  /** Если тариф позволяет, но достигнут лимит — модалка «докупить или upgrade». */
+  const [limitState, setLimitState] = useState<{
+    kind: "service" | "experience";
+    quota: QuotaCheck;
+  } | null>(null);
+  const [buyingAddon, setBuyingAddon] = useState(false);
 
   const returnTo = useMemo(() => searchParams.get("returnTo") || "/profile", [searchParams]);
   const presetKindParam = searchParams.get("kind");
@@ -94,6 +104,46 @@ export default function AddPlacePage() {
 
   async function createAndRedirect(kind: PlaceKind) {
     if (!user) return;
+
+    // 1) Базовое право публиковать этот kind по тарифу.
+    if (!canUserCreate(access, kind)) {
+      setPaywallKind(kind);
+      return;
+    }
+
+    // 2) Для service/experience — проверяем квоту: считаем активные карточки
+    //    (включая черновики), вычитаем лимит и bonus_credits.
+    if (kind === "service" || kind === "experience") {
+      const [serviceCountRes, experienceCountRes, profRes] = await Promise.all([
+        supabase
+          .from("places")
+          .select("id", { count: "exact", head: true })
+          .eq("created_by", user.id)
+          .eq("kind", "service"),
+        supabase
+          .from("places")
+          .select("id", { count: "exact", head: true })
+          .eq("created_by", user.id)
+          .eq("kind", "experience"),
+        supabase.from("profiles").select("bonus_listing_credits").eq("id", user.id).single(),
+      ]);
+
+      const services = serviceCountRes.count ?? 0;
+      const experiences = experienceCountRes.count ?? 0;
+      const credits =
+        ((profRes.data as { bonus_listing_credits?: number } | null)?.bonus_listing_credits) ?? 0;
+
+      const quota = checkQuota(access, kind, services, experiences, credits);
+      if (!quota.allowed) {
+        if (quota.reason === "no_plan") {
+          setPaywallKind(kind);
+        } else {
+          setLimitState({ kind, quota });
+        }
+        return;
+      }
+    }
+
     setError(null);
     setCreating(true);
 
@@ -125,6 +175,45 @@ export default function AddPlacePage() {
 
       if (createError) {
         console.error("Error creating place:", createError);
+
+        // Серверный trigger enforce_place_quota мог отклонить insert.
+        // Эти кейсы реалистичны при race condition (client-check прошёл,
+        // но между ним и insert юзер успел создать ещё одну карточку
+        // в другом окне) или если кто-то лезет в БД мимо клиента.
+        // Перехватываем по PG codes и показываем нормальные модалки.
+        const code = createError.code;
+        const msg = createError.message || "";
+
+        if (code === "P0001" || msg.includes("NO_PLAN")) {
+          setPaywallKind(kind);
+          setCreating(false);
+          return;
+        }
+
+        if (code === "P0002" || msg.includes("QUOTA_EXCEEDED")) {
+          // На сервере план разрешает kind, но лимит/кредиты выбраны.
+          // Подсчитаем актуальную квоту, чтобы показать корректные числа.
+          if (kind === "service" || kind === "experience") {
+            const [s, e, p] = await Promise.all([
+              supabase.from("places").select("id", { count: "exact", head: true })
+                .eq("created_by", user.id).eq("kind", "service"),
+              supabase.from("places").select("id", { count: "exact", head: true })
+                .eq("created_by", user.id).eq("kind", "experience"),
+              supabase.from("profiles").select("bonus_listing_credits").eq("id", user.id).single(),
+            ]);
+            const refreshedQuota = checkQuota(
+              access,
+              kind,
+              s.count ?? 0,
+              e.count ?? 0,
+              ((p.data as { bonus_listing_credits?: number } | null)?.bonus_listing_credits) ?? 0
+            );
+            setLimitState({ kind, quota: refreshedQuota });
+          }
+          setCreating(false);
+          return;
+        }
+
         const errorMessage =
           createError.message ||
           createError.code ||
@@ -164,7 +253,7 @@ export default function AddPlacePage() {
     );
   }
 
-  // Пока грузится access
+  // While access is loading
   if (accessLoading) {
     return (
       <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
@@ -199,10 +288,10 @@ export default function AddPlacePage() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         <div className="mb-6 sm:mb-10">
           <h1 className="font-fraunces text-2xl sm:text-3xl font-semibold text-[#1F2A1F] mb-2">
-            Что вы добавляете?
+            What are you adding?
           </h1>
           <p className="text-sm text-[#6F7A5A]">
-            Выберите тип карточки. Дальше вы заполните детали — фото, название, описание.
+            Pick a listing type. Next, you&apos;ll fill in the details — photos, title, description.
           </p>
         </div>
 
@@ -228,7 +317,7 @@ export default function AddPlacePage() {
                   </div>
                   <div className="text-sm text-[#3F4A35] mb-2">{opt.subtitle}</div>
                   <div className="text-xs text-[#6F7A5A]">
-                    Например: {opt.examples}
+                    For example: {opt.examples}
                   </div>
                 </div>
                 <Icon
@@ -257,6 +346,210 @@ export default function AddPlacePage() {
           </button>
         </div>
       </div>
+
+      {/* Пейволл при выборе service/experience без подходящего тарифа */}
+      {paywallKind && (
+        <PaywallModal
+          kind={paywallKind}
+          onClose={() => setPaywallKind(null)}
+          onUpgrade={() => router.push("/pricing")}
+        />
+      )}
+
+      {/* Модалка достигнутого лимита */}
+      {limitState && (
+        <LimitReachedModal
+          kind={limitState.kind}
+          quota={limitState.quota}
+          buying={buyingAddon}
+          onClose={() => setLimitState(null)}
+          onBuyAddon={async () => {
+            setBuyingAddon(true);
+            setError(null);
+            try {
+              const { data: sess } = await supabase.auth.getSession();
+              const accessToken = sess.session?.access_token;
+              if (!accessToken) {
+                router.push(`/auth?next=${encodeURIComponent("/add")}`);
+                return;
+              }
+              const res = await fetch("/api/stripe/checkout", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ access_token: accessToken, addon: "extra_listing" }),
+              });
+              const data = (await res.json()) as { url?: string; error?: string };
+              if (!res.ok || !data.url) {
+                setError(data.error || "Не удалось открыть оплату");
+                setBuyingAddon(false);
+                return;
+              }
+              window.location.href = data.url;
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Не удалось открыть оплату");
+              setBuyingAddon(false);
+            }
+          }}
+          onUpgrade={() => router.push("/pricing")}
+        />
+      )}
     </main>
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Пейволл-модалка
+// ─────────────────────────────────────────────────────────────────────────────
+
+function PaywallModal({
+  kind,
+  onClose,
+  onUpgrade,
+}: {
+  kind: PlaceKind;
+  onClose: () => void;
+  onUpgrade: () => void;
+}) {
+  const requiredPlan = suggestPlanForKind(kind);
+  const planCfg = PLAN_CONFIG[requiredPlan];
+
+  const kindLabel =
+    kind === "service" ? "a service" : kind === "experience" ? "an experience" : "a location";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="paywall-title"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md rounded-2xl bg-white border border-[#ECEEE4] shadow-lg p-6"
+      >
+        <div className="text-3xl mb-3" aria-hidden>
+          {planCfg.display.emoji}
+        </div>
+        <h2
+          id="paywall-title"
+          className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-2"
+        >
+          To create {kindLabel}, you need {planCfg.display.name}
+        </h2>
+        <p className="text-sm text-[#3F4A35] mb-4">{planCfg.display.audience}</p>
+        <ul className="space-y-2 mb-5">
+          {planCfg.display.features
+            .filter((f) => f.included)
+            .slice(0, 4)
+            .map((f) => (
+              <li key={f.label} className="flex items-start gap-2 text-sm text-[#1F2A1F]">
+                <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#8F9E4F]/15 text-[#556036]">
+                  <Icon name="check" size={12} />
+                </span>
+                {f.label}
+              </li>
+            ))}
+        </ul>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 h-11 rounded-xl border border-[#ECEEE4] bg-white px-5 text-sm font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] transition"
+          >
+            Not now
+          </button>
+          <button
+            type="button"
+            onClick={onUpgrade}
+            className="flex-1 h-11 rounded-xl bg-[#8F9E4F] px-5 text-sm font-medium text-white hover:bg-[#556036] transition"
+          >
+            See plans
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Limit reached — offer add-on or upgrade
+// ─────────────────────────────────────────────────────────────────────────────
+
+function LimitReachedModal({
+  kind,
+  quota,
+  buying,
+  onClose,
+  onBuyAddon,
+  onUpgrade,
+}: {
+  kind: "service" | "experience";
+  quota: QuotaCheck;
+  buying: boolean;
+  onClose: () => void;
+  onBuyAddon: () => void;
+  onUpgrade: () => void;
+}) {
+  const kindLabel = kind === "service" ? "services" : "experiences";
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md rounded-2xl bg-white border border-[#ECEEE4] shadow-lg p-6"
+      >
+        <div className="text-3xl mb-3" aria-hidden>📦</div>
+        <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-2">
+          {kindLabel.charAt(0).toUpperCase() + kindLabel.slice(1)} limit reached
+        </h2>
+        <p className="text-sm text-[#3F4A35] mb-1">
+          You&apos;re using {quota.used} of {quota.limit ?? "∞"} listings on your current plan.
+        </p>
+        {quota.bonusCredits > 0 && (
+          <p className="text-xs text-[#6F7A5A] mb-3">
+            Including {quota.bonusCredits} extra slots you&apos;ve purchased.
+          </p>
+        )}
+        <p className="text-sm text-[#1F2A1F] mb-4">
+          Buy one more slot for <strong>{formatPrice(EXTRA_LISTING.price)}</strong> or upgrade to a bigger plan.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            type="button"
+            onClick={onBuyAddon}
+            disabled={buying}
+            className={cx(
+              "flex-1 h-11 rounded-xl bg-[#8F9E4F] px-5 text-sm font-medium text-white hover:bg-[#556036] transition",
+              buying && "opacity-70 cursor-wait"
+            )}
+          >
+            {buying ? "Opening Stripe…" : `+1 slot for ${formatPrice(EXTRA_LISTING.price)}`}
+          </button>
+          <button
+            type="button"
+            onClick={onUpgrade}
+            className="flex-1 h-11 rounded-xl border border-[#1F2A1F] bg-white px-5 text-sm font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] transition"
+          >
+            Switch plan
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="block mx-auto mt-3 text-xs text-[#6F7A5A] underline hover:text-[#1F2A1F]"
+        >
+          Not now
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function cx(...a: Array<string | false | undefined | null>) {
+  return a.filter(Boolean).join(" ");
 }

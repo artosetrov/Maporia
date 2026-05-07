@@ -87,7 +87,7 @@ export default function ExplorePage() {
 
   // Calculate locked premium places for Haunted Gem indexing
   const defaultUserAccess: UserAccess = access ?? { 
-    role: "guest", 
+    role: "guest", plan: "free",
     hasPremium: false, 
     isAdmin: false 
   };
@@ -1437,7 +1437,7 @@ function MapView({
 }) {
   const isDesktop = useIsDesktop();
   const { openPremiumLocation, closeAuthModal, closePremiumModal, modalOpen, modalPlaceTitle, authModalOpen, authRedirectPath, authModalVariant } = usePremiumGate();
-  const defaultAccess: UserAccess = userAccess ?? { role: "guest", hasPremium: false, isAdmin: false };
+  const defaultAccess: UserAccess = userAccess ?? { role: "guest", hasPremium: false, isAdmin: false, plan: "free" };
   const [internalSelectedPlaceId, setInternalSelectedPlaceId] = useState<string | null>(null);
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);

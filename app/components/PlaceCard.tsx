@@ -464,7 +464,7 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
   // Unused - userAccess is passed directly to canAccessPlace
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _defaultUserAccess: UserAccess = userAccess ?? { 
-    role: "guest", 
+    role: "guest", plan: "free",
     hasPremium: false, 
     isAdmin: false 
   };

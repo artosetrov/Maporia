@@ -2,10 +2,19 @@
 
 import Link from "next/link";
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+
+type HomeKind = "location" | "service" | "experience";
+
+const HOME_TABS: { id: HomeKind; label: string; emoji: string; isNew?: boolean }[] = [
+  { id: "location", label: "Locations", emoji: "📍" },
+  { id: "experience", label: "Experiences", emoji: "✨", isNew: true },
+  { id: "service", label: "Services", emoji: "🛠", isNew: true },
+];
 import { useAuthRedirect } from "./hooks/useAuthRedirect";
 import TopBar from "./components/TopBar";
 import HomeSection from "./components/HomeSection";
+import Pill from "./components/Pill";
 import { ActiveFilters } from "./components/FiltersModal";
 // Heavy modals — only loaded when the user actually opens them.
 // Same pattern is already used on /map; this keeps the home-page main
@@ -25,11 +34,36 @@ import { useUserAccessContext } from "./contexts/UserAccessContext";
 import { SectionErrorBoundary } from "./components/SectionErrorBoundary";
 import { sanitizePostgrestValue } from "./utils";
 import { buildCityRadiusFilter, getCityCoords } from "./lib/cityRadius";
+import { canUserCreate } from "./lib/access";
+import Icon from "./components/Icon";
 
 export default function HomePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { redirectToAuth } = useAuthRedirect();
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+
+  // Active home tab — управляется через ?tab=services|experiences|locations
+  const tabParam = searchParams?.get("tab");
+  const activeKind: HomeKind =
+    tabParam === "services" ? "service" :
+    tabParam === "experiences" ? "experience" :
+    "location";
+
+  // Для service/experience узнаём, есть ли вообще такие карточки в БД.
+  // null = ещё не проверили, true = пусто, false = есть.
+  // Для location всегда false (там 292+ записи), не делаем лишний запрос.
+  const [kindIsEmpty, setKindIsEmpty] = useState<boolean | null>(null);
+
+  function setActiveKind(kind: HomeKind) {
+    const url = new URL(window.location.href);
+    if (kind === "location") {
+      url.searchParams.delete("tab");
+    } else {
+      url.searchParams.set("tab", kind === "service" ? "services" : "experiences");
+    }
+    router.replace(`${url.pathname}${url.search}`);
+  }
   
   // Search and filter state
   const [searchValue, setSearchValue] = useState("");
@@ -93,6 +127,36 @@ export default function HomePage() {
       console.error('[HomePage] Supabase configuration is missing. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.');
     }
   }, []);
+
+  // Проверяем «есть ли вообще карточки этого kind'а». Дешёвый count(*).
+  // Только для service / experience, потому что location всегда непустой.
+  useEffect(() => {
+    if (activeKind === "location") {
+      setKindIsEmpty(false);
+      return;
+    }
+    let cancelled = false;
+    setKindIsEmpty(null); // показываем секции (skeletons), пока считаем
+    (async () => {
+      try {
+        const { count, error } = await supabase
+          .from("places")
+          .select("id", { count: "exact", head: true })
+          .eq("kind", activeKind)
+          .eq("is_hidden", false);
+        if (cancelled) return;
+        if (error) {
+          // Не блокируем UI — показываем секции, они сами справятся.
+          setKindIsEmpty(false);
+          return;
+        }
+        setKindIsEmpty((count ?? 0) === 0);
+      } catch {
+        if (!cancelled) setKindIsEmpty(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeKind]);
 
   // Lazy loader for `placesForTags`. Previously this dragged in the FULL
   // places table (no LIMIT) on every home-page mount — for sites with
@@ -495,7 +559,47 @@ export default function HomePage() {
       />
 
       <div className="flex-1 pt-[64px]">
-        <div 
+        {/* Airbnb-style tabs: Locations / Experiences / Services */}
+        <div className="border-b border-[#ECEEE4] bg-[#FAFAF7] sticky top-[64px] z-20">
+          <div
+            className="mx-auto max-w-[1920px]"
+            style={{
+              paddingLeft: 'var(--home-page-padding, 16px)',
+              paddingRight: 'var(--home-page-padding, 16px)',
+            }}
+          >
+            <div className="flex gap-2 overflow-x-auto py-2 sm:py-3">
+              {HOME_TABS.map((tab) => {
+                const isActive = activeKind === tab.id;
+                return (
+                  <Pill
+                    key={tab.id}
+                    variant="tab"
+                    active={isActive}
+                    onClick={() => setActiveKind(tab.id)}
+                  >
+                    <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                      <span aria-hidden>{tab.emoji}</span>
+                      <span>{tab.label}</span>
+                      {tab.isNew && (
+                        <span
+                          className={
+                            "ml-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide " +
+                            (isActive ? "bg-white text-[#556036]" : "bg-[#D6B25E] text-white")
+                          }
+                        >
+                          New
+                        </span>
+                      )}
+                    </span>
+                  </Pill>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div
           className="mx-auto pb-6 lg:py-8 max-w-full lg:max-w-[960px] lg:max-w-[1120px] lg:max-w-[1440px] lg:max-w-[1920px]"
           style={{
             paddingLeft: 'var(--home-page-padding, 16px)',
@@ -507,23 +611,116 @@ export default function HomePage() {
             Supabase fetch in parallel, independent of auth, so the user sees
             real content as soon as the cheapest section returns instead of
             waiting for the full auth round-trip.
+
+            kindFilter передаём только если это не Locations — для location
+            оставляем legacy-поведение (показываем все типы), потому что
+            services/experiences пока почти нет и их карточки могут попадать
+            и в общую ленту через текущий ?tab=… отсутствует.
+            При активных вкладках Services/Experiences секции жёстко
+            фильтруются по kind.
           */}
-          {sectionsToRender.map((section, index) => (
-            <SectionErrorBoundary key={section.title}>
-              <HomeSection
-                section={section}
-                userId={userId}
-                userAccess={access}
-                favorites={favorites}
-                onToggleFavorite={toggleFavorite}
-                onTagClick={handleTagClick}
-                isFirst={index === 0}
-              />
-            </SectionErrorBoundary>
-          ))}
+          {kindIsEmpty === true ? (
+            <EmptyKindState
+              kind={activeKind as Exclude<HomeKind, "location">}
+              canCreate={canUserCreate(access, activeKind)}
+              onCreate={() =>
+                router.push(`/add?kind=${activeKind}&returnTo=${encodeURIComponent(`/?tab=${activeKind === "service" ? "services" : "experiences"}`)}`)
+              }
+              onUpgrade={() => router.push("/pricing")}
+            />
+          ) : (
+            sectionsToRender.map((section, index) => (
+              <SectionErrorBoundary key={`${section.title}-${activeKind}`}>
+                <HomeSection
+                  section={section}
+                  userId={userId}
+                  userAccess={access}
+                  favorites={favorites}
+                  onToggleFavorite={toggleFavorite}
+                  onTagClick={handleTagClick}
+                  isFirst={index === 0}
+                  kindFilter={activeKind === "location" ? undefined : activeKind}
+                />
+              </SectionErrorBoundary>
+            ))
+          )}
         </div>
       </div>
 
     </main>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Empty state для пустых табов Services/Experiences.
+// Если creator → CTA «Создать», если зритель → CTA «Тарифы».
+// ─────────────────────────────────────────────────────────────────────────────
+
+function EmptyKindState({
+  kind,
+  canCreate,
+  onCreate,
+  onUpgrade,
+}: {
+  kind: "service" | "experience";
+  canCreate: boolean;
+  onCreate: () => void;
+  onUpgrade: () => void;
+}) {
+  const config = kind === "service"
+    ? {
+        emoji: "🛠",
+        title: "No services yet",
+        body: "Maporia is just starting to fill up with services — photographers, instructors, makers. Be the first to publish your service in your city.",
+        creatorCta: "Create your first service",
+        viewerCta: "Become a provider — Pro Service",
+      }
+    : {
+        emoji: "✨",
+        title: "No experiences yet",
+        body: "Tours, workshops, food walks — all coming soon. If you run experiences, this is your chance to be first.",
+        creatorCta: "Create an experience",
+        viewerCta: "Become a host — Pro Experience",
+      };
+
+  return (
+    <div className="py-12 sm:py-20 px-4">
+      <div className="max-w-xl mx-auto text-center">
+        <div className="text-6xl sm:text-7xl mb-6" aria-hidden>
+          {config.emoji}
+        </div>
+        <h2 className="font-fraunces text-2xl sm:text-3xl font-semibold text-[#1F2A1F] mb-3">
+          {config.title}
+        </h2>
+        <p className="text-[15px] text-[#6F7A5A] mb-8 leading-relaxed">
+          {config.body}
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          {canCreate ? (
+            <button
+              type="button"
+              onClick={onCreate}
+              className="inline-flex items-center justify-center h-11 px-6 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] transition"
+            >
+              <Icon name="add" size={18} className="mr-2" />
+              {config.creatorCta}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onUpgrade}
+              className="inline-flex items-center justify-center h-11 px-6 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] transition"
+            >
+              {config.viewerCta}
+            </button>
+          )}
+        </div>
+        <div className="mt-10 pt-8 border-t border-[#ECEEE4]">
+          <p className="text-xs text-[#A8B096]">
+            Maporia is a directory — deals between buyers and providers happen directly.
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }

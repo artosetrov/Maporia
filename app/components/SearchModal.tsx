@@ -8,13 +8,25 @@ import { useIsDesktop } from "../hooks/useIsDesktop";
 import { getCitiesWithPlaces, type City } from "../lib/cities";
 import { supabase } from "../lib/supabase";
 import Icon from "./Icon";
-import { sanitizePostgrestValue } from "../utils";
+import { sanitizePostgrestValue, tokenizeQuery, buildTokenSearchExpr } from "../utils";
 import {
   CITY_RADIUS_MILES,
   buildCityRadiusFilter,
   isPlaceWithinCityRadius,
   populateCityCoordsCache,
 } from "../lib/cityRadius";
+
+// Fields searched for free-text token matching across the places table.
+// Keep in sync with the columns selected in performSearch below.
+const PLACE_SEARCH_FIELDS = [
+  "title",
+  "description",
+  "country",
+  "city",
+  "city_name_cached",
+  "address",
+  "kind",
+] as const;
 
 // Component for search result item with image error handling
 function SearchResultItem({ 
@@ -298,12 +310,21 @@ export default function SearchModal({
         countQuery = countQuery.overlaps("categories", tags);
       }
 
-      // Filter by query (title, description, country)
+      // Filter by query — token-based: place matches if ANY token appears in
+      // ANY of the searched fields. This makes "Cap's Restaurant" still match
+      // a place named "Cap's Place" via the "cap" token.
       if (searchQuery.trim()) {
-        const s = searchQuery.trim();
-        countQuery = countQuery.or(
-          `title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`
-        );
+        const tokens = tokenizeQuery(searchQuery);
+        if (tokens.length > 0) {
+          const expr = buildTokenSearchExpr(tokens, [...PLACE_SEARCH_FIELDS]);
+          if (expr) countQuery = countQuery.or(expr);
+        } else {
+          // Fallback: query consisted only of punctuation / 1-char tokens.
+          const s = sanitizePostgrestValue(searchQuery.trim());
+          countQuery = countQuery.or(
+            `title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`
+          );
+        }
       }
 
       const { count, error } = await countQuery;
@@ -366,12 +387,27 @@ export default function SearchModal({
       // Get search results for display
       const results: SearchResult[] = [];
 
-      // Search cities
+      const tokens = tokenizeQuery(searchQuery);
+      const fullQ = searchQuery.trim().toLowerCase();
+      // Normalize a string the same way the tokenizer normalizes the query,
+      // so client-side substring matches stay consistent with what the DB
+      // ILIKE returned (e.g. "cap_s" must match "cap's place").
+      const normalizeForMatch = (s: string): string =>
+        s.toLowerCase().replace(/[''`‘’]/g, "_");
+
+      // Search cities — match if ANY token appears in the city name.
+      // Falls back to substring of full query when tokenization yields nothing
+      // (e.g. user typed "S." which is below the min-len threshold).
       if (searchQuery.trim()) {
-        const matchingCities = cities.filter(c => 
-          c.name.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-        matchingCities.forEach(city => {
+        const matchingCities = cities.filter((c) => {
+          const name = normalizeForMatch(c.name);
+          if (tokens.length === 0) return name.includes(normalizeForMatch(fullQ));
+          // Token may contain `_` as single-char wildcard. For client-side
+          // matching we treat `_` literally — it'll still match the
+          // normalized apostrophe in the haystack.
+          return tokens.some((t) => name.includes(t));
+        });
+        matchingCities.forEach((city) => {
           results.push({
             type: "city",
             id: city.id,
@@ -382,36 +418,92 @@ export default function SearchModal({
         });
       }
 
-      // Search places (limit to 10 for display)
+      // Search places — token-based OR across multiple fields, then ranked
+      // on the client by number of unique tokens hit. This makes
+      // "Cap's Restaurant" still surface "Cap's Place" via the "cap" token.
       if (searchQuery.trim()) {
         let placesQuery = supabase
           .from("places")
-          .select("id,title,city,city_name_cached,cover_url,lat,lng")
-          .or(`title.ilike.%${sanitizePostgrestValue(searchQuery.trim())}%,description.ilike.%${sanitizePostgrestValue(searchQuery.trim())}%`);
+          .select(
+            "id,title,description,city,city_name_cached,country,address,kind,categories,cover_url,lat,lng",
+          );
+
+        if (tokens.length > 0) {
+          const expr = buildTokenSearchExpr(tokens, [...PLACE_SEARCH_FIELDS]);
+          if (expr) placesQuery = placesQuery.or(expr);
+        } else {
+          const s = sanitizePostgrestValue(searchQuery.trim());
+          placesQuery = placesQuery.or(
+            `title.ilike.%${s}%,description.ilike.%${s}%`,
+          );
+        }
 
         // Apply city radius filter at DB level
         if (city) {
           const coords = getCityLatLng(city);
-          placesQuery = placesQuery.or(buildCityRadiusFilter(city, coords.lat, coords.lng));
+          placesQuery = placesQuery.or(
+            buildCityRadiusFilter(city, coords.lat, coords.lng),
+          );
         }
 
-        placesQuery = placesQuery.limit(20);
+        // Pull a wider candidate set so client-side ranking has material to work with.
+        placesQuery = placesQuery.limit(50);
 
         const { data: placesData } = await placesQuery;
-        if (placesData) {
-          const filtered = placesData;
-          filtered.slice(0, 10).forEach((place: any) => {
+        if (placesData && placesData.length > 0) {
+          const normFullQ = normalizeForMatch(fullQ);
+          const ranked = (placesData as any[])
+            .map((place) => {
+              const title = normalizeForMatch(String(place.title ?? ""));
+              const haystack = [
+                place.title,
+                place.description,
+                place.country,
+                place.city,
+                place.city_name_cached,
+                place.address,
+                place.kind,
+                ...(Array.isArray(place.categories) ? place.categories : []),
+              ]
+                .filter((v) => typeof v === "string" && v.length > 0)
+                .map((v) => normalizeForMatch(String(v)))
+                .join(" || ");
+
+              let tokenHits = 0;
+              let titleHits = 0;
+              for (const t of tokens) {
+                if (haystack.includes(t)) tokenHits += 1;
+                if (title.includes(t)) titleHits += 1;
+              }
+
+              // Bonus weighting: exact title match > prefix match > title hits.
+              const exactBonus = title === normFullQ ? 100 : 0;
+              const prefixBonus =
+                normFullQ && title.startsWith(normFullQ) ? 25 : 0;
+              const score =
+                tokenHits * 10 + titleHits * 2 + prefixBonus + exactBonus;
+
+              return { place, score, tokenHits };
+            })
+            // Drop rows that didn't match any token at all (DB returned them
+            // only because of the city-radius .or() branch, not the text one).
+            .filter((r) => tokens.length === 0 || r.tokenHits > 0)
+            .sort((a, b) => b.score - a.score);
+
+          ranked.slice(0, 10).forEach(({ place }) => {
             results.push({
               type: "place",
               id: place.id,
               title: typeof place.title === "string" ? place.title : "",
-              subtitle: typeof place.city_name_cached === "string"
-                ? place.city_name_cached
-                : typeof place.city === "string"
-                  ? place.city
-                  : "",
+              subtitle:
+                typeof place.city_name_cached === "string"
+                  ? place.city_name_cached
+                  : typeof place.city === "string"
+                    ? place.city
+                    : "",
               icon: "photo",
-              coverUrl: typeof place.cover_url === "string" ? place.cover_url : null,
+              coverUrl:
+                typeof place.cover_url === "string" ? place.cover_url : null,
             });
           });
         }

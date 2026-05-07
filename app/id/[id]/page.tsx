@@ -990,7 +990,13 @@ export default function PlacePage(props: PageProps) {
   }
 
   if (isLocked) {
-    const pseudoTitle = `Haunted Gem #${getPseudoPlaceNumber(place.id)}`;
+    // pseudo-title зависит от kind: для location у нас исторически
+    // «Haunted Gem», для service/experience — нейтральнее.
+    const num = getPseudoPlaceNumber(place.id);
+    const pseudoTitle =
+      place.kind === "service"   ? `Locked Service #${num}` :
+      place.kind === "experience"? `Locked Experience #${num}` :
+                                   `Haunted Gem #${num}`;
     return (
       <main className="min-h-screen bg-white">
         <TopBar
@@ -1003,17 +1009,18 @@ export default function PlacePage(props: PageProps) {
         <div className="relative min-h-[60vh] flex items-center justify-center p-6">
           {/* Blurred cover image in background */}
           {place.cover_url && (
-            <div 
+            <div
               className="absolute inset-0 bg-cover bg-center opacity-20 blur-2xl scale-110"
               style={{ backgroundImage: `url(${place.cover_url})` }}
             />
           )}
-          
+
           {/* Locked content */}
           <div className="relative z-10 max-w-md w-full">
             <LockedPlaceOverlay
               placeTitle={pseudoTitle}
               coverUrl={place.cover_url || undefined}
+              onUpgradeClick={() => router.push("/pricing")}
             />
           </div>
         </div>

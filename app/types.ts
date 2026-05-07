@@ -30,7 +30,36 @@ export type Profile = {
   // User interests for recommendations
   favorite_categories?: string[] | null;
   favorite_tags?: string[] | null;
+  // Subscription / monetization
+  plan?: Plan | null;
+  plan_period?: PlanPeriod | null;
+  plan_renews_at?: string | null;
+  stripe_customer_id?: string | null;
+  /** Докупленные слоты сверх квоты тарифа ($2.99 за каждую). */
+  bonus_listing_credits?: number | null;
 };
+
+/**
+ * Тарифы Maporia.
+ * - free: регистрация, видит только публичные локации.
+ * - premium_viewer: $-флаг для потребителей — открывает скрытые локации.
+ * - creator_service / creator_experience / creator_all: для поставщиков.
+ *   Включают всё premium_viewer + право публикации соответствующих kind'ов.
+ */
+export type Plan =
+  | 'free'
+  | 'premium_viewer'
+  | 'creator_service'
+  | 'creator_experience'
+  | 'creator_all';
+
+export type PlanPeriod = 'month' | 'year' | 'lifetime';
+
+/** Тариф, который реально продаётся (free не продаётся). */
+export type PaidPlan = Exclude<Plan, 'free'>;
+
+/** Любой creator-тариф — даёт право публиковать. */
+export type CreatorPlan = 'creator_service' | 'creator_experience' | 'creator_all';
 
 /**
  * Place from the places table
@@ -166,6 +195,8 @@ export type PlaceListItem = {
   is_premium?: boolean | null;
   premium_only?: boolean | null;
   visibility?: string | null;
+  // Тип карточки (для маркеров на карте и фильтра)
+  kind?: 'location' | 'service' | 'experience' | null;
   // Computed fields (added by some queries)
   commentsCount?: number;
   likesCount?: number;

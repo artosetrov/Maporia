@@ -21,6 +21,7 @@ import { useUserAccessContext } from "../../contexts/UserAccessContext";
 import { useAuthRedirect } from "../../hooks/useAuthRedirect";
 import { useIsDesktop } from "../../hooks/useIsDesktop";
 import { isUserAdmin, isPlacePremium, canUserViewPlace, canUserAddPlace, type UserAccess } from "../../lib/access";
+import { PLAN_CONFIG, PLAN_ORDER, EXTRA_LISTING, formatPrice } from "../../lib/plans";
 import { DEFAULT_CITY, getTagEmoji, stripTagEmoji } from "../../constants";
 const PremiumUpsellModal = nextDynamic(() => import("../../components/PremiumUpsellModal"), { ssr: false });
 import PremiumBadge from "../../components/PremiumBadge";
@@ -139,7 +140,7 @@ function ProfileInner() {
   const pathname = usePathname();
   const { redirectToAuth, replaceToAuth } = useAuthRedirect();
 
-  const [section, setSection] = useState<"about" | "trips" | "added" | "activity" | "users" | "elements" | "history">("about");
+  const [section, setSection] = useState<"about" | "trips" | "added" | "activity" | "users" | "elements" | "history" | "premium">("about");
   const [profileLoading, setProfileLoading] = useState(true);
   const [extrasLoading, setExtrasLoading] = useState(true);
   const loading = profileLoading || extrasLoading;
@@ -349,7 +350,7 @@ function ProfileInner() {
   // Handle section parameter from URL
   useEffect(() => {
     const sectionParam = searchParams?.get("section");
-    if (sectionParam && ["about", "trips", "added", "activity", "users", "elements", "history"].includes(sectionParam)) {
+    if (sectionParam && ["about", "trips", "added", "activity", "users", "elements", "history", "premium"].includes(sectionParam)) {
       setSection(sectionParam as typeof section);
     }
   }, [searchParams]);
@@ -930,9 +931,10 @@ function ProfileInner() {
               </button>
               <h1 className="font-semibold text-[#1F2A1F] leading-none" style={{ fontSize: '24px' }}>
                 {section === "trips" ? "My favorites" :
-                 section === "added" ? "Added places" :
+                 section === "added" ? "Added" :
                  section === "history" ? "History" :
                  section === "activity" ? "Activity" :
+                 section === "premium" ? "Premium" :
                  section === "users" ? "Users" :
                  section === "elements" ? "Elements" : "Profile"}
               </h1>
@@ -1058,7 +1060,24 @@ function ProfileInner() {
                   )}
                 >
                   <Icon name="add" size={24} className="flex-shrink-0" />
-                  <span>Added places</span>
+                  <span>Added</span>
+                </button>
+                <button
+                  onClick={() => setSection("premium")}
+                  className={cx(
+                    "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition",
+                    section === "premium"
+                      ? "bg-[#FAFAF7] text-[#1F2A1F] font-medium"
+                      : "text-[#6F7A5A] hover:bg-[#FAFAF7]"
+                  )}
+                >
+                  <Icon name="star" size={24} className="flex-shrink-0" />
+                  <span className="flex-1">Premium</span>
+                  {access?.plan && access.plan !== "free" && (
+                    <span className="ml-auto text-[10px] uppercase tracking-wide bg-[#8F9E4F] text-white rounded-full px-2 py-0.5">
+                      Active
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => setSection("history")}
@@ -1181,6 +1200,9 @@ function ProfileInner() {
               {section === "activity" && (
                 <ActivitySection activity={activity} loading={loading} profile={profile} displayName={displayName} />
               )}
+              {section === "premium" && (
+                <PremiumSection />
+              )}
               {section === "users" && isAdmin && (
                 <UsersSection loading={loading} currentUserId={userId} />
               )}
@@ -1193,7 +1215,7 @@ function ProfileInner() {
 
         {/* Mobile Layout */}
         <div className="lg:hidden">
-          {section === "trips" || section === "added" || section === "history" || section === "activity" || (section === "users" && isAdmin) || (section === "elements" && isAdmin) ? (
+          {section === "trips" || section === "added" || section === "history" || section === "activity" || section === "premium" || (section === "users" && isAdmin) || (section === "elements" && isAdmin) ? (
             // Show section content on mobile
             <div 
               className={`px-6 py-6 ${section === "activity" || section === "added" || (section === "users" && isAdmin) || (section === "elements" && isAdmin) ? "pt-[48px]" : "pt-[80px]"}`}
@@ -1232,6 +1254,9 @@ function ProfileInner() {
               )}
               {section === "activity" && (
                 <ActivitySection activity={activity} loading={loading} profile={profile} displayName={displayName} />
+              )}
+              {section === "premium" && (
+                <PremiumSection />
               )}
               {section === "users" && isAdmin && (
                 <UsersSection loading={loading} currentUserId={userId} />
@@ -1456,7 +1481,7 @@ function ProfileInner() {
                           </div>
                         )}
                       </div>
-                      <div className="text-sm font-medium text-[#1F2A1F] text-center">Added places</div>
+                      <div className="text-sm font-medium text-[#1F2A1F] text-center">Added</div>
                     </button>
 
                     {/* History */}
@@ -1881,7 +1906,7 @@ function AboutSection({
                 </div>
               )}
             </div>
-            <div className="text-sm font-medium text-[#1F2A1F] text-center">Added places</div>
+            <div className="text-sm font-medium text-[#1F2A1F] text-center">Added</div>
           </button>
 
           {/* History */}
@@ -2106,8 +2131,11 @@ function TripsSection({
   if (places.length === 0) {
     const hasFilters = searchValue || (selectedCity && selectedCity !== DEFAULT_CITY) || (activeFilters?.categories && activeFilters.categories.length > 0);
     return (
-      <div className="text-center py-16 text-[#6F7A5A]">
-        {hasFilters ? "No places match your filters" : "No saved places yet"}
+      <div>
+        <h1 className="hidden lg:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">My favorites</h1>
+        <div className="text-center py-16 text-[#6F7A5A]">
+          {hasFilters ? "No places match your filters" : "No saved places yet"}
+        </div>
       </div>
     );
   }
@@ -2300,7 +2328,7 @@ function AddedPlacesSection({
       <div>
         {/* Header with title and Add place button */}
         <div className="hidden lg:flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F]">Added places</h1>
+          <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F]">Added</h1>
           {canAddPlace && (
             <Link
               href={`/add?returnTo=${encodeURIComponent(pathname)}`}
@@ -2312,9 +2340,29 @@ function AddedPlacesSection({
           )}
         </div>
 
-        <div className="text-center py-16 text-[#6F7A5A]">
-          {hasFilters ? "No places match your filters" : "You haven't added any places yet"}
-        </div>
+        {hasFilters ? (
+          <div className="text-center py-16 text-[#6F7A5A]">No places match your filters</div>
+        ) : canAddPlace ? (
+          <div className="text-center py-16 text-[#6F7A5A]">You haven&apos;t added any places yet</div>
+        ) : (
+          // No paid plan — send the user to the Premium tab to upgrade.
+          <div className="max-w-md mx-auto rounded-2xl border border-[#ECEEE4] bg-white p-6 text-center">
+            <div className="text-3xl mb-3" aria-hidden>🗝</div>
+            <div className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-2">
+              You need a plan to add places
+            </div>
+            <p className="text-sm text-[#6F7A5A] mb-5">
+              Premium unlocks creating locations and access to hidden places. Pro plans also let you publish services and experiences.
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push(`${pathname}?section=premium`)}
+              className="inline-flex items-center justify-center h-11 px-5 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] transition"
+            >
+              See Premium
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -2323,7 +2371,7 @@ function AddedPlacesSection({
     <div>
       {/* Header with title and Add place button */}
       <div className="hidden lg:flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F]">Added places</h1>
+        <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F]">Added</h1>
         {canAddPlace && (
             <Link
               href={`/add?returnTo=${encodeURIComponent(pathname)}`}
@@ -3717,5 +3765,226 @@ export default function ProfilePage() {
     }>
       <ProfileInner />
     </Suspense>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PremiumSection — статус подписки + апгрейд + cancel через Stripe
+// Источник правды по тарифам — app/lib/plans.ts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function PremiumSection() {
+  const router = useRouter();
+  const { user, profile, access } = useUserAccessContext();
+  const [opening, setOpening] = useState(false);
+  const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const currentPlan = access?.plan ?? "free";
+  const isPaid = currentPlan !== "free";
+
+  async function startCheckout(planId: string) {
+    setError(null);
+    if (!user) {
+      router.push("/auth?next=/profile?section=premium");
+      return;
+    }
+    if (currentPlan === planId) {
+      setError("You already have this plan.");
+      return;
+    }
+    setCheckoutPlan(planId);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) {
+        router.push("/auth?next=/profile?section=premium");
+        return;
+      }
+      const cfg = PLAN_CONFIG[planId as keyof typeof PLAN_CONFIG];
+      const body: Record<string, string> = { access_token: token, plan: planId };
+      if (cfg.billing.kind === "subscription") body.period = cfg.billing.period;
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
+        setError(data.error || "Couldn't start checkout");
+        setCheckoutPlan(null);
+        return;
+      }
+      window.location.href = data.url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't start checkout");
+      setCheckoutPlan(null);
+    }
+  }
+
+  async function openPortal() {
+    setError(null);
+    setOpening(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) {
+        router.push("/auth?next=/profile?section=premium");
+        return;
+      }
+      const res = await fetch("/api/stripe/portal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_token: token }),
+      });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
+        setError(data.error || "Couldn't open billing portal");
+        setOpening(false);
+        return;
+      }
+      window.location.href = data.url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't open billing portal");
+      setOpening(false);
+    }
+  }
+
+  const currentCfg = isPaid ? PLAN_CONFIG[currentPlan as keyof typeof PLAN_CONFIG] : null;
+  const isLifetime = profile?.plan_period === "lifetime";
+
+  return (
+    <div className="space-y-6">
+      <h1 className="hidden lg:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Premium</h1>
+
+      {/* Current plan */}
+      <section className="rounded-2xl border border-[#ECEEE4] bg-white p-5 sm:p-6">
+        <div className="text-xs uppercase tracking-wide text-[#6F7A5A] mb-2">Current plan</div>
+        {currentCfg ? (
+          <>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="text-2xl" aria-hidden>{currentCfg.display.emoji}</div>
+              <div>
+                <div className="font-fraunces text-xl font-semibold text-[#1F2A1F]">{currentCfg.display.name}</div>
+                <div className="text-sm text-[#6F7A5A]">{currentCfg.display.tagline}</div>
+              </div>
+              <span className="ml-auto rounded-full bg-[#8F9E4F]/15 text-[#556036] text-[11px] font-semibold uppercase tracking-wide px-2 py-1">
+                Active
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+              <div>
+                <div className="text-xs text-[#A8B096] mb-1">Billing</div>
+                <div className="text-[#1F2A1F]">
+                  {profile?.plan_period === "year" ? "Annual"
+                   : profile?.plan_period === "month" ? "Monthly"
+                   : profile?.plan_period === "lifetime" ? "Lifetime (one-time)"
+                   : "—"}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-[#A8B096] mb-1">Next charge</div>
+                <div className="text-[#1F2A1F]">
+                  {isLifetime ? "Never (one-time)"
+                   : profile?.plan_renews_at ? new Date(profile.plan_renews_at).toLocaleDateString("en-US")
+                   : "—"}
+                </div>
+              </div>
+            </div>
+            {!isLifetime && (
+              <button
+                type="button"
+                onClick={openPortal}
+                disabled={opening}
+                className={cx(
+                  "h-11 px-5 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] transition",
+                  opening && "opacity-70 cursor-wait"
+                )}
+              >
+                {opening ? "Opening Stripe…" : "Manage / cancel"}
+              </button>
+            )}
+          </>
+        ) : (
+          <div className="text-sm text-[#3F4A35]">
+            You&apos;re on the free plan. Pick a plan below to unlock hidden locations or start publishing services and experiences.
+          </div>
+        )}
+        {error && (
+          <div className="mt-3 rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/5 p-3 text-sm text-[#C96A5B]">{error}</div>
+        )}
+      </section>
+
+      {/* Available plans */}
+      <section>
+        <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-3">
+          {isPaid ? "Switch plan" : "Plans"}
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {PLAN_ORDER.map((id) => {
+            const cfg = PLAN_CONFIG[id];
+            const isCurrent = currentPlan === id;
+            const isLoading = checkoutPlan === id;
+            return (
+              <div
+                key={id}
+                className={cx(
+                  "rounded-2xl border bg-white p-4 flex flex-col",
+                  cfg.display.highlighted ? "border-[#8F9E4F]" : "border-[#ECEEE4]"
+                )}
+              >
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="text-2xl" aria-hidden>{cfg.display.emoji}</div>
+                  <div className="flex-1">
+                    <div className="font-fraunces text-lg font-semibold text-[#1F2A1F]">{cfg.display.name}</div>
+                    <div className="text-xs text-[#6F7A5A]">{cfg.display.tagline}</div>
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-1 mb-3">
+                  <span className="font-fraunces text-2xl font-semibold text-[#1F2A1F]">{formatPrice(cfg.display.price)}</span>
+                  <span className="text-sm text-[#6F7A5A]">{cfg.display.priceSuffix}</span>
+                </div>
+                <ul className="space-y-1 text-xs text-[#3F4A35] mb-4 flex-1">
+                  {cfg.display.features.filter((f) => f.included).slice(0, 3).map((f) => (
+                    <li key={f.label} className="flex items-start gap-1.5">
+                      <span className="mt-0.5 text-[#8F9E4F]">✓</span>
+                      <span>{f.label}</span>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => startCheckout(id)}
+                  disabled={isCurrent || isLoading}
+                  className={cx(
+                    "w-full h-10 rounded-xl text-sm font-medium transition",
+                    isCurrent
+                      ? "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
+                      : cfg.display.highlighted
+                      ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
+                      : "border border-[#8F9E4F] bg-white text-[#556036] hover:bg-[#FAFAF7]",
+                    isLoading && "opacity-70 cursor-wait"
+                  )}
+                >
+                  {isCurrent ? "Current" : isLoading ? "Loading…" : cfg.billing.kind === "one_time" ? "Buy" : "Subscribe"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Add-on */}
+      <section className="rounded-2xl border border-[#ECEEE4] bg-white p-5">
+        <div className="font-fraunces font-semibold text-[#1F2A1F] mb-1">+1 slot: {formatPrice(EXTRA_LISTING.price)}</div>
+        <p className="text-sm text-[#6F7A5A]">
+          One extra listing over your plan&apos;s limit. Purchased right from the editor when you hit the cap.
+        </p>
+      </section>
+
+      <p className="text-xs text-[#A8B096] text-center">
+        All payments are processed by Stripe. Prices exclude taxes; Maporia is a directory — we don&apos;t process payments between buyers and providers.
+      </p>
+    </div>
   );
 }

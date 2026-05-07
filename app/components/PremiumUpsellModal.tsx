@@ -126,16 +126,18 @@ export default function PremiumUpsellModal({
 
     async function loadPremiumPlaces() {
       try {
-        // Load all places with cover_url (don't filter by access_level on DB level)
-        // Filter client-side to catch all premium place variations
-        // The RLS policy "Everyone can view premium place covers" should allow this
-        // Only select fields that exist in the database: access_level and visibility
+        // Load premium places with cover_url, filtered server-side.
+        // Why: previously we pulled the latest 50 places and filtered client-side,
+        // but if no premium places fell into that window the slider was empty.
+        // Server-side OR filter on access_level/visibility avoids that truncation.
+        // Only filter on fields that actually exist in the DB.
         const { data: rawData, error } = await supabase
           .from("places")
           .select("id, cover_url, access_level, visibility")
           .not("cover_url", "is", null)
-          .limit(50) // Load more to filter client-side
-          .order("created_at", { ascending: false });
+          .or("access_level.eq.premium,visibility.eq.premium")
+          .order("created_at", { ascending: false })
+          .limit(20);
 
         const data = rawData as PlaceCoverRow[] | null;
         if (error) {

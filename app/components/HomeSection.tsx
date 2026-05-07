@@ -55,9 +55,15 @@ type HomeSectionProps = {
   onToggleFavorite?: (placeId: string, e: React.MouseEvent) => void;
   onTagClick?: (tag: string) => void;
   isFirst?: boolean;
+  /**
+   * Опциональный фильтр по типу карточки.
+   * Используется на главной при переключении табов Locations/Services/Experiences.
+   * Если не передан — секция показывает все типы (legacy behavior).
+   */
+  kindFilter?: "location" | "service" | "experience";
 };
 
-export default function HomeSection({ section, userId, favorites, userAccess, onToggleFavorite, onTagClick, isFirst = false }: HomeSectionProps) {
+export default function HomeSection({ section, userId, favorites, userAccess, onToggleFavorite, onTagClick, isFirst = false, kindFilter }: HomeSectionProps) {
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
   // Batch-loaded creator profiles: one IN(...) query per section instead of N
@@ -85,11 +91,12 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
             }
             return;
           }
-          const { data, error } = await supabase
+          let recentlyViewedQuery = supabase
             .from("places")
             .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility")
-            .in("id", recentlyViewedIds)
-            .limit(10);
+            .in("id", recentlyViewedIds);
+          if (kindFilter) recentlyViewedQuery = recentlyViewedQuery.eq("kind", kindFilter);
+          const { data, error } = await recentlyViewedQuery.limit(10);
           if (error) throw error;
           const placesMap = new Map((data || []).map((p: any) => [p.id, p]));
           const result = recentlyViewedIds
@@ -153,6 +160,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
           if (orParts.length > 0) {
             recQuery = recQuery.or(orParts.join(","));
           }
+          if (kindFilter) recQuery = recQuery.eq("kind", kindFilter);
           recQuery = recQuery.limit(40);
           const { data: allPlaces, error } = await recQuery;
           if (error) throw error;
@@ -233,6 +241,9 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
         if (section.tag) {
           query = query.contains("tags", [section.tag]);
         }
+        if (kindFilter) {
+          query = query.eq("kind", kindFilter);
+        }
         if (section.daysAgo) {
           const dateThreshold = new Date();
           dateThreshold.setDate(dateThreshold.getDate() - section.daysAgo);
@@ -256,7 +267,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
     })();
 
     return () => { cancelled = true; };
-  }, [section.title, section.city, section.tag, categoriesKey, section.daysAgo, section.sort, section.recentlyViewed, section.recommended, userId, userAccess, refreshKey]);
+  }, [section.title, section.city, section.tag, categoriesKey, section.daysAgo, section.sort, section.recentlyViewed, section.recommended, userId, userAccess, refreshKey, kindFilter]);
 
   // Helper function to calculate relevance score
   function calculateRelevanceScore(place: Place, favoriteCategories: string[], favoriteTags: string[]): number {
@@ -338,7 +349,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
 
   // Calculate locked premium places for Haunted Gem indexing
   const defaultUserAccess: UserAccess = userAccess ?? { 
-    role: "guest", 
+    role: "guest", plan: "free",
     hasPremium: false, 
     isAdmin: false 
   };

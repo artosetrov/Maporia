@@ -15,6 +15,13 @@ export type ActiveFilters = {
   premium?: boolean;
   hidden?: boolean;
   vibe?: boolean;
+  /**
+   * Фильтр по типу карточки. Пустой массив или undefined = все типы.
+   * Используется на /map: SQL .in('kind', kinds).
+   * На главной фильтр по kind управляется через табы (?tab=…) — он живёт
+   * отдельно от этого поля.
+   */
+  kinds?: ('location' | 'service' | 'experience')[];
   // Для обратной совместимости
   premiumOnly?: boolean;
 };
@@ -493,6 +500,47 @@ export default function FiltersModal({
               </button>
             </div>
           )}
+
+          {/* Kind Section — три типа карточек: Locations / Services / Experiences */}
+          <div>
+            <h3 className="text-xs font-semibold text-[#6F7A5A] uppercase tracking-wide mb-4">TYPE</h3>
+            <div className="grid grid-cols-3 gap-3">
+              {([
+                { value: "location",   emoji: "📍", label: "Locations" },
+                { value: "experience", emoji: "✨", label: "Experiences" },
+                { value: "service",    emoji: "🛠", label: "Services" },
+              ] as const).map((opt) => {
+                const isSelected = (draftFilters.kinds ?? []).includes(opt.value);
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() =>
+                      setDraftFilters((prev) => {
+                        const current = prev.kinds ?? [];
+                        return {
+                          ...prev,
+                          kinds: current.includes(opt.value)
+                            ? current.filter((k) => k !== opt.value)
+                            : [...current, opt.value],
+                        };
+                      })
+                    }
+                    className={`relative flex flex-col items-center justify-center px-2 py-4 rounded-xl border-2 transition-all ${
+                      isSelected
+                        ? "border-[#8F9E4F] bg-[#F4F6EF]"
+                        : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
+                    }`}
+                  >
+                    <span className="text-2xl mb-1.5">{opt.emoji}</span>
+                    <span className="text-sm font-medium text-[#1F2A1F] text-center leading-tight">{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-3 text-xs text-[#A8B096]">
+              Leave empty to show all types.
+            </p>
+          </div>
 
           {/* Category Section */}
           <div>

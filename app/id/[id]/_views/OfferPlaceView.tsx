@@ -64,11 +64,11 @@ type Props = {
 
 const PRICE_UNIT_LABEL: Record<string, string> = {
   fixed: "",
-  from: "от",
-  per_hour: "/ час",
-  per_person: "/ чел.",
-  per_day: "/ день",
-  per_session: "/ сеанс",
+  from: "from",
+  per_hour: "/ hr",
+  per_person: "/ person",
+  per_day: "/ day",
+  per_session: "/ session",
 };
 
 function formatPrice(amount: number | null | undefined, currency: string | null | undefined) {
@@ -87,30 +87,30 @@ function formatPrice(amount: number | null | undefined, currency: string | null 
 
 function formatDuration(minutes: number | null | undefined): string | null {
   if (!minutes || minutes <= 0) return null;
-  if (minutes < 60) return `${minutes} мин`;
+  if (minutes < 60) return `${minutes} min`;
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  if (m === 0) return `${h} ч`;
-  return `${h} ч ${m} мин`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }
 
-const RU_DAYS: Record<string, string> = {
-  mon: "Пн", tue: "Вт", wed: "Ср", thu: "Чт", fri: "Пт", sat: "Сб", sun: "Вс",
+const DAY_LABELS: Record<string, string> = {
+  mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun",
 };
 
 function describeSchedule(raw: unknown): string | null {
   if (!raw || typeof raw !== "object") return null;
   const s = raw as { type?: string; days?: string[]; from?: string; to?: string; dates?: string[] };
   if (s.type === "weekly" && Array.isArray(s.days) && s.days.length > 0) {
-    const days = s.days.map((d) => RU_DAYS[d] || d).join(", ");
+    const days = s.days.map((d) => DAY_LABELS[d] || d).join(", ");
     if (s.from && s.to) return `${days}, ${s.from}–${s.to}`;
     return days;
   }
   if (s.type === "dates" && Array.isArray(s.dates) && s.dates.length > 0) {
     const first = s.dates.slice(0, 3).join(", ");
-    return s.dates.length > 3 ? `${first} и ещё ${s.dates.length - 3}` : first;
+    return s.dates.length > 3 ? `${first} +${s.dates.length - 3} more` : first;
   }
-  if (s.type === "on_request") return "По запросу";
+  if (s.type === "on_request") return "By request";
   return null;
 }
 
@@ -135,7 +135,7 @@ export default function OfferPlaceView({
   const { isLoaded: mapsLoaded } = useGoogleMaps();
 
   const isService = kind === "service";
-  const kindLabel = isService ? "Услуга" : "Экспириенс";
+  const kindLabel = isService ? "Service" : "Experience";
   const kindEmoji = isService ? "🛠" : "✨";
 
   const priceText = useMemo(
@@ -154,7 +154,7 @@ export default function OfferPlaceView({
     [place.lat, place.lng]
   );
 
-  const ctaLabel = isService ? "Связаться" : "Забронировать";
+  const ctaLabel = isService ? "Contact" : "Book";
 
   return (
     <main className="min-h-screen bg-white pb-24">
@@ -219,7 +219,7 @@ export default function OfferPlaceView({
         {/* Title row */}
         <div className="flex items-start justify-between gap-4 mb-2">
           <h1 className="font-fraunces text-2xl sm:text-3xl font-semibold text-[#1F2A1F] leading-tight">
-            {place.title || "Без названия"}
+            {place.title || "Untitled"}
           </h1>
           {canEdit && (
             <Link
@@ -243,39 +243,39 @@ export default function OfferPlaceView({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
           {/* Price */}
           <div className="rounded-2xl border border-[#ECEEE4] bg-white p-4">
-            <div className="text-xs uppercase tracking-wide text-[#6F7A5A] mb-1">Цена</div>
+            <div className="text-xs uppercase tracking-wide text-[#6F7A5A] mb-1">Price</div>
             {priceText ? (
               <div className="font-fraunces text-xl font-semibold text-[#1F2A1F]">
-                {place.price_unit === "from" && <span className="text-sm font-normal text-[#6F7A5A] mr-1">от</span>}
+                {place.price_unit === "from" && <span className="text-sm font-normal text-[#6F7A5A] mr-1">from</span>}
                 {priceText}
                 {priceUnitLabel && place.price_unit !== "from" && (
                   <span className="text-sm font-normal text-[#6F7A5A] ml-1">{priceUnitLabel}</span>
                 )}
               </div>
             ) : (
-              <div className="text-sm text-[#A8B096]">По запросу</div>
+              <div className="text-sm text-[#A8B096]">By request</div>
             )}
           </div>
 
-          {/* Duration — для experience особенно важно */}
+          {/* Duration — particularly important for experiences */}
           <div className="rounded-2xl border border-[#ECEEE4] bg-white p-4">
-            <div className="text-xs uppercase tracking-wide text-[#6F7A5A] mb-1">Длительность</div>
+            <div className="text-xs uppercase tracking-wide text-[#6F7A5A] mb-1">Duration</div>
             {durationText ? (
               <div className="font-fraunces text-xl font-semibold text-[#1F2A1F]">{durationText}</div>
             ) : (
-              <div className="text-sm text-[#A8B096]">Не указана</div>
+              <div className="text-sm text-[#A8B096]">Not set</div>
             )}
           </div>
 
           {/* Schedule */}
           <div className="rounded-2xl border border-[#ECEEE4] bg-white p-4">
             <div className="text-xs uppercase tracking-wide text-[#6F7A5A] mb-1">
-              {isService ? "Режим" : "Даты"}
+              {isService ? "Hours" : "Dates"}
             </div>
             {scheduleText ? (
               <div className="text-sm text-[#1F2A1F]">{scheduleText}</div>
             ) : (
-              <div className="text-sm text-[#A8B096]">{isService ? "По договорённости" : "Уточняется"}</div>
+              <div className="text-sm text-[#A8B096]">{isService ? "By appointment" : "TBA"}</div>
             )}
           </div>
         </div>
@@ -283,7 +283,7 @@ export default function OfferPlaceView({
         {/* Description */}
         {place.description && (
           <section className="mb-8">
-            <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-3">Описание</h2>
+            <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-3">About</h2>
             <p className="text-[15px] leading-relaxed text-[#1F2A1F] whitespace-pre-wrap">
               {place.description}
             </p>
@@ -294,7 +294,7 @@ export default function OfferPlaceView({
         {((place.categories && place.categories.length > 0) || (place.tags && place.tags.length > 0)) && (
           <section className="mb-8">
             <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-3">
-              {isService ? "Что входит" : "Что вас ждёт"}
+              {isService ? "What's included" : "What to expect"}
             </h2>
             <div className="flex flex-wrap gap-2">
               {place.categories?.map((c) => (
@@ -320,7 +320,7 @@ export default function OfferPlaceView({
         {/* Map */}
         {center && mapsLoaded && (
           <section className="mb-8">
-            <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-3">Где это</h2>
+            <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-3">Where</h2>
             <div className="h-64 sm:h-80 w-full overflow-hidden rounded-2xl border border-[#ECEEE4]">
               <GoogleMap
                 mapContainerStyle={{ width: "100%", height: "100%" }}
@@ -350,14 +350,14 @@ export default function OfferPlaceView({
           <div className="min-w-0">
             {priceText ? (
               <div className="font-fraunces text-lg font-semibold text-[#1F2A1F]">
-                {place.price_unit === "from" && <span className="text-sm font-normal text-[#6F7A5A] mr-1">от</span>}
+                {place.price_unit === "from" && <span className="text-sm font-normal text-[#6F7A5A] mr-1">from</span>}
                 {priceText}
                 {priceUnitLabel && place.price_unit !== "from" && (
                   <span className="text-sm font-normal text-[#6F7A5A] ml-1">{priceUnitLabel}</span>
                 )}
               </div>
             ) : (
-              <div className="text-sm text-[#6F7A5A]">Цена по запросу</div>
+              <div className="text-sm text-[#6F7A5A]">Price on request</div>
             )}
           </div>
           {place.link ? (
@@ -377,7 +377,7 @@ export default function OfferPlaceView({
                 "rounded-xl bg-[#ECEEE4] px-5 py-2.5 text-sm font-medium text-[#6F7A5A]",
                 "cursor-not-allowed"
               )}
-              title="Контакт не указан"
+              title="No contact link provided"
             >
               {ctaLabel}
             </button>

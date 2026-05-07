@@ -21,7 +21,7 @@ const SearchModal = nextDynamic(() => import("../components/SearchModal"), { ssr
 import FavoriteIcon from "../components/FavoriteIcon";
 import PremiumBadge from "../components/PremiumBadge";
 import { getMapOptions } from "../config/googleMaps";
-import { getCategoryEmoji, createMarkerIcon } from "../lib/mapMarkers";
+import { getCategoryEmoji, createMarkerIcon, getMarkerEmoji } from "../lib/mapMarkers";
 import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
@@ -62,7 +62,7 @@ type PlacePhotosRow = Database["public"]["Tables"]["place_photos"]["Row"];
 type ProfileDisplay = Pick<ProfilesRow, "display_name" | "avatar_url">;
 type ProfileResult = { data: ProfileDisplay | null; error: PostgrestError | null };
 
-type PlacesSelectRow = Pick<PlacesRow, "id" | "title" | "description" | "city" | "city_name_cached" | "lat" | "lng" | "cover_url" | "categories" | "tags" | "created_at" | "created_by" | "access_level" | "country">;
+type PlacesSelectRow = Pick<PlacesRow, "id" | "title" | "description" | "city" | "city_name_cached" | "lat" | "lng" | "cover_url" | "categories" | "tags" | "created_at" | "created_by" | "access_level" | "country" | "kind">;
 type PlacesResult = { data: PlacesSelectRow[] | null; error: PostgrestError | null; count?: number | null };
 
 type ReactionPlaceId = Pick<ReactionsRow, "place_id">;
@@ -615,7 +615,7 @@ function MapPageContent() {
       // Фильтры Premium/Hidden/Vibe применяются на клиенте через filterPlaces
       // Используем только существующие поля: access_level для premium, категории для hidden/vibe
       let query = supabase.from("places").select(
-        "id,title,description,city,city_name_cached,lat,lng,cover_url,categories,tags,created_at,created_by,access_level,country",
+        "id,title,description,city,city_name_cached,lat,lng,cover_url,categories,tags,created_at,created_by,access_level,country,kind",
         { count: 'exact' }
       );
 
@@ -632,6 +632,13 @@ function MapPageContent() {
       // Фильтрация по тегам
       if (selectedTag) {
         query = query.contains("tags", [selectedTag]);
+      }
+
+      // Фильтрация по типу карточки (location / service / experience).
+      // Применяется серверно через .in() — меньше передаваемых данных.
+      const kinds = activeFilters.kinds ?? [];
+      if (kinds.length > 0) {
+        query = query.in("kind", kinds);
       }
 
       // Применяем сортировку
@@ -1337,7 +1344,7 @@ function MapPageContent() {
 
   // Calculate locked premium places for Haunted Gem indexing
   const defaultUserAccess: UserAccess = access ?? { 
-    role: "guest", 
+    role: "guest", plan: "free",
     hasPremium: false, 
     isAdmin: false 
   };
@@ -2258,7 +2265,7 @@ function MapView({
 }) {
   const isDesktop = useIsDesktop();
   const { openPremiumLocation, closeAuthModal, closePremiumModal, modalOpen, modalPlaceTitle, authModalOpen, authRedirectPath, authModalVariant } = usePremiumGate();
-  const defaultAccess: UserAccess = userAccess ?? { role: "guest", hasPremium: false, isAdmin: false };
+  const defaultAccess: UserAccess = userAccess ?? { role: "guest", hasPremium: false, isAdmin: false, plan: "free" };
   const [internalSelectedPlaceId, setInternalSelectedPlaceId] = useState<string | null>(null);
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
   const [placePhotos, setPlacePhotos] = useState<Map<string, string[]>>(new Map());
@@ -2352,7 +2359,7 @@ function MapView({
 
   // Filter premium places for non-premium users on map (but keep them in list)
   const defaultUserAccess: UserAccess = userAccess ?? { 
-    role: "guest", 
+    role: "guest", plan: "free",
     hasPremium: false, 
     isAdmin: false 
   };
@@ -2503,7 +2510,7 @@ function MapView({
 
     // Создаём новые маркеры для каждого места
     const newMarkers = placesWithCoords.map((place) => {
-      const emoji = getCategoryEmoji(place.categories);
+      const emoji = getMarkerEmoji(place.kind ?? null, place.categories);
       const isPremium = isPlacePremium(place);
 
       const marker = new google.maps.Marker({
@@ -2573,7 +2580,7 @@ function MapView({
       const place = placesWithCoords.find((p) => p.id === placeId);
       if (!place) continue;
 
-      const emoji = getCategoryEmoji(place.categories);
+      const emoji = getMarkerEmoji(place.kind ?? null, place.categories);
       const isPremium = isPlacePremium(place);
       const state = isSelected ? "active" : "default";
 

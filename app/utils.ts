@@ -17,6 +17,58 @@ export const sanitizePostgrestValue = (value: string): string => {
 };
 
 /**
+ * Splits a free-text search query into normalized tokens for fuzzy matching.
+ *
+ * - Lowercases the input
+ * - Replaces apostrophes (ASCII `'`, U+2018, U+2019, backtick) with `_` —
+ *   PostgREST/LIKE single-char wildcard. This is the one trick that lets
+ *   `cap_s` ILIKE-match BOTH "cap's" (with any flavor of apostrophe) AND
+ *   "caps" without us caring which one is in the DB.
+ * - Replaces every other non-letter/digit/space char with whitespace
+ * - Splits on whitespace, drops tokens shorter than `minLen` (default 2),
+ *   and de-duplicates
+ *
+ * Example: tokenizeQuery("Cap's Restaurant") → ["cap_s", "restaurant"]
+ */
+export const tokenizeQuery = (raw: string, minLen = 2): string[] => {
+  if (!raw) return [];
+  const normalized = raw
+    .toLowerCase()
+    .replace(/[''`‘’]/g, "_")    // apostrophes → SQL single-char wildcard
+    .replace(/[^\p{L}\p{N}\s_]/gu, " ");    // other punctuation → space
+  return Array.from(
+    new Set(
+      normalized
+        .split(/\s+/)
+        .map((t) => t.trim())
+        .filter((t) => t.length >= minLen),
+    ),
+  );
+};
+
+/**
+ * Builds a PostgREST `.or(...)` expression that matches if ANY of the given
+ * tokens appears in ANY of the given text fields (token-based ILIKE).
+ *
+ * Use as `query.or(buildTokenSearchExpr(tokens, fields))`. Returns an empty
+ * string when tokens is empty — caller should skip applying it in that case.
+ */
+export const buildTokenSearchExpr = (
+  tokens: string[],
+  fields: string[],
+): string => {
+  if (!tokens.length || !fields.length) return "";
+  const parts: string[] = [];
+  for (const t of tokens) {
+    const safe = sanitizePostgrestValue(t);
+    for (const f of fields) {
+      parts.push(`${f}.ilike.%${safe}%`);
+    }
+  }
+  return parts.join(",");
+};
+
+/**
  * Combines class names, filtering out falsy values
  */
 export function cx(...classes: Array<string | false | undefined | null>): string {

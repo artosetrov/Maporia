@@ -573,7 +573,7 @@ export default function TopBar({
                   <div className="w-14 h-14 lg:w-12 lg:h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors">
                     <Icon name="location" size={24} className="text-[#1F2A1F]" />
                   </div>
-                  <span className="text-sm lg:text-xs font-medium text-[#1F2A1F] text-center">Added places</span>
+                  <span className="text-sm lg:text-xs font-medium text-[#1F2A1F] text-center">Added</span>
                 </Link>
                 <Link
                   href="/profile?section=history"

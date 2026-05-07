@@ -349,7 +349,7 @@ export default function BrandGuidePage() {
                       tags: ["hidden"],
                       created_by: null,
                     }}
-                    userAccess={{ role: "guest", hasPremium: false, isAdmin: false }}
+                    userAccess={{ role: "guest", hasPremium: false, isAdmin: false, plan: "free" }}
                   />
                 </div>
                 <div className="max-w-[200px]">
@@ -363,7 +363,7 @@ export default function BrandGuidePage() {
                       access_level: "premium",
                       created_by: null,
                     }}
-                    userAccess={{ role: "standard", hasPremium: false, isAdmin: false }}
+                    userAccess={{ role: "standard", hasPremium: false, isAdmin: false, plan: "free" }}
                     userId="u1"
                     hauntedGemIndex={1}
                   />

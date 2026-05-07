@@ -8,17 +8,35 @@
  * - admin: Platform administrator
  */
 
-import type { Profile, Place } from "../types";
+import type { Plan, Profile, Place } from "../types";
 
 export type UserRole = "guest" | "standard" | "premium" | "admin";
 export type SubscriptionStatus = "active" | "inactive";
 export type AccessLevel = "public" | "premium";
+
+/**
+ * Тарифы, дающие право создавать карточки соответствующих kind'ов.
+ *
+ *   creator_service     → создаёт услуги + локации
+ *   creator_experience  → создаёт впечатления + локации
+ *   creator_all         → всё
+ *
+ * premium_viewer не создаёт ничего сам, но видит скрытые локации.
+ * Любой creator-тариф автоматически даёт право premium_viewer.
+ */
+export const CREATOR_PLANS = [
+  "creator_service",
+  "creator_experience",
+  "creator_all",
+] as const satisfies ReadonlyArray<Plan>;
 
 export type UserAccess = {
   role: UserRole;
   hasPremium: boolean;
   isAdmin: boolean;
   subscriptionStatus?: SubscriptionStatus;
+  /** Точный тариф из profiles.plan; 'free' для гостей и не-плательщиков. */
+  plan: Plan;
 };
 
 export type PlaceAccess = {
@@ -38,36 +56,50 @@ export function getUserAccess(profile: Profile | null): UserAccess {
       role: "guest",
       hasPremium: false,
       isAdmin: false,
+      plan: "free",
     };
   }
 
-  // Admin: check is_admin field
+  // Resolve plan with backward compatibility:
+  //   - profiles.plan — новое поле (после миграции add_subscription_plans_and_history).
+  //   - subscription_status='active' — legacy: lifetime premium из старых one-time платежей.
+  //   - Иначе — free.
+  let plan: Plan = (profile.plan as Plan | null | undefined) ?? "free";
+  if (plan === "free" && profile.subscription_status === "active") {
+    plan = "premium_viewer";
+  }
+
+  // Admin: check is_admin field — админ имеет полный доступ независимо от тарифа
   if (profile.is_admin === true) {
     return {
       role: "admin",
-      hasPremium: true, // Admin has premium access
+      hasPremium: true,
       isAdmin: true,
       subscriptionStatus: profile.subscription_status || undefined,
+      plan,
     };
   }
 
-  // Premium: check subscription_status = 'active'
-  const subscriptionStatus = profile.subscription_status as SubscriptionStatus | undefined;
-  if (subscriptionStatus === "active") {
+  // Любой платный план даёт доступ ко всему premium-контенту
+  const isPaidPlan = plan !== "free";
+  if (isPaidPlan) {
     return {
       role: "premium",
       hasPremium: true,
       isAdmin: false,
       subscriptionStatus: "active",
+      plan,
     };
   }
 
-  // Standard: authenticated but no active subscription
+  // Standard: авторизован, но без оплаченного плана
+  const subscriptionStatus = profile.subscription_status as SubscriptionStatus | undefined;
   return {
     role: "standard",
     hasPremium: false,
     isAdmin: false,
     subscriptionStatus: subscriptionStatus || "inactive",
+    plan: "free",
   };
 }
 
@@ -144,14 +176,125 @@ export function canUserInteract(userAccess: UserAccess): boolean {
 }
 
 /**
- * Checks if user can add places
- * 
- * @param userAccess - User's access level
- * @returns true if user can add places
+ * Checks if user can add places of any kind.
+ *
+ * @deprecated Use canUserCreate(userAccess, kind) instead — даёт права по конкретному типу.
+ *             Сохранено для обратной совместимости (используется в /add и местах,
+ *             которые пока не различают kind).
  */
 export function canUserAddPlace(userAccess: UserAccess): boolean {
-  // Only premium users and admins can add places
   return userAccess.role === "premium" || userAccess.role === "admin";
+}
+
+/**
+ * Право публиковать карточку определённого типа.
+ *
+ *  - location:   любой платный план (premium_viewer тоже — такая модель сейчас).
+ *  - service:    creator_service / creator_all / admin
+ *  - experience: creator_experience / creator_all / admin
+ *
+ * Why: location — почти бесплатная фича каталога; основная монетизация
+ * на услугах и впечатлениях, поэтому только creator-тарифы их публикуют.
+ */
+export function canUserCreate(
+  userAccess: UserAccess,
+  kind: "location" | "service" | "experience"
+): boolean {
+  if (userAccess.isAdmin) return true;
+
+  if (kind === "location") {
+    // Сохраняем текущее поведение: публиковать локации может любой платный.
+    return userAccess.hasPremium === true;
+  }
+
+  if (kind === "service") {
+    return userAccess.plan === "creator_service" || userAccess.plan === "creator_all";
+  }
+
+  if (kind === "experience") {
+    return userAccess.plan === "creator_experience" || userAccess.plan === "creator_all";
+  }
+
+  return false;
+}
+
+/**
+ * Какой минимальный тариф нужен для публикации kind'а.
+ * Полезно в пейволле, чтобы предложить апгрейд.
+ */
+export function requiredPlanFor(
+  kind: "location" | "service" | "experience"
+): Plan {
+  if (kind === "location") return "premium_viewer";
+  if (kind === "service") return "creator_service";
+  return "creator_experience";
+}
+
+/**
+ * Подсчёт квоты с учётом текущих карточек юзера и докупленных слотов.
+ *
+ *   activeServices, activeExperiences — текущие НЕ-удалённые карточки юзера
+ *   данного kind'а (с учётом скрытых черновиков).
+ *
+ * Возвращает:
+ *   - allowed: можно ли создать ещё одну карточку
+ *   - limit: общий лимит (план + бонусные слоты), null = безлимит
+ *   - used: сколько уже занято (с учётом combined-pool у Pro All)
+ *   - reason: 'no_plan' | 'limit_reached' | 'ok'
+ */
+export type QuotaCheck = {
+  allowed: boolean;
+  limit: number | null;
+  used: number;
+  bonusCredits: number;
+  reason: "ok" | "no_plan" | "limit_reached";
+};
+
+export function checkQuota(
+  access: UserAccess,
+  kind: "service" | "experience",
+  activeServices: number,
+  activeExperiences: number,
+  bonusCredits: number = 0
+): QuotaCheck {
+  if (access.isAdmin) {
+    return { allowed: true, limit: null, used: 0, bonusCredits, reason: "ok" };
+  }
+
+  const plan = access.plan;
+  // Pro All — общий пул. Иначе считаем по конкретному kind'у.
+  // Эта логика дублирует quotaFor() из plans.ts, но избегаем циклической зависимости:
+  //   plans.ts ← access.ts уже импортирует её обратно, не хочется.
+  let baseLimit: number;
+  let used: number;
+
+  if (plan === "creator_all") {
+    baseLimit = 10;
+    used = activeServices + activeExperiences;
+  } else if (plan === "creator_service" && kind === "service") {
+    baseLimit = 5;
+    used = activeServices;
+  } else if (plan === "creator_experience" && kind === "experience") {
+    baseLimit = 5;
+    used = activeExperiences;
+  } else {
+    // План не позволяет создавать этот kind вообще
+    return { allowed: false, limit: 0, used: 0, bonusCredits, reason: "no_plan" };
+  }
+
+  const totalLimit = baseLimit + bonusCredits;
+
+  if (used >= totalLimit) {
+    return {
+      allowed: false,
+      limit: totalLimit,
+      used,
+      bonusCredits,
+      reason: "limit_reached",
+    };
+  }
+
+  return { allowed: true, limit: totalLimit, used, bonusCredits, reason: "ok" };
 }
 
 /**

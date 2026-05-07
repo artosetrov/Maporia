@@ -29,7 +29,7 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
   const [user, setUser] = useState<{ id: string; email: string | null } | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [access, setAccess] = useState<UserAccess>({ 
-    role: "guest", 
+    role: "guest", plan: "free",
     hasPremium: false, 
     isAdmin: false 
   });
@@ -62,7 +62,7 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
             if (!isUnmounting && currentRequestId === requestId) {
               setUser(null);
               setProfile(null);
-              setAccess({ role: "guest", hasPremium: false, isAdmin: false });
+              setAccess({ role: "guest", hasPremium: false, isAdmin: false, plan: "free" });
               setLoading(false);
             }
             return;
@@ -72,7 +72,7 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
             if (!isUnmounting && currentRequestId === requestId) {
               setUser(null);
               setProfile(null);
-              setAccess({ role: "guest", hasPremium: false, isAdmin: false });
+              setAccess({ role: "guest", hasPremium: false, isAdmin: false, plan: "free" });
               setLoading(false);
             }
             if (process.env.NODE_ENV === 'development') {
@@ -87,7 +87,7 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
               setUser(null);
               setProfile(null);
               setAccess({ 
-                role: "guest", 
+                role: "guest", plan: "free",
                 hasPremium: false, 
                 isAdmin: false 
               });
@@ -123,7 +123,7 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
             setUser(null);
             setProfile(null);
             setAccess({ 
-              role: "guest", 
+              role: "guest", plan: "free",
               hasPremium: false, 
               isAdmin: false 
             });
@@ -228,7 +228,7 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
           if (!isUnmounting && currentRequestId === requestId) {
             setUser(null);
             setProfile(null);
-            setAccess({ role: "guest", hasPremium: false, isAdmin: false });
+            setAccess({ role: "guest", hasPremium: false, isAdmin: false, plan: "free" });
             setLoading(false);
           }
           if (process.env.NODE_ENV === 'development') {
@@ -244,7 +244,7 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
             setUser(null);
             setProfile(null);
             setAccess({ 
-              role: "guest", 
+              role: "guest", plan: "free",
               hasPremium: false, 
               isAdmin: false 
             });

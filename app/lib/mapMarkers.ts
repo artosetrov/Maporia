@@ -24,6 +24,29 @@ export const MARKER_SIZE_ACTIVE = 52;
 // ── Types ──────────────────────────────────────────────────────
 export type MarkerState = "default" | "active";
 
+/** Тип карточки на карте — определяет emoji и (потенциально) tint маркера. */
+export type MarkerKind = "location" | "service" | "experience";
+
+/** Эмодзи по умолчанию, если для service/experience не пришла категория. */
+const KIND_EMOJI: Record<MarkerKind, string> = {
+  location: "📍",
+  service: "🛠",
+  experience: "✨",
+};
+
+/**
+ * Эмодзи для маркера: для service/experience всегда специфичная иконка,
+ * для location — берём первую категорию (как раньше). Это даёт мгновенное
+ * визуальное различие на карте без ломки бренд-палитры.
+ */
+export const getMarkerEmoji = (
+  kind: MarkerKind | null | undefined,
+  categories: string[] | null,
+): string => {
+  if (kind === "service" || kind === "experience") return KIND_EMOJI[kind];
+  return getCategoryEmoji(categories);
+};
+
 // ── Helpers ────────────────────────────────────────────────────
 
 /** Extracts the leading emoji from a category string like "🍽 Food & Drinks" */

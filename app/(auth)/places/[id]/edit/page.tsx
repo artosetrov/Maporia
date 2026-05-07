@@ -78,6 +78,13 @@ type Place = {
   cover_url: string | null;
   created_at: string;
   is_hidden?: boolean | null;
+  // Place kind + offer-specific fields (для service / experience)
+  kind?: "location" | "service" | "experience" | null;
+  price_amount?: number | null;
+  price_currency?: string | null;
+  price_unit?: string | null;
+  duration_minutes?: number | null;
+  schedule?: unknown | null;
   // Premium/Access fields
   access_level?: string | null; // Primary field: 'public' | 'premium'
   // Legacy fields (for backward compatibility)
@@ -103,6 +110,56 @@ type RequiredStep = {
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
+}
+
+// ── helpers for hub cards (Price / Schedule) ─────────────────────────
+const PRICE_UNIT_SUFFIX: Record<string, string> = {
+  fixed: "",
+  from: "",
+  per_hour: " / hr",
+  per_person: " / person",
+  per_day: " / day",
+  per_session: " / session",
+};
+const CURRENCY_SYMBOL: Record<string, string> = {
+  USD: "$", EUR: "€", RUB: "₽", GBP: "£",
+};
+function formatPriceSummary(
+  amount: number | null | undefined,
+  currency: string | null | undefined,
+  unit: string | null | undefined
+): string {
+  if (amount == null) return "By request";
+  const sym = CURRENCY_SYMBOL[(currency || "USD").toUpperCase()] || (currency || "USD");
+  const hasCents = amount % 1 !== 0;
+  const formatted = hasCents ? amount.toFixed(2) : Math.round(amount).toString();
+  const fromPrefix = unit === "from" ? "from " : "";
+  const suffix = PRICE_UNIT_SUFFIX[unit || ""] ?? "";
+  return `${fromPrefix}${sym}${formatted}${suffix}`;
+}
+function formatScheduleSummary(raw: unknown, durationMinutes: number | null | undefined): string {
+  const parts: string[] = [];
+  if (raw && typeof raw === "object") {
+    const s = raw as { type?: string; days?: string[]; from?: string; to?: string; dates?: string[] };
+    if (s.type === "weekly" && Array.isArray(s.days) && s.days.length > 0) {
+      const labels: Record<string, string> = {
+        mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun",
+      };
+      const ds = s.days.map((d) => labels[d] || d).join(", ");
+      parts.push(s.from && s.to ? `${ds} ${s.from}–${s.to}` : ds);
+    } else if (s.type === "dates" && Array.isArray(s.dates) && s.dates.length > 0) {
+      parts.push(`${s.dates.length} date${s.dates.length === 1 ? "" : "s"}`);
+    } else if (s.type === "on_request") {
+      parts.push("By request");
+    }
+  }
+  if (durationMinutes && durationMinutes > 0) {
+    const h = Math.floor(durationMinutes / 60);
+    const m = durationMinutes % 60;
+    const dur = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+    parts.push(dur);
+  }
+  return parts.length > 0 ? parts.join(" • ") : "Not set";
 }
 
 type PageProps = { params: Promise<{ id: string }> };
@@ -150,7 +207,7 @@ export default function PlaceEditorHub(props: PageProps) {
       const [placeRes, photosRes] = await Promise.all([
         supabase
           .from("places")
-          .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled")
+          .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule")
           .eq("id", placeId)
           .single(),
         supabase
@@ -285,7 +342,7 @@ export default function PlaceEditorHub(props: PageProps) {
         (async () => {
           const { data: rawPlace } = await supabase
             .from("places")
-            .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled")
+            .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule")
             .eq("id", placeId)
             .single();
 
@@ -1106,6 +1163,67 @@ export default function PlaceEditorHub(props: PageProps) {
                 <Icon name="forward" size={20} className="text-[#6F7A5A]" />
               </div>
             </Link>
+
+            {/* Price + Schedule cards — только для service / experience */}
+            {place.kind && place.kind !== "location" && (
+              <>
+                {/* Price Card */}
+                <Link
+                  href={`/places/${placeId}/edit/price`}
+                  className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                        place.price_amount != null ? 'bg-[#7FA35C]' : 'bg-[#ECEEE4]'
+                      }`}>
+                        <Icon
+                          name="check"
+                          size={16}
+                          className={place.price_amount != null ? 'text-white' : 'text-[#A8B096]'}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Price</h3>
+                        <p className="text-sm text-[#6F7A5A]">
+                          {place.price_amount != null
+                            ? formatPriceSummary(place.price_amount, place.price_currency, place.price_unit)
+                            : "By request"}
+                        </p>
+                      </div>
+                    </div>
+                    <Icon name="forward" size={20} className="text-[#6F7A5A]" />
+                  </div>
+                </Link>
+
+                {/* Schedule Card */}
+                <Link
+                  href={`/places/${placeId}/edit/schedule`}
+                  className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                        place.schedule || place.duration_minutes ? 'bg-[#7FA35C]' : 'bg-[#ECEEE4]'
+                      }`}>
+                        <Icon
+                          name="check"
+                          size={16}
+                          className={place.schedule || place.duration_minutes ? 'text-white' : 'text-[#A8B096]'}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Schedule</h3>
+                        <p className="text-sm text-[#6F7A5A]">
+                          {formatScheduleSummary(place.schedule, place.duration_minutes)}
+                        </p>
+                      </div>
+                    </div>
+                    <Icon name="forward" size={20} className="text-[#6F7A5A]" />
+                  </div>
+                </Link>
+              </>
+            )}
 
             {/* Collections Card (Admin only) */}
             {isAdmin && (
