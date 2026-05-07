@@ -87,6 +87,12 @@ type Place = {
   schedule?: unknown | null;
   host_qualification?: string | null;
   service_mode?: 'at_provider' | 'at_client' | 'online' | 'flexible' | null;
+  max_guests?: number | null;
+  min_guests?: number | null;
+  meeting_point?: string | null;
+  cancellation_policy?: string | null;
+  included_items?: string[] | null;
+  bring_items?: string[] | null;
   // Premium/Access fields
   access_level?: string | null; // Primary field: 'public' | 'premium'
   // Legacy fields (for backward compatibility)
@@ -139,6 +145,24 @@ function formatPriceSummary(
   const suffix = PRICE_UNIT_SUFFIX[unit || ""] ?? "";
   return `${fromPrefix}${sym}${formatted}${suffix}`;
 }
+function formatDetailsSummary(place: { max_guests?: number | null; min_guests?: number | null; meeting_point?: string | null; cancellation_policy?: string | null; included_items?: string[] | null; bring_items?: string[] | null }): string {
+  const parts: string[] = [];
+  if (place.max_guests != null) {
+    if (place.min_guests != null && place.min_guests !== place.max_guests) {
+      parts.push(`${place.min_guests}–${place.max_guests} guests`);
+    } else {
+      parts.push(`Up to ${place.max_guests} guests`);
+    }
+  }
+  if (place.meeting_point) parts.push("Meeting point set");
+  if (place.cancellation_policy) parts.push(`${place.cancellation_policy} cancellation`);
+  const incCount = (place.included_items?.length ?? 0);
+  const brCount = (place.bring_items?.length ?? 0);
+  if (incCount > 0) parts.push(`${incCount} included`);
+  if (brCount > 0) parts.push(`${brCount} to bring`);
+  return parts.length > 0 ? parts.join(" • ") : "Add guest size, meeting point, cancellation policy";
+}
+
 function formatServiceModeLabel(mode: string | null | undefined): string {
   if (mode === "at_provider") return "At provider's place";
   if (mode === "at_client") return "At your place";
@@ -216,7 +240,7 @@ export default function PlaceEditorHub(props: PageProps) {
       const [placeRes, photosRes] = await Promise.all([
         supabase
           .from("places")
-          .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode")
+          .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
           .eq("id", placeId)
           .single(),
         supabase
@@ -351,7 +375,7 @@ export default function PlaceEditorHub(props: PageProps) {
         (async () => {
           const { data: rawPlace } = await supabase
             .from("places")
-            .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode")
+            .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
             .eq("id", placeId)
             .single();
 
@@ -1241,6 +1265,43 @@ export default function PlaceEditorHub(props: PageProps) {
                     <Icon name="forward" size={20} className="text-[#6F7A5A]" />
                   </div>
                 </Link>
+
+                {/* Details Card — только для experience */}
+                {place.kind === "experience" && (
+                  <Link
+                    href={`/places/${placeId}/edit/details`}
+                    className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-1">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          (place.max_guests || place.meeting_point || place.cancellation_policy ||
+                           (place.included_items && place.included_items.length > 0) ||
+                           (place.bring_items && place.bring_items.length > 0))
+                            ? 'bg-[#7FA35C]' : 'bg-[#ECEEE4]'
+                        }`}>
+                          <Icon
+                            name="check"
+                            size={16}
+                            className={
+                              (place.max_guests || place.meeting_point || place.cancellation_policy ||
+                               (place.included_items && place.included_items.length > 0) ||
+                               (place.bring_items && place.bring_items.length > 0))
+                                ? 'text-white' : 'text-[#A8B096]'
+                            }
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Details</h3>
+                          <p className="text-sm text-[#6F7A5A] line-clamp-1">
+                            {formatDetailsSummary(place)}
+                          </p>
+                        </div>
+                      </div>
+                      <Icon name="forward" size={20} className="text-[#6F7A5A]" />
+                    </div>
+                  </Link>
+                )}
 
                 {/* Host info Card */}
                 <Link

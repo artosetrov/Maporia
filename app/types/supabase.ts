@@ -138,6 +138,12 @@ export interface Database {
           schedule: PlaceSchedule | null
           host_qualification: string | null
           service_mode: 'at_provider' | 'at_client' | 'online' | 'flexible' | null
+          max_guests: number | null
+          min_guests: number | null
+          meeting_point: string | null
+          cancellation_policy: 'flexible' | 'moderate' | 'strict' | 'non_refundable' | 'custom' | null
+          included_items: string[] | null
+          bring_items: string[] | null
         }
         Insert: {
           id?: string
@@ -174,6 +180,12 @@ export interface Database {
           schedule?: PlaceSchedule | null
           host_qualification?: string | null
           service_mode?: 'at_provider' | 'at_client' | 'online' | 'flexible' | null
+          max_guests?: number | null
+          min_guests?: number | null
+          meeting_point?: string | null
+          cancellation_policy?: 'flexible' | 'moderate' | 'strict' | 'non_refundable' | 'custom' | null
+          included_items?: string[] | null
+          bring_items?: string[] | null
         }
         Update: {
           id?: string
@@ -210,6 +222,12 @@ export interface Database {
           schedule?: PlaceSchedule | null
           host_qualification?: string | null
           service_mode?: 'at_provider' | 'at_client' | 'online' | 'flexible' | null
+          max_guests?: number | null
+          min_guests?: number | null
+          meeting_point?: string | null
+          cancellation_policy?: 'flexible' | 'moderate' | 'strict' | 'non_refundable' | 'custom' | null
+          included_items?: string[] | null
+          bring_items?: string[] | null
         }
       }
       reactions: {

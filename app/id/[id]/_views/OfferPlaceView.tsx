@@ -10,18 +10,20 @@
  * MVP: без комментариев и сложной галереи. Расширим, как сообщество протестит формат.
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { GoogleMap, Marker } from "@react-google-maps/api";
 import { useGoogleMaps } from "../../../providers/GoogleMapsProvider";
 import { getMapOptions } from "../../../config/googleMaps";
 import { createStaticPinSvg } from "../../../lib/mapMarkers";
+import { supabase } from "../../../lib/supabase";
 import TopBar from "../../../components/TopBar";
 import FavoriteIcon from "../../../components/FavoriteIcon";
 import Icon from "../../../components/Icon";
 import PremiumBadge from "../../../components/PremiumBadge";
 import ReviewsSection from "../../../components/ReviewsSection";
+import StarRating from "../../../components/StarRating";
 import { isPlacePremium } from "../../../lib/access";
 
 type OfferPlace = {
@@ -50,6 +52,12 @@ type OfferPlace = {
   schedule?: unknown | null;
   host_qualification?: string | null;
   service_mode?: 'at_provider' | 'at_client' | 'online' | 'flexible' | null;
+  max_guests?: number | null;
+  min_guests?: number | null;
+  meeting_point?: string | null;
+  cancellation_policy?: 'flexible' | 'moderate' | 'strict' | 'non_refundable' | 'custom' | null;
+  included_items?: string[] | null;
+  bring_items?: string[] | null;
 };
 
 type HostProfile = {
@@ -89,6 +97,22 @@ const SERVICE_MODE_LABELS: Record<string, string> = {
   online:      "Online",
   flexible:    "Flexible",
 };
+
+const CANCELLATION_LABELS: Record<string, string> = {
+  flexible:       "Flexible cancellation",
+  moderate:       "Moderate cancellation",
+  strict:         "Strict cancellation",
+  non_refundable: "Non-refundable",
+  custom:         "Custom policy",
+};
+
+function formatGuests(min: number | null | undefined, max: number | null | undefined): string | null {
+  if (min == null && max == null) return null;
+  if (max != null && min != null && min !== max) return `${min}–${max} guests`;
+  if (max != null) return `Up to ${max} guests`;
+  if (min != null) return `Min ${min} guests`;
+  return null;
+}
 
 function initialsFromHost(name?: string | null, username?: string | null): string {
   if (name) {
@@ -186,6 +210,38 @@ export default function OfferPlaceView({
 
   const ctaLabel = isService ? "Contact" : "Book";
 
+  // Все фото места: cover + photo_urls. Уникальные, обрезанные до 5 для mosaic.
+  const galleryPhotos = useMemo(() => {
+    const list: string[] = [];
+    if (place.cover_url) list.push(place.cover_url);
+    for (const u of place.photo_urls ?? []) {
+      if (typeof u === "string" && u.length > 0 && !list.includes(u)) list.push(u);
+    }
+    return list.slice(0, 5);
+  }, [place.cover_url, place.photo_urls]);
+  const hasMosaic = galleryPhotos.length >= 5;
+
+  // Aggregate rating через RPC. Молча ничего не показываем при ошибке.
+  const [rating, setRating] = useState<{ avg: number; count: number } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.rpc(
+        "get_place_rating" as never,
+        { p_place_id: place.id } as never
+      );
+      if (cancelled || error || !data) return;
+      const r = data as { avg: number; count: number };
+      if (typeof r?.count === "number" && r.count > 0) setRating({ avg: Number(r.avg), count: r.count });
+    })();
+    return () => { cancelled = true; };
+  }, [place.id]);
+
+  const guestsText = formatGuests(place.min_guests, place.max_guests);
+  const hasIncluded = (place.included_items?.length ?? 0) > 0;
+  const hasBring = (place.bring_items?.length ?? 0) > 0;
+  const hasLogistics = guestsText || place.meeting_point || place.cancellation_policy;
+
   return (
     <main className="min-h-screen bg-white pb-24">
       {/* Top bar — desktop only; на мобиле есть назад/сердечко в hero */}
@@ -199,44 +255,79 @@ export default function OfferPlaceView({
         />
       </div>
 
-      {/* HERO */}
-      <section className="relative w-full bg-[#FAFAF7]" style={{ paddingBottom: "56.25%" }}>
-        {cover ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={cover}
-            alt={place.title || "Cover"}
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-6xl">
-            {kindEmoji}
-          </div>
-        )}
+      {/* HERO — mobile: single cover; desktop: photo mosaic when ≥5 photos */}
+      <section className="relative w-full bg-[#FAFAF7]">
+        {/* Mobile single cover */}
+        <div className="relative w-full lg:hidden" style={{ paddingBottom: "56.25%" }}>
+          {cover ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={cover}
+              alt={place.title || "Cover"}
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center text-6xl">
+              {kindEmoji}
+            </div>
+          )}
+        </div>
+
+        {/* Desktop: 5-photo mosaic, иначе single cover */}
+        <div className="hidden lg:block max-w-6xl mx-auto px-4 sm:px-6 pt-6">
+          {hasMosaic ? (
+            <div className="grid grid-cols-4 grid-rows-2 gap-2 h-[420px] rounded-2xl overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={galleryPhotos[0]}
+                alt={place.title || "Cover"}
+                className="col-span-2 row-span-2 h-full w-full object-cover"
+              />
+              {galleryPhotos.slice(1, 5).map((u, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={u + i}
+                  src={u}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ))}
+            </div>
+          ) : cover ? (
+            <div className="rounded-2xl overflow-hidden h-[420px]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={cover} alt={place.title || "Cover"} className="h-full w-full object-cover" />
+            </div>
+          ) : (
+            <div className="h-[420px] flex items-center justify-center text-6xl bg-[#FAFAF7] rounded-2xl">
+              {kindEmoji}
+            </div>
+          )}
+        </div>
 
         {/* Mobile back button */}
         <button
           type="button"
           onClick={() => router.back()}
-          className="lg:hidden absolute left-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur shadow"
+          className="lg:hidden absolute left-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur shadow"
           aria-label="Back"
         >
           <Icon name="back" size={18} />
         </button>
 
-        {/* Favorite — top right */}
+        {/* Favorite — top right (mobile only, на desktop в TopBar) */}
         <button
           type="button"
           onClick={onToggleFavorite}
           disabled={favoriteLoading}
-          className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur shadow disabled:opacity-50"
+          className="lg:hidden absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur shadow disabled:opacity-50"
           aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
           <FavoriteIcon isActive={isFavorite} size={20} />
         </button>
 
-        {/* Kind chip — bottom left */}
-        <div className="absolute left-3 bottom-3 flex items-center gap-2">
+        {/* Kind chip — bottom left (mobile only) */}
+        <div className="lg:hidden absolute left-3 bottom-3 z-10 flex items-center gap-2">
           <span className="rounded-full bg-white/95 px-3 py-1 text-xs font-medium text-[#1F2A1F] shadow">
             {kindEmoji} {kindLabel}
           </span>
@@ -260,6 +351,18 @@ export default function OfferPlaceView({
             </Link>
           )}
         </div>
+
+        {/* Aggregate rating под title — Airbnb-style. Скрыт пока нет отзывов. */}
+        {rating && (
+          <div className="flex items-center gap-1.5 mb-3 text-sm text-[#1F2A1F]">
+            <StarRating value={rating.avg} size={14} />
+            <span className="font-semibold">{rating.avg.toFixed(2)}</span>
+            <span className="text-[#6F7A5A]">·</span>
+            <span className="text-[#6F7A5A]">
+              {rating.count} review{rating.count === 1 ? "" : "s"}
+            </span>
+          </div>
+        )}
 
         {/* Subtitle: city/address + service_mode chip */}
         {(place.city || place.address || place.service_mode) && (
@@ -375,6 +478,77 @@ export default function OfferPlaceView({
                 </span>
               ))}
             </div>
+          </section>
+        )}
+
+        {/* Logistics — guests, meeting point, cancellation */}
+        {hasLogistics && (
+          <section className="mb-8 rounded-2xl border border-[#ECEEE4] bg-[#FAFAF7] p-5">
+            <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-3">Logistics</h2>
+            <div className="space-y-3 text-sm">
+              {guestsText && (
+                <div className="flex items-start gap-3">
+                  <span className="text-lg leading-none">👥</span>
+                  <div>
+                    <div className="font-medium text-[#1F2A1F]">{guestsText}</div>
+                  </div>
+                </div>
+              )}
+              {place.meeting_point && (
+                <div className="flex items-start gap-3">
+                  <span className="text-lg leading-none">📍</span>
+                  <div>
+                    <div className="font-medium text-[#1F2A1F]">Meeting point</div>
+                    <div className="text-[#3F4A35]">{place.meeting_point}</div>
+                  </div>
+                </div>
+              )}
+              {place.cancellation_policy && (
+                <div className="flex items-start gap-3">
+                  <span className="text-lg leading-none">↩️</span>
+                  <div>
+                    <div className="font-medium text-[#1F2A1F]">
+                      {CANCELLATION_LABELS[place.cancellation_policy] || "Cancellation policy"}
+                    </div>
+                    <div className="text-xs text-[#6F7A5A]">
+                      Maporia is a directory — refund terms are between you and the host.
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* Included / Bring */}
+        {(hasIncluded || hasBring) && (
+          <section className="mb-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {hasIncluded && (
+              <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5">
+                <h3 className="font-fraunces text-lg font-semibold text-[#1F2A1F] mb-3">What&apos;s included</h3>
+                <ul className="space-y-2">
+                  {place.included_items!.map((it) => (
+                    <li key={`inc-${it}`} className="flex items-start gap-2 text-sm text-[#1F2A1F]">
+                      <span className="mt-0.5 text-[#8F9E4F]">✓</span>
+                      <span>{it}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {hasBring && (
+              <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5">
+                <h3 className="font-fraunces text-lg font-semibold text-[#1F2A1F] mb-3">What to bring</h3>
+                <ul className="space-y-2">
+                  {place.bring_items!.map((it) => (
+                    <li key={`br-${it}`} className="flex items-start gap-2 text-sm text-[#1F2A1F]">
+                      <span className="mt-0.5 text-[#D6B25E]">•</span>
+                      <span>{it}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </section>
         )}
 
