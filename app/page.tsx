@@ -17,6 +17,7 @@ import SearchBar from "./components/SearchBar";
 import HomeSection from "./components/HomeSection";
 import Pill from "./components/Pill";
 import CategoryCarousel from "./components/CategoryCarousel";
+import StatsBanner from "./components/StatsBanner";
 import { ActiveFilters } from "./components/FiltersModal";
 // Heavy modals — only loaded when the user actually opens them.
 // Same pattern is already used on /map; this keeps the home-page main
@@ -677,6 +678,13 @@ function HomePageInner() {
             При активных вкладках Services/Experiences секции жёстко
             фильтруются по kind.
           */}
+          {/*
+            Live-статистика по проекту: users / locations / services / experiences.
+            Показываем всегда (не зависит от активного таба) — это «пульс» Maporia.
+            Числа тянутся из Supabase через дешёвые count-запросы внутри компонента.
+          */}
+          <StatsBanner />
+
           {/* Category carousel — только для service/experience табов */}
           {activeKind !== "location" && kindIsEmpty !== true && (
             <CategoryCarousel kind={activeKind} />

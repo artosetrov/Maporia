@@ -3298,6 +3298,25 @@ function ElementsSection() {
           </div>
         </Link>
 
+        {/* Stats Banner — homepage live counters */}
+        <Link
+          href="/profile/elements/stats-banner"
+          className="block rounded-xl border border-[#ECEEE4] bg-white p-6 hover:shadow-md transition group"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4] flex items-center justify-center">
+                <Icon name="users" size={24} className="text-[#8F9E4F]" />
+              </div>
+              <div>
+                <div className="font-semibold text-[#1F2A1F] mb-1">Stats Banner</div>
+                <div className="text-sm text-[#6F7A5A]">Homepage counters: users · locations · services · experiences</div>
+              </div>
+            </div>
+            <Icon name="forward" size={20} className="text-[#A8B096] group-hover:text-[#6F7A5A] transition" />
+          </div>
+        </Link>
+
         {/* Brand Guide */}
         <Link
           href="/brand-guide"
