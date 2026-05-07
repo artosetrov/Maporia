@@ -587,7 +587,7 @@ function HomePageInner() {
               paddingRight: 'var(--home-page-padding, 16px)',
             }}
           >
-            <div className="flex gap-2 overflow-x-auto py-2 sm:py-3">
+            <div className="flex gap-2 overflow-x-auto py-3">
               {HOME_TABS.map((tab) => {
                 const isActive = activeKind === tab.id;
                 return (
