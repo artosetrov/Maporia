@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type HomeKind = "location" | "service" | "experience";
@@ -37,7 +37,26 @@ import { buildCityRadiusFilter, getCityCoords } from "./lib/cityRadius";
 import { canUserCreate } from "./lib/access";
 import Icon from "./components/Icon";
 
+/**
+ * HomePage — обёртка с Suspense.
+ * useSearchParams() на этой странице (для ?tab=…) требует Suspense boundary
+ * в Next.js App Router, иначе prerender падает с CSR-bailout.
+ */
 export default function HomePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
+          <div className="text-sm text-[#6F7A5A]">Loading…</div>
+        </main>
+      }
+    >
+      <HomePageInner />
+    </Suspense>
+  );
+}
+
+function HomePageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { redirectToAuth } = useAuthRedirect();
