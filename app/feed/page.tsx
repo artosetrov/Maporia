@@ -17,6 +17,7 @@ import { ActivityItemSkeleton } from "../components/Skeleton";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
+import { canUserViewPlace, type UserAccess } from "../lib/access";
 
 type ProfilesRow = Database["public"]["Tables"]["profiles"]["Row"];
 type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
@@ -29,7 +30,7 @@ type ProfileDisplayResult = { data: ProfileDisplayAvatar | null; error: Postgres
 type ProfileBatch = Pick<ProfilesRow, "id" | "display_name" | "username" | "avatar_url">;
 type ProfilesBatchResult = { data: ProfileBatch[] | null; error: PostgrestError | null };
 
-type PlacesFeed = Pick<PlacesRow, "id" | "title" | "cover_url" | "address" | "created_at" | "created_by">;
+type PlacesFeed = Pick<PlacesRow, "id" | "title" | "cover_url" | "address" | "created_at" | "created_by" | "access_level" | "is_premium" | "premium_only" | "visibility">;
 type PlacesFeedResult = { data: PlacesFeed[] | null; error: PostgrestError | null };
 
 type ReactionFeed = Pick<ReactionsRow, "place_id" | "created_at" | "user_id">;
@@ -38,7 +39,7 @@ type ReactionsFeedResult = { data: ReactionFeed[] | null; error: PostgrestError 
 type CommentFeed = Pick<CommentsRow, "place_id" | "text" | "created_at" | "user_id">;
 type CommentsFeedResult = { data: CommentFeed[] | null; error: PostgrestError | null };
 
-type PlacesBatch = Pick<PlacesRow, "id" | "title" | "cover_url" | "address">;
+type PlacesBatch = Pick<PlacesRow, "id" | "title" | "cover_url" | "address" | "created_by" | "access_level" | "is_premium" | "premium_only" | "visibility">;
 type PlacesBatchResult = { data: PlacesBatch[] | null; error: PostgrestError | null };
 
 type ActivityItem =
@@ -62,6 +63,13 @@ function formatTime(iso: string) {
   if (daysAgo === 1) return `1 day ago · ${timeStr}`;
   return `${daysAgo} days ago · ${timeStr}`;
 }
+
+const guestAccess: UserAccess = {
+  role: "guest",
+  hasPremium: false,
+  isAdmin: false,
+  plan: "free",
+};
 
 function ActivityCard({ item }: { item: ActivityItem }) {
   const isDesktop = useIsDesktop();
@@ -194,12 +202,18 @@ export default function FeedPage() {
 
   async function loadActivities() {
     setLoading(true);
+    const effectiveAccess = access ?? guestAccess;
+    const canShowPlace = (place: PlacesBatch | PlacesFeed | undefined | null) => {
+      if (!place) return false;
+      if (userId && place.created_by === userId) return true;
+      return canUserViewPlace(effectiveAccess, place);
+    };
 
     // Загружаем все активности: добавленные места, лайки, комментарии
     const [placesResult, likesResult, commentsResult] = (await Promise.all([
       supabase
         .from("places")
-        .select("id, title, cover_url, address, created_at, created_by")
+        .select("id, title, cover_url, address, created_at, created_by, access_level, is_premium, premium_only, visibility")
         .order("created_at", { ascending: false })
         .limit(50),
       supabase
@@ -249,7 +263,7 @@ export default function FeedPage() {
       placeIds.size > 0
         ? supabase
             .from("places")
-            .select("id, title, cover_url, address")
+            .select("id, title, cover_url, address, created_by, access_level, is_premium, premium_only, visibility")
             .in("id", Array.from(placeIds))
         : Promise.resolve({ data: [], error: null }),
     ])) as [ProfilesBatchResult, PlacesBatchResult];
@@ -266,14 +280,10 @@ export default function FeedPage() {
       });
     }
 
-    const placesCache = new Map<string, { title: string | null; cover_url: string | null; address: string | null }>();
+    const placesCache = new Map<string, PlacesBatch>();
     if (placesDataResult.data) {
       placesDataResult.data.forEach((p) => {
-        placesCache.set(p.id, {
-          title: p.title,
-          cover_url: p.cover_url,
-          address: p.address,
-        });
+        if (canShowPlace(p)) placesCache.set(p.id, p);
       });
     }
 
@@ -282,6 +292,7 @@ export default function FeedPage() {
     // Добавляем добавленные места
     if (placesResult.data) {
       for (const place of placesResult.data) {
+        if (!canShowPlace(place)) continue;
         const profile = place.created_by ? profilesCache.get(place.created_by) : null;
         const userName = profile?.display_name || profile?.username || "Unknown";
         allActivities.push({
@@ -303,6 +314,7 @@ export default function FeedPage() {
       for (const like of likesResult.data) {
         const profile = profilesCache.get(like.user_id);
         const place = placesCache.get(like.place_id);
+        if (!place) continue;
         const userName = profile?.display_name || profile?.username || "Unknown";
         allActivities.push({
           type: "liked",
@@ -323,6 +335,7 @@ export default function FeedPage() {
       for (const comment of commentsResult.data) {
         const profile = profilesCache.get(comment.user_id);
         const place = placesCache.get(comment.place_id);
+        if (!place) continue;
         const userName = profile?.display_name || profile?.username || "Unknown";
         allActivities.push({
           type: "commented",

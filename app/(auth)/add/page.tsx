@@ -27,6 +27,7 @@ import { EXTRA_LISTING, PLAN_CONFIG, formatPrice, suggestPlanForKind } from "../
 import Icon from "../../components/Icon";
 import ImpersonationDisclaimer from "../../components/ImpersonationDisclaimer";
 import { useImpersonationStatus } from "../../hooks/useImpersonationStatus";
+import { sanitizePostgrestValue } from "../../utils";
 
 type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
 type PlaceIdResult = { data: Pick<PlacesRow, "id"> | null; error: PostgrestError | null };
@@ -65,6 +66,11 @@ const KIND_OPTIONS: KindOption[] = [
 
 function isValidKind(value: string | null): value is PlaceKind {
   return value === "location" || value === "service" || value === "experience";
+}
+
+function placeContainsKindFilter(kind: "service" | "experience"): string {
+  const safeKind = sanitizePostgrestValue(kind);
+  return `kind.eq.${safeKind},secondary_kinds.cs.{${safeKind}}`;
 }
 
 /**
@@ -187,12 +193,12 @@ export default function AddPlacePage() {
           .from("places")
           .select("id", { count: "exact", head: true })
           .eq("created_by", user.id)
-          .or("kind.eq.service,secondary_kinds.cs.{service}"),
+          .or(placeContainsKindFilter("service")),
         supabase
           .from("places")
           .select("id", { count: "exact", head: true })
           .eq("created_by", user.id)
-          .or("kind.eq.experience,secondary_kinds.cs.{experience}"),
+          .or(placeContainsKindFilter("experience")),
         supabase.from("profiles").select("bonus_listing_credits").eq("id", user.id).single(),
       ]);
 
@@ -281,10 +287,10 @@ export default function AddPlacePage() {
             const [s, e, p] = await Promise.all([
               supabase.from("places").select("id", { count: "exact", head: true })
                 .eq("created_by", user.id)
-                .or("kind.eq.service,secondary_kinds.cs.{service}"),
+                .or(placeContainsKindFilter("service")),
               supabase.from("places").select("id", { count: "exact", head: true })
                 .eq("created_by", user.id)
-                .or("kind.eq.experience,secondary_kinds.cs.{experience}"),
+                .or(placeContainsKindFilter("experience")),
               supabase.from("profiles").select("bonus_listing_credits").eq("id", user.id).single(),
             ]);
             const refreshedQuota = checkQuota(

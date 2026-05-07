@@ -13,7 +13,10 @@ import { useUserAccessContext } from "../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../lib/access";
 import { getAuthUrl } from "../../../lib/authRedirect";
 
-type PlaceSettingsRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by">;
+type PlaceSettingsRow = Pick<
+  Database["public"]["Tables"]["places"]["Row"],
+  "id" | "title" | "created_by" | "is_hidden" | "access_level" | "visibility"
+>;
 type PlacePhotoUrlRow = Pick<Database["public"]["Tables"]["place_photos"]["Row"], "url">;
 import Icon from "../../../components/Icon";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
@@ -53,11 +56,16 @@ export default function PlaceSettingsPage(props: PageProps) {
 
     (async () => {
       setLoading(true);
-      const { data: rawData, error: placeError } = await supabase
+      let placeQuery = supabase
         .from("places")
-        .select("id, title, created_by, is_hidden, visibility")
-        .eq("id", placeId)
-        .single();
+        .select("id, title, created_by, is_hidden, access_level, visibility")
+        .eq("id", placeId);
+
+      if (!isAdmin) {
+        placeQuery = placeQuery.eq("created_by", user.id);
+      }
+
+      const { data: rawData, error: placeError } = await placeQuery.single();
 
       const data = rawData as PlaceSettingsRow | null;
       if (placeError || !data) {
@@ -65,10 +73,10 @@ export default function PlaceSettingsPage(props: PageProps) {
         return;
       }
 
-      // Check ownership or admin status
-      const currentIsAdmin = isUserAdmin(access);
-      const isOwner = data.created_by === user.id;
-      if (!isOwner && !currentIsAdmin) {
+      // Check ownership or admin status. Non-admin queries are already scoped
+      // by created_by above, so unauthorized users get redirected without
+      // receiving settings data for someone else's place.
+      if (data.created_by !== user.id && !isAdmin) {
         router.push(`/id/${placeId}`);
         return;
       }

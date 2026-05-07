@@ -1,0 +1,75 @@
+# Search Index
+
+Последнее обновление: 2026-05-07.
+
+## По Доменаm
+
+| Термин | Что искать | Где обычно живет |
+| --- | --- | --- |
+| Auth | `auth`, `signIn`, `signUp`, `magicLink`, `reset` | `app/lib/auth/`, `app/components/auth/`, `app/auth/**` |
+| Profile | `profiles`, `display_name`, `username`, `avatar_url` | `app/(auth)/profile/**`, `app/types.ts` |
+| Access | `getUserAccess`, `canUserViewPlace`, `isPlacePremium` | `app/lib/access.ts` |
+| Premium | `premium_viewer`, `PremiumUpsellModal`, `LockedPlaceOverlay` | `app/lib/plans.ts`, `app/components/` |
+| Creator plans | `creator_service`, `creator_experience`, `creator_all` | `app/lib/plans.ts`, `app/lib/access.ts` |
+| Quota | `checkQuota`, `bonus_listing_credits`, `EXTRA_LISTING` | `app/lib/access.ts`, `app/lib/plans.ts` |
+| Places | `places`, `Place`, `PlaceListItem`, `kind` | `app/types.ts`, `app/types/supabase.ts`, `app/(auth)/places/**` |
+| Service/Experience | `OfferPlaceView`, `price_amount`, `schedule`, `host_qualification` | `app/id/[id]/_views/`, edit pages |
+| Collections | `collections`, `place_collections` | `app/collections/**`, `app/(auth)/admin/collections/**` |
+| Tags | `tags`, `category_ids`, `emoji` | `app/api/tags`, `app/api/admin/tags`, `scripts/sql/*tags*` |
+| Cities | `cities`, `city_id`, `city_name_cached`, `resolve` | `app/lib/cities.ts`, `app/lib/cityResolver.ts`, `app/api/cities/resolve` |
+| Map | `GoogleMap`, `MarkerClusterer`, `MaporiaClusterRenderer` | `app/map/page.tsx`, `app/explore/page.tsx`, `app/lib/clusterRenderer.ts` |
+| Google import | `google_place_id`, `place-import`, `google-import` | `app/api/google*`, `app/(auth)/add/google/**` |
+| Stripe | `checkout`, `webhook`, `subscription`, `stripe_customer_id` | `app/api/stripe/**`, `app/lib/stripe.ts` |
+| AI description | `generate-description`, `placeDescription` | `app/api/ai/generate-description`, `app/lib/ai/` |
+| Impersonation | `impersonate`, `admin_impersonation_log` | `app/api/admin/impersonate/**`, `app/lib/impersonation.ts` |
+| Health | `health`, `CheckResult`, `health:json` | `scripts/health/**`, `app/api/health/route.ts` |
+
+## Быстрые Команды
+
+```bash
+# все страницы
+find app -type f -name 'page.tsx' | sort
+
+# все API routes
+find app/api -type f -name 'route.ts' | sort
+
+# все Supabase table usages
+rg "from\\(['\\\"]" app scripts
+
+# premium/access logic
+rg "access_level|premium_only|is_premium|canUserViewPlace|isPlacePremium" app
+
+# billing
+rg "PLAN_CONFIG|STRIPE_|checkout|webhook|subscription|bonus_listing_credits" app scripts
+
+# карта и маркеры
+rg "GoogleMap|MarkerClusterer|AdvancedMarker|google\\.maps\\.Marker" app
+
+# Google import
+rg "google_place_id|google-import|place-import|GoogleImport" app
+
+# TODO и известные долги
+rg "TODO|FIXME|deprecated|CRITICAL" app scripts docs
+```
+
+## Файлы-Источники Правды
+
+| Решение | Источник |
+| --- | --- |
+| Тарифы и цены | `app/lib/plans.ts` |
+| Роли, доступ, квоты | `app/lib/access.ts` |
+| Shared domain types | `app/types.ts` |
+| Generated Supabase schema | `app/types/supabase.ts` |
+| Категории и города | `app/constants.ts` |
+| Home sections | `app/constants/homeSections.ts` |
+| Supabase browser client | `app/lib/supabase.ts` |
+| Stripe server utilities | `app/lib/stripe.ts` |
+| Google Maps config | `app/config/googleMaps.ts` |
+| Place layout config | `app/config/placeLayout.ts` |
+| Health check rules | `scripts/health/healthChecks.ts` |
+
+## Где Не Искать Первым
+
+- `docs/archive/` - сначала смотри актуальную вики и код; archive нужен для истории.
+- Корневые `*_PLAN.md` - это планы, не всегда текущая реализация.
+- `README.md` - полезен для setup, но не покрывает текущую модель продукта целиком.

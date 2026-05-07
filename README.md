@@ -115,7 +115,7 @@ supabase db push
 - `add-place-visibility-fields.sql` - Place access control fields
 - `rls-role-based-policies.sql` - Row-level security policies
 - `create-premium-modal-settings-table.sql` - App settings table
-- See all `.sql` files in the root directory
+- See all `.sql` files in `scripts/sql/`
 
 ### 7. Set Up Storage Buckets
 
@@ -154,11 +154,15 @@ maporia/
 │   ├── lib/               # Utilities (Supabase client, etc.)
 │   ├── types.ts           # TypeScript types
 │   └── types/             # Generated Supabase types (create this)
-├── supabase/              # Supabase config (created by CLI)
-│   └── migrations/        # Database migrations
+├── scripts/
+│   ├── sql/               # SQL migration and maintenance scripts
+│   ├── migrations/        # JS migration helpers
+│   └── health/            # Product health checks
+├── supabase/              # Supabase config (created by CLI, if linked)
+│   └── migrations/        # Supabase CLI migrations
 ├── .env.local             # Environment variables (not in git)
 ├── .env.example           # Example environment file
-└── *.sql                  # SQL migration files
+└── docs/wiki/             # Product/technical wiki and audit
 ```
 
 ## Available Scripts

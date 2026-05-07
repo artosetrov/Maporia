@@ -11,6 +11,7 @@ import type { Database } from "../types/supabase";
 import { isPlacePremium } from "../lib/access";
 import { startPremiumCheckout } from "../lib/premium";
 import { usePremiumModalContext } from "../contexts/PremiumModalContext";
+import { sanitizePostgrestValue } from "../utils";
 
 type PlaceCoverRow = Pick<Database["public"]["Tables"]["places"]["Row"], "id" | "cover_url" | "access_level" | "visibility">;
 
@@ -135,7 +136,9 @@ export default function PremiumUpsellModal({
           .from("places")
           .select("id, cover_url, access_level, visibility")
           .not("cover_url", "is", null)
-          .or("access_level.eq.premium,visibility.eq.premium")
+          .or(
+            `access_level.eq.${sanitizePostgrestValue("premium")},visibility.eq.${sanitizePostgrestValue("premium")}`
+          )
           .order("created_at", { ascending: false })
           .limit(20);
 

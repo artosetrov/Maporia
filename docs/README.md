@@ -1,30 +1,45 @@
 # Документация Maporia
 
-Вся документация в одной папке. В корне проекта — только основной `README.md`.
+Главная актуальная точка входа: [wiki/README.md](./wiki/README.md).
 
-## Оглавление
+Вики собрана как продуктово-технический слой поверх кода и старых документов: там есть аудит, карта фич, архитектура, операции и список рисков.
 
-### Настройка
-- **GOOGLE-IMPORT.md** — настройка и использование импорта из Google Maps
-- **SETUP-DUAL-HOST.md** — двойной хост (localhost + production)
-- **FIX-RLS-INSTRUCTIONS.md** — инструкции по RLS (Supabase)
+## Актуальная Вики
 
-### Функциональность
-- **README-CITY-RESOLUTION.md** — разрешение городов
-- **README-PERSISTENT-COUNTERS.md** — счётчики
-- **README-ROLES-IMPLEMENTATION.md** — роли пользователей
+- [Maporia Wiki](./wiki/README.md) - навигация и быстрый поиск.
+- [Product Audit](./wiki/01-product-audit.md) - что за продукт, монетизация, сценарии и приоритеты.
+- [Feature Map](./wiki/02-feature-map.md) - страницы, API routes, компоненты и поисковые команды.
+- [Architecture](./wiki/03-architecture.md) - стек, данные, роли, billing, интеграции.
+- [Operations And Risks](./wiki/04-operations-and-risks.md) - health-check, релизный checklist, риски.
+- [Search Index](./wiki/05-search-index.md) - термины, source-of-truth файлы и быстрые `rg` команды.
 
-### Supabase
-- **SUPABASE-AUDIT-COMPLETE.md** — полный аудит БД (актуальный)
-- **SUPABASE-STORAGE-AUDIT.md** — аудит Storage
-- **SUPABASE-SYNC-SUMMARY.md** — синхронизация
+## Документы По Темам
 
-### Прочее
-- **BRAND-GUIDE.md** — бренд, логотип, Wordmark, цвета (актуальная версия)
-- **TOPBAR-STATES-DOCUMENTATION.md** — состояния TopBar
-- **ADMIN-EDIT-PLACES-SUMMARY.md** — админ-редактирование мест
-- **ПРАВА-ПОЛЬЗОВАТЕЛЕЙ.md** — права пользователей
+### Бренд И UI
 
-## SQL-скрипты
+- [BRAND-GUIDE.md](./BRAND-GUIDE.md) - бренд, логотип, Wordmark, цвета.
+- [VISUAL-SCHEMAS.md](./VISUAL-SCHEMAS.md) - визуальные схемы.
+- [COLLECTION-COVERS-STORAGE.md](./COLLECTION-COVERS-STORAGE.md) - storage для обложек коллекций.
 
-Все миграции и скрипты лежат в папке **`sql/`** в корне проекта.
+### Auth И Доступ
+
+- [auth-email-password-plan.md](./auth-email-password-plan.md) - план email/password auth.
+- [IMPERSONATION_PLAN.md](./IMPERSONATION_PLAN.md) - admin impersonation.
+
+### Production
+
+- [production/PRODUCTION-AUDIT-REPORT.md](./production/PRODUCTION-AUDIT-REPORT.md)
+- [production/PRODUCTION-TROUBLESHOOTING.md](./production/PRODUCTION-TROUBLESHOOTING.md)
+- [production/PRODUCTION-DATA-LOADING-FIX.md](./production/PRODUCTION-DATA-LOADING-FIX.md)
+- [production/FIX-GOOGLE-MAPS-PRODUCTION.md](./production/FIX-GOOGLE-MAPS-PRODUCTION.md)
+
+### Archive
+
+Старые аудиты, инструкции и отчеты лежат в [archive/](./archive/). Они полезны как история решений, но перед применением надо сверять с текущим кодом и вики.
+
+## SQL И Скрипты
+
+- SQL: `scripts/sql/`
+- JS migrations/helpers: `scripts/migrations/`
+- Diagnostics: `scripts/diagnostics/`
+- Health checks: `scripts/health/`
