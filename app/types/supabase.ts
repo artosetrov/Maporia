@@ -212,9 +212,9 @@ export interface Database {
         Update: { place_id?: string; user_id?: string; reaction?: string }
       }
       comments: {
-        Row: { id: string; place_id: string; user_id: string; text: string; created_at: string; user_display_name?: string | null; user_username?: string | null; user_avatar_url?: string | null }
-        Insert: { place_id: string; user_id: string; text: string }
-        Update: { place_id?: string; user_id?: string; text?: string }
+        Row: { id: string; place_id: string; user_id: string; text: string; rating: number | null; created_at: string; user_display_name?: string | null; user_username?: string | null; user_avatar_url?: string | null }
+        Insert: { place_id: string; user_id: string; text: string; rating?: number | null }
+        Update: { place_id?: string; user_id?: string; text?: string; rating?: number | null }
       }
       place_photos: {
         Row: { id: string; place_id: string; user_id: string; url: string; sort: number; is_cover: boolean; created_at?: string }

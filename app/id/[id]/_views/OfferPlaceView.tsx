@@ -21,6 +21,7 @@ import TopBar from "../../../components/TopBar";
 import FavoriteIcon from "../../../components/FavoriteIcon";
 import Icon from "../../../components/Icon";
 import PremiumBadge from "../../../components/PremiumBadge";
+import ReviewsSection from "../../../components/ReviewsSection";
 import { isPlacePremium } from "../../../lib/access";
 
 type OfferPlace = {
@@ -40,6 +41,7 @@ type OfferPlace = {
   lng: number | null;
   created_at: string;
   access_level?: string | null;
+  comments_enabled?: boolean | null;
   kind?: "location" | "service" | "experience" | null;
   price_amount?: number | null;
   price_currency?: string | null;
@@ -342,6 +344,11 @@ export default function OfferPlaceView({
             )}
           </section>
         )}
+
+        {/* Reviews — pb для запаса под sticky-CTA снизу */}
+        <div className="pb-8">
+          <ReviewsSection placeId={place.id} commentsEnabled={place.comments_enabled} />
+        </div>
       </div>
 
       {/* Bottom CTA bar — sticky */}

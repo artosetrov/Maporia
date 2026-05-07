@@ -34,6 +34,7 @@ import { MapSkeleton } from "../../components/Skeleton";
 import { convertInstagramReelToEmbed, filterValidPhotos, isValidPhotoUrl } from "../../utils";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 import OfferPlaceView from "./_views/OfferPlaceView";
+import StarRating from "../../components/StarRating";
 
 type Place = {
   id: string;
@@ -63,10 +64,11 @@ type Place = {
   schedule?: unknown | null; // jsonb — конкретный тип в app/types/supabase.ts (PlaceSchedule)
 };
 
-type Comment = { 
-  id: string; 
-  text: string; 
-  created_at: string; 
+type Comment = {
+  id: string;
+  text: string;
+  rating: number | null; // 1..5, NULL для legacy комментариев без оценки
+  created_at: string;
   user_id: string;
   user_display_name?: string | null;
   user_username?: string | null;
@@ -88,6 +90,7 @@ type ProfileData = {
 type CommentData = {
   id: string;
   text: string;
+  rating: number | null;
   created_at: string;
   user_id: string;
 };
@@ -137,6 +140,8 @@ export default function PlacePage(props: PageProps) {
   const [place, setPlace] = useState<Place | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState("");
+  const [commentRating, setCommentRating] = useState<number>(0); // 0 = не выбрано
+  const [placeRating, setPlaceRating] = useState<{ avg: number; count: number }>({ avg: 0, count: 0 });
   const [sending, setSending] = useState(false);
   const [commentsLoading, setCommentsLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
@@ -474,7 +479,7 @@ export default function PlacePage(props: PageProps) {
           : Promise.resolve({ data: null, error: null } as { data: ProfileData | null; error: any }),
         supabase
           .from("comments")
-          .select("id,text,created_at,user_id")
+          .select("id,text,rating,created_at,user_id")
           .eq("place_id", id)
           .order("created_at", { ascending: false }),
         supabase
@@ -585,6 +590,19 @@ export default function PlacePage(props: PageProps) {
         setComments(commentsWithProfiles);
         setCommentsCount(commentsWithProfiles.length);
         setCommentError(null);
+
+        // Aggregate rating: avg + count по уже подгруженным комментам.
+        // Игнорируем legacy comments без rating.
+        const rated = commentsWithProfiles.filter((c) => typeof c.rating === "number");
+        if (rated.length > 0) {
+          const sum = rated.reduce((s, c) => s + (c.rating ?? 0), 0);
+          setPlaceRating({
+            avg: Math.round((sum / rated.length) * 100) / 100,
+            count: rated.length,
+          });
+        } else {
+          setPlaceRating({ avg: 0, count: 0 });
+        }
       }
       setCommentsLoading(false);
     })();
@@ -846,14 +864,19 @@ export default function PlacePage(props: PageProps) {
         return;
       }
 
+      // Если юзер поставил звёздочки — сохраняем как rating;
+      // legacy «просто комментарий без оценки» — rating остаётся null.
+      const ratingToSave = commentRating > 0 ? commentRating : null;
+
       const { data, error } = await supabase
         .from("comments")
         .insert({
           place_id: place.id,
           user_id: user.id,
           text: trimmedText,
+          rating: ratingToSave,
         } as any)
-        .select("id,text,created_at,user_id")
+        .select("id,text,rating,created_at,user_id")
         .single() as { data: CommentData | null; error: any };
 
       setSending(false);
@@ -883,7 +906,18 @@ export default function PlacePage(props: PageProps) {
         setComments((prev) => [newComment, ...prev]);
         setCommentsCount((prev) => prev + 1);
         setCommentText("");
+        setCommentRating(0);
         setCommentError(null);
+
+        // Пересчитать aggregate если был rating
+        if (ratingToSave) {
+          setPlaceRating((prev) => {
+            const newCount = prev.count + 1;
+            const newAvg =
+              (prev.avg * prev.count + ratingToSave) / newCount;
+            return { avg: Math.round(newAvg * 100) / 100, count: newCount };
+          });
+        }
       }
     } catch (err) {
       console.error("Unexpected error adding comment:", err);
@@ -1630,18 +1664,30 @@ export default function PlacePage(props: PageProps) {
 
         {/* Comments Section */}
         <section ref={commentsRef} id="comments" className="mb-16">
-          <h2 className="text-2xl font-semibold text-[#1F2A1F] mb-6">Comments</h2>
+          <h2 className="text-2xl font-semibold text-[#1F2A1F] mb-2">Reviews</h2>
+          {placeRating.count > 0 && (
+            <div className="flex items-center gap-2 mb-5 text-sm text-[#1F2A1F]">
+              <StarRating value={placeRating.avg} size={16} />
+              <span className="font-semibold">{placeRating.avg.toFixed(2)}</span>
+              <span className="text-[#6F7A5A]">·</span>
+              <span className="text-[#6F7A5A]">{placeRating.count} review{placeRating.count === 1 ? "" : "s"}</span>
+            </div>
+          )}
 
           {/* Check if comments are enabled (default to enabled if null/undefined) */}
           {place?.comments_enabled === false ? (
             <div className="text-center py-12 text-[#8F9E4F]/60">
-              <div className="mb-1">Comments are disabled for this place</div>
+              <div className="mb-1">Reviews are disabled for this place</div>
             </div>
           ) : (
             <>
-          {/* Add comment */}
+          {/* Add review */}
           {userId ? (
             <div className="mb-6 rounded-xl border border-[#ECEEE4] bg-white p-4">
+              <div className="mb-3">
+                <div className="text-xs uppercase tracking-wide text-[#6F7A5A] mb-1.5">Your rating</div>
+                <StarRating value={commentRating} size={28} onChange={setCommentRating} />
+              </div>
               <textarea
                 className="w-full bg-transparent text-sm outline-none text-[#1F2A1F] placeholder:text-[#8F9E4F]/40 resize-none mb-3"
                 placeholder="Share your thoughts..."
@@ -1753,6 +1799,11 @@ export default function PlacePage(props: PageProps) {
                             </button>
                           )}
                         </div>
+                        {typeof c.rating === "number" && (
+                          <div className="mb-1">
+                            <StarRating value={c.rating} size={14} />
+                          </div>
+                        )}
                         <div className="text-sm text-[#1F2A1F] leading-relaxed">
                           {c.text}
                         </div>
@@ -2149,16 +2200,28 @@ export default function PlacePage(props: PageProps) {
           </section>
 
           <section ref={commentsRef} id="comments" className="mb-16">
-            <h2 className="text-2xl font-semibold text-[#1F2A1F] mb-6">Comments</h2>
+            <h2 className="text-2xl font-semibold text-[#1F2A1F] mb-2">Reviews</h2>
+            {placeRating.count > 0 && (
+              <div className="flex items-center gap-2 mb-5 text-sm text-[#1F2A1F]">
+                <StarRating value={placeRating.avg} size={16} />
+                <span className="font-semibold">{placeRating.avg.toFixed(2)}</span>
+                <span className="text-[#6F7A5A]">·</span>
+                <span className="text-[#6F7A5A]">{placeRating.count} review{placeRating.count === 1 ? "" : "s"}</span>
+              </div>
+            )}
             {/* Check if comments are enabled (default to enabled if null/undefined) */}
             {place?.comments_enabled === false ? (
               <div className="text-center py-12 text-[#8F9E4F]/60">
-                <div className="mb-1">Comments are disabled for this place</div>
+                <div className="mb-1">Reviews are disabled for this place</div>
               </div>
             ) : (
               <>
             {userId ? (
               <div className="mb-6 rounded-xl border border-[#ECEEE4] bg-white p-4">
+                <div className="mb-3">
+                  <div className="text-xs uppercase tracking-wide text-[#6F7A5A] mb-1.5">Your rating</div>
+                  <StarRating value={commentRating} size={28} onChange={setCommentRating} />
+                </div>
                 <textarea
                   className="w-full bg-transparent text-sm outline-none text-[#1F2A1F] placeholder:text-[#8F9E4F]/40 resize-none mb-3"
                   placeholder="Share your thoughts..."
