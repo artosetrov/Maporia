@@ -23,7 +23,6 @@ npm run health:json
 
 | Priority | Риск | Где | Почему важно | Что сделать |
 | --- | --- | --- | --- | --- |
-| P0 | Billing docs/env не совпадают с текущими тарифами | `.env.example`, `app/lib/plans.ts`, `app/api/stripe/**` | Checkout creator-планов может не завестись на новом окружении | Обновить `.env.example`, README и Stripe setup docs под все current price IDs |
 | P1 | Public route может не фильтровать premium access | `app/feed/page.tsx`, `app/places/[id]/settings/page.tsx` | Риск показа premium/hidden данных не тем пользователям | Проверить queries и добавить `canUserViewPlace`/server filtering |
 | P1 | PostgREST `.or()` без sanitize в нескольких местах | `app/components/PremiumUpsellModal.tsx`, `app/(auth)/add/page.tsx` | Потенциальная filter injection/сломанные фильтры при спецсимволах | Использовать `sanitizePostgrestValue` или структурировать query без raw `.or()` |
 | P1 | Несколько источников правды для card batch loading | `/map`, `/explore`, collections, profile, `useBatchPlaceData` | Риск N+1, разного UI и разной производительности | Вынести общий loader и перевести списки на него |
@@ -122,7 +121,7 @@ rg "canUserViewPlace|isPlacePremium|getUserAccess" app
 Актуальные рядом:
 
 - `README.md` - базовый setup.
-- `STRIPE_SETUP.md` - Stripe setup, требует синхронизации с текущей тарифной сеткой.
+- `STRIPE_SETUP.md` - Stripe setup, синхронизирован с текущей тарифной сеткой.
 - `docs/BRAND-GUIDE.md` - бренд.
 - `docs/VISUAL-SCHEMAS.md` - визуальные схемы.
 - `docs/COLLECTION-COVERS-STORAGE.md` - storage для collection covers.

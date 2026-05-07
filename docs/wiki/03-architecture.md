@@ -104,7 +104,7 @@ STRIPE_PRICE_CREATOR_ALL_MONTH=
 STRIPE_PRICE_EXTRA_LISTING=
 ```
 
-Legacy env `STRIPE_PRICE_ID` еще документирован в `.env.example`; его надо оставить только как совместимость или заменить в docs.
+Legacy env `STRIPE_PRICE_ID` остаётся только как fallback для старого one-time Premium checkout. Новые флоу должны использовать `PLAN_CONFIG` price env выше.
 
 ## Integrations
 
