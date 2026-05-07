@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { supabase, getAuthRedirectUrl } from "../lib/supabase";
+import { getAuthUrl, getSignupUrl } from "../lib/authRedirect";
 import Icon from "./Icon";
 
 export type AuthModalVariant = "default" | "profile" | "saved" | "premium";
@@ -73,7 +74,9 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: getAuthRedirectUrl(redirectTo),
+        // Уводим клик из письма через /auth/callback — это место, где
+        // PKCE-обмен токенов отрабатывает чисто и аккуратно редиректит дальше.
+        emailRedirectTo: getAuthRedirectUrl(`/auth/callback?next=${encodeURIComponent(redirectTo)}`),
       },
     });
 
@@ -85,6 +88,16 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
     }
   }
 
+  function goToLogin() {
+    onClose();
+    router.push(getAuthUrl(redirectPath));
+  }
+
+  function goToSignup() {
+    onClose();
+    router.push(getSignupUrl(redirectPath));
+  }
+
   async function signInWithGoogle() {
     setError(null);
     setGoogleLoading(true);
@@ -93,7 +106,7 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: getAuthRedirectUrl(redirectTo),
+        redirectTo: getAuthRedirectUrl(`/auth/callback?next=${encodeURIComponent(redirectTo)}`),
       },
     });
 
@@ -163,6 +176,32 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
               </div>
             )}
 
+            {/* Primary: email + password */}
+            <button
+              type="button"
+              onClick={goToLogin}
+              className="w-full py-3 px-4 rounded-xl bg-[#8F9E4F] text-white font-semibold text-sm hover:brightness-110 active:brightness-90 transition-all"
+            >
+              Sign in with email and password
+            </button>
+            <button
+              type="button"
+              onClick={goToSignup}
+              className="mt-3 w-full py-3 px-4 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] font-semibold text-sm hover:bg-[#FAFAF7] transition-colors"
+            >
+              Create account
+            </button>
+
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-[#ECEEE4]"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-[#A8B096]">Or use magic link</span>
+              </div>
+            </div>
+
+            {/* Magic link — оставлен как fallback */}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -188,7 +227,7 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 px-4 rounded-xl bg-[#8F9E4F] text-white font-semibold text-sm hover:brightness-110 active:brightness-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3 px-4 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] font-semibold text-sm hover:bg-[#FAFAF7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? "Sending..." : "Send magic link"}
               </button>

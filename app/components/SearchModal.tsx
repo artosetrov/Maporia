@@ -384,7 +384,8 @@ export default function SearchModal({
       const count = await getFilteredPlacesCount(city, tags, searchQuery);
       setPlacesCount(count);
 
-      // Get search results for display
+      // Get search results for display.
+      // Order matters: places (catalog matches) come first, cities after.
       const results: SearchResult[] = [];
 
       const tokens = tokenizeQuery(searchQuery);
@@ -394,29 +395,6 @@ export default function SearchModal({
       // ILIKE returned (e.g. "cap_s" must match "cap's place").
       const normalizeForMatch = (s: string): string =>
         s.toLowerCase().replace(/[''`‘’]/g, "_");
-
-      // Search cities — match if ANY token appears in the city name.
-      // Falls back to substring of full query when tokenization yields nothing
-      // (e.g. user typed "S." which is below the min-len threshold).
-      if (searchQuery.trim()) {
-        const matchingCities = cities.filter((c) => {
-          const name = normalizeForMatch(c.name);
-          if (tokens.length === 0) return name.includes(normalizeForMatch(fullQ));
-          // Token may contain `_` as single-char wildcard. For client-side
-          // matching we treat `_` literally — it'll still match the
-          // normalized apostrophe in the haystack.
-          return tokens.some((t) => name.includes(t));
-        });
-        matchingCities.forEach((city) => {
-          results.push({
-            type: "city",
-            id: city.id,
-            title: city.name,
-            subtitle: "City",
-            icon: "location",
-          });
-        });
-      }
 
       // Search places — token-based OR across multiple fields, then ranked
       // on the client by number of unique tokens hit. This makes
@@ -507,6 +485,30 @@ export default function SearchModal({
             });
           });
         }
+      }
+
+      // Search cities — match if ANY token appears in the city name.
+      // Falls back to substring of full query when tokenization yields nothing
+      // (e.g. user typed "S." which is below the min-len threshold).
+      // Pushed after places so the catalog matches surface first.
+      if (searchQuery.trim()) {
+        const matchingCities = cities.filter((c) => {
+          const name = normalizeForMatch(c.name);
+          if (tokens.length === 0) return name.includes(normalizeForMatch(fullQ));
+          // Token may contain `_` as single-char wildcard. For client-side
+          // matching we treat `_` literally — it'll still match the
+          // normalized apostrophe in the haystack.
+          return tokens.some((t) => name.includes(t));
+        });
+        matchingCities.forEach((city) => {
+          results.push({
+            type: "city",
+            id: city.id,
+            title: city.name,
+            subtitle: "City",
+            icon: "location",
+          });
+        });
       }
 
       setSearchResults(results);
@@ -830,41 +832,66 @@ export default function SearchModal({
               {loading ? (
                 <div className="px-0 py-8 text-center text-[#6F7A5A]">Searching...</div>
               ) : searchResults.length > 0 ? (
-                <div className="space-y-0">
-                  {searchResults.map((result, idx) => {
-                    const colors = [
-                      { bg: "bg-[#E8F0E8]", hover: "group-hover:bg-[#D4E4D4]", icon: "text-[#8F9E4F]" },
-                      { bg: "bg-[#F5E8D8]", hover: "group-hover:bg-[#E8D4C0]", icon: "text-[#C96A5B]" },
-                      { bg: "bg-[#F0E8F5]", hover: "group-hover:bg-[#E0D4E8]", icon: "text-[#9E4F8F]" },
-                      { bg: "bg-[#E8F5F0]", hover: "group-hover:bg-[#D4E8E0]", icon: "text-[#4F9E8F]" },
-                      { bg: "bg-[#F5F0E8]", hover: "group-hover:bg-[#E8E0D4]", icon: "text-[#9E8F4F]" },
-                      { bg: "bg-[#E8E8F5]", hover: "group-hover:bg-[#D4D4E8]", icon: "text-[#4F4F9E]" },
-                    ];
-                    const color = colors[idx % colors.length];
-                    const iconName = result.type === "city" ? "location" : result.icon || "photo";
-                    
-                    return (
-                      <SearchResultItem 
-                        key={`${result.type}-${result.id}`}
-                        result={result}
-                        color={color}
-                        iconName={iconName}
-                        idx={idx}
-                        totalResults={searchResults.length}
-                        onCitySelect={handleCitySelect}
-                        onQuerySet={setQuery}
-                        onPlaceClick={(placeId) => {
-                          if (isDesktop) {
-                            window.open(`/id/${placeId}`, "_blank", "noopener,noreferrer");
-                          } else {
-                            router.push(`/id/${placeId}`);
-                          }
-                        }}
-                        onClose={onClose}
-                      />
-                    );
-                  })}
-                </div>
+                (() => {
+                  const colors = [
+                    { bg: "bg-[#E8F0E8]", hover: "group-hover:bg-[#D4E4D4]", icon: "text-[#8F9E4F]" },
+                    { bg: "bg-[#F5E8D8]", hover: "group-hover:bg-[#E8D4C0]", icon: "text-[#C96A5B]" },
+                    { bg: "bg-[#F0E8F5]", hover: "group-hover:bg-[#E0D4E8]", icon: "text-[#9E4F8F]" },
+                    { bg: "bg-[#E8F5F0]", hover: "group-hover:bg-[#D4E8E0]", icon: "text-[#4F9E8F]" },
+                    { bg: "bg-[#F5F0E8]", hover: "group-hover:bg-[#E8E0D4]", icon: "text-[#9E8F4F]" },
+                    { bg: "bg-[#E8E8F5]", hover: "group-hover:bg-[#D4D4E8]", icon: "text-[#4F4F9E]" },
+                  ];
+                  const placeResults = searchResults.filter((r) => r.type === "place");
+                  const cityResults = searchResults.filter((r) => r.type === "city");
+                  const otherResults = searchResults.filter(
+                    (r) => r.type !== "place" && r.type !== "city",
+                  );
+                  const handlePlaceClick = (placeId: string) => {
+                    if (isDesktop) {
+                      window.open(`/id/${placeId}`, "_blank", "noopener,noreferrer");
+                    } else {
+                      router.push(`/id/${placeId}`);
+                    }
+                  };
+                  const renderSection = (
+                    sectionTitle: string,
+                    items: SearchResult[],
+                  ) => (
+                    <div className="space-y-0">
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6F7A5A] pt-4 pb-2">
+                        {sectionTitle}
+                      </h3>
+                      {items.map((result, idx) => {
+                        const color = colors[idx % colors.length];
+                        const iconName =
+                          result.type === "city"
+                            ? "location"
+                            : result.icon || "photo";
+                        return (
+                          <SearchResultItem
+                            key={`${result.type}-${result.id}`}
+                            result={result}
+                            color={color}
+                            iconName={iconName}
+                            idx={idx}
+                            totalResults={items.length}
+                            onCitySelect={handleCitySelect}
+                            onQuerySet={setQuery}
+                            onPlaceClick={handlePlaceClick}
+                            onClose={onClose}
+                          />
+                        );
+                      })}
+                    </div>
+                  );
+                  return (
+                    <>
+                      {placeResults.length > 0 && renderSection("Places", placeResults)}
+                      {cityResults.length > 0 && renderSection("Cities", cityResults)}
+                      {otherResults.length > 0 && renderSection("Other", otherResults)}
+                    </>
+                  );
+                })()
               ) : (
                 <div className="px-0 py-8 text-center text-[#6F7A5A]">
                   No results found

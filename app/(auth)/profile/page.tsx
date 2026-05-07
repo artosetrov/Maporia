@@ -19,6 +19,7 @@ import PlaceCard from "../../components/PlaceCard";
 import FavoriteIcon from "../../components/FavoriteIcon";
 import { useUserAccessContext } from "../../contexts/UserAccessContext";
 import { useAuthRedirect } from "../../hooks/useAuthRedirect";
+import { getAuthUrl } from "../../lib/authRedirect";
 import { useIsDesktop } from "../../hooks/useIsDesktop";
 import { isUserAdmin, isPlacePremium, canUserViewPlace, canUserAddPlace, type UserAccess } from "../../lib/access";
 import { PLAN_CONFIG, PLAN_ORDER, EXTRA_LISTING, formatPrice } from "../../lib/plans";
@@ -3848,7 +3849,7 @@ function PremiumSection() {
   async function startCheckout(planId: string) {
     setError(null);
     if (!user) {
-      router.push("/auth?next=/profile?section=premium");
+      router.push(getAuthUrl("/profile?section=premium"));
       return;
     }
     if (currentPlan === planId) {
@@ -3860,7 +3861,7 @@ function PremiumSection() {
       const { data: sess } = await supabase.auth.getSession();
       const token = sess.session?.access_token;
       if (!token) {
-        router.push("/auth?next=/profile?section=premium");
+        router.push(getAuthUrl("/profile?section=premium"));
         return;
       }
       const cfg = PLAN_CONFIG[planId as keyof typeof PLAN_CONFIG];
@@ -3891,7 +3892,7 @@ function PremiumSection() {
       const { data: sess } = await supabase.auth.getSession();
       const token = sess.session?.access_token;
       if (!token) {
-        router.push("/auth?next=/profile?section=premium");
+        router.push(getAuthUrl("/profile?section=premium"));
         return;
       }
       const res = await fetch("/api/stripe/portal", {
