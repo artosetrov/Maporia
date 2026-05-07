@@ -135,6 +135,8 @@ export interface Database {
           comments_enabled: boolean | null
           google_place_id: string | null
           is_hidden: boolean | null
+          /** True когда владелец вручную скрыл карточку через тумблер Visibility. Auto-publish эффект редактора пропускает такие карточки. См. add_manually_hidden_to_places. */
+          manually_hidden: boolean
           kind: PlaceKind
           /** Дополнительные kind'ы; не пересекаются с primary `kind`. См. add_secondary_kinds_to_places. */
           secondary_kinds: PlaceKind[]
@@ -184,6 +186,7 @@ export interface Database {
           comments_enabled?: boolean | null
           google_place_id?: string | null
           is_hidden?: boolean | null
+          manually_hidden?: boolean
           kind?: PlaceKind
           secondary_kinds?: PlaceKind[]
           price_amount?: number | null
@@ -232,6 +235,7 @@ export interface Database {
           comments_enabled?: boolean | null
           google_place_id?: string | null
           is_hidden?: boolean | null
+          manually_hidden?: boolean
           kind?: PlaceKind
           secondary_kinds?: PlaceKind[]
           price_amount?: number | null

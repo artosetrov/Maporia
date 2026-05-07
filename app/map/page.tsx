@@ -38,19 +38,9 @@ import Icon from "../components/Icon";
 import { PlaceCardGridSkeleton, MapSkeleton, Empty } from "../components/Skeleton";
 import { sanitizePostgrestValue, normalizeCity, cx, initialsFromEmail, timeAgo, isValidPhotoUrl } from "../utils";
 import type { PlaceListItem as Place } from "../types";
-import { buildCityRadiusFilter, getCityCoords, isPlaceWithinCityRadius } from "../lib/cityRadius";
+import { buildCityRadiusFilter, getCityCoords } from "../lib/cityRadius";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
-
-// Тип для фильтров
-type PlaceFilters = {
-  premium?: boolean;
-  premiumOnly?: boolean;
-  cities?: string[];
-  categories?: string[];
-  tags?: string[];
-  /** Pre-resolved city coordinates for radius filtering */
-  cityCoordsMap?: Map<string, { lat: number | null; lng: number | null }>;
-};
+import { filterPlaces } from "../lib/filterPlaces";
 
 // Result types for Supabase queries (Database['public']['Tables'][table]['Row'] + Pick)
 type ProfilesRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -75,51 +65,6 @@ type PlacePhotoUrl = Pick<PlacePhotosRow, "url">;
 type PlacePhotosUrlResult = { data: PlacePhotoUrl[] | null; error: PostgrestError | null };
 type PlacePhotoPlaceIdUrl = Pick<PlacePhotosRow, "place_id" | "url">;
 type PlacePhotosBatchResult = { data: PlacePhotoPlaceIdUrl[] | null; error: PostgrestError | null };
-
-// Централизованная функция фильтрации мест
-function filterPlaces(places: Place[], filters: PlaceFilters): Place[] {
-  let filtered = [...places];
-
-  // Фильтрация по Premium
-  if (filters.premium) {
-    filtered = filtered.filter(place => isPlacePremium(place));
-  }
-
-  // Фильтрация по городам с радиусом 10 миль (OR внутри группы)
-  if (filters.cities && filters.cities.length > 0) {
-    const coordsMap = filters.cityCoordsMap;
-    filtered = filtered.filter(place => {
-      return filters.cities!.some(cityName => {
-        const coords = coordsMap?.get(cityName.toLowerCase().trim());
-        if (coords) {
-          return isPlaceWithinCityRadius(place, cityName, coords.lat, coords.lng);
-        }
-        // Fallback: strict name match
-        const placeCity = normalizeCity(place.city || place.city_name_cached);
-        return normalizeCity(cityName) === placeCity;
-      });
-    });
-  }
-
-  // Фильтрация по категориям - OR внутри группы (место имеет любую из выбранных категорий)
-  if (filters.categories && filters.categories.length > 0) {
-    filtered = filtered.filter(place => {
-      if (!place.categories || place.categories.length === 0) return false;
-      return filters.categories!.some(cat => place.categories!.includes(cat));
-    });
-  }
-
-  // Фильтрация по тегам - OR (место имеет любой из выбранных тегов)
-  if (filters.tags && filters.tags.length > 0) {
-    filtered = filtered.filter(place => {
-      if (!place.tags || place.tags.length === 0) return false;
-      return filters.tags!.some(tag => place.tags!.includes(tag));
-    });
-  }
-
-  return filtered;
-}
-
 
 function MapPageContent() {
   const router = useRouter();
@@ -849,8 +794,11 @@ function MapPageContent() {
       }
     })();
     return () => { cancelled = true; };
-  // SUGGESTION (deps only, do not change code): Keep refetch tied to server-affecting params as now. Do not add filteredPlaces.length or placesData?.length — would cause refetch on client-only filter changes. Optional: single filterKey = JSON.stringify({ appliedCity, appliedCities, appliedQ, appliedCategories, selectedTag, sort: activeFilters.sort }) in deps instead of listing each. See docs/SUGGESTION-USER-ACCESS-PROVIDER.md §3.
-  }, [appliedCity, appliedCities, appliedQ, appliedCategories, selectedTag, activeFilters.sort, hasExplicitCityInUrlState, userId, bootReady, refreshKey]);
+  // SUGGESTION (deps only, do not change code): Keep refetch tied to server-affecting params as now. Do not add filteredPlaces.length or placesData?.length — would cause refetch on client-only filter changes. Optional: single filterKey = JSON.stringify({ appliedCity, appliedCities, appliedQ, appliedCategories, selectedTag, sort: activeFilters.sort, kinds: activeFilters.kinds }) in deps instead of listing each. See docs/SUGGESTION-USER-ACCESS-PROVIDER.md §3.
+  // activeFilters.kinds — server-side фильтр (.in("kind", kinds) выше), поэтому ОБЯЗАН быть в deps,
+  // иначе при смене типа карточки в FiltersModal список не перезапрашивается.
+  // Стабилизируем массив через JSON.stringify, чтобы избежать новой ссылки на каждый рендер.
+  }, [appliedCity, appliedCities, appliedQ, appliedCategories, selectedTag, activeFilters.sort, JSON.stringify(activeFilters.kinds ?? []), hasExplicitCityInUrlState, userId, bootReady, refreshKey]);
 
   // No pagination - placesData contains all places directly
 
@@ -950,11 +898,13 @@ function MapPageContent() {
         }
         
         // Затем применяем остальные фильтры (с радиусом для городов)
+        const activeKinds = activeFilters.kinds ?? [];
         result = filterPlaces(result, {
           premium: activeFilters.premium,
           premiumOnly: activeFilters.premiumOnly,
           categories: activeFilters.categories.length > 0 ? activeFilters.categories : undefined,
           tags: (activeFilters.tags ?? []).length > 0 ? (activeFilters.tags ?? []) : undefined,
+          kinds: activeKinds.length > 0 ? activeKinds : undefined,
           cities: citiesForFilter,
           cityCoordsMap,
         });
@@ -1539,111 +1489,24 @@ function MapPageContent() {
           // Увеличиваем версию фильтров для принудительного обновления списка
           setFiltersVersion(prev => prev + 1);
         }}
-        getFilteredCount={async (draftFilters: ActiveFilters, draftCities: string[]) => {
-          // Используем централизованную функцию filterPlaces для подсчета
+        // Спринт 2.1: один SELECT, FiltersModal сам считает все счётчики через
+        // computeFilterCounts. Это заменяет getFilteredCount + getCategoryCount + getKindCount.
+        getFilterPlaces={async () => {
           try {
-            // Используем только draftCities из модального окна
-            // НЕ применяем fallback на appliedCity/appliedCities, чтобы показывать правильное количество
-            // при открытии модального окна без выбранных фильтров
-            let selectedCities: string[] = [];
-            if (draftCities.length > 0) {
-              // Если в draftCities есть города, используем их (включая DEFAULT_CITY, если он там есть)
-              selectedCities = draftCities;
-            }
-            // Если draftCities пустой, не применяем фильтр по городам вообще
-            // Это позволяет показывать общее количество мест (37) при открытии модального окна
-
-            // Проверяем, выбраны ли все города или все категории
-            const allCitiesSelected = selectedCities.length > 0 && 
-                                     selectedCities.length === CITIES.length &&
-                                     CITIES.every(city => selectedCities.includes(city));
-            
-            const allCategoriesSelected = draftFilters.categories.length > 0 && 
-                                         draftFilters.categories.length === CATEGORIES.length &&
-                                         CATEGORIES.every(cat => draftFilters.categories.includes(cat));
-
-            let dataToFilter: Place[] = [];
-            
-            // Оптимизация: загружаем только необходимые поля для подсчета
-            // Используем только существующие поля: access_level для premium, категории для hidden/vibe
-            const placesCountResult = (await supabase
+            const { data, error } = (await supabase
               .from("places")
-              .select("id,title,description,city,city_name_cached,categories,tags,access_level,country")) as { data: PlacesSelectRow[] | null; error: PostgrestError | null };
-            const { data: allData, error: dataError } = placesCountResult;
-
-            if (dataError) {
-              // Silently ignore AbortError
-              if (dataError.message?.includes('abort') || dataError.name === 'AbortError' || (dataError as any).code === 'ECONNABORTED') {
-                if (places.length > 0) {
-                  dataToFilter = places;
-                } else {
-                  return 0;
-                }
-              } else {
-                // Enhanced logging for production
-                if (process.env.NODE_ENV === 'production') {
-                  console.error("Error fetching places for count:", {
-                    message: dataError.message,
-                    code: dataError.code,
-                    details: dataError.details,
-                    hint: dataError.hint,
-                  });
-                } else {
-                  console.error("Error fetching places for count:", dataError);
-                }
-                if (places.length > 0) {
-                  dataToFilter = places;
-                } else {
-                  return 0;
-                }
+              .select("id,title,description,city,city_name_cached,categories,tags,access_level,country,kind,lat,lng")) as { data: PlacesSelectRow[] | null; error: PostgrestError | null };
+            if (error) {
+              if (process.env.NODE_ENV === 'production') {
+                console.error("Error fetching places for filter counts:", {
+                  message: error.message, code: error.code,
+                });
               }
-            } else {
-              dataToFilter = (allData || []) as Place[];
+              return places.length > 0 ? places : [];
             }
-
-            if (dataToFilter.length === 0) {
-              return 0;
-            }
-
-            // Не применяем поисковый запрос в модальном окне фильтров
-            // Поиск применяется отдельно через SearchModal
-            // Фильтруем только по фильтрам из модального окна
-            const draftTags = draftFilters.tags ?? [];
-            const availableTagsFromData = Array.from(new Set(dataToFilter.flatMap((p: Place) => p.tags ?? [])));
-            const allTagsSelected = draftTags.length > 0 && availableTagsFromData.length > 0 && draftTags.length >= availableTagsFromData.length;
-            // Pre-resolve city coords for radius filtering
-            const citiesToResolve = selectedCities.length > 0 && !allCitiesSelected ? selectedCities : [];
-            const resolvedCoordsMap = new Map<string, { lat: number | null; lng: number | null }>();
-            await Promise.all(
-              citiesToResolve.map(async (name) => {
-                const coords = await getCityCoords(name);
-                resolvedCoordsMap.set(name.toLowerCase().trim(), coords);
-              }),
-            );
-
-            const filtered = filterPlaces(dataToFilter, {
-              premium: draftFilters.premium || draftFilters.premiumOnly || false,
-              cities: selectedCities.length > 0 && !allCitiesSelected ? selectedCities : undefined,
-              categories: draftFilters.categories.length > 0 && !allCategoriesSelected ? draftFilters.categories : undefined,
-              tags: draftTags.length > 0 && !allTagsSelected ? draftTags : undefined,
-              cityCoordsMap: resolvedCoordsMap,
-            });
-
-            return filtered.length;
-          } catch (error: any) {
-            // Silently ignore AbortError
-            if (error?.name === 'AbortError' || error?.message?.includes('abort') || error?.code === 'ECONNABORTED') {
-              return 0;
-            }
-            // Enhanced logging for production
-            if (process.env.NODE_ENV === 'production') {
-              console.error("Error in getFilteredCount:", {
-                error: error?.message || String(error),
-              });
-            } else {
-              console.error("Error in getFilteredCount:", error);
-            }
-            return 0;
+            return (data || []) as Place[];
+          } catch {
+            return places.length > 0 ? places : [];
           }
         }}
         getCityCount={async (city: string) => {
@@ -1672,21 +1535,6 @@ function MapPageContent() {
             if (err?.name === 'AbortError' || err?.message?.includes('abort') || err?.code === 'ECONNABORTED') {
               return 0;
             }
-            return 0;
-          }
-        }}
-        getCategoryCount={async (category: string, premiumOnly?: boolean) => {
-          try {
-            let query = supabase
-              .from("places")
-              .select("*", { count: 'exact', head: true })
-              .overlaps("categories", [category]);
-            if (premiumOnly) {
-              query = query.eq("access_level", "premium");
-            }
-            const { count } = await query;
-            return count || 0;
-          } catch {
             return 0;
           }
         }}

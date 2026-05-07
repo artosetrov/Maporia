@@ -595,7 +595,7 @@ function HomePageInner() {
           Обе строки залипают вместе при скролле, поэтому пользователь
           всегда видит и тип контента, и строку поиска.
         */}
-        <div className="border-b border-[#ECEEE4] bg-[#FAFAF7] sticky top-[64px] z-20">
+        <div className="border-b border-[#ECEEE4] bg-white sticky top-[64px] z-50">
           <div
             className="mx-auto max-w-[1920px]"
             style={{

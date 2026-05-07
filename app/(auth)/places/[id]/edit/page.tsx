@@ -83,6 +83,8 @@ type Place = {
   cover_url: string | null;
   created_at: string;
   is_hidden?: boolean | null;
+  /** True когда владелец скрыл карточку через тумблер. Auto-publish эффект пропускает такие карточки. */
+  manually_hidden?: boolean | null;
   // Place kind + offer-specific fields (для service / experience)
   kind?: "location" | "service" | "experience" | null;
   price_amount?: number | null;
@@ -245,7 +247,7 @@ export default function PlaceEditorHub(props: PageProps) {
       const [placeRes, photosRes] = await Promise.all([
         supabase
           .from("places")
-          .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
+          .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, is_hidden, manually_hidden, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
           .eq("id", placeId)
           .single(),
         supabase
@@ -380,7 +382,7 @@ export default function PlaceEditorHub(props: PageProps) {
         (async () => {
           const { data: rawPlace } = await supabase
             .from("places")
-            .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
+            .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, is_hidden, manually_hidden, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
             .eq("id", placeId)
             .single();
 
@@ -418,9 +420,12 @@ export default function PlaceEditorHub(props: PageProps) {
     console.log("Toggling visibility:", { placeId, newHiddenState, currentIsHidden: isHidden });
 
     // Try multiple possible field names
+    // manually_hidden — explicit user intent. Когда true, auto-publish effect ниже
+    // не будет переоткрывать карточку, даже если все обязательные поля заполнены.
     const payload: any = {
       is_hidden: newHiddenState,
       visibility: newHiddenState ? "hidden" : "public",
+      manually_hidden: newHiddenState,
     };
 
     // Admin can update any place, owner can update their own
@@ -493,6 +498,7 @@ export default function PlaceEditorHub(props: PageProps) {
         ...updatedPlace,
         is_hidden: updatedPlace.is_hidden ?? newHiddenState,
         visibility: updatedPlace.visibility ?? (newHiddenState ? "hidden" : "public"),
+        manually_hidden: updatedPlace.manually_hidden ?? newHiddenState,
       } as Place;
       
       console.log("State updated in setPlace:", { 
@@ -516,10 +522,11 @@ export default function PlaceEditorHub(props: PageProps) {
       });
     }, 100);
 
-    // Reset auto-visibility ref when manually hiding, so it can auto-enable again if all fields are filled
-    if (newHiddenState) {
-      autoVisibilityEnabledRef.current = false;
-    }
+    // ВАЖНО: НЕ сбрасываем autoVisibilityEnabledRef при ручном hide.
+    // Раньше тут стоял `autoVisibilityEnabledRef.current = false`, и сразу после ручного
+    // скрытия срабатывал auto-publish effect, мгновенно возвращая видимость обратно.
+    // Теперь явное намерение пользователя живёт в БД-флаге places.manually_hidden,
+    // и auto-publish effect его уважает (см. условие ниже).
 
     console.log("Visibility updated successfully:", { 
       newHiddenState, 
@@ -890,19 +897,24 @@ export default function PlaceEditorHub(props: PageProps) {
   }, [place, photos]);
 
   // Automatically enable Visibility when all required fields are filled
+  // ВАЖНО: эффект публикует только черновик (manually_hidden !== true).
+  // Если пользователь явно скрыл карточку через тумблер, place.manually_hidden = true,
+  // и эффект её НЕ трогает, иначе ручное скрытие моментально откатывалось бы.
   useEffect(() => {
-    if (!placeId || !user || !place || !allRequiredFieldsFilled || !isHidden) {
-      // Reset ref when conditions are not met
+    const isManuallyHidden = place?.manually_hidden === true;
+    if (!placeId || !user || !place || !allRequiredFieldsFilled || !isHidden || isManuallyHidden) {
+      // Reset ref when conditions are not met (но НЕ когда заблокировано ручным флагом —
+      // там reset бесполезен, потому что ref всё равно ничего не делает).
       if (!allRequiredFieldsFilled || !isHidden) {
         autoVisibilityEnabledRef.current = false;
       }
       return;
     }
-    
+
     // Prevent duplicate requests
     if (autoVisibilityEnabledRef.current) return;
-    
-    // Only auto-enable if currently hidden
+
+    // Only auto-enable if currently hidden AND not manually hidden by the user
     autoVisibilityEnabledRef.current = true;
     (async () => {
       const currentIsAdmin = isUserAdmin(access);
@@ -1615,7 +1627,10 @@ export default function PlaceEditorHub(props: PageProps) {
               onClick={async () => {
                 // Если карточка ещё скрыта, но все обязательные поля есть — явно публикуем
                 // (auto-unhide effect мог не отработать, если юзер быстро ушёл со страницы).
-                if (isHidden && allRequiredFieldsFilled && placeId) {
+                // НО уважаем manually_hidden: если пользователь намеренно скрыл карточку
+                // тумблером, кнопка Save не публикует её автоматически.
+                const manuallyHidden = place?.manually_hidden === true;
+                if (isHidden && allRequiredFieldsFilled && placeId && !manuallyHidden) {
                   isUpdatingRef.current = true;
                   const updateQuery = supabase
                     .from("places")
@@ -1634,7 +1649,7 @@ export default function PlaceEditorHub(props: PageProps) {
                   : "bg-[#8F9E4F] text-white hover:bg-[#556036]"
               )}
             >
-              {isHidden && allRequiredFieldsFilled ? "Publish" : "Save"}
+              {isHidden && allRequiredFieldsFilled && place?.manually_hidden !== true ? "Publish" : "Save"}
             </button>
           </div>
         </div>

@@ -2,11 +2,20 @@
 
  
 
-import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import { CATEGORIES, getTagEmoji, stripTagEmoji } from "../constants";
+import {
+  CATEGORIES,
+  LOCATION_CATEGORIES,
+  SERVICE_CATEGORIES,
+  EXPERIENCE_CATEGORIES,
+  getTagEmoji,
+  stripTagEmoji,
+} from "../constants";
 import Icon from "./Icon";
 import { type UserAccess } from "../lib/access";
+import { computeFilterCounts } from "../lib/filterCounts";
+import type { FilterablePlace } from "../lib/filterPlaces";
 
 export type ActiveFilters = {
   categories: string[];
@@ -49,14 +58,39 @@ type FiltersModalProps = {
   getCityCount?: (city: string) => number | Promise<number>;
   
   // Optional: get count for each category. premiumOnly filters to only premium places.
-  getCategoryCount?: (category: string, premiumOnly?: boolean) => number | Promise<number>;
+  // kinds (если переданы) сужают подсчёт до выбранных типов карточек.
+  getCategoryCount?: (
+    category: string,
+    premiumOnly?: boolean,
+    kinds?: ('location' | 'service' | 'experience')[],
+  ) => number | Promise<number>;
+
+  // Optional: get count for each place kind. premiumOnly filters to only premium places.
+  // Возвращает «сколько в БД мест данного типа» — НЕ зависит от других выбранных kinds,
+  // чтобы пользователь видел стабильные счётчики на кнопках TYPE.
+  getKindCount?: (
+    kind: 'location' | 'service' | 'experience',
+    premiumOnly?: boolean,
+  ) => number | Promise<number>;
   
   // Optional: list of available tags filtered by selected categories
   getAvailableTags?: (categories: string[]) => string[] | Promise<string[]>;
   // Optional: get counts for all tags in one call (batched). Returns map tagName -> count.
   // premiumOnly filters to only premium places.
   getTagCounts?: (tags: string[], categories?: string[], premiumOnly?: boolean) => Record<string, number> | Promise<Record<string, number>>;
-  
+
+  /**
+   * Преферированный механизм (Спринт 2.1, см. docs/FILTERS_IMPROVEMENT_PLAN.md):
+   * выгружает один раз все места с минимальным набором полей, FiltersModal
+   * сам считает все счётчики (kinds / categories / tags / total) на клиенте
+   * через computeFilterCounts.
+   *
+   * Если этот prop передан — `getKindCount`/`getCategoryCount`/`getFilteredCount`
+   * НЕ вызываются (они остаются опциональным fallback'ом для страниц, которые
+   * ещё не мигрировали).
+   */
+  getFilterPlaces?: () => Promise<FilterablePlace[]>;
+
   // Optional: user access level - used to determine if Premium filter should be shown
   userAccess?: UserAccess;
   
@@ -76,8 +110,10 @@ export default function FiltersModal({
   getFilteredCount,
   getCityCount: _getCityCount,
   getCategoryCount,
+  getKindCount,
   getAvailableTags,
   getTagCounts,
+  getFilterPlaces,
   userAccess,
   onResetAll,
 }: FiltersModalProps) {
@@ -103,9 +139,17 @@ export default function FiltersModal({
   
   // Category counts
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
+  // Kind counts (Locations / Services / Experiences)
+  const [kindCounts, setKindCounts] = useState<Partial<Record<'location' | 'service' | 'experience', number>>>({});
   // Available tags and tag counts
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [tagCounts, setTagCounts] = useState<Record<string, number>>({});
+
+  // Спринт 2.1: один SELECT при открытии (если getFilterPlaces передан).
+  // Все 4 типа счётчиков считаются локально на этом массиве через computeFilterCounts.
+  const [placesForCounts, setPlacesForCounts] = useState<FilterablePlace[] | null>(null);
+  // Используем клиентский reduce только если loader передан.
+  const useClientReduce = !!getFilterPlaces;
   
   // Use ref to store getFilteredCount to avoid dependency issues
   const getFilteredCountRef = useRef(getFilteredCount);
@@ -138,34 +182,154 @@ export default function FiltersModal({
   }, [isOpen, userAccess]);
 
   
-  // Load category counts (re-triggers when premium toggle changes)
   const draftPremium = !!draftFilters.premium;
+  const draftKinds = draftFilters.kinds ?? [];
+  // Стабильный ключ массива kinds, чтобы избежать лишних re-fetch'ей.
+  const draftKindsKey = [...draftKinds].sort().join(",");
+
+  // Спринт 2.1: один SELECT при открытии модала. Загруженные места живут до закрытия.
+  // Это убирает 12+ round-trip'ов на category/kind counts.
+  const getFilterPlacesRef = useRef(getFilterPlaces);
+  useEffect(() => { getFilterPlacesRef.current = getFilterPlaces; }, [getFilterPlaces]);
+  useEffect(() => {
+    if (!isOpen) {
+      setPlacesForCounts(null);
+      return;
+    }
+    const loader = getFilterPlacesRef.current;
+    if (!loader) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await loader();
+        if (!cancelled) setPlacesForCounts(Array.isArray(data) ? data : []);
+      } catch {
+        if (!cancelled) setPlacesForCounts([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isOpen]);
+
+  // FALLBACK путь — если getFilterPlaces не передан, продолжаем через старые
+  // отдельные RPC-вызовы (`getCategoryCount`, `getKindCount`). Это сохраняет
+  // обратную совместимость для страниц, которые ещё не мигрировали.
   useEffect(() => {
     if (!isOpen) return;
-    
-    // Load category counts
-    if (getCategoryCount) {
-      const loadCategoryCounts = async () => {
-        const counts: Record<string, number> = {};
-        for (const category of CATEGORIES) {
-          try {
-            const count = await getCategoryCount(category, draftPremium);
-            counts[category] = count;
-          } catch {
-            counts[category] = 0;
-          }
+    if (useClientReduce) return; // новый путь — категории посчитаются ниже
+    if (!getCategoryCount) return;
+    let cancelled = false;
+    const loadCategoryCounts = async () => {
+      const kindsParam = draftKindsKey
+        ? (draftKindsKey.split(",") as ('location' | 'service' | 'experience')[])
+        : undefined;
+      const counts: Record<string, number> = {};
+      for (const category of CATEGORIES) {
+        try {
+          const count = await getCategoryCount(category, draftPremium, kindsParam);
+          if (cancelled) return;
+          counts[category] = count;
+        } catch {
+          counts[category] = 0;
         }
-        setCategoryCounts(counts);
-      };
-      loadCategoryCounts();
-    }
-  }, [isOpen, getCategoryCount, draftPremium]);
+      }
+      if (!cancelled) setCategoryCounts(counts);
+    };
+    loadCategoryCounts();
+    return () => { cancelled = true; };
+  }, [isOpen, getCategoryCount, draftPremium, draftKindsKey, useClientReduce]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (useClientReduce) return; // новый путь — kinds посчитаются ниже
+    if (!getKindCount) return;
+    let cancelled = false;
+    const KINDS: Array<'location' | 'service' | 'experience'> = ['location', 'service', 'experience'];
+    const load = async () => {
+      const next: Partial<Record<'location' | 'service' | 'experience', number>> = {};
+      for (const k of KINDS) {
+        try {
+          const c = await getKindCount(k, draftPremium);
+          if (cancelled) return;
+          next[k] = c;
+        } catch {
+          next[k] = 0;
+        }
+      }
+      if (!cancelled) setKindCounts(next);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [isOpen, getKindCount, draftPremium, useClientReduce]);
+
+  // Видимые секции категорий зависят от выбранного TYPE (Спринт 1.1).
+  // Если kinds пустой → показываем все три таксономии с подзаголовками.
+  // Если выбран один или несколько kinds → только их таксономии.
+  const visibleCategorySections = useMemo<
+    Array<{ key: 'location' | 'service' | 'experience'; heading: string; categories: readonly string[] }>
+  >(() => {
+    const all: Array<{ key: 'location' | 'service' | 'experience'; heading: string; categories: readonly string[] }> = [
+      { key: 'location',   heading: 'PLACES',      categories: LOCATION_CATEGORIES },
+      { key: 'service',    heading: 'SERVICES',    categories: SERVICE_CATEGORIES },
+      { key: 'experience', heading: 'EXPERIENCES', categories: EXPERIENCE_CATEGORIES },
+    ];
+    if (draftKinds.length === 0) return all;
+    return all.filter((s) => draftKinds.includes(s.key));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKindsKey]);
+
+  // Плоский список всех видимых категорий — для computeFilterCounts.
+  const visibleCategoriesFlat = useMemo<string[]>(() => {
+    const out: string[] = [];
+    for (const s of visibleCategorySections) out.push(...s.categories);
+    return out;
+  }, [visibleCategorySections]);
 
   // Ref for stable getAvailableTags / getTagCounts to avoid re-triggering on every render
   const getAvailableTagsRef = useRef(getAvailableTags);
   useEffect(() => { getAvailableTagsRef.current = getAvailableTags; }, [getAvailableTags]);
   const getTagCountsRef = useRef(getTagCounts);
   useEffect(() => { getTagCountsRef.current = getTagCounts; }, [getTagCounts]);
+
+  // Спринт 2.1: клиентский compute counts (kinds + categories + tags + total).
+  // Триггерится когда меняются draftFilters/places. Один проход без round-trip'ов.
+  useEffect(() => {
+    if (!isOpen || !useClientReduce) return;
+    if (placesForCounts === null) return;
+    const filtersForCount = {
+      premium: draftPremium,
+      categories: draftFilters.categories.length > 0 ? draftFilters.categories : undefined,
+      tags: (draftFilters.tags ?? []).length > 0 ? (draftFilters.tags ?? []) : undefined,
+      kinds: draftKinds.length > 0 ? draftKinds : undefined,
+      // Города интегрируем здесь же, чтобы счётчики реагировали на city-фильтр.
+      cities: draftCities.length > 0 ? draftCities : undefined,
+    };
+    const counts = computeFilterCounts(placesForCounts, {
+      filters: filtersForCount,
+      allCategories: visibleCategoriesFlat,
+      allTags: availableTags,
+    });
+    setCategoryCounts(counts.categories);
+    setKindCounts(counts.kinds);
+    // Если используем клиентский reduce, tagCounts тоже обновляем здесь —
+    // обходим getTagCounts prop (синхронно с другими счётчиками).
+    if (availableTags.length > 0) setTagCounts(counts.tags);
+    // Синхронизируем filteredCount тоже (это перебьёт async-ветку ниже,
+    // которая всё равно сделает то же самое — но синхронно дешевле).
+    setFilteredCount(counts.total);
+    setCountLoading(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isOpen,
+    useClientReduce,
+    placesForCounts,
+    draftPremium,
+    draftFilters.categories,
+    draftFilters.tags,
+    draftKindsKey,
+    visibleCategoriesFlat,
+    availableTags,
+    draftCities,
+  ]);
 
   // Load available tags when categories change (reactive to draftFilters.categories)
   const draftCategories = draftFilters.categories;
@@ -212,6 +376,9 @@ export default function FiltersModal({
   // Load tag counts in one batch when availableTags or premium changes
   useEffect(() => {
     if (!isOpen || availableTags.length === 0) return;
+    // При useClientReduce теги уже посчитаны через computeFilterCounts —
+    // не дублируем round-trip.
+    if (useClientReduce) return;
     const fn = getTagCountsRef.current;
     if (!fn) return;
 
@@ -232,6 +399,18 @@ export default function FiltersModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, availableTags, draftPremium]);
   
+  // Уважаем системную настройку «уменьшить анимацию».
+  // Inline-style не имеет media-query — детектим через matchMedia в JS.
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setPrefersReducedMotion(mql.matches);
+    update();
+    mql.addEventListener('change', update);
+    return () => mql.removeEventListener('change', update);
+  }, []);
+
   // Lock body scroll when modal is open (prevents iOS Safari scroll-through)
   useEffect(() => {
     if (!isOpen) return;
@@ -271,7 +450,9 @@ export default function FiltersModal({
       setCountLoading(false);
       return;
     }
-    
+    // При useClientReduce — total уже считается в client-compute useEffect выше.
+    if (useClientReduce) return;
+
     const getCountFn = getFilteredCountRef.current;
     if (!getCountFn) {
       setFilteredCount(null);
@@ -302,7 +483,7 @@ export default function FiltersModal({
       setFilteredCount(result);
       setCountLoading(false);
     }
-  }, [draftFilters, draftCities, isOpen]);
+  }, [draftFilters, draftCities, isOpen, useClientReduce]);
 
   if (!isOpen) return null;
 
@@ -450,7 +631,7 @@ export default function FiltersModal({
              minHeight: '50vh',
              borderTopLeftRadius: '1rem',
              borderTopRightRadius: '1rem',
-             animation: 'slide-up 0.3s ease-out',
+             animation: prefersReducedMotion ? undefined : 'slide-up 0.3s ease-out',
            }}>
         {/* Header */}
         <div className="px-6 pt-5 pb-4 border-b border-[#ECEEE4] flex-shrink-0">
@@ -511,10 +692,16 @@ export default function FiltersModal({
                 { value: "service",    emoji: "🛠", label: "Services" },
               ] as const).map((opt) => {
                 const isSelected = (draftFilters.kinds ?? []).includes(opt.value);
+                const count = kindCounts[opt.value];
+                const isDisabled = !isSelected && count === 0;
                 return (
                   <button
                     key={opt.value}
-                    onClick={() =>
+                    type="button"
+                    aria-pressed={isSelected}
+                    aria-disabled={isDisabled || undefined}
+                    onClick={() => {
+                      if (isDisabled) return;
                       setDraftFilters((prev) => {
                         const current = prev.kinds ?? [];
                         return {
@@ -523,81 +710,113 @@ export default function FiltersModal({
                             ? current.filter((k) => k !== opt.value)
                             : [...current, opt.value],
                         };
-                      })
-                    }
-                    className={`relative flex flex-col items-center justify-center px-2 py-4 rounded-xl border-2 transition-all ${
+                      });
+                    }}
+                    className={`relative flex flex-col items-center justify-center px-2 py-4 rounded-xl border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-2 ${
                       isSelected
                         ? "border-[#8F9E4F] bg-[#F4F6EF]"
-                        : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
+                        : isDisabled
+                          ? "border-[#ECEEE4] bg-white opacity-40 cursor-not-allowed"
+                          : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
                     }`}
                   >
-                    <span className="text-2xl mb-1.5">{opt.emoji}</span>
+                    {count !== undefined && (
+                      <span className="absolute top-1.5 right-2 text-xs font-medium text-[#6F7A5A]">
+                        {count}
+                      </span>
+                    )}
+                    <span className="text-2xl mb-1.5" aria-hidden="true">{opt.emoji}</span>
                     <span className="text-sm font-medium text-[#1F2A1F] text-center leading-tight">{opt.label}</span>
                   </button>
                 );
               })}
             </div>
-            <p className="mt-3 text-xs text-[#A8B096]">
+            <p className="mt-3 text-xs text-[#6F7A5A]">
               Leave empty to show all types.
             </p>
           </div>
 
-          {/* Category Section */}
-          <div>
-            <h3 className="text-xs font-semibold text-[#6F7A5A] uppercase tracking-wide mb-4">CATEGORY</h3>
-            <div className="grid grid-cols-3 gap-3">
-              {CATEGORIES.map((category) => {
-                const isSelected = draftFilters.categories.includes(category);
-                const count = categoryCounts[category];
-                const emoji = getCategoryEmoji(category);
-                const label = category.replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]+\s*/u, "").trim();
-                return (
-                  <button
-                    key={category}
-                    onClick={() => handleToggleCategory(category)}
-                    className={`relative flex flex-col items-center justify-center px-2 py-4 rounded-xl border-2 transition-all ${
-                      isSelected
-                        ? "border-[#8F9E4F] bg-[#F4F6EF]"
-                        : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
-                    }`}
-                  >
-                    {count !== undefined && (
-                      <span className={`absolute top-1.5 right-2 text-xs font-medium ${isSelected ? "text-[#6F7A5A]" : "text-[#A8B096]"}`}>
-                        {count}
-                      </span>
-                    )}
-                    <span className="text-2xl mb-1.5">{emoji}</span>
-                    <span className="text-sm font-medium text-[#1F2A1F] text-center leading-tight">{label}</span>
-                  </button>
-                );
-              })}
+          {/* Category Section — секции по выбранному TYPE (Спринт 1.1).
+              Если kinds пустой → все три таксономии с подзаголовками PLACES / SERVICES / EXPERIENCES. */}
+          {visibleCategorySections.map((section) => (
+            <div key={section.key}>
+              <h3 className="text-xs font-semibold text-[#6F7A5A] uppercase tracking-wide mb-4">
+                {visibleCategorySections.length > 1 ? `${section.heading} · CATEGORY` : 'CATEGORY'}
+              </h3>
+              <div className="grid grid-cols-3 gap-3">
+                {section.categories.map((category) => {
+                  const isSelected = draftFilters.categories.includes(category);
+                  const count = categoryCounts[category];
+                  const isDisabled = !isSelected && count === 0;
+                  const emoji = getCategoryEmoji(category);
+                  const label = category.replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]+\s*/u, "").trim();
+                  return (
+                    <button
+                      key={category}
+                      type="button"
+                      aria-pressed={isSelected}
+                      aria-disabled={isDisabled || undefined}
+                      onClick={() => {
+                        if (isDisabled) return;
+                        handleToggleCategory(category);
+                      }}
+                      className={`relative flex flex-col items-center justify-center px-2 py-4 rounded-xl border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-2 ${
+                        isSelected
+                          ? "border-[#8F9E4F] bg-[#F4F6EF]"
+                          : isDisabled
+                            ? "border-[#ECEEE4] bg-white opacity-40 cursor-not-allowed"
+                            : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
+                      }`}
+                    >
+                      {count !== undefined && (
+                        <span className="absolute top-1.5 right-2 text-xs font-medium text-[#6F7A5A]">
+                          {count}
+                        </span>
+                      )}
+                      <span className="text-2xl mb-1.5" aria-hidden="true">{emoji}</span>
+                      <span className="text-sm font-medium text-[#1F2A1F] text-center leading-tight">{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          ))}
 
           {/* Tags Section — visible only when categories are selected */}
           {draftFilters.categories.length > 0 && availableTags.length > 0 && (
             <div>
               <h3 className="text-xs font-semibold text-[#6F7A5A] uppercase tracking-wide mb-4">TAGS</h3>
-              <div className="grid grid-cols-4 gap-2">
+              {/* На очень узких экранах (<360px, например iPhone SE 1) — 3 колонки,
+                  чтобы touch target ≥ ~85px. Иначе 4 колонки как раньше. */}
+              <div className="grid grid-cols-3 min-[360px]:grid-cols-4 gap-2">
                 {availableTags.map((tag) => {
                   const isSelected = (draftFilters.tags ?? []).includes(tag);
                   const count = tagCounts[tag];
+                  const isDisabled = !isSelected && count === 0;
                   return (
                     <button
                       key={tag}
-                      onClick={() => handleToggleTag(tag)}
-                      className={`relative flex flex-col items-center justify-center px-1 py-3 rounded-xl border-2 transition-all ${
+                      type="button"
+                      aria-pressed={isSelected}
+                      aria-disabled={isDisabled || undefined}
+                      onClick={() => {
+                        if (isDisabled) return;
+                        handleToggleTag(tag);
+                      }}
+                      className={`relative flex flex-col items-center justify-center px-1 py-3 rounded-xl border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-2 ${
                         isSelected
                           ? "border-[#8F9E4F] bg-[#F4F6EF]"
-                          : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
+                          : isDisabled
+                            ? "border-[#ECEEE4] bg-white opacity-40 cursor-not-allowed"
+                            : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
                       }`}
                     >
                       {count !== undefined && (
-                        <span className={`absolute top-1 right-1.5 text-xs font-medium ${isSelected ? "text-[#6F7A5A]" : "text-[#A8B096]"}`}>
+                        <span className="absolute top-1 right-1.5 text-xs font-medium text-[#6F7A5A]">
                           {count}
                         </span>
                       )}
-                      <span className="text-lg mb-1">{getTagEmoji(tag)}</span>
+                      <span className="text-lg mb-1" aria-hidden="true">{getTagEmoji(tag)}</span>
                       <span className="text-sm font-medium text-[#1F2A1F] text-center leading-tight line-clamp-2">{stripTagEmoji(tag)}</span>
                     </button>
                   );
@@ -608,34 +827,55 @@ export default function FiltersModal({
         </div>
 
         {/* Footer (sticky) */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[#ECEEE4] bg-white lg:rounded-b-2xl flex-shrink-0"
+        <div className="px-6 py-4 border-t border-[#ECEEE4] bg-white lg:rounded-b-2xl flex-shrink-0"
              style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
-          <button
-            onClick={handleClearAll}
-            className="text-sm font-medium text-[#6F7A5A] hover:text-[#1F2A1F] underline transition-colors"
-          >
-            Reset all
-          </button>
-          <button
-            onClick={handleApply}
-            disabled={countLoading || filteredCount === null || filteredCount === 0}
-            className={`px-5 h-11 rounded-xl font-medium text-sm transition-all flex items-center gap-2 ${
-              !countLoading && filteredCount !== null && filteredCount > 0
-                ? "bg-[#8F9E4F] text-white hover:bg-[#7A8A42] shadow-sm"
-                : "bg-[#DADDD0] text-white cursor-not-allowed"
-            }`}
-          >
-            {(draftFilters.premium || draftFilters.premiumOnly) && (
-              <svg className="w-4 h-4 text-white flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-              </svg>
+          {/* Сообщение, когда комбинация фильтров даёт 0 — даём юзеру явный путь к Reset. */}
+          {!countLoading && filteredCount === 0 && (
+            <p className="mb-3 text-xs text-[#8B6F00] bg-[#FFF7E0] border border-[#F0E0A0] rounded-lg px-3 py-2 text-center">
+              No places match these filters. Try removing one.
+            </p>
+          )}
+          <div className="flex items-center justify-between">
+            <button
+              onClick={handleClearAll}
+              className="text-sm font-medium text-[#6F7A5A] hover:text-[#1F2A1F] underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-2 rounded"
+            >
+              Reset all
+            </button>
+            {/* Когда счётчик = 0 — кнопка Apply превращается в активный Reset filters,
+                чтобы юзер не упирался в disabled-стейт без выхода. */}
+            {!countLoading && filteredCount === 0 ? (
+              <button
+                onClick={handleClearAll}
+                type="button"
+                className="px-5 h-11 rounded-xl font-medium text-sm transition-all flex items-center gap-2 bg-[#8F9E4F] text-white hover:bg-[#7A8A42] shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-2"
+              >
+                Reset filters
+              </button>
+            ) : (
+              <button
+                onClick={handleApply}
+                disabled={countLoading || filteredCount === null}
+                type="button"
+                className={`px-5 h-11 rounded-xl font-medium text-sm transition-all flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-2 ${
+                  !countLoading && filteredCount !== null && filteredCount > 0
+                    ? "bg-[#8F9E4F] text-white hover:bg-[#7A8A42] shadow-sm"
+                    : "bg-[#DADDD0] text-white cursor-not-allowed"
+                }`}
+              >
+                {(draftFilters.premium || draftFilters.premiumOnly) && (
+                  <svg className="w-4 h-4 text-white flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                )}
+                {countLoading
+                  ? "Loading..."
+                  : filteredCount !== null
+                  ? `Show ${filteredCount} ${filteredCount === 1 ? "place" : "places"}`
+                  : "Apply"}
+              </button>
             )}
-            {countLoading
-              ? "Loading..."
-              : filteredCount !== null
-              ? `Show ${filteredCount} ${filteredCount === 1 ? "place" : "places"}`
-              : "Apply"}
-          </button>
+          </div>
         </div>
       </div>
     </div>
