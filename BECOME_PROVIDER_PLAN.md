@@ -165,11 +165,70 @@
 - Миграция `add_secondary_kinds_to_places`.
 - Триггер `enforce_place_quota_v2` (или alter существующий).
 
-## План работы — что я предлагаю сделать сейчас
+## Статус реализации
 
-1. Ты подтверждаешь решения по открытым вопросам (особенно вариант B по БД).
-2. Я делаю **Phase 1** в этой сессии (header link + модалка + редирект на existing /add). Это коммитится отдельно — уже даёт результат.
-3. Phase 2 (миграция БД) — следующая сессия. Хочу делать это отдельно, потому что миграция касается живой prod-таблицы и нужно прогнать smoke-тесты.
-4. Phase 3-5 — по сессии каждая.
+### ✅ Phase 1 — Header + Modal (DONE 2026-05-07)
+- `app/components/BecomeProviderModal.tsx` — новый компонент, мульти-выбор через чекбоксы, Esc/click-outside, body-scroll lock, persist выбора в `localStorage` для auth-redirect.
+- `app/components/TopBar.tsx` — ссылка «Become a provider» в desktop-шапке (видна всем); пункт «Become a provider» в hamburger-меню для всех, у кого нет «Add Gem» (анон / standard).
+- Auth-flow: на «Continue» проверяем сессию через `supabase.auth.getSession()`. Если анон — закрываем модалку, открываем `AuthModal` с `redirectPath=/add?kinds=…`. После логина юзер вернётся в /add, который заберёт kinds из URL.
+- Редирект на `/add?kinds=service,location` (CSV).
 
-Альтернатива: я могу сделать Phase 1 + Phase 2 в этой сессии, если ты ОК с миграцией сегодня.
+### ✅ Phase 2 — Миграция БД + типы + lib (DONE 2026-05-07)
+
+**Миграция `add_secondary_kinds_to_places`:**
+- Колонка `secondary_kinds text[] NOT NULL DEFAULT '{}'` (все 292 существующих ряда — пустые массивы, ничего не сломалось).
+- CHECK `places_secondary_kinds_no_primary` — secondary не дублирует primary `kind`.
+- CHECK `places_secondary_kinds_valid` — только {location, service, experience}.
+- GIN-индекс `places_secondary_kinds_gin` для будущих `ANY()` фильтров.
+- Триггер `enforce_place_quota()` переписан под union(kind, secondary_kinds):
+  - Plan-check для каждого kind в union отдельно.
+  - Quota count считает места, "содержащие" kind через primary ИЛИ secondary.
+  - Combined-pool у Pro All: `COUNT(DISTINCT places)`, чтобы карточка с service+experience считалась как 1 слот, а не 2.
+- **17 smoke-тестов прогнаны** через DO-блок с rollback (создаём временного auth.user → profile → INSERT'ы → искусственный exception).
+
+**Типы:**
+- `app/types.ts` → `Place.secondary_kinds?: PlaceKind[] | null` (опционально для legacy).
+- `app/types/supabase.ts` → `Database['public']['Tables']['places']` Row/Insert/Update — добавлено `secondary_kinds`.
+
+**Lib:**
+- `app/lib/access.ts` → новая `canUserCreateMulti(access, kinds[])` — проверяет права на КАЖДЫЙ kind. `canUserCreate` (single) сохранён.
+- `app/lib/plans.ts` → новая `suggestPlanForKinds(kinds[])` — auto-suggest минимально достаточного плана для набора kind'ов:
+  - service+experience → `creator_all` ($34.99/мес)
+  - service (с/без location) → `creator_service` ($14.99/мес)
+  - experience (с/без location) → `creator_experience` ($14.99/мес)
+  - только location → `premium_viewer` ($35 разово)
+
+**`/add/page.tsx`:**
+- Парсит `?kinds=service,location` (новый CSV) с приоритетом над legacy `?kind=service`.
+- `splitPrimaryAndSecondary(kinds)`: priority `service > experience > location` для выбора primary `kind`. Это означает, что мульти-формат «локация + сервис» получит primary=service → отрисуется через `OfferPlaceView` (с ценой), а не через legacy location-view.
+- `createAndRedirect(kinds[])` — мульти-версия. Использует `canUserCreateMulti`, `checkQuota` для каждого service/experience в выборе. INSERT с `secondary_kinds`.
+- Quota-counts через `or("kind.eq.X,secondary_kinds.cs.{X}")` — 1:1 с триггером.
+
+**Проверки:**
+- `npx tsc --noEmit --skipLibCheck` — чисто.
+- `npx eslint` на правленых файлах — 0 errors. 10 warnings pre-existing (не мои), документированы выше.
+- 17 smoke-тестов БД прошли с rollback — никаких побочных эффектов в prod.
+
+### Готово к ship'у Phase 1+2
+
+Что уже работает после деплоя:
+1. Юзер кликает «Become a provider» в шапке.
+2. Видит модалку с тремя карточками с чекбоксами, выбирает любой набор.
+3. На «Continue» — если анон → AuthModal, после логина вернётся в /add?kinds=…
+4. /add создаёт черновик с правильным `kind` + `secondary_kinds`.
+5. Редактор (`/places/[id]/edit`) видит черновик через тот же RLS — ничего не сломано.
+6. Триггер квоты считает мульти-kind места корректно.
+
+### 🟡 Phase 3 — Wizard с превью (не реализовано)
+
+Сейчас flow заканчивается в существующем хабе редактирования (`/places/[id]/edit/...`) — то же что было до. Превью карточки и pricing-suggest пока не интегрированы. План остаётся как описан выше — следующая сессия.
+
+### 🟡 Phase 4-5 — Pricing + Polish (не реализовано)
+
+См. план выше.
+
+## Известные ограничения текущего скоупа
+
+- **Фильтры на /map, главной, HomeSection, CategoryCarousel** ещё не учитывают `secondary_kinds`. Карточка с `kind=service, secondary_kinds=['location']` появится в списках services (по primary), но не в списках locations. Если это критично — добавить `or("kind.eq.X,secondary_kinds.cs.{X}")` в эти query (Phase 3+).
+- **Edit-страницы** (`/places/[id]/edit/...`) пока не показывают и не позволяют менять `secondary_kinds`. Чтобы добавить kind к существующей карточке, юзер должен пересоздать. Phase 5.
+- **PaywallModal** на /add берёт single `kind` для подсказки тарифа. При мульти-выборе показывается тариф по primary, что близко к правде, но не точно — реальный auto-suggest будет в Phase 4 на pricing-экране.

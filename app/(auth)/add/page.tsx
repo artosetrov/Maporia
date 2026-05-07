@@ -23,7 +23,7 @@ import { useUserAccessContext } from "../../contexts/UserAccessContext";
 import { useAuthRedirect } from "../../hooks/useAuthRedirect";
 import { canUserAddPlace, canUserCreate, canUserCreateMulti, checkQuota } from "../../lib/access";
 import type { QuotaCheck } from "../../lib/access";
-import { EXTRA_LISTING, PLAN_CONFIG, formatPrice, suggestPlanForKind, suggestPlanForKinds } from "../../lib/plans";
+import { EXTRA_LISTING, PLAN_CONFIG, formatPrice, suggestPlanForKind } from "../../lib/plans";
 import Icon from "../../components/Icon";
 import ImpersonationDisclaimer from "../../components/ImpersonationDisclaimer";
 import { useImpersonationStatus } from "../../hooks/useImpersonationStatus";
@@ -158,29 +158,41 @@ export default function AddPlacePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessLoading, user, canAdd, presetKinds]);
 
-  async function createAndRedirect(kind: PlaceKind) {
+  async function createAndRedirect(kinds: PlaceKind[]) {
     if (!user) return;
+    if (kinds.length === 0) return;
 
-    // 1) Базовое право публиковать этот kind по тарифу.
-    if (!canUserCreate(access, kind)) {
-      setPaywallKind(kind);
+    const { primary, secondary } = splitPrimaryAndSecondary(kinds);
+
+    // 1) Базовое право публиковать ВСЕ выбранные kind'ы одновременно.
+    if (!canUserCreateMulti(access, kinds)) {
+      // Для пейволла показываем тот kind, по которому план не покрывает —
+      // это даёт более точный upsell-message. Берём primary как fallback.
+      const blockingKind =
+        kinds.find((k) => !canUserCreate(access, k)) ?? primary;
+      setPaywallKind(blockingKind);
       return;
     }
 
-    // 2) Для service/experience — проверяем квоту: считаем активные карточки
-    //    (включая черновики), вычитаем лимит и bonus_credits.
-    if (kind === "service" || kind === "experience") {
+    // 2) Для service/experience — проверяем квоту. Считаем активные карточки
+    //    (включая черновики и existing мульти-kind), вычитаем лимит и bonus_credits.
+    //    Карточка "содержит" kind, если он primary ИЛИ в secondary_kinds — это
+    //    1:1 с логикой триггера enforce_place_quota (см. add_secondary_kinds_to_places).
+    const hasService = kinds.includes("service");
+    const hasExperience = kinds.includes("experience");
+
+    if (hasService || hasExperience) {
       const [serviceCountRes, experienceCountRes, profRes] = await Promise.all([
         supabase
           .from("places")
           .select("id", { count: "exact", head: true })
           .eq("created_by", user.id)
-          .eq("kind", "service"),
+          .or("kind.eq.service,secondary_kinds.cs.{service}"),
         supabase
           .from("places")
           .select("id", { count: "exact", head: true })
           .eq("created_by", user.id)
-          .eq("kind", "experience"),
+          .or("kind.eq.experience,secondary_kinds.cs.{experience}"),
         supabase.from("profiles").select("bonus_listing_credits").eq("id", user.id).single(),
       ]);
 
@@ -189,14 +201,22 @@ export default function AddPlacePage() {
       const credits =
         ((profRes.data as { bonus_listing_credits?: number } | null)?.bonus_listing_credits) ?? 0;
 
-      const quota = checkQuota(access, kind, services, experiences, credits);
-      if (!quota.allowed) {
-        if (quota.reason === "no_plan") {
-          setPaywallKind(kind);
-        } else {
-          setLimitState({ kind, quota });
+      // checkQuota ожидает один kind. Проверяем оба (если оба выбраны),
+      // блокируемся на первом непрошедшем.
+      const kindsToCheck: Array<"service" | "experience"> = [];
+      if (hasService) kindsToCheck.push("service");
+      if (hasExperience) kindsToCheck.push("experience");
+
+      for (const k of kindsToCheck) {
+        const quota = checkQuota(access, k, services, experiences, credits);
+        if (!quota.allowed) {
+          if (quota.reason === "no_plan") {
+            setPaywallKind(k);
+          } else {
+            setLimitState({ kind: k, quota });
+          }
+          return;
         }
-        return;
       }
     }
 
@@ -205,7 +225,8 @@ export default function AddPlacePage() {
 
     try {
       const payload = {
-        kind, // <-- тип карточки
+        kind: primary,
+        secondary_kinds: secondary,
         title: "",
         description: null,
         city: null,
@@ -241,7 +262,8 @@ export default function AddPlacePage() {
         const msg = createError.message || "";
 
         if (code === "P0001" || msg.includes("NO_PLAN")) {
-          setPaywallKind(kind);
+          // Показываем пейволл по primary kind — он же ведущий в pricing-suggestion.
+          setPaywallKind(primary);
           setCreating(false);
           return;
         }
@@ -249,22 +271,30 @@ export default function AddPlacePage() {
         if (code === "P0002" || msg.includes("QUOTA_EXCEEDED")) {
           // На сервере план разрешает kind, но лимит/кредиты выбраны.
           // Подсчитаем актуальную квоту, чтобы показать корректные числа.
-          if (kind === "service" || kind === "experience") {
+          // Для модалки лимита нужен service|experience — берём первый из выбранных.
+          const limitKind: "service" | "experience" | null = hasService
+            ? "service"
+            : hasExperience
+            ? "experience"
+            : null;
+          if (limitKind) {
             const [s, e, p] = await Promise.all([
               supabase.from("places").select("id", { count: "exact", head: true })
-                .eq("created_by", user.id).eq("kind", "service"),
+                .eq("created_by", user.id)
+                .or("kind.eq.service,secondary_kinds.cs.{service}"),
               supabase.from("places").select("id", { count: "exact", head: true })
-                .eq("created_by", user.id).eq("kind", "experience"),
+                .eq("created_by", user.id)
+                .or("kind.eq.experience,secondary_kinds.cs.{experience}"),
               supabase.from("profiles").select("bonus_listing_credits").eq("id", user.id).single(),
             ]);
             const refreshedQuota = checkQuota(
               access,
-              kind,
+              limitKind,
               s.count ?? 0,
               e.count ?? 0,
               ((p.data as { bonus_listing_credits?: number } | null)?.bonus_listing_credits) ?? 0
             );
-            setLimitState({ kind, quota: refreshedQuota });
+            setLimitState({ kind: limitKind, quota: refreshedQuota });
           }
           setCreating(false);
           return;
@@ -356,7 +386,7 @@ export default function AddPlacePage() {
             <button
               key={opt.kind}
               type="button"
-              onClick={() => createAndRedirect(opt.kind)}
+              onClick={() => createAndRedirect([opt.kind])}
               className="group relative w-full text-left rounded-2xl border border-[#ECEEE4] bg-white p-5 sm:p-6 shadow-sm hover:shadow-md hover:border-[#8F9E4F] transition focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] focus:ring-offset-2"
               aria-label={`Create ${opt.title}`}
             >
