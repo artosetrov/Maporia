@@ -102,7 +102,8 @@ export default function PricingPage() {
         userEmail={user?.email ?? null}
       />
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-14">
+      {/* pt компенсирует sticky TopBar (~64px) + дыхание */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-[88px] sm:pt-[112px] pb-8 sm:pb-14">
         <header className="text-center mb-8 sm:mb-10">
           <h1 className="font-fraunces text-3xl sm:text-4xl font-semibold text-[#1F2A1F] mb-3">
             Maporia plans
