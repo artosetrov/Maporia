@@ -9,8 +9,8 @@ import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../../lib/access";
 
-type PlaceCategoriesRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "categories" | "tags">;
-import { CATEGORIES, getTagEmoji, stripTagEmoji } from "../../../../../constants";
+type PlaceCategoriesRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "categories" | "tags" | "kind">;
+import { getCategoriesByKind, getTagEmoji, stripTagEmoji } from "../../../../../constants";
 import Icon from "../../../../../components/Icon";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
@@ -29,6 +29,7 @@ export default function CategoriesEditorPage(props: PageProps) {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<string[]>([]);
   const [originalCategories, setOriginalCategories] = useState<string[]>([]);
+  const [placeKind, setPlaceKind] = useState<'location' | 'service' | 'experience'>('location');
   const [tags, setTags] = useState<string[]>([]);
   const [originalTags, setOriginalTags] = useState<string[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
@@ -65,7 +66,7 @@ export default function CategoriesEditorPage(props: PageProps) {
       setLoading(true);
       const { data: rawData, error: placeError } = await supabase
         .from("places")
-        .select("categories, tags, created_by")
+        .select("categories, tags, created_by, kind")
         .eq("id", placeId)
         .single();
 
@@ -88,6 +89,7 @@ export default function CategoriesEditorPage(props: PageProps) {
       setOriginalCategories([...currentCategories]);
       setTags(currentTags);
       setOriginalTags([...currentTags]);
+      setPlaceKind((data.kind as 'location' | 'service' | 'experience' | null) || 'location');
       setLoading(false);
     })();
   }, [placeId, user, router, access, accessLoading]);
@@ -103,7 +105,8 @@ export default function CategoriesEditorPage(props: PageProps) {
     setSaving(true);
     setError(null);
 
-    const validCategories = categories.filter((cat) => CATEGORIES.includes(cat as any));
+    const allowedCategories = getCategoriesByKind(placeKind);
+    const validCategories = categories.filter((cat) => allowedCategories.includes(cat));
     const validTags = tags
       .filter((tag) => typeof tag === "string" && tag.trim().length > 0)
       .map((tag) => tag.trim()); // Trim whitespace from tags
@@ -320,7 +323,7 @@ export default function CategoriesEditorPage(props: PageProps) {
               Select at least one category that best describes your place.
             </p>
             <div className="grid grid-cols-3 gap-3">
-              {CATEGORIES.map((cat) => {
+              {getCategoriesByKind(placeKind).map((cat) => {
                 const isSelected = categories.includes(cat);
                 const emojiMatch = cat.match(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u);
                 const emoji = emojiMatch ? emojiMatch[0] : "📍";

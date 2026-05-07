@@ -85,6 +85,8 @@ type Place = {
   price_unit?: string | null;
   duration_minutes?: number | null;
   schedule?: unknown | null;
+  host_qualification?: string | null;
+  service_mode?: 'at_provider' | 'at_client' | 'online' | 'flexible' | null;
   // Premium/Access fields
   access_level?: string | null; // Primary field: 'public' | 'premium'
   // Legacy fields (for backward compatibility)
@@ -136,6 +138,13 @@ function formatPriceSummary(
   const fromPrefix = unit === "from" ? "from " : "";
   const suffix = PRICE_UNIT_SUFFIX[unit || ""] ?? "";
   return `${fromPrefix}${sym}${formatted}${suffix}`;
+}
+function formatServiceModeLabel(mode: string | null | undefined): string {
+  if (mode === "at_provider") return "At provider's place";
+  if (mode === "at_client") return "At your place";
+  if (mode === "online") return "Online";
+  if (mode === "flexible") return "Flexible";
+  return "";
 }
 function formatScheduleSummary(raw: unknown, durationMinutes: number | null | undefined): string {
   const parts: string[] = [];
@@ -207,7 +216,7 @@ export default function PlaceEditorHub(props: PageProps) {
       const [placeRes, photosRes] = await Promise.all([
         supabase
           .from("places")
-          .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule")
+          .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode")
           .eq("id", placeId)
           .single(),
         supabase
@@ -342,7 +351,7 @@ export default function PlaceEditorHub(props: PageProps) {
         (async () => {
           const { data: rawPlace } = await supabase
             .from("places")
-            .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule")
+            .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode")
             .eq("id", placeId)
             .single();
 
@@ -1226,6 +1235,35 @@ export default function PlaceEditorHub(props: PageProps) {
                         <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Schedule</h3>
                         <p className="text-sm text-[#6F7A5A]">
                           {formatScheduleSummary(place.schedule, place.duration_minutes)}
+                        </p>
+                      </div>
+                    </div>
+                    <Icon name="forward" size={20} className="text-[#6F7A5A]" />
+                  </div>
+                </Link>
+
+                {/* Host info Card */}
+                <Link
+                  href={`/places/${placeId}/edit/host`}
+                  className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                        place.host_qualification || place.service_mode ? 'bg-[#7FA35C]' : 'bg-[#ECEEE4]'
+                      }`}>
+                        <Icon
+                          name="check"
+                          size={16}
+                          className={place.host_qualification || place.service_mode ? 'text-white' : 'text-[#A8B096]'}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Host info</h3>
+                        <p className="text-sm text-[#6F7A5A] line-clamp-1">
+                          {place.host_qualification || (place.service_mode
+                            ? formatServiceModeLabel(place.service_mode)
+                            : "Add your qualification + where you work")}
                         </p>
                       </div>
                     </div>

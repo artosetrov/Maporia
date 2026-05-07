@@ -136,6 +136,8 @@ export interface Database {
           price_unit: PriceUnit | null
           duration_minutes: number | null
           schedule: PlaceSchedule | null
+          host_qualification: string | null
+          service_mode: 'at_provider' | 'at_client' | 'online' | 'flexible' | null
         }
         Insert: {
           id?: string
@@ -170,6 +172,8 @@ export interface Database {
           price_unit?: PriceUnit | null
           duration_minutes?: number | null
           schedule?: PlaceSchedule | null
+          host_qualification?: string | null
+          service_mode?: 'at_provider' | 'at_client' | 'online' | 'flexible' | null
         }
         Update: {
           id?: string
@@ -204,6 +208,8 @@ export interface Database {
           price_unit?: PriceUnit | null
           duration_minutes?: number | null
           schedule?: PlaceSchedule | null
+          host_qualification?: string | null
+          service_mode?: 'at_provider' | 'at_client' | 'online' | 'flexible' | null
         }
       }
       reactions: {

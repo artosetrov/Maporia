@@ -62,6 +62,8 @@ type Place = {
   price_unit?: string | null;
   duration_minutes?: number | null;
   schedule?: unknown | null; // jsonb — конкретный тип в app/types/supabase.ts (PlaceSchedule)
+  host_qualification?: string | null;
+  service_mode?: 'at_provider' | 'at_client' | 'online' | 'flexible' | null;
 };
 
 type Comment = {
@@ -439,7 +441,7 @@ export default function PlacePage(props: PageProps) {
       // existing (if it doesn't, we redirect anyway).
       const { data: placeData, error: pErr } = await supabase
         .from("places")
-        .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule")
+        .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode")
         .eq("id", id)
         .single();
 
@@ -1077,6 +1079,7 @@ export default function PlacePage(props: PageProps) {
         isFavorite={isFavorite}
         favoriteLoading={favoriteLoading}
         onToggleFavorite={toggleFavorite}
+        hostProfile={creatorProfile}
       />
     );
   }

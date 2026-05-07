@@ -48,6 +48,14 @@ type OfferPlace = {
   price_unit?: string | null;
   duration_minutes?: number | null;
   schedule?: unknown | null;
+  host_qualification?: string | null;
+  service_mode?: 'at_provider' | 'at_client' | 'online' | 'flexible' | null;
+};
+
+type HostProfile = {
+  display_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
 };
 
 type Props = {
@@ -60,6 +68,8 @@ type Props = {
   isFavorite: boolean;
   favoriteLoading: boolean;
   onToggleFavorite: () => void;
+  /** Профиль создателя карточки (host) — для блока «Hosted by». */
+  hostProfile?: HostProfile | null;
 };
 
 // ---------- helpers ----------
@@ -72,6 +82,23 @@ const PRICE_UNIT_LABEL: Record<string, string> = {
   per_day: "/ day",
   per_session: "/ session",
 };
+
+const SERVICE_MODE_LABELS: Record<string, string> = {
+  at_provider: "At provider's place",
+  at_client:   "At your place",
+  online:      "Online",
+  flexible:    "Flexible",
+};
+
+function initialsFromHost(name?: string | null, username?: string | null): string {
+  if (name) {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase().slice(0, 2);
+    return name[0]?.toUpperCase() || "U";
+  }
+  if (username) return username[0]?.toUpperCase() || "U";
+  return "U";
+}
 
 function formatPrice(amount: number | null | undefined, currency: string | null | undefined) {
   if (amount == null) return null;
@@ -132,6 +159,7 @@ export default function OfferPlaceView({
   isFavorite,
   favoriteLoading,
   onToggleFavorite,
+  hostProfile,
 }: Props) {
   const router = useRouter();
   const { isLoaded: mapsLoaded } = useGoogleMaps();
@@ -233,11 +261,42 @@ export default function OfferPlaceView({
           )}
         </div>
 
-        {/* Subtitle: city/address */}
-        {(place.city || place.address) && (
-          <div className="text-sm text-[#6F7A5A] mb-5 flex items-center gap-1.5">
-            <Icon name="location" size={14} />
-            <span className="truncate">{place.address || place.city}</span>
+        {/* Subtitle: city/address + service_mode chip */}
+        {(place.city || place.address || place.service_mode) && (
+          <div className="text-sm text-[#6F7A5A] mb-5 flex items-center gap-3 flex-wrap">
+            {(place.city || place.address) && (
+              <span className="flex items-center gap-1.5 min-w-0">
+                <Icon name="location" size={14} />
+                <span className="truncate">{place.address || place.city}</span>
+              </span>
+            )}
+            {place.service_mode && (
+              <span className="inline-flex items-center rounded-full bg-[#FAFAF7] border border-[#ECEEE4] px-3 py-1 text-xs font-medium text-[#1F2A1F]">
+                {SERVICE_MODE_LABELS[place.service_mode]}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Hosted by — show only if we have host data or qualification */}
+        {(hostProfile || place.host_qualification) && (
+          <div className="flex items-center gap-3 mb-6 pb-6 border-b border-[#ECEEE4]">
+            <div className="w-12 h-12 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] overflow-hidden flex items-center justify-center text-sm font-semibold text-[#8F9E4F] flex-shrink-0">
+              {hostProfile?.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={hostProfile.avatar_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span>{initialsFromHost(hostProfile?.display_name, hostProfile?.username)}</span>
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-[#1F2A1F]">
+                Hosted by {hostProfile?.display_name || hostProfile?.username || "your host"}
+              </div>
+              {place.host_qualification && (
+                <div className="text-xs text-[#6F7A5A] truncate">{place.host_qualification}</div>
+              )}
+            </div>
           </div>
         )}
 

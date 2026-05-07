@@ -1,3 +1,5 @@
+// Базовый список = location categories (legacy / для обратной совместимости).
+// Новые места: используй getCategoriesByKind(place.kind).
 export const CATEGORIES = [
     "🍽 Food & Drinks",
     "🍸 Bars & Wine",
@@ -9,8 +11,52 @@ export const CATEGORIES = [
     "✨ Vibe & Atmosphere",
     "👻 Crime & Haunted",
   ] as const;
-  
+
   export type Category = (typeof CATEGORIES)[number];
+
+  // ── Kind-specific категории ───────────────────────────────────
+  // location использует CATEGORIES (alias ниже), service / experience —
+  // отдельные таксономии под Airbnb-стиль каталога.
+
+  export const LOCATION_CATEGORIES = CATEGORIES;
+
+  export const SERVICE_CATEGORIES = [
+    "📸 Photography",
+    "👨‍🍳 Chefs & Catering",
+    "💆 Massage",
+    "🍱 Prepared Meals",
+    "💪 Training & Fitness",
+    "💄 Makeup",
+    "✂️ Hair",
+    "🧖 Spa & Wellness",
+    "🎨 Creative Services",
+    "🛠 Other Services",
+  ] as const;
+
+  export const EXPERIENCE_CATEGORIES = [
+    "🏊 Water Sports",
+    "🥾 Adventures",
+    "🍳 Cooking Classes",
+    "🗺 Tours & Walks",
+    "🎨 Workshops",
+    "🧘 Wellness & Retreats",
+    "🎶 Music & Nightlife",
+    "📷 Photo Walks",
+    "🦊 Wildlife & Nature",
+    "🍷 Tastings",
+  ] as const;
+
+  /**
+   * Возвращает категории, релевантные для конкретного типа карточки.
+   * Для FiltersModal с пустым выбором — union без дублей.
+   */
+  export function getCategoriesByKind(
+    kind: 'location' | 'service' | 'experience' | null | undefined
+  ): readonly string[] {
+    if (kind === 'service') return SERVICE_CATEGORIES;
+    if (kind === 'experience') return EXPERIENCE_CATEGORIES;
+    return LOCATION_CATEGORIES;
+  }
 
   // Vibe / Emotions for filtering
   export const VIBES = [
