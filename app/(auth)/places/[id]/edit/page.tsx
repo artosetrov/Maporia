@@ -900,6 +900,16 @@ export default function PlaceEditorHub(props: PageProps) {
 
   // Determine if this is a new place (no title or empty title)
   const isNewPlace = !place || !place.title || place.title.trim().length === 0;
+  // "New Gem" / "New Service" / "New Experience" — зависит от типа карточки.
+  // Gem оставлен как ласкательное обращение к локациям (исторически было).
+  const newPlaceTitle =
+    place?.kind === "service"    ? "New Service" :
+    place?.kind === "experience" ? "New Experience" :
+                                    "New Gem";
+  const placeKindNoun =
+    place?.kind === "service"    ? "service" :
+    place?.kind === "experience" ? "experience" :
+                                    "place";
 
   // NOTE: keep editor minimal (as before)
 
@@ -944,7 +954,7 @@ export default function PlaceEditorHub(props: PageProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16 gap-2">
             <div className="font-semibold font-fraunces text-[#1F2A1F] min-w-0 flex-1 truncate" style={{ fontSize: '24px' }}>
-              {isNewPlace ? "New Gem" : (place?.title?.trim() || "")}
+              {isNewPlace ? newPlaceTitle : (place?.title?.trim() || "")}
             </div>
             <button
               onClick={() => {
@@ -999,7 +1009,7 @@ export default function PlaceEditorHub(props: PageProps) {
                   </div>
                 </div>
                 <p className="text-sm text-[#6F7A5A]">
-                  Finish these final tasks to publish your place.
+                  Finish these final tasks to publish your {placeKindNoun}.
                 </p>
               </div>
             )}
