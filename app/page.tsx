@@ -15,6 +15,7 @@ import { useAuthRedirect } from "./hooks/useAuthRedirect";
 import TopBar from "./components/TopBar";
 import HomeSection from "./components/HomeSection";
 import Pill from "./components/Pill";
+import CategoryCarousel from "./components/CategoryCarousel";
 import { ActiveFilters } from "./components/FiltersModal";
 // Heavy modals — only loaded when the user actually opens them.
 // Same pattern is already used on /map; this keeps the home-page main
@@ -628,6 +629,11 @@ function HomePageInner() {
             При активных вкладках Services/Experiences секции жёстко
             фильтруются по kind.
           */}
+          {/* Category carousel — только для service/experience табов */}
+          {activeKind !== "location" && kindIsEmpty !== true && (
+            <CategoryCarousel kind={activeKind} />
+          )}
+
           {kindIsEmpty === true ? (
             <EmptyKindState
               kind={activeKind as Exclude<HomeKind, "location">}
