@@ -231,6 +231,29 @@ export function requiredPlanFor(
 }
 
 /**
+ * Право публиковать карточку с НЕСКОЛЬКИМИ kind'ами одновременно
+ * (мульти-формат: например, локация + сервис в одной карточке).
+ *
+ * Принимает union — primary kind + secondary_kinds. Возвращает true, только
+ * если у юзера есть права на КАЖДЫЙ из выбранных kind'ов.
+ *
+ * Used by BecomeProviderModal/wizard и серверной валидацией перед публикацией.
+ *
+ * Пустой массив трактуется как «нет требований» → true (defensive, не должно
+ * случаться в реальном flow).
+ */
+export function canUserCreateMulti(
+  userAccess: UserAccess,
+  kinds: Array<"location" | "service" | "experience">
+): boolean {
+  if (userAccess.isAdmin) return true;
+  if (kinds.length === 0) return true;
+
+  // Все kind'ы должны быть доступны на текущем плане одновременно.
+  return kinds.every((k) => canUserCreate(userAccess, k));
+}
+
+/**
  * Подсчёт квоты с учётом текущих карточек юзера и докупленных слотов.
  *
  *   activeServices, activeExperiences — текущие НЕ-удалённые карточки юзера

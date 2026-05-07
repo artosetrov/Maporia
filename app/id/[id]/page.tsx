@@ -35,6 +35,7 @@ import { convertInstagramReelToEmbed, filterValidPhotos, isValidPhotoUrl } from 
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 import OfferPlaceView from "./_views/OfferPlaceView";
 import StarRating from "../../components/StarRating";
+import PlaceContacts from "../../components/PlaceContacts";
 
 type Place = {
   id: string;
@@ -44,6 +45,11 @@ type Place = {
   country: string | null;
   address: string | null;
   link: string | null;
+  phone?: string | null;
+  website?: string | null;
+  instagram?: string | null;
+  youtube?: string | null;
+  telegram?: string | null;
   tags: string[] | null;
   categories: string[] | null;
   cover_url: string | null;
@@ -447,7 +453,7 @@ export default function PlacePage(props: PageProps) {
       // existing (if it doesn't, we redirect anyway).
       const { data: placeData, error: pErr } = await supabase
         .from("places")
-        .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
+        .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
         .eq("id", id)
         .single();
 
@@ -1896,6 +1902,17 @@ export default function PlacePage(props: PageProps) {
                 <Icon name="share" size={20} />
                 Share
               </button>
+
+              {/* Contacts (desktop sidebar) — скрывается полностью если все поля пустые */}
+              <PlaceContacts
+                phone={place.phone}
+                website={place.website}
+                instagram={place.instagram}
+                youtube={place.youtube}
+                telegram={place.telegram}
+                title="Contact"
+                variant="card"
+              />
             </div>
           </div>
         </div>
@@ -1987,6 +2004,21 @@ export default function PlacePage(props: PageProps) {
                   </Link>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Contacts (mobile/tablet) — обёртка только если хотя бы одно поле заполнено */}
+          {(place.phone || place.website || place.instagram || place.youtube || place.telegram) && (
+            <div className="pb-6 mb-6 border-b border-[#ECEEE4]">
+              <PlaceContacts
+                phone={place.phone}
+                website={place.website}
+                instagram={place.instagram}
+                youtube={place.youtube}
+                telegram={place.telegram}
+                title="Contact"
+                variant="inline"
+              />
             </div>
           )}
 

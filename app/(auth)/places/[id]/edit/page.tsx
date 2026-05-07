@@ -73,6 +73,11 @@ type Place = {
   lat: number | null;
   lng: number | null;
   link: string | null;
+  phone: string | null;
+  website: string | null;
+  instagram: string | null;
+  youtube: string | null;
+  telegram: string | null;
   categories: string[] | null;
   tags: string[] | null;
   cover_url: string | null;
@@ -240,7 +245,7 @@ export default function PlaceEditorHub(props: PageProps) {
       const [placeRes, photosRes] = await Promise.all([
         supabase
           .from("places")
-          .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
+          .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
           .eq("id", placeId)
           .single(),
         supabase
@@ -375,7 +380,7 @@ export default function PlaceEditorHub(props: PageProps) {
         (async () => {
           const { data: rawPlace } = await supabase
             .from("places")
-            .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
+            .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
             .eq("id", placeId)
             .single();
 
@@ -1202,6 +1207,69 @@ export default function PlaceEditorHub(props: PageProps) {
                         : "No categories selected"}
                     </p>
                   </div>
+                </div>
+                <Icon name="forward" size={20} className="text-[#6F7A5A]" />
+              </div>
+            </Link>
+
+            {/* Contacts Card — для всех kinds (location/service/experience) */}
+            <Link
+              href={`/places/${placeId}/edit/contacts`}
+              className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 flex-1">
+                  {(() => {
+                    const filledCount =
+                      (place.phone ? 1 : 0) +
+                      (place.website ? 1 : 0) +
+                      (place.instagram ? 1 : 0) +
+                      (place.youtube ? 1 : 0) +
+                      (place.telegram ? 1 : 0);
+                    const hasAny = filledCount > 0;
+                    return (
+                      <>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          hasAny ? 'bg-[#7FA35C]' : 'bg-[#ECEEE4]'
+                        }`}>
+                          <Icon
+                            name="check"
+                            size={16}
+                            className={hasAny ? 'text-white' : 'text-[#A8B096]'}
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Contacts</h3>
+                          <p className="text-sm text-[#6F7A5A] line-clamp-1">
+                            {hasAny
+                              ? `${filledCount} of 5 set${
+                                  [
+                                    place.phone && "phone",
+                                    place.website && "website",
+                                    place.instagram && "Instagram",
+                                    place.youtube && "YouTube",
+                                    place.telegram && "Telegram",
+                                  ]
+                                    .filter(Boolean)
+                                    .slice(0, 2)
+                                    .join(", ")
+                                    ? ` — ${[
+                                        place.phone && "phone",
+                                        place.website && "website",
+                                        place.instagram && "Instagram",
+                                        place.youtube && "YouTube",
+                                        place.telegram && "Telegram",
+                                      ]
+                                        .filter(Boolean)
+                                        .join(", ")}`
+                                    : ""
+                                }`
+                              : "Phone, website, Instagram, YouTube, Telegram"}
+                          </p>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
                 <Icon name="forward" size={20} className="text-[#6F7A5A]" />
               </div>

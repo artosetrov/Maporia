@@ -118,6 +118,11 @@ export interface Database {
           categories: string[] | null
           tags: string[] | null
           link: string | null
+          phone: string | null
+          website: string | null
+          instagram: string | null
+          youtube: string | null
+          telegram: string | null
           created_by: string | null
           created_at: string
           updated_at: string | null
@@ -131,6 +136,8 @@ export interface Database {
           google_place_id: string | null
           is_hidden: boolean | null
           kind: PlaceKind
+          /** Дополнительные kind'ы; не пересекаются с primary `kind`. См. add_secondary_kinds_to_places. */
+          secondary_kinds: PlaceKind[]
           price_amount: number | null
           price_currency: string | null
           price_unit: PriceUnit | null
@@ -160,6 +167,11 @@ export interface Database {
           categories?: string[] | null
           tags?: string[] | null
           link?: string | null
+          phone?: string | null
+          website?: string | null
+          instagram?: string | null
+          youtube?: string | null
+          telegram?: string | null
           created_by?: string | null
           created_at?: string
           updated_at?: string | null
@@ -173,6 +185,7 @@ export interface Database {
           google_place_id?: string | null
           is_hidden?: boolean | null
           kind?: PlaceKind
+          secondary_kinds?: PlaceKind[]
           price_amount?: number | null
           price_currency?: string | null
           price_unit?: PriceUnit | null
@@ -202,6 +215,11 @@ export interface Database {
           categories?: string[] | null
           tags?: string[] | null
           link?: string | null
+          phone?: string | null
+          website?: string | null
+          instagram?: string | null
+          youtube?: string | null
+          telegram?: string | null
           created_by?: string | null
           created_at?: string
           updated_at?: string | null
@@ -215,6 +233,7 @@ export interface Database {
           google_place_id?: string | null
           is_hidden?: boolean | null
           kind?: PlaceKind
+          secondary_kinds?: PlaceKind[]
           price_amount?: number | null
           price_currency?: string | null
           price_unit?: PriceUnit | null
@@ -313,6 +332,38 @@ export interface Database {
           collection_id?: string
           sort_order?: number
           created_at?: string
+        }
+      }
+      admin_impersonation_log: {
+        Row: {
+          id: string
+          admin_id: string
+          target_id: string
+          started_at: string
+          ended_at: string | null
+          ip: string | null
+          user_agent: string | null
+          reason: string | null
+        }
+        Insert: {
+          id?: string
+          admin_id: string
+          target_id: string
+          started_at?: string
+          ended_at?: string | null
+          ip?: string | null
+          user_agent?: string | null
+          reason?: string | null
+        }
+        Update: {
+          id?: string
+          admin_id?: string
+          target_id?: string
+          started_at?: string
+          ended_at?: string | null
+          ip?: string | null
+          user_agent?: string | null
+          reason?: string | null
         }
       }
     }

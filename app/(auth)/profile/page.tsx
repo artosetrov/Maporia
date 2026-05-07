@@ -29,6 +29,8 @@ import PremiumBadge from "../../components/PremiumBadge";
 import { getRecentlyViewedPlaceIds } from "../../utils";
 import { ProfileSkeleton, PlaceCardGridSkeleton, SkeletonBase } from "../../components/Skeleton";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
+import ImpersonationDisclaimer from "../../components/ImpersonationDisclaimer";
+import { useImpersonationStatus } from "../../hooks/useImpersonationStatus";
 
 type Place = {
   id: string;
@@ -3314,6 +3316,25 @@ function ElementsSection() {
             <Icon name="forward" size={20} className="text-[#A8B096] group-hover:text-[#6F7A5A] transition" />
           </div>
         </Link>
+
+        {/* Impersonation log */}
+        <Link
+          href="/admin/impersonation-log"
+          className="block rounded-xl border border-[#ECEEE4] bg-white p-6 hover:shadow-md transition group"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4] flex items-center justify-center">
+                <Icon name="eye" size={24} className="text-[#8F9E4F]" />
+              </div>
+              <div>
+                <div className="font-semibold text-[#1F2A1F] mb-1">Impersonation log</div>
+                <div className="text-sm text-[#6F7A5A]">Аудит сессий, когда админы входили под пользователями</div>
+              </div>
+            </div>
+            <Icon name="forward" size={20} className="text-[#A8B096] group-hover:text-[#6F7A5A] transition" />
+          </div>
+        </Link>
       </div>
 
       {/* Modal Preview with Custom Content */}
@@ -3331,6 +3352,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
   const [usersLoading, setUsersLoading] = useState(true);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [impersonatingUserId, setImpersonatingUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirmUserId, setDeleteConfirmUserId] = useState<string | null>(null);
   const [pendingRoleChanges, setPendingRoleChanges] = useState<Map<string, AdminAssignable>>(new Map());
@@ -3484,6 +3506,81 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
     }
     setError(null);
     setDeleteConfirmUserId(userId);
+  }
+
+  async function handleImpersonate(user: User) {
+    if (user.id === currentUserId) {
+      setError("Нельзя зайти под собой");
+      return;
+    }
+    if (user.is_admin) {
+      setError("Нельзя зайти под другим админом");
+      return;
+    }
+
+    const targetLabel = user.display_name || user.username || user.email || "этим пользователем";
+    if (typeof window !== "undefined") {
+      const ok = window.confirm(
+        `Войти как ${targetLabel}?\n\nВсе ваши действия будут залогированы. Stripe-операции под чужим аккаунтом заблокированы. Вернуться обратно можно через баннер в шапке.`
+      );
+      if (!ok) return;
+    }
+
+    setImpersonatingUserId(user.id);
+    setError(null);
+
+    try {
+      const {
+        data: { session },
+        error: sessionErr,
+      } = await supabase.auth.getSession();
+
+      if (sessionErr || !session) {
+        setError("Не удалось получить текущую сессию админа");
+        return;
+      }
+
+      const res = await fetch("/api/admin/impersonate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetUserId: user.id,
+          accessToken: session.access_token,
+          refreshToken: session.refresh_token,
+        }),
+      });
+
+      const body = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setError(`Не удалось войти: ${body?.error ?? `HTTP ${res.status}`}`);
+        return;
+      }
+
+      const tokenHash: string | undefined = body?.tokenHash;
+      if (!tokenHash) {
+        setError("Сервер не вернул token_hash");
+        return;
+      }
+
+      const { error: otpErr } = await supabase.auth.verifyOtp({
+        type: "magiclink",
+        token_hash: tokenHash,
+      });
+
+      if (otpErr) {
+        setError(`verifyOtp: ${otpErr.message}`);
+        return;
+      }
+
+      // Полная перезагрузка — чтобы все провайдеры (UserAccessContext и др.) подхватили нового юзера.
+      window.location.href = "/";
+    } catch (err) {
+      console.error("Error impersonating user:", err);
+      setError(err instanceof Error ? err.message : "Не удалось войти");
+    } finally {
+      setImpersonatingUserId(null);
+    }
   }
 
   function closeDeleteConfirm() {
@@ -3651,6 +3748,23 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
                         <Icon name="close" size={16} />
                       </button>
                     </>
+                  )}
+
+                  {/* Impersonate Button */}
+                  {user.id !== currentUserId && !user.is_admin && !pendingRoleChanges.has(user.id) && (
+                    <button
+                      onClick={() => handleImpersonate(user)}
+                      disabled={impersonatingUserId === user.id}
+                      className="p-2 rounded-lg border border-[#ECEEE4] text-[#6F7A5A] hover:bg-[#FAFAF7] hover:text-[#8F9E4F] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Войти как этот пользователь"
+                      aria-label="Войти как этот пользователь"
+                    >
+                      {impersonatingUserId === user.id ? (
+                        <div className="w-4 h-4 border-2 border-[#8F9E4F] border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Icon name="eye" size={16} />
+                      )}
+                    </button>
                   )}
 
                   {/* Delete Button */}
@@ -3839,6 +3953,8 @@ export default function ProfilePage() {
 function PremiumSection() {
   const router = useRouter();
   const { user, profile, access } = useUserAccessContext();
+  const impersonation = useImpersonationStatus();
+  const isImpersonating = !!impersonation?.active;
   const [opening, setOpening] = useState(false);
   const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -3848,6 +3964,10 @@ function PremiumSection() {
 
   async function startCheckout(planId: string) {
     setError(null);
+    if (isImpersonating) {
+      setError("Stripe-операции отключены в режиме impersonation.");
+      return;
+    }
     if (!user) {
       router.push(getAuthUrl("/profile?section=premium"));
       return;
@@ -3887,6 +4007,10 @@ function PremiumSection() {
 
   async function openPortal() {
     setError(null);
+    if (isImpersonating) {
+      setError("Stripe-операции отключены в режиме impersonation.");
+      return;
+    }
     setOpening(true);
     try {
       const { data: sess } = await supabase.auth.getSession();
@@ -3919,6 +4043,8 @@ function PremiumSection() {
   return (
     <div className="space-y-6">
       <h1 className="hidden lg:block text-3xl font-semibold font-fraunces text-[#1F2A1F] mb-8">Premium</h1>
+
+      <ImpersonationDisclaimer />
 
       {/* Current plan */}
       <section className="rounded-2xl border border-[#ECEEE4] bg-white p-5 sm:p-6">
@@ -3958,13 +4084,17 @@ function PremiumSection() {
               <button
                 type="button"
                 onClick={openPortal}
-                disabled={opening}
+                disabled={opening || isImpersonating}
+                title={isImpersonating ? "Stripe-операции отключены в режиме impersonation" : undefined}
                 className={cx(
-                  "h-11 px-5 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] transition",
+                  "h-11 px-5 rounded-xl text-sm font-medium transition",
+                  isImpersonating
+                    ? "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
+                    : "bg-[#8F9E4F] text-white hover:bg-[#556036]",
                   opening && "opacity-70 cursor-wait"
                 )}
               >
-                {opening ? "Opening Stripe…" : "Manage / cancel"}
+                {isImpersonating ? "Locked" : opening ? "Opening Stripe…" : "Manage / cancel"}
               </button>
             )}
           </>
@@ -4018,10 +4148,11 @@ function PremiumSection() {
                 <button
                   type="button"
                   onClick={() => startCheckout(id)}
-                  disabled={isCurrent || isLoading}
+                  disabled={isCurrent || isLoading || isImpersonating}
+                  title={isImpersonating ? "Покупки отключены в режиме impersonation" : undefined}
                   className={cx(
                     "w-full h-10 rounded-xl text-sm font-medium transition",
-                    isCurrent
+                    isCurrent || isImpersonating
                       ? "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
                       : cfg.display.highlighted
                       ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
@@ -4029,7 +4160,7 @@ function PremiumSection() {
                     isLoading && "opacity-70 cursor-wait"
                   )}
                 >
-                  {isCurrent ? "Current" : isLoading ? "Loading…" : cfg.billing.kind === "one_time" ? "Buy" : "Subscribe"}
+                  {isCurrent ? "Current" : isImpersonating ? "Locked" : isLoading ? "Loading…" : cfg.billing.kind === "one_time" ? "Buy" : "Subscribe"}
                 </button>
               </div>
             );

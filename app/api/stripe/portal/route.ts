@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe, supabaseAdmin } from "../../../lib/stripe";
+import { isImpersonatingFromRequest } from "../../../lib/impersonation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -20,6 +21,15 @@ const jsonError = (message: string, status: number, code?: string) =>
 
 export async function POST(request: NextRequest) {
   try {
+    // Гард: запрещаем Stripe-операции под impersonation.
+    if (isImpersonatingFromRequest(request)) {
+      return jsonError(
+        "Stripe operations are disabled while impersonating another user.",
+        403,
+        "IMPERSONATION_ACTIVE"
+      );
+    }
+
     const stripe = getStripe();
     if (!stripe) return jsonError("Stripe is not configured.", 503, "MISSING_STRIPE_KEY");
 

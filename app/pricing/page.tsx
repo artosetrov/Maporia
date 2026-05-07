@@ -30,6 +30,8 @@ import {
 import type { PaidPlan } from "../types";
 import TopBar from "../components/TopBar";
 import Icon from "../components/Icon";
+import ImpersonationDisclaimer from "../components/ImpersonationDisclaimer";
+import { useImpersonationStatus } from "../hooks/useImpersonationStatus";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
@@ -38,6 +40,8 @@ function cx(...a: Array<string | false | undefined | null>) {
 export default function PricingPage() {
   const router = useRouter();
   const { user, profile, access } = useUserAccessContext();
+  const impersonation = useImpersonationStatus();
+  const isImpersonating = !!impersonation?.active;
   const [checkoutPlan, setCheckoutPlan] = useState<PaidPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,6 +50,11 @@ export default function PricingPage() {
 
   async function startCheckout(plan: PaidPlan) {
     setError(null);
+
+    if (isImpersonating) {
+      setError("Stripe-операции отключены в режиме impersonation.");
+      return;
+    }
 
     if (!user) {
       router.push(`/auth?next=${encodeURIComponent("/pricing")}`);
@@ -114,6 +123,11 @@ export default function PricingPage() {
           </p>
         </header>
 
+        {/* Disclaimer для impersonation */}
+        <div className="mb-6">
+          <ImpersonationDisclaimer />
+        </div>
+
         {/* 4 платных тарифа */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {plans.map((p) => {
@@ -121,6 +135,8 @@ export default function PricingPage() {
             const isLoading = checkoutPlan === p.id;
             const ctaLabel = isCurrent
               ? "Current plan"
+              : isImpersonating
+              ? "Locked"
               : isLoading
               ? "Loading…"
               : p.billing.kind === "one_time"
@@ -191,10 +207,11 @@ export default function PricingPage() {
                 <button
                   type="button"
                   onClick={() => startCheckout(p.id)}
-                  disabled={isCurrent || isLoading}
+                  disabled={isCurrent || isLoading || isImpersonating}
+                  title={isImpersonating ? "Покупки отключены в режиме impersonation" : undefined}
                   className={cx(
                     "w-full h-11 rounded-xl text-sm font-medium transition",
-                    isCurrent
+                    isCurrent || isImpersonating
                       ? "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
                       : p.display.highlighted
                       ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"

@@ -209,6 +209,32 @@ export function suggestPlanForKind(
 }
 
 /**
+ * Какой тариф минимально достаточен для публикации НАБОРА kind'ов одновременно
+ * (мульти-формат: например, локация + сервис в одной карточке).
+ *
+ * Логика — самый дешёвый план, который покрывает все запрошенные kind'ы:
+ *  - есть и service, и experience → creator_all (только он покрывает оба).
+ *  - есть только service (с/без location) → creator_service.
+ *  - есть только experience (с/без location) → creator_experience.
+ *  - только location → premium_viewer.
+ *
+ * Used by BecomeProviderModal/wizard для авто-подбора тарифа перед оплатой.
+ * Пустой массив трактуется как location-only (defensive default).
+ */
+export function suggestPlanForKinds(
+  kinds: Array<"location" | "service" | "experience">
+): PaidPlan {
+  const set = new Set(kinds);
+  const hasService = set.has("service");
+  const hasExperience = set.has("experience");
+
+  if (hasService && hasExperience) return "creator_all";
+  if (hasService) return "creator_service";
+  if (hasExperience) return "creator_experience";
+  return "premium_viewer";
+}
+
+/**
  * Возвращает квоту по конкретному kind'у с учётом combined-pool.
  * Если у тарифа есть `combined`, значит лимит общий между service+experience.
  */

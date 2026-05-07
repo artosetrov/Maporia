@@ -21,10 +21,12 @@ import type { Database, PlaceKind } from "../../types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { useUserAccessContext } from "../../contexts/UserAccessContext";
 import { useAuthRedirect } from "../../hooks/useAuthRedirect";
-import { canUserAddPlace, canUserCreate, checkQuota } from "../../lib/access";
+import { canUserAddPlace, canUserCreate, canUserCreateMulti, checkQuota } from "../../lib/access";
 import type { QuotaCheck } from "../../lib/access";
-import { EXTRA_LISTING, PLAN_CONFIG, formatPrice, suggestPlanForKind } from "../../lib/plans";
+import { EXTRA_LISTING, PLAN_CONFIG, formatPrice, suggestPlanForKind, suggestPlanForKinds } from "../../lib/plans";
 import Icon from "../../components/Icon";
+import ImpersonationDisclaimer from "../../components/ImpersonationDisclaimer";
+import { useImpersonationStatus } from "../../hooks/useImpersonationStatus";
 
 type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
 type PlaceIdResult = { data: Pick<PlacesRow, "id"> | null; error: PostgrestError | null };
@@ -65,11 +67,55 @@ function isValidKind(value: string | null): value is PlaceKind {
   return value === "location" || value === "service" || value === "experience";
 }
 
+/**
+ * Парсим CSV-список kind'ов из query (`?kinds=service,location`).
+ * Дропаем невалидные значения, дедуплицируем, сохраняем порядок появления.
+ * Пустая строка / только мусор → пустой массив.
+ */
+function parseKindsCsv(raw: string | null): PlaceKind[] {
+  if (!raw) return [];
+  const seen = new Set<PlaceKind>();
+  const out: PlaceKind[] = [];
+  for (const part of raw.split(",")) {
+    const trimmed = part.trim();
+    if (isValidKind(trimmed) && !seen.has(trimmed)) {
+      seen.add(trimmed);
+      out.push(trimmed);
+    }
+  }
+  return out;
+}
+
+/**
+ * Из набора выбранных kind'ов выбираем primary для записи в `place.kind`.
+ * Приоритет: service > experience > location — потому что:
+ *   - kind-router на /id/[id]/page.tsx рендерит OfferPlaceView для service/experience
+ *     и legacy view для location. Если карточка содержит и service, и location,
+ *     юзеру важнее увидеть service-страницу с ценой.
+ *   - У service/experience есть price/schedule fields, у location — нет.
+ *
+ * Возвращает primary + остальные как secondary_kinds.
+ */
+function splitPrimaryAndSecondary(kinds: PlaceKind[]): {
+  primary: PlaceKind;
+  secondary: PlaceKind[];
+} {
+  if (kinds.length === 0) {
+    return { primary: "location", secondary: [] };
+  }
+  const priority: PlaceKind[] = ["service", "experience", "location"];
+  const primary = priority.find((k) => kinds.includes(k)) ?? kinds[0];
+  const secondary = kinds.filter((k) => k !== primary);
+  return { primary, secondary };
+}
+
 export default function AddPlacePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { replaceToAuth } = useAuthRedirect();
   const { loading: accessLoading, user, access } = useUserAccessContext();
+  const impersonation = useImpersonationStatus();
+  const isImpersonating = !!impersonation?.active;
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Если пользователь нажал на тип без нужного тарифа — показываем модалку. */
@@ -83,7 +129,17 @@ export default function AddPlacePage() {
 
   const returnTo = useMemo(() => searchParams.get("returnTo") || "/profile", [searchParams]);
   const presetKindParam = searchParams.get("kind");
+  const presetKindsParam = searchParams.get("kinds");
   const presetKind: PlaceKind | null = isValidKind(presetKindParam) ? presetKindParam : null;
+  /**
+   * Мульти-kind из BecomeProviderModal (?kinds=service,location).
+   * Если ни kinds, ни kind не задан — массив пустой, рисуется выбор-визард.
+   */
+  const presetKinds: PlaceKind[] = useMemo(() => {
+    const fromCsv = parseKindsCsv(presetKindsParam);
+    if (fromCsv.length > 0) return fromCsv;
+    return presetKind ? [presetKind] : [];
+  }, [presetKindsParam, presetKind]);
 
   const canAdd = canUserAddPlace(access);
 
@@ -95,12 +151,12 @@ export default function AddPlacePage() {
     }
   }, [accessLoading, user, replaceToAuth]);
 
-  // Если пользователь пришёл с ?kind=… — создаём сразу.
+  // Если пользователь пришёл с ?kind= или ?kinds=… — создаём сразу.
   useEffect(() => {
-    if (accessLoading || !user || !canAdd || !presetKind || creating) return;
-    void createAndRedirect(presetKind);
+    if (accessLoading || !user || !canAdd || presetKinds.length === 0 || creating) return;
+    void createAndRedirect(presetKinds);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessLoading, user, canAdd, presetKind]);
+  }, [accessLoading, user, canAdd, presetKinds]);
 
   async function createAndRedirect(kind: PlaceKind) {
     if (!user) return;
@@ -351,6 +407,7 @@ export default function AddPlacePage() {
       {paywallKind && (
         <PaywallModal
           kind={paywallKind}
+          isImpersonating={isImpersonating}
           onClose={() => setPaywallKind(null)}
           onUpgrade={() => router.push("/pricing")}
         />
@@ -362,8 +419,13 @@ export default function AddPlacePage() {
           kind={limitState.kind}
           quota={limitState.quota}
           buying={buyingAddon}
+          isImpersonating={isImpersonating}
           onClose={() => setLimitState(null)}
           onBuyAddon={async () => {
+            if (isImpersonating) {
+              setError("Stripe-операции отключены в режиме impersonation.");
+              return;
+            }
             setBuyingAddon(true);
             setError(null);
             try {
@@ -403,10 +465,12 @@ export default function AddPlacePage() {
 
 function PaywallModal({
   kind,
+  isImpersonating,
   onClose,
   onUpgrade,
 }: {
   kind: PlaceKind;
+  isImpersonating: boolean;
   onClose: () => void;
   onUpgrade: () => void;
 }) {
@@ -451,6 +515,11 @@ function PaywallModal({
               </li>
             ))}
         </ul>
+        {isImpersonating && (
+          <div className="mb-4">
+            <ImpersonationDisclaimer compact />
+          </div>
+        )}
         <div className="flex gap-3">
           <button
             type="button"
@@ -462,9 +531,16 @@ function PaywallModal({
           <button
             type="button"
             onClick={onUpgrade}
-            className="flex-1 h-11 rounded-xl bg-[#8F9E4F] px-5 text-sm font-medium text-white hover:bg-[#556036] transition"
+            disabled={isImpersonating}
+            title={isImpersonating ? "Покупки отключены в режиме impersonation" : undefined}
+            className={cx(
+              "flex-1 h-11 rounded-xl px-5 text-sm font-medium transition",
+              isImpersonating
+                ? "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
+                : "bg-[#8F9E4F] text-white hover:bg-[#556036]"
+            )}
           >
-            See plans
+            {isImpersonating ? "Locked" : "See plans"}
           </button>
         </div>
       </div>
@@ -480,6 +556,7 @@ function LimitReachedModal({
   kind,
   quota,
   buying,
+  isImpersonating,
   onClose,
   onBuyAddon,
   onUpgrade,
@@ -487,6 +564,7 @@ function LimitReachedModal({
   kind: "service" | "experience";
   quota: QuotaCheck;
   buying: boolean;
+  isImpersonating: boolean;
   onClose: () => void;
   onBuyAddon: () => void;
   onUpgrade: () => void;
@@ -518,22 +596,42 @@ function LimitReachedModal({
         <p className="text-sm text-[#1F2A1F] mb-4">
           Buy one more slot for <strong>{formatPrice(EXTRA_LISTING.price)}</strong> or upgrade to a bigger plan.
         </p>
+        {isImpersonating && (
+          <div className="mb-4">
+            <ImpersonationDisclaimer compact />
+          </div>
+        )}
         <div className="flex flex-col sm:flex-row gap-3">
           <button
             type="button"
             onClick={onBuyAddon}
-            disabled={buying}
+            disabled={buying || isImpersonating}
+            title={isImpersonating ? "Покупки отключены в режиме impersonation" : undefined}
             className={cx(
-              "flex-1 h-11 rounded-xl bg-[#8F9E4F] px-5 text-sm font-medium text-white hover:bg-[#556036] transition",
-              buying && "opacity-70 cursor-wait"
+              "flex-1 h-11 rounded-xl px-5 text-sm font-medium transition",
+              isImpersonating
+                ? "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
+                : "bg-[#8F9E4F] text-white hover:bg-[#556036]",
+              buying && !isImpersonating && "opacity-70 cursor-wait"
             )}
           >
-            {buying ? "Opening Stripe…" : `+1 slot for ${formatPrice(EXTRA_LISTING.price)}`}
+            {isImpersonating
+              ? "Locked"
+              : buying
+              ? "Opening Stripe…"
+              : `+1 slot for ${formatPrice(EXTRA_LISTING.price)}`}
           </button>
           <button
             type="button"
             onClick={onUpgrade}
-            className="flex-1 h-11 rounded-xl border border-[#1F2A1F] bg-white px-5 text-sm font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] transition"
+            disabled={isImpersonating}
+            title={isImpersonating ? "Покупки отключены в режиме impersonation" : undefined}
+            className={cx(
+              "flex-1 h-11 rounded-xl px-5 text-sm font-medium transition",
+              isImpersonating
+                ? "border border-[#DADDD0] bg-white text-[#A8B096] cursor-not-allowed"
+                : "border border-[#1F2A1F] bg-white text-[#1F2A1F] hover:bg-[#FAFAF7]"
+            )}
           >
             Switch plan
           </button>

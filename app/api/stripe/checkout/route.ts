@@ -19,6 +19,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe, supabaseAdmin, getOrCreateStripeCustomer } from "../../../lib/stripe";
 import { EXTRA_LISTING, PLAN_CONFIG } from "../../../lib/plans";
+import { isImpersonatingFromRequest } from "../../../lib/impersonation";
 import type { PaidPlan } from "../../../types";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,15 @@ function isPaidPlan(value: unknown): value is PaidPlan {
 
 export async function POST(request: NextRequest) {
   try {
+    // Гард: запрещаем Stripe-операции под impersonation.
+    if (isImpersonatingFromRequest(request)) {
+      return jsonError(
+        "Stripe operations are disabled while impersonating another user.",
+        403,
+        "IMPERSONATION_ACTIVE"
+      );
+    }
+
     const stripe = getStripe();
     if (!stripe) {
       return jsonError("Stripe is not configured. Set STRIPE_SECRET_KEY.", 503, "MISSING_STRIPE_KEY");

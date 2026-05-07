@@ -13,6 +13,7 @@ const HOME_TABS: { id: HomeKind; label: string; emoji: string }[] = [
 ];
 import { useAuthRedirect } from "./hooks/useAuthRedirect";
 import TopBar from "./components/TopBar";
+import SearchBar from "./components/SearchBar";
 import HomeSection from "./components/HomeSection";
 import Pill from "./components/Pill";
 import CategoryCarousel from "./components/CategoryCarousel";
@@ -443,8 +444,17 @@ function HomePageInner() {
 
   return (
     <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
+      {/*
+        Airbnb-style header on home:
+        – TopBar держит только Logo + правые экшены (showSearchBar=false).
+        – Табы (Locations / Experiences / Services) и SearchBar выезжают
+          отдельной sticky-зоной под TopBar — поиск всегда под табами.
+        Search-handlers всё равно прокидываем: они привязаны к собственному
+        SearchBar ниже.
+      */}
       <TopBar
-        showSearchBar={true}
+        showSearchBar={false}
+        hideMobileSearchPill={true}
         searchValue={searchValue}
         onSearchChange={handleSearchChange}
         selectedCity={selectedCity}
@@ -579,7 +589,11 @@ function HomePageInner() {
       />
 
       <div className="flex-1 pt-[64px]">
-        {/* Airbnb-style tabs: Locations / Experiences / Services */}
+        {/*
+          Airbnb-style sticky header zone: tabs row → search row.
+          Обе строки залипают вместе при скролле, поэтому пользователь
+          всегда видит и тип контента, и строку поиска.
+        */}
         <div className="border-b border-[#ECEEE4] bg-[#FAFAF7] sticky top-[64px] z-20">
           <div
             className="mx-auto max-w-[1920px]"
@@ -588,23 +602,57 @@ function HomePageInner() {
               paddingRight: 'var(--home-page-padding, 16px)',
             }}
           >
-            <div className="flex gap-2 overflow-x-auto py-3">
-              {HOME_TABS.map((tab) => {
-                const isActive = activeKind === tab.id;
-                return (
-                  <Pill
-                    key={tab.id}
-                    variant="tab"
-                    active={isActive}
-                    onClick={() => setActiveKind(tab.id)}
-                  >
-                    <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                      <span aria-hidden>{tab.emoji}</span>
-                      <span>{tab.label}</span>
-                    </span>
-                  </Pill>
-                );
-              })}
+            {/* Row 1: Tabs — centered, like Airbnb's Homes/Experiences/Services */}
+            <div className="flex justify-center">
+              <div className="flex gap-2 overflow-x-auto pt-3 pb-2 max-w-full">
+                {HOME_TABS.map((tab) => {
+                  const isActive = activeKind === tab.id;
+                  return (
+                    <Pill
+                      key={tab.id}
+                      variant="tab"
+                      active={isActive}
+                      onClick={() => setActiveKind(tab.id)}
+                    >
+                      <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                        <span aria-hidden>{tab.emoji}</span>
+                        <span>{tab.label}</span>
+                      </span>
+                    </Pill>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Row 2: SearchBar — always under the tabs.
+                Mobile vs desktop через CSS, без JS-флага, чтобы не было
+                hydration-моргания. */}
+            <div className="pb-3 pt-1">
+              {/* Mobile (< lg) */}
+              <div className="lg:hidden">
+                <SearchBar
+                  selectedCity={selectedCity}
+                  onCityChange={handleCityChange}
+                  searchValue={searchValue}
+                  onSearchChange={handleSearchChange}
+                  onFiltersClick={handleFiltersClick}
+                  activeFiltersCount={activeFiltersCount}
+                  isMobile={true}
+                  onSearchBarClick={() => setSearchModalOpen(true)}
+                />
+              </div>
+              {/* Desktop (>= lg) */}
+              <div className="hidden lg:flex justify-center">
+                <SearchBar
+                  selectedCity={selectedCity}
+                  onCityChange={handleCityChange}
+                  searchValue={searchValue}
+                  onSearchChange={handleSearchChange}
+                  onFiltersClick={handleFiltersClick}
+                  activeFiltersCount={activeFiltersCount}
+                  onSearchBarClick={() => setSearchModalOpen(true)}
+                />
+              </div>
             </div>
           </div>
         </div>

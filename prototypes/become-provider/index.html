@@ -1,0 +1,1176 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Maporia — «Стать провайдером» (прототип)</title>
+
+<!-- Brand fonts (как в проекте) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet">
+
+<style>
+  /* === MAPORIA BRAND TOKENS (1:1 c app/globals.css) === */
+  :root {
+    --olive-primary: #8F9E4F;
+    --olive-dark: #556036;
+    --soft-sage: #C9D2A3;
+    --warm-white: #FAFAF7;
+
+    --text-primary: #1F2A1F;
+    --text-secondary: #6F7A5A;
+    --text-muted: #A8B096;
+
+    --success: #7FA35C;
+    --warning: #D6B25E;
+    --error: #C96A5B;
+
+    --border-light: #ECEEE4;
+    --border-input: #E5E8DB;
+    --bg-card: #FFFFFF;
+    --disabled-bg: #DADDD0;
+
+    --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, sans-serif;
+    --font-serif: "Fraunces", Georgia, serif;
+
+    --shadow-sm: 0 1px 20px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 20px rgba(0,0,0,0.10);
+    --shadow-lg: 0 10px 20px rgba(0,0,0,0.10);
+    --shadow-2xl: 0 25px 50px rgba(0,0,0,0.25);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--warm-white);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  a { color: inherit; text-decoration: none; }
+
+  h1, .h1 { font-family: var(--font-serif); font-size: 30px; line-height: 1.25; letter-spacing: -0.01em; font-weight: 600; margin: 0; }
+  h2, .h2 { font-family: var(--font-serif); font-size: 22px; line-height: 1.3; letter-spacing: -0.01em; font-weight: 600; margin: 0; }
+  h3 { font-family: var(--font-serif); font-size: 18px; font-weight: 600; margin: 0; }
+  @media (min-width:1024px){ h1{font-size:32px;} h2{font-size:24px;} }
+
+  /* === TOPBAR (повторяет app/components/TopBar.tsx) === */
+  .topbar {
+    position: sticky; top: 0; z-index: 60;
+    background: #fff;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .topbar-inner {
+    max-width: 1280px; margin: 0 auto;
+    display: flex; align-items: center; gap: 24px;
+    padding: 12px 32px;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 8px;
+    font-family: "Manrope", var(--font-sans); font-weight: 700;
+    font-size: 22px; letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+  .logo-mark {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: var(--olive-primary);
+    display: grid; place-items: center; color: #fff; font-size: 18px;
+  }
+  .topbar-search {
+    flex: 1; max-width: 480px;
+    display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--border-input);
+    border-radius: 999px;
+    padding: 8px 16px;
+    background: #fff;
+    color: var(--text-secondary);
+    font-size: 14px;
+    cursor: pointer;
+    transition: border-color .15s;
+  }
+  .topbar-search:hover { border-color: var(--olive-primary); }
+  .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+  /* НОВАЯ ссылка «Стать провайдером» — добавляется в шапку */
+  .become-host-link {
+    font-size: 14px; font-weight: 500; color: var(--text-primary);
+    padding: 10px 14px; border-radius: 999px;
+    transition: background-color .15s;
+    cursor: pointer;
+    border: none; background: transparent;
+    white-space: nowrap;
+  }
+  .become-host-link:hover { background: var(--warm-white); }
+
+  .icon-btn {
+    width: 40px; height: 40px; border-radius: 999px;
+    background: #fff; border: 1px solid var(--border-light);
+    display: grid; place-items: center;
+    transition: background-color .15s;
+  }
+  .icon-btn:hover { background: var(--warm-white); }
+  .avatar {
+    width: 32px; height: 32px; border-radius: 999px;
+    background: var(--warm-white); border: 1px solid var(--border-light);
+    display: grid; place-items: center;
+    font-size: 12px; font-weight: 600; color: var(--olive-primary);
+  }
+
+  /* === HOME (mock) === */
+  .home {
+    max-width: 1280px; margin: 0 auto;
+    padding: 24px 32px 80px;
+  }
+  .home-hero {
+    margin-bottom: 32px;
+  }
+  .home-hero h1 { margin-bottom: 6px; }
+  .home-hero p { color: var(--text-secondary); margin: 0; font-size: 14px; }
+
+  .grid {
+    display: grid; gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+  .place-card {
+    background: #fff; border-radius: 16px; border: 1px solid var(--border-light);
+    overflow: hidden;
+  }
+  .place-card-img {
+    aspect-ratio: 4 / 3;
+    background-size: cover; background-position: center;
+  }
+  .place-card-body { padding: 12px 14px; }
+  .place-card-title {
+    font-family: var(--font-serif); font-weight: 600; font-size: 15px;
+    margin: 0 0 4px;
+  }
+  .place-card-meta { font-size: 13px; color: var(--text-secondary); }
+  .place-card-kind {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 500; color: var(--olive-dark);
+    background: rgba(143,158,79,0.12);
+    padding: 2px 8px; border-radius: 999px;
+    margin-bottom: 8px;
+  }
+
+  /* === MODAL backdrop === */
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(0,0,0,0.5);
+    display: flex; align-items: flex-end; justify-content: center;
+    padding: 16px;
+    animation: fadeIn .2s ease-out;
+  }
+  @media (min-width: 640px) { .modal-backdrop { align-items: center; } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  .modal {
+    background: #fff;
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-lg);
+    border-radius: 20px;
+    max-width: 640px; width: 100%;
+    max-height: calc(100vh - 32px);
+    display: flex; flex-direction: column;
+    animation: slideUp .25s ease-out;
+    overflow: hidden;
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-light);
+    flex-shrink: 0;
+  }
+  .modal-title { font-family: var(--font-serif); font-weight: 600; font-size: 17px; }
+  .modal-close {
+    width: 32px; height: 32px; border-radius: 999px;
+    border: none; background: transparent;
+    display: grid; place-items: center;
+    color: var(--text-secondary);
+    transition: background-color .15s;
+  }
+  .modal-close:hover { background: var(--warm-white); color: var(--text-primary); }
+
+  .modal-body {
+    padding: 24px 20px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .modal-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-light);
+    background: #fff;
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  /* === KIND CARDS (мульти-выбор) === */
+  .kind-intro {
+    text-align: left; margin-bottom: 20px;
+  }
+  .kind-intro h2 { margin-bottom: 4px; }
+  .kind-intro p { font-size: 14px; color: var(--text-secondary); margin: 0; }
+
+  .kind-grid {
+    display: grid; gap: 12px;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 640px) {
+    .kind-grid { grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  }
+
+  .kind-card {
+    position: relative;
+    text-align: left;
+    background: #fff;
+    border: 1.5px solid var(--border-light);
+    border-radius: 16px;
+    padding: 20px 16px 16px;
+    transition: border-color .15s, background-color .15s, transform .15s;
+    display: flex; flex-direction: column; gap: 10px;
+    min-height: 200px;
+  }
+  .kind-card:hover {
+    border-color: var(--olive-primary);
+    background: #fff;
+  }
+  .kind-card.selected {
+    border-color: var(--olive-primary);
+    background: rgba(143,158,79,0.06);
+  }
+  .kind-card-check {
+    position: absolute; top: 12px; right: 12px;
+    width: 22px; height: 22px; border-radius: 6px;
+    border: 2px solid var(--border-light);
+    background: #fff;
+    display: grid; place-items: center;
+    transition: all .15s;
+  }
+  .kind-card.selected .kind-card-check {
+    background: var(--olive-primary);
+    border-color: var(--olive-primary);
+  }
+  .kind-card-check svg { opacity: 0; transition: opacity .15s; color: #fff; }
+  .kind-card.selected .kind-card-check svg { opacity: 1; }
+
+  .kind-emoji {
+    width: 48px; height: 48px; border-radius: 12px;
+    background: var(--warm-white);
+    display: grid; place-items: center;
+    font-size: 26px; line-height: 1;
+  }
+  .kind-card.selected .kind-emoji { background: rgba(143,158,79,0.12); }
+  .kind-title {
+    font-family: var(--font-serif); font-weight: 600; font-size: 16px;
+    color: var(--text-primary);
+  }
+  .kind-subtitle { font-size: 13px; color: var(--text-secondary); line-height: 1.45; }
+  .kind-examples { font-size: 12px; color: var(--text-muted); margin-top: auto; }
+
+  .kind-hint {
+    margin-top: 16px; font-size: 12px; color: var(--text-muted);
+    background: var(--warm-white);
+    padding: 10px 12px; border-radius: 10px;
+    line-height: 1.5;
+  }
+
+  /* === BUTTONS === */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    height: 44px; padding: 0 20px;
+    border-radius: 12px;
+    font-size: 14px; font-weight: 500;
+    border: none; transition: all .15s;
+    white-space: nowrap;
+  }
+  .btn-primary {
+    background: var(--olive-primary); color: #fff;
+  }
+  .btn-primary:hover { background: var(--olive-dark); }
+  .btn-primary:disabled {
+    background: var(--disabled-bg); color: var(--text-muted);
+    cursor: not-allowed;
+  }
+  .btn-ghost {
+    background: transparent; color: var(--text-secondary);
+  }
+  .btn-ghost:hover { background: var(--warm-white); color: var(--text-primary); }
+  .btn-secondary {
+    background: #fff; color: var(--text-primary);
+    border: 1px solid var(--border-light);
+  }
+  .btn-secondary:hover { background: var(--warm-white); }
+
+  /* === FORM screen === */
+  .screen {
+    max-width: 720px; margin: 0 auto;
+    padding: 32px 24px 120px;
+  }
+  .screen-back {
+    background: transparent; border: none;
+    color: var(--text-secondary); font-size: 14px;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 0; margin-bottom: 16px;
+  }
+  .screen-back:hover { color: var(--text-primary); }
+  .screen h1 { margin-bottom: 8px; }
+  .screen-subtitle { color: var(--text-secondary); font-size: 14px; margin: 0 0 24px; }
+
+  .selected-kinds-row {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin-bottom: 20px;
+  }
+  .selected-kind-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(143,158,79,0.12);
+    color: var(--olive-dark);
+    padding: 4px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 500;
+  }
+
+  .field-group {
+    background: #fff; border: 1px solid var(--border-light);
+    border-radius: 16px; padding: 20px;
+    margin-bottom: 16px;
+  }
+  .field-group-title {
+    font-family: var(--font-serif); font-weight: 600; font-size: 16px;
+    margin: 0 0 12px; display: flex; align-items: center; gap: 8px;
+  }
+  .field-group-title .badge {
+    font-family: var(--font-sans); font-size: 11px; font-weight: 500;
+    background: var(--warm-white); color: var(--text-secondary);
+    padding: 2px 8px; border-radius: 999px;
+    border: 1px solid var(--border-light);
+  }
+  .field { margin-bottom: 14px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label {
+    display: block; font-size: 13px; font-weight: 500; color: var(--text-primary);
+    margin-bottom: 6px;
+  }
+  .input, .textarea, .select {
+    width: 100%;
+    border: 1px solid var(--border-input);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: #fff;
+    font-family: inherit; font-size: 14px;
+    color: var(--text-primary);
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .input:focus, .textarea:focus, .select:focus {
+    outline: none;
+    border-color: var(--olive-primary);
+    box-shadow: 0 0 0 3px rgba(143,158,79,0.15);
+  }
+  .textarea { resize: vertical; min-height: 80px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .image-uploader {
+    border: 1.5px dashed var(--border-input);
+    border-radius: 12px;
+    padding: 24px; text-align: center;
+    color: var(--text-secondary); font-size: 13px;
+    cursor: pointer;
+    background: var(--warm-white);
+    transition: border-color .15s;
+  }
+  .image-uploader:hover { border-color: var(--olive-primary); }
+
+  /* === sticky footer === */
+  .sticky-footer {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--border-light);
+    padding: 12px 24px;
+    display: flex; gap: 12px; justify-content: space-between; align-items: center;
+    z-index: 30;
+  }
+  .sticky-footer-info {
+    font-size: 12px; color: var(--text-secondary);
+  }
+
+  /* === PREVIEW (карточка как будет) === */
+  .preview-wrap {
+    background: #fff; border: 1px solid var(--border-light);
+    border-radius: 20px; padding: 24px;
+    box-shadow: var(--shadow-sm);
+  }
+  .preview-card {
+    max-width: 320px; margin: 0 auto;
+    background: #fff;
+    border-radius: 16px; border: 1px solid var(--border-light);
+    overflow: hidden;
+  }
+  .preview-card-img {
+    aspect-ratio: 4 / 3;
+    background: linear-gradient(135deg, #C9D2A3, #8F9E4F);
+    display: grid; place-items: center;
+    font-size: 64px;
+  }
+  .preview-card-body { padding: 14px 16px 16px; }
+  .preview-card-kinds { margin-bottom: 8px; display: flex; gap: 4px; flex-wrap: wrap; }
+  .preview-card-title {
+    font-family: var(--font-serif); font-weight: 600; font-size: 17px;
+    margin: 0 0 4px;
+  }
+  .preview-card-meta { font-size: 13px; color: var(--text-secondary); }
+  .preview-card-price {
+    margin-top: 10px; padding-top: 10px;
+    border-top: 1px solid var(--border-light);
+    font-size: 14px; color: var(--text-primary);
+  }
+  .preview-card-price strong { font-weight: 600; }
+
+  .preview-disclaimer {
+    margin-top: 16px; font-size: 12px; color: var(--text-muted);
+    text-align: center;
+  }
+
+  /* === PRICING screen === */
+  .pricing-card {
+    background: #fff; border: 2px solid var(--olive-primary);
+    border-radius: 20px; padding: 28px;
+    box-shadow: var(--shadow-md);
+    position: relative; overflow: hidden;
+  }
+  .pricing-card::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+    background: linear-gradient(90deg, var(--olive-primary), var(--soft-sage));
+  }
+  .pricing-recommended-badge {
+    display: inline-block;
+    background: var(--olive-primary); color: #fff;
+    padding: 4px 12px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+    margin-bottom: 12px; text-transform: uppercase;
+  }
+  .pricing-emoji { font-size: 48px; line-height: 1; margin-bottom: 8px; }
+  .pricing-name {
+    font-family: var(--font-serif); font-weight: 600; font-size: 24px;
+    margin: 0 0 4px;
+  }
+  .pricing-tagline {
+    font-size: 14px; color: var(--text-secondary); margin: 0 0 20px;
+  }
+  .pricing-price-row {
+    display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px;
+  }
+  .pricing-price {
+    font-family: var(--font-serif); font-size: 40px; font-weight: 600;
+    color: var(--text-primary); line-height: 1;
+  }
+  .pricing-price-suffix { color: var(--text-secondary); font-size: 14px; }
+  .pricing-audience {
+    font-size: 13px; color: var(--text-muted); margin-bottom: 16px;
+  }
+  .pricing-features {
+    list-style: none; padding: 0; margin: 0 0 20px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .pricing-features li {
+    display: flex; gap: 8px; align-items: flex-start;
+    font-size: 14px; color: var(--text-primary);
+  }
+  .pricing-features li svg { flex-shrink: 0; margin-top: 2px; color: var(--olive-primary); }
+
+  .alt-plan-link {
+    text-align: center; font-size: 13px; color: var(--text-secondary);
+    margin-top: 20px;
+  }
+  .alt-plan-link button {
+    color: var(--olive-dark); border: none; background: transparent;
+    text-decoration: underline; font-size: inherit;
+  }
+
+  /* === SUCCESS === */
+  .success-screen {
+    max-width: 480px; margin: 80px auto; text-align: center;
+    padding: 0 24px;
+  }
+  .success-emoji { font-size: 72px; margin-bottom: 12px; }
+  .success-screen h1 { margin-bottom: 8px; }
+  .success-screen p { color: var(--text-secondary); margin: 0 0 24px; }
+
+  /* === step pills (показывают прогресс) === */
+  .step-pills {
+    display: flex; gap: 6px; justify-content: center;
+    margin-bottom: 20px;
+  }
+  .step-pill {
+    height: 4px; flex: 1; max-width: 60px;
+    border-radius: 999px; background: var(--border-light);
+    transition: background-color .2s;
+  }
+  .step-pill.active { background: var(--olive-primary); }
+
+  .reset-link {
+    position: fixed; bottom: 16px; left: 16px;
+    font-size: 11px; color: var(--text-muted);
+    background: rgba(255,255,255,0.9); border: 1px solid var(--border-light);
+    padding: 4px 8px; border-radius: 6px;
+    z-index: 100;
+  }
+  .reset-link:hover { color: var(--text-secondary); }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+
+<body>
+
+<!-- ============ TOPBAR ============ -->
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="logo">
+      <div class="logo-mark">M</div>
+      <span>Maporia</span>
+    </div>
+
+    <button class="topbar-search" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.35-4.35"></path>
+      </svg>
+      <span>Куда вы едете?</span>
+    </button>
+
+    <div class="topbar-actions">
+      <!-- ↓↓↓ ВОТ ОНА: новая ссылка в шапке ↓↓↓ -->
+      <button class="become-host-link" id="open-modal-btn" onclick="openModal()">
+        Стать провайдером
+      </button>
+
+      <button class="icon-btn" aria-label="Меню">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="4" y1="6" x2="20" y2="6"></line>
+          <line x1="4" y1="12" x2="20" y2="12"></line>
+          <line x1="4" y1="18" x2="20" y2="18"></line>
+        </svg>
+      </button>
+      <div class="avatar">AO</div>
+    </div>
+  </div>
+</header>
+
+<!-- ============ HOME (mock) ============ -->
+<main class="home" id="screen-home">
+  <div class="home-hero">
+    <h1>Откройте своё место</h1>
+    <p>Гайды, локации и впечатления от тех, кто здесь живёт.</p>
+  </div>
+
+  <div class="grid">
+    <!-- 8 mock-карточек -->
+    <div class="place-card">
+      <div class="place-card-img" style="background-image:linear-gradient(135deg,#C9D2A3,#8F9E4F);"></div>
+      <div class="place-card-body">
+        <span class="place-card-kind">📍 Локация</span>
+        <h3 class="place-card-title">Кофейня на крыше</h3>
+        <div class="place-card-meta">Барселона · 4.9</div>
+      </div>
+    </div>
+    <div class="place-card">
+      <div class="place-card-img" style="background-image:linear-gradient(135deg,#D6B25E,#C96A5B);"></div>
+      <div class="place-card-body">
+        <span class="place-card-kind">✨ Впечатление</span>
+        <h3 class="place-card-title">Тур по гастро-рынкам</h3>
+        <div class="place-card-meta">$45 · 3 часа</div>
+      </div>
+    </div>
+    <div class="place-card">
+      <div class="place-card-img" style="background-image:linear-gradient(135deg,#7FA35C,#556036);"></div>
+      <div class="place-card-body">
+        <span class="place-card-kind">🛠 Сервис</span>
+        <h3 class="place-card-title">Фотограф для пары</h3>
+        <div class="place-card-meta">от $120 / сессия</div>
+      </div>
+    </div>
+    <div class="place-card">
+      <div class="place-card-img" style="background-image:linear-gradient(135deg,#A8B096,#6F7A5A);"></div>
+      <div class="place-card-body">
+        <span class="place-card-kind">📍 Локация</span>
+        <h3 class="place-card-title">Секретный пляж</h3>
+        <div class="place-card-meta">Коста-Брава · 4.8</div>
+      </div>
+    </div>
+    <div class="place-card">
+      <div class="place-card-img" style="background-image:linear-gradient(135deg,#E5E8DB,#8F9E4F);"></div>
+      <div class="place-card-body">
+        <span class="place-card-kind">✨ Впечатление</span>
+        <h3 class="place-card-title">Серф-выезд на закат</h3>
+        <div class="place-card-meta">$85 · 4 часа</div>
+      </div>
+    </div>
+    <div class="place-card">
+      <div class="place-card-img" style="background-image:linear-gradient(135deg,#FAFAF7,#C9D2A3);"></div>
+      <div class="place-card-body">
+        <span class="place-card-kind">🛠 Сервис</span>
+        <h3 class="place-card-title">Йога-инструктор</h3>
+        <div class="place-card-meta">от $25 / занятие</div>
+      </div>
+    </div>
+    <div class="place-card">
+      <div class="place-card-img" style="background-image:linear-gradient(135deg,#C96A5B,#D6B25E);"></div>
+      <div class="place-card-body">
+        <span class="place-card-kind">📍 Локация</span>
+        <h3 class="place-card-title">Винодельня Joan</h3>
+        <div class="place-card-meta">Приорат · 5.0</div>
+      </div>
+    </div>
+    <div class="place-card">
+      <div class="place-card-img" style="background-image:linear-gradient(135deg,#8F9E4F,#1F2A1F);"></div>
+      <div class="place-card-body">
+        <span class="place-card-kind">✨ Впечатление</span>
+        <h3 class="place-card-title">Мастер-класс по паэлье</h3>
+        <div class="place-card-meta">$60 · 2 часа</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ============ MODAL: выбор kind ============ -->
+<div class="modal-backdrop hidden" id="kind-modal" onclick="closeModalIfBackdrop(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title">Что вы хотите разместить?</div>
+      <button class="modal-close" onclick="closeModal()" aria-label="Закрыть">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <div class="kind-intro">
+        <h2>Выберите типы карточек</h2>
+        <p>Можно выбрать несколько — например, локацию + услугу. Тариф подберём автоматически.</p>
+      </div>
+
+      <div class="kind-grid">
+        <!-- Location -->
+        <button type="button" class="kind-card" data-kind="location" onclick="toggleKind('location')">
+          <span class="kind-card-check">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </span>
+          <div class="kind-emoji">📍</div>
+          <div class="kind-title">Локация</div>
+          <div class="kind-subtitle">Точка на карте — кафе, видовая, парк, секрет.</div>
+          <div class="kind-examples">Например: ресторан, пляж, smotrovaya</div>
+        </button>
+
+        <!-- Service -->
+        <button type="button" class="kind-card" data-kind="service" onclick="toggleKind('service')">
+          <span class="kind-card-check">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </span>
+          <div class="kind-emoji">🛠</div>
+          <div class="kind-title">Сервис</div>
+          <div class="kind-subtitle">Услуга от человека — с ценой и графиком.</div>
+          <div class="kind-examples">Массаж, фотограф, инструктор</div>
+        </button>
+
+        <!-- Experience -->
+        <button type="button" class="kind-card" data-kind="experience" onclick="toggleKind('experience')">
+          <span class="kind-card-check">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </span>
+          <div class="kind-emoji">✨</div>
+          <div class="kind-title">Впечатление</div>
+          <div class="kind-subtitle">Событие с расписанием и длительностью.</div>
+          <div class="kind-examples">Тур, мастер-класс, поход</div>
+        </button>
+      </div>
+
+      <div class="kind-hint">
+        💡 Тариф зависит от выбранных типов и предложен на финальном шаге. Заполнение формы — бесплатно.
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Отмена</button>
+      <button class="btn btn-primary" id="modal-next-btn" onclick="goToForm()" disabled>
+        Далее
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ FORM screen ============ -->
+<main class="screen hidden" id="screen-form">
+  <button class="screen-back" onclick="goToHome(true)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+    Назад
+  </button>
+
+  <div class="step-pills">
+    <div class="step-pill active"></div>
+    <div class="step-pill active"></div>
+    <div class="step-pill"></div>
+    <div class="step-pill"></div>
+  </div>
+
+  <h1>Расскажите о вашем месте</h1>
+  <p class="screen-subtitle">Заполните основные поля. Опубликуете — оплатите тариф.</p>
+
+  <div class="selected-kinds-row" id="form-selected-chips"></div>
+
+  <!-- Базовые поля -->
+  <div class="field-group">
+    <h3 class="field-group-title">Основное</h3>
+    <div class="field">
+      <label for="form-title">Название</label>
+      <input class="input" id="form-title" type="text" placeholder="Например: Кофейня Bonsai">
+    </div>
+    <div class="field">
+      <label for="form-desc">Описание</label>
+      <textarea class="textarea" id="form-desc" placeholder="2–3 предложения о том, чем особенное это место…"></textarea>
+    </div>
+    <div class="field">
+      <label>Фото (обложка)</label>
+      <div class="image-uploader">📷 Перетащите фото или нажмите, чтобы загрузить</div>
+    </div>
+  </div>
+
+  <!-- Поля для location -->
+  <div class="field-group hidden" id="group-location">
+    <h3 class="field-group-title">📍 Локация <span class="badge">для карты</span></h3>
+    <div class="field">
+      <label for="form-address">Адрес</label>
+      <input class="input" id="form-address" type="text" placeholder="Carrer de la Marina, 16, Barcelona">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label for="form-city">Город</label>
+        <input class="input" id="form-city" type="text" placeholder="Барселона">
+      </div>
+      <div class="field">
+        <label for="form-category">Категория</label>
+        <select class="select" id="form-category">
+          <option>Кафе</option><option>Ресторан</option><option>Парк</option><option>Видовая</option><option>Бар</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Поля для service -->
+  <div class="field-group hidden" id="group-service">
+    <h3 class="field-group-title">🛠 Сервис <span class="badge">с ценой</span></h3>
+    <div class="field-row">
+      <div class="field">
+        <label for="form-price">Цена</label>
+        <input class="input" id="form-price" type="number" placeholder="120">
+      </div>
+      <div class="field">
+        <label for="form-price-unit">Единица</label>
+        <select class="select" id="form-price-unit">
+          <option>за сессию</option><option>за час</option><option>от</option><option>фикс.</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label for="form-duration-svc">Длительность (мин)</label>
+      <input class="input" id="form-duration-svc" type="number" placeholder="60">
+    </div>
+  </div>
+
+  <!-- Поля для experience -->
+  <div class="field-group hidden" id="group-experience">
+    <h3 class="field-group-title">✨ Впечатление <span class="badge">с расписанием</span></h3>
+    <div class="field-row">
+      <div class="field">
+        <label for="form-price-exp">Цена за участника</label>
+        <input class="input" id="form-price-exp" type="number" placeholder="60">
+      </div>
+      <div class="field">
+        <label for="form-duration-exp">Длительность</label>
+        <input class="input" id="form-duration-exp" type="text" placeholder="2 часа">
+      </div>
+    </div>
+    <div class="field">
+      <label for="form-schedule">Расписание</label>
+      <select class="select" id="form-schedule">
+        <option>Еженедельно (выбрать дни)</option>
+        <option>Конкретные даты</option>
+        <option>По запросу</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="sticky-footer">
+    <div class="sticky-footer-info" id="footer-info">Заполните хотя бы название и описание</div>
+    <div style="display:flex; gap:12px;">
+      <button class="btn btn-secondary" onclick="goToHome(true)">Сохранить черновик</button>
+      <button class="btn btn-primary" onclick="goToPreview()">Превью</button>
+    </div>
+  </div>
+</main>
+
+<!-- ============ PREVIEW ============ -->
+<main class="screen hidden" id="screen-preview">
+  <button class="screen-back" onclick="goToForm(true)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+    К редактированию
+  </button>
+
+  <div class="step-pills">
+    <div class="step-pill active"></div>
+    <div class="step-pill active"></div>
+    <div class="step-pill active"></div>
+    <div class="step-pill"></div>
+  </div>
+
+  <h1>Превью карточки</h1>
+  <p class="screen-subtitle">Так увидят вашу карточку другие пользователи. Опубликуете — выберете тариф.</p>
+
+  <div class="preview-wrap">
+    <div class="preview-card">
+      <div class="preview-card-img" id="preview-emoji">📍</div>
+      <div class="preview-card-body">
+        <div class="preview-card-kinds" id="preview-kinds-chips"></div>
+        <h3 class="preview-card-title" id="preview-title">Без названия</h3>
+        <div class="preview-card-meta" id="preview-meta">Город · ★ —</div>
+        <div class="preview-card-price hidden" id="preview-price"></div>
+      </div>
+    </div>
+    <div class="preview-disclaimer">Можно вернуться и поправить любое поле.</div>
+  </div>
+
+  <div class="sticky-footer">
+    <div class="sticky-footer-info">Готовы опубликовать? Покажем тариф под ваш выбор.</div>
+    <div style="display:flex; gap:12px;">
+      <button class="btn btn-secondary" onclick="goToForm(true)">Назад к форме</button>
+      <button class="btn btn-primary" onclick="goToPricing()">
+        Опубликовать
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+      </button>
+    </div>
+  </div>
+</main>
+
+<!-- ============ PRICING ============ -->
+<main class="screen hidden" id="screen-pricing">
+  <button class="screen-back" onclick="goToPreview(true)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+    К превью
+  </button>
+
+  <div class="step-pills">
+    <div class="step-pill active"></div>
+    <div class="step-pill active"></div>
+    <div class="step-pill active"></div>
+    <div class="step-pill active"></div>
+  </div>
+
+  <h1>Подходящий тариф</h1>
+  <p class="screen-subtitle">Подобран под ваш выбор: <span id="pricing-explain">—</span></p>
+
+  <div class="pricing-card">
+    <span class="pricing-recommended-badge" id="pricing-badge">Рекомендуем</span>
+    <div class="pricing-emoji" id="pricing-emoji">🚀</div>
+    <div class="pricing-name" id="pricing-name">Pro All-in</div>
+    <div class="pricing-tagline" id="pricing-tagline">Услуги + впечатления + локации</div>
+    <div class="pricing-price-row">
+      <div class="pricing-price" id="pricing-price">$34.99</div>
+      <div class="pricing-price-suffix" id="pricing-price-suffix">/ мес</div>
+    </div>
+    <div class="pricing-audience" id="pricing-audience">Для агентств и креаторов с несколькими форматами</div>
+    <ul class="pricing-features" id="pricing-features"></ul>
+
+    <button class="btn btn-primary" style="width:100%; height:48px;" onclick="goToSuccess()">
+      Оплатить и опубликовать
+    </button>
+  </div>
+
+  <div class="alt-plan-link">
+    <button onclick="alert('В реальности — переход на /pricing с полной сравнительной таблицей')">
+      Посмотреть все тарифы
+    </button>
+  </div>
+</main>
+
+<!-- ============ SUCCESS ============ -->
+<main class="success-screen hidden" id="screen-success">
+  <div class="success-emoji">🎉</div>
+  <h1>Карточка опубликована</h1>
+  <p>Готово — она появится в каталоге через минуту. Вы можете создать ещё одну или вернуться в профиль.</p>
+  <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+    <button class="btn btn-secondary" onclick="goToHome(true)">На главную</button>
+    <button class="btn btn-primary" onclick="resetAndOpenModal()">Создать ещё</button>
+  </div>
+</main>
+
+<button class="reset-link" onclick="resetAll()">↺ начать прототип сначала</button>
+
+<script>
+  // ───────────────── State ─────────────────
+  const state = {
+    selected: new Set(), // 'location' | 'service' | 'experience'
+  };
+
+  const KIND_META = {
+    location: { emoji: '📍', label: 'Локация' },
+    service: { emoji: '🛠', label: 'Сервис' },
+    experience: { emoji: '✨', label: 'Впечатление' },
+  };
+
+  // ───────────────── Pricing logic ─────────────────
+  // Логика 1:1 с PLAN_CONFIG в app/lib/plans.ts
+  function suggestPlan(kinds) {
+    const has = (k) => kinds.has(k);
+    const hasService = has('service');
+    const hasExperience = has('experience');
+    const hasLocation = has('location');
+
+    // Service + Experience (с/без location) → Pro All-in
+    if (hasService && hasExperience) {
+      return {
+        id: 'creator_all',
+        emoji: '🚀',
+        name: 'Pro All-in',
+        tagline: 'Услуги + впечатления + локации',
+        price: '$34.99',
+        priceSuffix: '/ мес',
+        audience: 'Для агентств и креаторов с несколькими форматами',
+        features: [
+          'Premium включён бесплатно',
+          'До 10 карточек в сумме (services + experiences)',
+          'Безлимит локаций',
+          'Доп. слот сверх лимита — $2.99',
+          'Pro-бейдж на ваших карточках',
+        ],
+      };
+    }
+    // Только Service (или Service + Location)
+    if (hasService) {
+      return {
+        id: 'creator_service',
+        emoji: '🛠',
+        name: 'Pro Service',
+        tagline: 'Публикуйте свои услуги',
+        price: '$14.99',
+        priceSuffix: '/ мес',
+        audience: 'Фотографы, инструкторы, мастера, фрилансеры',
+        features: [
+          'Premium включён бесплатно',
+          'До 5 активных услуг',
+          'Публикация локаций',
+          'Доп. слот сверх лимита — $2.99',
+        ],
+      };
+    }
+    // Только Experience (или Experience + Location)
+    if (hasExperience) {
+      return {
+        id: 'creator_experience',
+        emoji: '✨',
+        name: 'Pro Experience',
+        tagline: 'Запускайте впечатления',
+        price: '$14.99',
+        priceSuffix: '/ мес',
+        audience: 'Гиды, туроператоры, ведущие мастер-классов',
+        features: [
+          'Premium включён бесплатно',
+          'До 5 активных впечатлений',
+          'Страница в стиле Airbnb',
+          'Доп. слот сверх лимита — $2.99',
+        ],
+      };
+    }
+    // Только Location
+    return {
+      id: 'premium_viewer',
+      emoji: '🗝',
+      name: 'Premium',
+      tagline: 'Публикуйте локации навсегда',
+      price: '$35',
+      priceSuffix: 'разово',
+      audience: 'Для тех, кто хочет добавить свои места на карту',
+      features: [
+        'Доступ ко всем скрытым локациям',
+        'Безлимит избранного и коллекций',
+        'Публикация своих локаций',
+        'Один платёж — навсегда',
+      ],
+    };
+  }
+
+  function explainSelection(kinds) {
+    if (kinds.size === 0) return '—';
+    const labels = Array.from(kinds).map(k => KIND_META[k].label.toLowerCase());
+    if (labels.length === 1) return labels[0];
+    if (labels.length === 2) return labels.join(' + ');
+    return labels.slice(0, -1).join(', ') + ' и ' + labels[labels.length - 1];
+  }
+
+  // ───────────────── Modal ─────────────────
+  function openModal() {
+    document.getElementById('kind-modal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModal() {
+    document.getElementById('kind-modal').classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+  function closeModalIfBackdrop(e) {
+    if (e.target.id === 'kind-modal') closeModal();
+  }
+
+  function toggleKind(kind) {
+    if (state.selected.has(kind)) state.selected.delete(kind);
+    else state.selected.add(kind);
+    renderKindCards();
+    renderModalNextBtn();
+  }
+  function renderKindCards() {
+    document.querySelectorAll('.kind-card').forEach(c => {
+      const k = c.dataset.kind;
+      c.classList.toggle('selected', state.selected.has(k));
+    });
+  }
+  function renderModalNextBtn() {
+    const btn = document.getElementById('modal-next-btn');
+    const n = state.selected.size;
+    btn.disabled = n === 0;
+    btn.textContent = n === 0 ? 'Далее' : (n === 1 ? 'Далее → 1 тип' : `Далее → ${n} типа`);
+  }
+
+  // ───────────────── Screens ─────────────────
+  function showScreen(id) {
+    ['screen-home','screen-form','screen-preview','screen-pricing','screen-success'].forEach(s => {
+      document.getElementById(s).classList.add('hidden');
+    });
+    document.getElementById(id).classList.remove('hidden');
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+
+  function goToHome(closeFirst) {
+    if (closeFirst) closeModal();
+    showScreen('screen-home');
+  }
+
+  function goToForm() {
+    closeModal();
+    renderFormForKinds();
+    showScreen('screen-form');
+  }
+
+  function renderFormForKinds() {
+    // chips
+    const chipsRow = document.getElementById('form-selected-chips');
+    chipsRow.innerHTML = '';
+    state.selected.forEach(k => {
+      const chip = document.createElement('span');
+      chip.className = 'selected-kind-chip';
+      chip.innerHTML = `${KIND_META[k].emoji} ${KIND_META[k].label}`;
+      chipsRow.appendChild(chip);
+    });
+    // group visibility
+    document.getElementById('group-location').classList.toggle('hidden', !state.selected.has('location'));
+    document.getElementById('group-service').classList.toggle('hidden', !state.selected.has('service'));
+    document.getElementById('group-experience').classList.toggle('hidden', !state.selected.has('experience'));
+  }
+
+  function goToPreview(skipRender) {
+    if (!skipRender) renderPreview();
+    showScreen('screen-preview');
+  }
+
+  function renderPreview() {
+    const title = document.getElementById('form-title').value || 'Без названия';
+    const city = document.getElementById('form-city').value || 'Город';
+    document.getElementById('preview-title').textContent = title;
+    document.getElementById('preview-meta').textContent = `${city} · ★ —`;
+
+    // Эмодзи на карточке = первый kind
+    const firstKind = Array.from(state.selected)[0] || 'location';
+    document.getElementById('preview-emoji').textContent = KIND_META[firstKind].emoji;
+
+    // chips на превью карточки
+    const chips = document.getElementById('preview-kinds-chips');
+    chips.innerHTML = '';
+    state.selected.forEach(k => {
+      const c = document.createElement('span');
+      c.className = 'place-card-kind';
+      c.innerHTML = `${KIND_META[k].emoji} ${KIND_META[k].label}`;
+      chips.appendChild(c);
+    });
+
+    // price preview if service or experience
+    const priceEl = document.getElementById('preview-price');
+    let priceLine = '';
+    const svcPrice = document.getElementById('form-price').value;
+    const svcUnit = document.getElementById('form-price-unit').value;
+    const expPrice = document.getElementById('form-price-exp').value;
+    if (state.selected.has('service') && svcPrice) priceLine = `<strong>$${svcPrice}</strong> <span style="color:var(--text-secondary)">${svcUnit}</span>`;
+    else if (state.selected.has('experience') && expPrice) priceLine = `<strong>$${expPrice}</strong> <span style="color:var(--text-secondary)">/ человек</span>`;
+    if (priceLine) {
+      priceEl.classList.remove('hidden');
+      priceEl.innerHTML = priceLine;
+    } else {
+      priceEl.classList.add('hidden');
+    }
+  }
+
+  function goToPricing() {
+    const plan = suggestPlan(state.selected);
+    document.getElementById('pricing-explain').textContent = explainSelection(state.selected);
+    document.getElementById('pricing-emoji').textContent = plan.emoji;
+    document.getElementById('pricing-name').textContent = plan.name;
+    document.getElementById('pricing-tagline').textContent = plan.tagline;
+    document.getElementById('pricing-price').textContent = plan.price;
+    document.getElementById('pricing-price-suffix').textContent = plan.priceSuffix;
+    document.getElementById('pricing-audience').textContent = plan.audience;
+    const ul = document.getElementById('pricing-features');
+    ul.innerHTML = '';
+    plan.features.forEach(f => {
+      const li = document.createElement('li');
+      li.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> <span>${f}</span>`;
+      ul.appendChild(li);
+    });
+    showScreen('screen-pricing');
+  }
+
+  function goToSuccess() {
+    showScreen('screen-success');
+  }
+
+  function resetAndOpenModal() {
+    state.selected.clear();
+    renderKindCards();
+    renderModalNextBtn();
+    showScreen('screen-home');
+    setTimeout(openModal, 100);
+  }
+
+  function resetAll() {
+    state.selected.clear();
+    renderKindCards();
+    renderModalNextBtn();
+    closeModal();
+    document.getElementById('form-title').value = '';
+    document.getElementById('form-desc').value = '';
+    document.getElementById('form-address').value = '';
+    document.getElementById('form-city').value = '';
+    document.getElementById('form-price').value = '';
+    document.getElementById('form-price-exp').value = '';
+    document.getElementById('form-duration-svc').value = '';
+    document.getElementById('form-duration-exp').value = '';
+    showScreen('screen-home');
+  }
+
+  // ───────────────── Init ─────────────────
+  renderModalNextBtn();
+</script>
+
+</body>
+</html>

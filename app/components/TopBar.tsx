@@ -16,6 +16,7 @@ import { useIsDesktop } from "../hooks/useIsDesktop";
 import { usePremiumGate } from "../hooks/usePremiumGate";
 import AuthCTA from "./AuthCTA";
 import AuthModal from "./AuthModal";
+import BecomeProviderModal from "./BecomeProviderModal";
 
 type TopBarProps = {
   // Search bar props (only for /map page) - Airbnb style
@@ -30,6 +31,12 @@ type TopBarProps = {
   activeFiltersSummary?: string;
   // Callback when search bar is clicked (for mobile to open modal)
   onSearchBarClick?: () => void;
+  /**
+   * Если поиск рендерится отдельной зоной ниже TopBar (Airbnb-style на /),
+   * выставляем true — тогда мобильный TopBar не показывает дублирующий
+   * центральный pill "Start to your search". Не влияет на desktop.
+   */
+  hideMobileSearchPill?: boolean;
   // User props
   userAvatar?: string | null;
   userDisplayName?: string | null;
@@ -75,6 +82,7 @@ export default function TopBar({
   activeFiltersCount = 0,
   activeFiltersSummary,
   onSearchBarClick,
+  hideMobileSearchPill = false,
   userAvatar,
   userDisplayName,
   userEmail,
@@ -92,6 +100,7 @@ export default function TopBar({
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [becomeProviderOpen, setBecomeProviderOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
   const mobileAvatarRef = useRef<HTMLButtonElement>(null);
@@ -254,8 +263,10 @@ export default function TopBar({
                     </div>
                   ) : (
                     <>
-                      {/* Center: Search pill (clickable) - hidden when showSearchBar is true, on profile page and place page */}
-                      {pathname !== "/profile" && !pathname.startsWith("/id/") && (
+                      {/* Center: Search pill (clickable) - hidden when showSearchBar is true,
+                          when hideMobileSearchPill is set (search lives outside TopBar),
+                          on profile page and place page */}
+                      {!hideMobileSearchPill && pathname !== "/profile" && !pathname.startsWith("/id/") && (
                         <button
                           onClick={() => setSearchModalOpen(true)}
                           className={`flex-1 min-w-0 bg-white rounded-full border border-[#E5E8DB] hover:border-[#8F9E4F] transition-colors px-4 py-2.5 flex items-center gap-3 ${pathname === "/" ? "justify-center" : "text-left"}`}
@@ -289,8 +300,9 @@ export default function TopBar({
                         <Icon name="add" size={20} className="text-[#1F2A1F]" />
                       </Link>
                     )}
-                    {/* Filter button (not profile, not place page, not when SearchBar pill already has filters) */}
-                    {!showSearchBar && pathname !== "/profile" && !pathname.startsWith("/id/") && (
+                    {/* Filter button (not profile, not place page, not when SearchBar pill already has filters,
+                        not когда поиск рендерится отдельно ниже — там свой фильтр) */}
+                    {!showSearchBar && !hideMobileSearchPill && pathname !== "/profile" && !pathname.startsWith("/id/") && (
                       <button
                         onClick={onFiltersClick}
                         className="w-10 h-10 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] transition-colors flex items-center justify-center flex-shrink-0 relative"
@@ -412,6 +424,16 @@ export default function TopBar({
 
               {/* Right: Auth area */}
               <div className="flex-shrink-0 flex items-center gap-4 ml-auto">
+                {/* Become a provider — видна всем, включая анонимов.
+                    Логин-гейт сработает внутри модалки на «Continue». */}
+                <button
+                  type="button"
+                  onClick={() => setBecomeProviderOpen(true)}
+                  className="text-sm font-medium text-[#1F2A1F] px-3.5 py-2.5 h-11 rounded-full hover:bg-[#FAFAF7] transition-colors whitespace-nowrap"
+                >
+                  Become a provider
+                </button>
+
                 {/* Get Started — для неавторизованных. Переход на страницу логина */}
                 {!isAuthenticated && (
                   <button
@@ -494,6 +516,25 @@ export default function TopBar({
               }}
             >
               <div className="grid grid-cols-2 gap-3 lg:gap-2">
+                {/* Become a provider — primary CTA для тех, кто ещё не creator.
+                    Premium-юзеры и creator'ы видят отдельный «Add Gem» ниже.
+                    Anon тоже видит — гейт сработает внутри модалки. */}
+                {!canAddPlace && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setMenuPosition(null);
+                      setBecomeProviderOpen(true);
+                    }}
+                    className="flex flex-col items-center justify-center p-5 lg:p-4 rounded-xl bg-[#8F9E4F] hover:bg-[#7A8A42] transition-colors group"
+                  >
+                    <div className="w-14 h-14 lg:w-12 lg:h-12 rounded-full bg-white/20 group-hover:bg-white/30 flex items-center justify-center mb-2 transition-colors">
+                      <Icon name="add" size={24} className="text-white" />
+                    </div>
+                    <span className="text-sm lg:text-xs font-medium text-white text-center">Become a provider</span>
+                  </button>
+                )}
                 {/* Add Gem - only for Premium and Admin, first and highlighted */}
                 {canAddPlace && (
                   <Link
@@ -626,6 +667,11 @@ export default function TopBar({
         onClose={closeAuthModal}
         redirectPath={authRedirectPath}
         variant={authModalVariant}
+      />
+
+      <BecomeProviderModal
+        isOpen={becomeProviderOpen}
+        onClose={() => setBecomeProviderOpen(false)}
       />
     </>
   );

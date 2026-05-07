@@ -79,6 +79,16 @@ export type Place = {
   categories?: string[] | null;
   tags?: string[] | null;
   link?: string | null;
+  /** Контактный телефон карточки. Используется в tel:. */
+  phone?: string | null;
+  /** URL сайта карточки. Отдельно от `link` (link — CTA для service/experience). */
+  website?: string | null;
+  /** Instagram: @username или полная ссылка. */
+  instagram?: string | null;
+  /** YouTube канал/ссылка. Не путать с `youtube_shorts_url` (контентный шортс). */
+  youtube?: string | null;
+  /** Telegram: @username или t.me/<handle>. */
+  telegram?: string | null;
   created_by?: string | null;
   created_at: string;
   updated_at?: string | null;
@@ -93,6 +103,13 @@ export type Place = {
   google_place_id?: string | null;
   // For draft state in wizard
   accessLevel?: AccessLevel;
+  /**
+   * Дополнительные kind'ы помимо primary `kind` (смотри miграцию add_secondary_kinds_to_places).
+   * Один листинг может одновременно быть локацией+сервисом или локацией+experience.
+   * `kind` остаётся primary (определяет шаблон отображения через kind-router).
+   * Pricing и quota-логика берут union(kind, secondary_kinds).
+   */
+  secondary_kinds?: ('location' | 'service' | 'experience')[] | null;
 };
 
 /**

@@ -24,6 +24,7 @@ import Icon from "../../../components/Icon";
 import PremiumBadge from "../../../components/PremiumBadge";
 import ReviewsSection from "../../../components/ReviewsSection";
 import StarRating from "../../../components/StarRating";
+import PlaceContacts from "../../../components/PlaceContacts";
 import { isPlacePremium } from "../../../lib/access";
 
 type OfferPlace = {
@@ -34,6 +35,11 @@ type OfferPlace = {
   country: string | null;
   address: string | null;
   link: string | null;
+  phone?: string | null;
+  website?: string | null;
+  instagram?: string | null;
+  youtube?: string | null;
+  telegram?: string | null;
   tags: string[] | null;
   categories: string[] | null;
   cover_url: string | null;
@@ -577,6 +583,17 @@ export default function OfferPlaceView({
             )}
           </section>
         )}
+
+        {/* Contacts — телефон, сайт, соцсети. Скрывается, если все 5 пустые. */}
+        <section className="mb-8">
+          <PlaceContacts
+            phone={place.phone}
+            website={place.website}
+            instagram={place.instagram}
+            youtube={place.youtube}
+            telegram={place.telegram}
+          />
+        </section>
 
         {/* Reviews — pb для запаса под sticky-CTA снизу */}
         <div className="pb-8">
