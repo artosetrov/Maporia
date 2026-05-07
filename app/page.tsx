@@ -15,6 +15,8 @@ import CategoryCarousel from "./components/CategoryCarousel";
 import StatsBanner from "./components/StatsBanner";
 import HomeHero from "./components/HomeHero";
 import HomeTabsSegmented from "./components/HomeTabsSegmented";
+import HomeSearchHero from "./components/HomeSearchHero";
+import StatsTicker from "./components/StatsTicker";
 import { ActiveFilters } from "./components/FiltersModal";
 // Heavy modals — only loaded when the user actually opens them.
 // Same pattern is already used on /map; this keeps the home-page main
@@ -659,17 +661,31 @@ function HomePageInner() {
                   onSearchBarClick={() => setSearchModalOpen(true)}
                 />
               </div>
-              {/* Desktop (>= lg) */}
+              {/* Desktop (>= lg). Phase 3: redesign flag swaps the legacy
+                  pill SearchBar for the Airbnb-style HomeSearchHero. Both
+                  are TRIGGERS that open <SearchModal>; the URL contract
+                  (router.push("/map?…") via handleSearch* / handleFiltersApply)
+                  is unchanged. Mobile stays on legacy SearchBar isMobile. */}
               <div className="hidden lg:flex justify-center">
-                <SearchBar
-                  selectedCity={selectedCity}
-                  onCityChange={handleCityChange}
-                  searchValue={searchValue}
-                  onSearchChange={handleSearchChange}
-                  onFiltersClick={handleFiltersClick}
-                  activeFiltersCount={activeFiltersCount}
-                  onSearchBarClick={() => setSearchModalOpen(true)}
-                />
+                {HOME_REDESIGN_ENABLED ? (
+                  <HomeSearchHero
+                    selectedCity={selectedCity}
+                    searchValue={searchValue}
+                    activeFiltersCount={activeFiltersCount}
+                    onSearchBarClick={() => setSearchModalOpen(true)}
+                    onFiltersClick={handleFiltersClick}
+                  />
+                ) : (
+                  <SearchBar
+                    selectedCity={selectedCity}
+                    onCityChange={handleCityChange}
+                    searchValue={searchValue}
+                    onSearchChange={handleSearchChange}
+                    onFiltersClick={handleFiltersClick}
+                    activeFiltersCount={activeFiltersCount}
+                    onSearchBarClick={() => setSearchModalOpen(true)}
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -700,7 +716,10 @@ function HomePageInner() {
             Показываем всегда (не зависит от активного таба) — это «пульс» Maporia.
             Числа тянутся из Supabase через дешёвые count-запросы внутри компонента.
           */}
-          <StatsBanner />
+          {/* Phase 4: redesign flag swaps the 4-card StatsBanner for the
+              compact StatsTicker. Both read the same `app_settings.stats_banner`
+              row + same supabase counts; admin overrides keep working. */}
+          {HOME_REDESIGN_ENABLED ? <StatsTicker /> : <StatsBanner />}
 
           {/* Category carousel — только для service/experience табов */}
           {activeKind !== "location" && kindIsEmpty !== true && (
