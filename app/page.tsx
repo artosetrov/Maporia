@@ -6,10 +6,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 type HomeKind = "location" | "service" | "experience";
 
-const HOME_TABS: { id: HomeKind; label: string; emoji: string; isNew?: boolean }[] = [
+const HOME_TABS: { id: HomeKind; label: string; emoji: string }[] = [
   { id: "location", label: "Locations", emoji: "📍" },
-  { id: "experience", label: "Experiences", emoji: "✨", isNew: true },
-  { id: "service", label: "Services", emoji: "🛠", isNew: true },
+  { id: "experience", label: "Experiences", emoji: "✨" },
+  { id: "service", label: "Services", emoji: "🛠" },
 ];
 import { useAuthRedirect } from "./hooks/useAuthRedirect";
 import TopBar from "./components/TopBar";
@@ -600,16 +600,6 @@ function HomePageInner() {
                     <span className="inline-flex items-center gap-2 whitespace-nowrap">
                       <span aria-hidden>{tab.emoji}</span>
                       <span>{tab.label}</span>
-                      {tab.isNew && (
-                        <span
-                          className={
-                            "ml-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide " +
-                            (isActive ? "bg-white text-[#556036]" : "bg-[#D6B25E] text-white")
-                          }
-                        >
-                          New
-                        </span>
-                      )}
                     </span>
                   </Pill>
                 );

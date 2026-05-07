@@ -1433,12 +1433,32 @@ export default function PlaceEditorHub(props: PageProps) {
             >
               {deleting ? "Cancelling…" : "Cancel"}
             </button>
-            <Link
-              href="/profile?section=added"
-              className="flex-1 h-11 rounded-xl bg-[#8F9E4F] text-white px-5 text-sm font-medium text-center hover:bg-[#556036] transition flex items-center justify-center"
+            <button
+              type="button"
+              onClick={async () => {
+                // Если карточка ещё скрыта, но все обязательные поля есть — явно публикуем
+                // (auto-unhide effect мог не отработать, если юзер быстро ушёл со страницы).
+                if (isHidden && allRequiredFieldsFilled && placeId) {
+                  isUpdatingRef.current = true;
+                  const updateQuery = supabase
+                    .from("places")
+                    // @ts-expect-error Supabase generated types infer update payload as never
+                    .update({ is_hidden: false, visibility: "public" })
+                    .eq("id", placeId);
+                  if (!isUserAdmin(access) && user) updateQuery.eq("created_by", user.id);
+                  await updateQuery.select();
+                }
+                router.push("/profile?section=added");
+              }}
+              className={cx(
+                "flex-1 h-11 rounded-xl px-5 text-sm font-medium text-center transition flex items-center justify-center",
+                isHidden && allRequiredFieldsFilled
+                  ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
+                  : "bg-[#8F9E4F] text-white hover:bg-[#556036]"
+              )}
             >
-              Save
-            </Link>
+              {isHidden && allRequiredFieldsFilled ? "Publish" : "Save"}
+            </button>
           </div>
         </div>
       </div>

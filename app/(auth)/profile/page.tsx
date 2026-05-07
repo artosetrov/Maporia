@@ -2735,8 +2735,42 @@ type User = {
   role: string | null;
   is_admin: boolean | null;
   subscription_status: string | null;
+  // Новые поля для работы с тарифами
+  plan: string | null;
+  plan_period: string | null;
   created_at: string;
 };
+
+/**
+ * Опции, которые админ может назначить юзеру.
+ * 'admin' — отдельный slot (is_admin=true). Остальные — конкретные планы.
+ */
+type AdminAssignable =
+  | "admin"
+  | "free"
+  | "premium_viewer"
+  | "creator_service"
+  | "creator_experience"
+  | "creator_all";
+
+const ADMIN_OPTIONS: { value: AdminAssignable; label: string }[] = [
+  { value: "free",               label: "Free" },
+  { value: "premium_viewer",     label: "Premium" },
+  { value: "creator_service",    label: "Pro Service" },
+  { value: "creator_experience", label: "Pro Experience" },
+  { value: "creator_all",        label: "Pro All-in" },
+  { value: "admin",              label: "Admin" },
+];
+
+/** Текущее значение dropdown'а — admin побеждает план. */
+function currentAdminAssignable(u: User): AdminAssignable {
+  if (u.is_admin) return "admin";
+  const plan = u.plan as AdminAssignable | null;
+  if (plan && plan !== "admin") return plan;
+  // Legacy fallback: если plan ещё не выставлен — выводим из subscription_status
+  if (u.subscription_status === "active") return "premium_viewer";
+  return "free";
+}
 
 function ElementsSection() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -3298,7 +3332,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirmUserId, setDeleteConfirmUserId] = useState<string | null>(null);
-  const [pendingRoleChanges, setPendingRoleChanges] = useState<Map<string, 'standard' | 'premium' | 'admin'>>(new Map());
+  const [pendingRoleChanges, setPendingRoleChanges] = useState<Map<string, AdminAssignable>>(new Map());
 
   useEffect(() => {
     loadUsers();
@@ -3312,7 +3346,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
       // Load all profiles (admin can see all users)
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, username, display_name, avatar_url, role, is_admin, subscription_status, created_at")
+        .select("id, username, display_name, avatar_url, role, is_admin, subscription_status, plan, plan_period, created_at")
         .order("created_at", { ascending: false });
 
       if (profilesError) {
@@ -3323,7 +3357,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
 
       // Try to get emails from auth.users via RPC or use profiles data
       // Note: Email might not be available on client-side without admin API
-      const profilesList = (profiles || []) as ProfileRow[];
+      const profilesList = (profiles || []) as Array<ProfileRow & { plan?: string | null; plan_period?: string | null }>;
       const usersWithData: User[] = profilesList.map(profile => ({
         id: profile.id,
         email: null, // Email requires server-side admin API access
@@ -3333,6 +3367,8 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
         role: profile.role || 'standard',
         is_admin: profile.is_admin || false,
         subscription_status: profile.subscription_status || 'inactive',
+        plan: profile.plan || 'free',
+        plan_period: profile.plan_period || null,
         created_at: profile.created_at,
       }));
 
@@ -3345,40 +3381,55 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
     }
   }
 
-  function handleRoleChange(userId: string, newRole: 'standard' | 'premium' | 'admin') {
-    // Store pending change instead of saving immediately
+  function handleRoleChange(userId: string, newAssignable: AdminAssignable) {
     setPendingRoleChanges(prev => {
       const next = new Map(prev);
-      next.set(userId, newRole);
+      next.set(userId, newAssignable);
       return next;
     });
     setError(null);
   }
 
   async function saveUserRole(userId: string) {
-    const newRole = pendingRoleChanges.get(userId);
-    if (!newRole) return;
+    const next = pendingRoleChanges.get(userId);
+    if (!next) return;
 
     setUpdatingUserId(userId);
     setError(null);
 
     try {
-      const updates: any = {
-        role: newRole,
-      };
+      // Маппинг назначения админа на колонки profiles:
+      //  - admin            → is_admin=true (план не трогаем — админ обходит квоты в trigger).
+      //  - free             → plan='free', is_admin=false, subscription_status='inactive'.
+      //  - premium_viewer   → plan='premium_viewer', period='lifetime' (наш Premium one-time).
+      //  - creator_*        → plan='creator_*',     period='month' (manually granted creator).
+      //                       Реальная подписка не создаётся — Stripe этим юзером не управляет.
+      //                       Это ручное предоставление прав; webhook'и от Stripe потом могут
+      //                       перетереть, если юзер сам что-то купит.
+      const updates: Record<string, unknown> = {};
 
-      // Update is_admin based on role
-      if (newRole === 'admin') {
+      if (next === "admin") {
         updates.is_admin = true;
+        updates.role = "admin";
       } else {
         updates.is_admin = false;
-      }
-
-      // Update subscription_status based on role
-      if (newRole === 'premium') {
-        updates.subscription_status = 'active';
-      } else if (newRole === 'standard') {
-        updates.subscription_status = 'inactive';
+        updates.plan = next;
+        if (next === "free") {
+          updates.plan_period = null;
+          updates.plan_renews_at = null;
+          updates.subscription_status = "inactive";
+          updates.role = "standard";
+        } else if (next === "premium_viewer") {
+          updates.plan_period = "lifetime";
+          updates.plan_renews_at = null;
+          updates.subscription_status = "active";
+          updates.role = "premium";
+        } else {
+          // creator_service / creator_experience / creator_all — manual grant
+          updates.plan_period = "month";
+          updates.subscription_status = "active";
+          updates.role = "premium";
+        }
       }
 
       const { data, error } = await supabase
@@ -3525,16 +3576,27 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
                     <h3 className="font-semibold text-[#1F2A1F] truncate">
                       {user.display_name || user.username || user.email || "User"}
                     </h3>
-                    {user.is_admin && (
-                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-[#8F9E4F] text-white">
-                        Admin
-                      </span>
-                    )}
-                    {user.role === 'premium' && !user.is_admin && (
-                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-[#D6B25E] text-white">
-                        Premium
-                      </span>
-                    )}
+                    {(() => {
+                      const cur = currentAdminAssignable(user);
+                      if (cur === "admin") {
+                        return (
+                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-[#8F9E4F] text-white">
+                            Admin
+                          </span>
+                        );
+                      }
+                      if (cur === "free") return null;
+                      const label =
+                        cur === "premium_viewer"     ? "Premium" :
+                        cur === "creator_service"    ? "Pro Service" :
+                        cur === "creator_experience" ? "Pro Experience" :
+                        cur === "creator_all"        ? "Pro All-in" : null;
+                      return label ? (
+                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-[#D6B25E] text-white">
+                          {label}
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                   {user.email && (
                     <p className="text-sm text-[#6F7A5A] truncate">{user.email}</p>
@@ -3546,16 +3608,16 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
 
                 {/* Actions */}
                 <div className="flex items-center gap-2">
-                  {/* Role Selector */}
+                  {/* Plan / Admin Selector */}
                   <select
-                    value={pendingRoleChanges.get(user.id) || user.role || 'standard'}
-                    onChange={(e) => handleRoleChange(user.id, e.target.value as 'standard' | 'premium' | 'admin')}
+                    value={pendingRoleChanges.get(user.id) || currentAdminAssignable(user)}
+                    onChange={(e) => handleRoleChange(user.id, e.target.value as AdminAssignable)}
                     disabled={updatingUserId === user.id || user.id === currentUserId}
                     className="px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <option value="standard">Standard</option>
-                    <option value="premium">Premium</option>
-                    <option value="admin">Admin</option>
+                    {ADMIN_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
                   </select>
 
                   {/* Save/Cancel buttons if role changed */}
