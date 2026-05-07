@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       sessionMetadata.kind = "extra_listing";
       if (!priceId) {
         return jsonError(
-          `Stripe Price ID для add-on не задан: ${EXTRA_LISTING.priceIdEnv}`,
+          `Stripe Price ID for add-on is not set. Define env ${EXTRA_LISTING.priceIdEnv}.`,
           503,
           "MISSING_ADDON_PRICE"
         );
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
       priceId = process.env[cfg.priceIdEnv] || null;
       if (!priceId) {
         return jsonError(
-          `Stripe Price ID не задан: установи env ${cfg.priceIdEnv}`,
+          `Stripe Price ID is not set. Define env ${cfg.priceIdEnv} on the server.`,
           503,
           "MISSING_PLAN_PRICE"
         );

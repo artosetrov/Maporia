@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (pErr || !profile?.stripe_customer_id) {
-      return jsonError("У вас ещё нет подписки", 400, "NO_CUSTOMER");
+      return jsonError("You don't have a subscription yet.", 400, "NO_CUSTOMER");
     }
 
     const origin =
