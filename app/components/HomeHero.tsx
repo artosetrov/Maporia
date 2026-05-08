@@ -108,7 +108,7 @@ export default function HomeHero({
 
             <h1
               id="home-hero-title"
-              className="font-extrabold text-[52px] sm:text-[72px] lg:text-[96px] leading-[1.02] tracking-[-0.025em] text-[#16190f]"
+              className="font-extrabold text-[60px] sm:text-[88px] lg:text-[120px] leading-[0.98] tracking-[-0.03em] text-[#16190f]"
             >
               Discover<br />
               <em className="not-italic font-fraunces italic font-semibold text-[#8F9E4F]">
@@ -180,7 +180,12 @@ export default function HomeHero({
               </span>
             </h1>
 
-            <p className="mt-4 text-[15px] sm:text-[17px] leading-[1.5] text-[#4a4f3d] max-w-[520px] mx-auto lg:mx-0">
+            {/* 2026-05-08: max-w-[520px] на mobile превышал ширину
+                viewport (~343px на iPhone Pro), и текст обрезался за
+                правым краем. На <sm используем max-w-full — текст
+                ложится в общий padding hero. На sm+ возвращаем 520px,
+                чтобы линия не вытягивалась под весь широкий экран. */}
+            <p className="mt-4 text-[15px] sm:text-[17px] leading-[1.5] text-[#4a4f3d] max-w-full sm:max-w-[520px] mx-auto lg:mx-0">
               Places, experiences, and services — handpicked by locals
               from Fort Lauderdale to Lighthouse Point. No ads, no
               endless filter walls.

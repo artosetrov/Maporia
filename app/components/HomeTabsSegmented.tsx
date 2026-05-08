@@ -111,54 +111,66 @@ export default function HomeTabsSegmented({
     nextEl?.focus();
   }
 
+  // 2026-05-08: на узких экранах три таба с whitespace-nowrap
+  // (Locations N · Experiences N · Services N) имеют intrinsic ~520px
+  // и не помещаются в ~343px viewport iPhone — это вызывало overflow
+  // у body и «съезд» всей hero-секции вправо. Обёртка ниже даёт
+  // горизонтальный скролл *внутри* блока табов (со скрытой полосой)
+  // вместо того чтобы расширять родителя. Поведение клавиатуры,
+  // фокус и счётчики не меняются.
   return (
     <div
-      ref={containerRef}
-      role="tablist"
-      aria-label="Home content type"
-      onKeyDown={handleKeyDown}
-      className="inline-flex items-center gap-1.5"
+      className="max-w-full w-full overflow-x-auto [&::-webkit-scrollbar]:hidden"
+      style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
     >
-      {HOME_TABS.map((tab) => {
-        const isActive = active === tab.id;
-        const n = countFor(tab.id, counts);
-        return (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={isActive}
-            tabIndex={isActive ? 0 : -1}
-            data-tab-id={tab.id}
-            onClick={() => onChange(tab.id)}
-            className={[
-              "h-11 px-4 rounded-full text-[14px] font-semibold whitespace-nowrap",
-              "inline-flex items-center gap-2",
-              "transition-colors focus:outline-none",
-              "focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-1",
-              isActive
-                ? "bg-[#16190f] text-white"
-                : "text-[#4A4F3D] hover:bg-[#16190f]/5",
-            ].join(" ")}
-          >
-            <TabIcon kind={ICON_BY_KIND[tab.id]} />
-            <span>{tab.label}</span>
-            {n !== null && (
-              <span
-                aria-hidden
-                className={[
-                  "text-[11px] font-bold px-2 py-0.5 rounded-full",
-                  isActive
-                    ? "bg-white/15 text-white/90"
-                    : "bg-[#16190f]/8 text-[#4A4F3D]",
-                ].join(" ")}
-              >
-                {fmt(n)}
-              </span>
-            )}
-          </button>
-        );
-      })}
+      <div
+        ref={containerRef}
+        role="tablist"
+        aria-label="Home content type"
+        onKeyDown={handleKeyDown}
+        className="inline-flex items-center gap-1.5"
+      >
+        {HOME_TABS.map((tab) => {
+          const isActive = active === tab.id;
+          const n = countFor(tab.id, counts);
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              tabIndex={isActive ? 0 : -1}
+              data-tab-id={tab.id}
+              onClick={() => onChange(tab.id)}
+              className={[
+                "h-11 px-4 rounded-full text-[14px] font-semibold whitespace-nowrap",
+                "inline-flex items-center gap-2",
+                "transition-colors focus:outline-none",
+                "focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-1",
+                isActive
+                  ? "bg-[#16190f] text-white"
+                  : "text-[#4A4F3D] hover:bg-[#16190f]/5",
+              ].join(" ")}
+            >
+              <TabIcon kind={ICON_BY_KIND[tab.id]} />
+              <span>{tab.label}</span>
+              {n !== null && (
+                <span
+                  aria-hidden
+                  className={[
+                    "text-[11px] font-bold px-2 py-0.5 rounded-full",
+                    isActive
+                      ? "bg-white/15 text-white/90"
+                      : "bg-[#16190f]/8 text-[#4A4F3D]",
+                  ].join(" ")}
+                >
+                  {fmt(n)}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
