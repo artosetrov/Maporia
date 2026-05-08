@@ -15,6 +15,7 @@ import CategoryCarousel from "./components/CategoryCarousel";
 import StatsBanner from "./components/StatsBanner";
 import HomeHero from "./components/HomeHero";
 import HomeTabsSegmented from "./components/HomeTabsSegmented";
+import HomeSearchHero from "./components/HomeSearchHero";
 import StatsTicker from "./components/StatsTicker";
 import HomeBecomeProviderBanner from "./components/HomeBecomeProviderBanner";
 import { ActiveFilters } from "./components/FiltersModal";
@@ -611,7 +612,24 @@ function HomePageInner() {
           so it scrolls away on its own — sticky behaviour is unchanged.
           Cross-link: docs/HOME_REDESIGN_INTEGRATION_PLAN.md.
         */}
-        {HOME_REDESIGN_ENABLED && <HomeHero />}
+        {HOME_REDESIGN_ENABLED && (
+          <HomeHero
+            selectedCity={selectedCity}
+            onCityChange={handleCityChange}
+            activeKind={activeKind}
+            onChangeKind={setActiveKind}
+            initialQuery={searchValue}
+            onSubmitSearch={handleSearchChange}
+            onFiltersClick={handleFiltersClick}
+            activeFiltersCount={activeFiltersCount}
+            onTagClick={(category) => {
+              const params = new URLSearchParams();
+              params.set("categories", encodeURIComponent(category));
+              if (selectedCity) params.set("city", selectedCity);
+              router.push(`/map?${params.toString()}`);
+            }}
+          />
+        )}
 
         {/*
           Airbnb-style sticky header zone: tabs row → search row.
@@ -681,10 +699,9 @@ function HomePageInner() {
               <div className="hidden lg:flex justify-center">
                 {HOME_REDESIGN_ENABLED ? (
                   <HomeSearchHero
-                    selectedCity={selectedCity}
-                    searchValue={searchValue}
+                    initialQuery={searchValue}
+                    onSubmit={handleSearchChange}
                     activeFiltersCount={activeFiltersCount}
-                    onSearchBarClick={() => setSearchModalOpen(true)}
                     onFiltersClick={handleFiltersClick}
                   />
                 ) : (
