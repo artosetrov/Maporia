@@ -1,6 +1,6 @@
 # Operations And Risks
 
-Последнее обновление: 2026-05-07.
+Последнее обновление: 2026-05-08.
 
 ## Audit Snapshot
 
@@ -10,26 +10,26 @@
 npm run health:json
 ```
 
-Результат на 2026-05-07:
+Результат на 2026-05-08:
 
 - Status: `YELLOW`.
-- Passed: 16.
-- Warnings: 77.
+- Passed: 20.
+- Warnings: 50.
 - Failures: 0.
-- Navigation check: all 52 `page.tsx` files export default; internal links валидны.
-- Security criticals: не найдено real keys в `.env.example`, anon key не найден в admin routes, server-only keys не найдены в client files.
+- Navigation check: all 53 `page.tsx` files export default; internal links валидны.
+- Security criticals: не найдено real keys в `.env.example`, anon key не найден в admin routes, server-only keys не найдены в client files, raw `.or()` filters sanitized.
+- Docs freshness: `npm run docs:check` проходит и проверяет agent/wiki entrypoints, source-of-truth файлы и markdown-ссылки.
 
 ## Top Risks
 
 | Priority | Риск | Где | Почему важно | Что сделать |
 | --- | --- | --- | --- | --- |
-| P1 | Public route может не фильтровать premium access | `app/feed/page.tsx`, `app/places/[id]/settings/page.tsx` | Риск показа premium/hidden данных не тем пользователям | Проверить queries и добавить `canUserViewPlace`/server filtering |
-| P1 | PostgREST `.or()` без sanitize в нескольких местах | `app/components/PremiumUpsellModal.tsx`, `app/(auth)/add/page.tsx` | Потенциальная filter injection/сломанные фильтры при спецсимволах | Использовать `sanitizePostgrestValue` или структурировать query без raw `.or()` |
-| P1 | Несколько источников правды для card batch loading | `/map`, `/explore`, collections, profile, `useBatchPlaceData` | Риск N+1, разного UI и разной производительности | Вынести общий loader и перевести списки на него |
-| P2 | Модалки дублируются на страницах | `TopBar`, `/map`, `/explore`, collections, profile | Лишний JS, неожиданные состояния, сложнее поддерживать | Довести `GlobalModals` до единой точки |
-| P2 | Много `any` и untyped API responses | `app/(auth)/profile/page.tsx`, `app/id/[id]/page.tsx`, API routes | Регрессии ловятся поздно | Типизировать hotspots и response contracts |
-| P2 | Deprecated Google `Marker` | `/map`, `/id/[id]`, edit location | Будущая миграционная боль и warnings | Provision Map ID и перейти на `AdvancedMarkerElement` |
-| P3 | ErrorBoundary покрытие неполное | auth/pricing/admin/edit pages | Краш секции может ронять всю страницу | Обернуть risky pages/sections |
+| P1 | Несколько list surfaces с `PlaceCard` без batch loading | `brand-guide`, collections, home sections, explore, map, profile, saved | Риск N+1, разного UI и разной производительности | Вынести общий loader и перевести списки на `useBatchPlaceData` |
+| P2 | Много `any` и untyped API responses | `app/(auth)/profile/page.tsx`, `app/id/[id]/page.tsx`, `app/explore/page.tsx`, `app/map/page.tsx`, `app/page.tsx`, API routes | Регрессии ловятся поздно | Типизировать hotspots и response contracts |
+| P2 | ErrorBoundary покрытие неполное | auth/login/pricing/signup/admin/edit pages | Краш секции может ронять всю страницу | Обернуть risky pages/sections |
+| P2 | Missing skeleton/empty states | pricing, settings, add/google/edit pages, brand-guide | UX выглядит сломанным при загрузке или пустых данных | Добавить `Skeleton` и явные empty states |
+| P3 | Deprecated Google `Marker` | `/map`, `/id/[id]`, edit location | Будущая миграционная боль и warnings | Provision Map ID и перейти на `AdvancedMarkerElement` |
+| P3 | Raw console usage in server helpers/routes | `app/lib/**`, `app/api/**` | Сложнее наблюдаемость и шум в production logs | Перевести на `logger.ts` или убрать временные логи |
 
 ## Release Checklist
 
@@ -38,6 +38,7 @@ npm run health:json
 ```bash
 npm run health:json
 npm run typecheck
+npm run docs:check
 npm run lint
 npm run build
 ```

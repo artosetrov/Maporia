@@ -52,6 +52,7 @@ npm run lint
 npm run build
 npm run health
 npm run health:json
+npm run docs:check
 npm run check
 ```
 

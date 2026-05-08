@@ -24,6 +24,7 @@
 | Impersonation | `impersonate`, `admin_impersonation_log` | `app/api/admin/impersonate/**`, `app/lib/impersonation.ts` |
 | Health | `health`, `CheckResult`, `health:json` | `scripts/health/**`, `app/api/health/route.ts` |
 | LLM orientation | `AGENTS.md`, `LLM Brief`, `wiki` | `AGENTS.md`, `docs/wiki/00-llm-brief.md`, `docs/wiki/README.md` |
+| Wiki freshness | `docs:check`, `checkWikiFreshness` | `scripts/wiki/checkWikiFreshness.ts`, `package.json` |
 | Home redesign | `HOME_REDESIGN`, `HomeHero`, `HomeSearchHero`, `HomeTabsSegmented` | `app/config/homeRedesign.ts`, `app/components/Home*.tsx`, `docs/HOME_REDESIGN_*` |
 
 ## Быстрые Команды
@@ -55,6 +56,9 @@ rg "TODO|FIXME|deprecated|CRITICAL" app scripts docs
 
 # LLM/agent context
 rg "LLM|agent|source of truth|health:json|HOME_REDESIGN" AGENTS.md docs/wiki docs
+
+# Wiki freshness check
+npm run docs:check
 ```
 
 ## Файлы-Источники Правды
@@ -72,6 +76,7 @@ rg "LLM|agent|source of truth|health:json|HOME_REDESIGN" AGENTS.md docs/wiki doc
 | Google Maps config | `app/config/googleMaps.ts` |
 | Place layout config | `app/config/placeLayout.ts` |
 | Health check rules | `scripts/health/healthChecks.ts` |
+| Wiki freshness check | `scripts/wiki/checkWikiFreshness.ts` |
 | Agent entrypoint | `AGENTS.md` |
 | LLM short brief | `docs/wiki/00-llm-brief.md` |
 | Home redesign flag | `app/config/homeRedesign.ts` |

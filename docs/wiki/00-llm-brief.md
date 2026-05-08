@@ -89,12 +89,14 @@ Run:
 ```bash
 npm run typecheck
 npm run health:json
+npm run docs:check
 ```
 
 Expected current shape:
 
 - Typecheck should pass.
 - Health should be `YELLOW`, no failures.
+- Wiki freshness should pass.
 - Green areas should include security, access filtering, modal centralization, navigation.
 
 ## Quick Navigation Commands

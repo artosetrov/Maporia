@@ -56,6 +56,7 @@ Use the narrowest useful checks first:
 ```bash
 npm run typecheck
 npm run health:json
+npm run docs:check
 ```
 
 For broader release confidence:
