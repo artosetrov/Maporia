@@ -407,11 +407,11 @@ function HomePageInner() {
 
   function handleFiltersApply(filters: ActiveFilters) {
     setActiveFilters(filters);
-    // Если юзер выбрал в модале другой TYPE — синхронизируем таб главной.
-    // singleKindMode гарантирует ровно один элемент в kinds.
-    const nextKind = (filters.kinds?.[0] ?? "location") as HomeKind;
-    if (nextKind !== activeKind) setActiveKind(nextKind);
-
+    // С 2026-05-08: TYPE — multi-select везде (см. docs/FILTERS_UNIFICATION_PLAN.md).
+    // Sync с табом главной не делаем: при kinds.length===0 или >1 таб не имеет
+    // однозначной проекции, а апплай всё равно push'ит на /map с ?kinds=…
+    // Если юзер выбрал ровно один тип, таб главной останется на старом
+    // значении — это нормально, т.к. он уйдёт на /map и больше не увидит таб.
     // Always redirect to /map with applied filters
     const params = new URLSearchParams();
     if (selectedCity) params.set("city", selectedCity);
@@ -476,6 +476,7 @@ function HomePageInner() {
     if (searchValue) count++;
     if (activeFilters.categories.length > 0) count += activeFilters.categories.length;
     if ((activeFilters.tags ?? []).length > 0) count += (activeFilters.tags ?? []).length;
+    if ((activeFilters.kinds ?? []).length > 0) count += (activeFilters.kinds ?? []).length;
     if (activeFilters.sort) count++;
     setActiveFiltersCount(count);
   }, [selectedCity, searchValue, activeFilters]);
@@ -527,10 +528,11 @@ function HomePageInner() {
         // раздела «Места» → в TYPE предвыбран Locations.
         appliedFilters={{ ...activeFilters, kinds: [activeKind] }}
         userAccess={access}
-        // singleKindMode: TYPE — radio (ровно один). На главной только
-        // один таб одновременно — multi-select был бы абсурдом.
-        // При apply мапим kinds[0] → setActiveKind + ?kinds= в URL для /map.
-        singleKindMode
+        // С 2026-05-08: убрали singleKindMode — везде в приложении TYPE multi-select.
+        // См. docs/FILTERS_UNIFICATION_PLAN.md. На главной таб ?tab= остаётся как
+        // отдельный навигационный механизм; при открытии модала kinds инициализируются
+        // активным табом (см. appliedFilters выше), но юзер может снять/добавить
+        // другие kinds и при apply всё уйдёт в /map?kinds=…
         getCategoryCount={async (category: string, premiumOnly?: boolean) => {
           try {
             let query = supabase

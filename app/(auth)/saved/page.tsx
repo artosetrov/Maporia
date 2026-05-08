@@ -74,6 +74,7 @@ export default function SavedPage() {
     if (selectedCity && selectedCity !== DEFAULT_CITY) count++;
     if (searchValue) count++;
     if (activeFilters.categories.length > 0) count += activeFilters.categories.length;
+    if ((activeFilters.kinds ?? []).length > 0) count += (activeFilters.kinds ?? []).length;
     if (activeFilters.sort) count++;
     setActiveFiltersCount(count);
   }, [selectedCity, searchValue, activeFilters]);
@@ -221,8 +222,8 @@ export default function SavedPage() {
         isOpen={filterOpen}
         onClose={() => setFilterOpen(false)}
         userAccess={access}
-        // /saved редиректит на /map; URL params пока не несут kinds.
-        hideKindFilter
+        // С 2026-05-08: TYPE-секция показывается на всех страницах (унификация UX).
+        // Apply прокидывает kinds в /map?kinds=… См. docs/FILTERS_UNIFICATION_PLAN.md.
         onApply={(filters) => {
           setActiveFilters(filters);
           // Always redirect to /map with applied filters
@@ -231,6 +232,12 @@ export default function SavedPage() {
           if (searchValue) params.set("q", searchValue);
           if (filters.categories.length > 0) {
             params.set("categories", filters.categories.map(c => encodeURIComponent(c)).join(','));
+          }
+          if ((filters.tags ?? []).length > 0) {
+            params.set("tags", (filters.tags ?? []).map(t => encodeURIComponent(t)).join(','));
+          }
+          if (filters.kinds && filters.kinds.length > 0) {
+            params.set("kinds", filters.kinds.join(","));
           }
           if (filters.sort) {
             params.set("sort", filters.sort);

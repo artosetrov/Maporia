@@ -46,6 +46,9 @@ type Place = {
   premium_only?: boolean | null;
   visibility?: string | null;
   categories?: string[] | null;
+  // С 2026-05-08: добавили kind для локального getFilteredCount по TYPE-фильтру.
+  // См. docs/FILTERS_UNIFICATION_PLAN.md.
+  kind?: 'location' | 'service' | 'experience' | null;
 };
 
 type Review = {
@@ -179,6 +182,8 @@ function ProfileInner() {
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (activeFilters.categories.length > 0) count += activeFilters.categories.length;
+    if ((activeFilters.kinds ?? []).length > 0) count += (activeFilters.kinds ?? []).length;
+    if ((activeFilters.tags ?? []).length > 0) count += (activeFilters.tags ?? []).length;
     if (activeFilters.sort) count += 1;
     return count;
   }, [activeFilters]);
@@ -208,6 +213,14 @@ function ProfileInner() {
       filtered = filtered.filter((place) => {
         if (!place.categories || place.categories.length === 0) return false;
         return activeFilters.categories.some((cat) => place.categories?.includes(cat));
+      });
+    }
+
+    // Filter by kind (с 2026-05-08 — TYPE-фильтр на /profile, см. docs/FILTERS_UNIFICATION_PLAN.md)
+    if ((activeFilters.kinds ?? []).length > 0) {
+      filtered = filtered.filter((place) => {
+        if (!place.kind) return false;
+        return (activeFilters.kinds ?? []).includes(place.kind);
       });
     }
 
@@ -249,6 +262,14 @@ function ProfileInner() {
       filtered = filtered.filter((place) => {
         if (!place.categories || place.categories.length === 0) return false;
         return activeFilters.categories.some((cat) => place.categories?.includes(cat));
+      });
+    }
+
+    // Filter by kind (с 2026-05-08 — TYPE-фильтр на /profile, см. docs/FILTERS_UNIFICATION_PLAN.md)
+    if ((activeFilters.kinds ?? []).length > 0) {
+      filtered = filtered.filter((place) => {
+        if (!place.kind) return false;
+        return (activeFilters.kinds ?? []).includes(place.kind);
       });
     }
 
@@ -312,6 +333,14 @@ function ProfileInner() {
       if (searchValue) params.set("q", searchValue);
       if (pendingFilters.categories.length > 0) {
         params.set("categories", pendingFilters.categories.map(c => encodeURIComponent(c)).join(','));
+      }
+      if ((pendingFilters.tags ?? []).length > 0) {
+        params.set("tags", (pendingFilters.tags ?? []).map(t => encodeURIComponent(t)).join(','));
+      }
+      // С 2026-05-08: kinds прокидываются в /map как и categories.
+      // См. docs/FILTERS_UNIFICATION_PLAN.md
+      if (pendingFilters.kinds && pendingFilters.kinds.length > 0) {
+        params.set("kinds", pendingFilters.kinds.join(","));
       }
       if (pendingFilters.sort) {
         params.set("sort", pendingFilters.sort);
@@ -467,7 +496,7 @@ function ProfileInner() {
         ] = await Promise.all([
           supabase
             .from("places")
-            .select("id,title,city,country,address,cover_url,created_at")
+            .select("id,title,city,country,address,cover_url,created_at,categories,kind")
             .eq("created_by", user.id)
             .order("created_at", { ascending: false }),
           supabase
@@ -494,7 +523,7 @@ function ProfileInner() {
           recentlyViewedIds.length > 0
             ? supabase
                 .from("places")
-                .select("id,title,city,country,address,cover_url,created_at,categories")
+                .select("id,title,city,country,address,cover_url,created_at,categories,kind")
                 .in("id", recentlyViewedIds)
                 .limit(20)
             : Promise.resolve({ data: null }),
@@ -527,7 +556,7 @@ function ProfileInner() {
           placeIds.length > 0
             ? supabase
                 .from("places")
-                .select("id,title,city,country,address,cover_url,created_at,categories")
+                .select("id,title,city,country,address,cover_url,created_at,categories,kind")
                 .in("id", placeIds)
                 .order("created_at", { ascending: false })
             : Promise.resolve({ data: [] }),
@@ -965,9 +994,9 @@ function ProfileInner() {
         appliedFilters={activeFilters}
         appliedCity={selectedCity}
         userAccess={access}
-        // /profile редиректит на /map — TYPE-фильтр здесь не применяется,
-        // чтобы не путать юзера фантомным выбором.
-        hideKindFilter
+        // С 2026-05-08: TYPE-секция показывается на всех страницах (унификация UX).
+        // На /profile при apply мы push'им на /map с ?kinds=…, где SQL действительно
+        // фильтрует по kind. См. docs/FILTERS_UNIFICATION_PLAN.md.
         onCityChange={handleCityChange}
         getFilteredCount={async (draftFilters: ActiveFilters) => {
           // Since we redirect to /map, we don't need to count filtered places here
@@ -999,6 +1028,15 @@ function ProfileInner() {
                 filtered = filtered.filter((place) => {
                   if (!place.categories || place.categories.length === 0) return false;
                   return draftFilters.categories.some((cat) => place.categories?.includes(cat));
+                });
+              }
+
+              // Filter by kind (с 2026-05-08 — TYPE-секция показывается на /profile).
+              // SELECT уже подтягивает kind колонку. См. docs/FILTERS_UNIFICATION_PLAN.md.
+              if ((draftFilters.kinds ?? []).length > 0) {
+                filtered = filtered.filter((place) => {
+                  if (!place.kind) return false;
+                  return (draftFilters.kinds ?? []).includes(place.kind);
                 });
               }
 

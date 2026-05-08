@@ -448,9 +448,9 @@ export default function FeedPage() {
         isOpen={filterOpen}
         onClose={() => setFilterOpen(false)}
         userAccess={access}
-        // /feed редиректит на /map; URL params пока не несут kinds —
-        // скрываем TYPE, чтобы не было фантомного выбора.
-        hideKindFilter
+        // С 2026-05-08: TYPE-секция показывается на всех страницах (унификация UX).
+        // Apply прокидывает kinds в /map?kinds=… — там SQL .in("kind", kinds).
+        // См. docs/FILTERS_UNIFICATION_PLAN.md.
         onApply={(filters) => {
           setActiveFilters(filters);
           // Always redirect to /map with applied filters
@@ -459,6 +459,12 @@ export default function FeedPage() {
           if (searchValue) params.set("q", searchValue);
           if (filters.categories.length > 0) {
             params.set("categories", filters.categories.map(c => encodeURIComponent(c)).join(','));
+          }
+          if ((filters.tags ?? []).length > 0) {
+            params.set("tags", (filters.tags ?? []).map(t => encodeURIComponent(t)).join(','));
+          }
+          if (filters.kinds && filters.kinds.length > 0) {
+            params.set("kinds", filters.kinds.join(","));
           }
           if (filters.sort) {
             params.set("sort", filters.sort);

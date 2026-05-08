@@ -975,6 +975,8 @@ export default function PlacePage(props: PageProps) {
     if (selectedCity) count++;
     if (searchValue) count++;
     if (activeFilters.categories?.length) count += activeFilters.categories.length;
+    if ((activeFilters.kinds ?? []).length > 0) count += (activeFilters.kinds ?? []).length;
+    if ((activeFilters.tags ?? []).length > 0) count += (activeFilters.tags ?? []).length;
     if (activeFilters.sort) count++;
     return count;
   }, [activeFilters, searchValue, selectedCity]);
@@ -990,6 +992,13 @@ export default function PlacePage(props: PageProps) {
     const params = new URLSearchParams();
     if (filters.categories.length > 0) {
       params.set("categories", filters.categories.map(c => encodeURIComponent(c)).join(','));
+    }
+    if ((filters.tags ?? []).length > 0) {
+      params.set("tags", (filters.tags ?? []).map(t => encodeURIComponent(t)).join(','));
+    }
+    // С 2026-05-08: kinds прокидываются в /map. См. docs/FILTERS_UNIFICATION_PLAN.md
+    if (filters.kinds && filters.kinds.length > 0) {
+      params.set("kinds", filters.kinds.join(","));
     }
     if (filters.sort) {
       params.set("sort", filters.sort);
@@ -2399,8 +2408,10 @@ export default function PlacePage(props: PageProps) {
         onApply={handleFiltersApply}
         appliedFilters={activeFilters}
         userAccess={access}
-        // /id/[id] не применяет kinds к related places — пока скрываем.
-        hideKindFilter
+        // С 2026-05-08: TYPE-секция показывается на всех страницах.
+        // На /id/[id] нет related-places-секции, которая бы фильтровалась по kind,
+        // но юзер всё равно может выставить TYPE и нажать Apply — модал push'ит на
+        // /map?kinds=…, где фильтр реально применяется. См. docs/FILTERS_UNIFICATION_PLAN.md.
         getFilteredCount={async (draftFilters: ActiveFilters) => {
           // Подсчитываем количество мест с учетом фильтров
           try {
@@ -2411,6 +2422,11 @@ export default function PlacePage(props: PageProps) {
               countQuery = countQuery.overlaps("categories", draftFilters.categories);
             }
 
+            // Фильтрация по kind (TYPE) — чтобы счётчик "Show N places"
+            // отражал тот же фильтр, что применится после редиректа на /map.
+            if (draftFilters.kinds && draftFilters.kinds.length > 0) {
+              countQuery = countQuery.in("kind", draftFilters.kinds);
+            }
 
             const { count, error } = await countQuery;
             if (error) {
