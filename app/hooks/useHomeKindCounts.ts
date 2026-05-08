@@ -88,7 +88,6 @@ export function useHomeKindCounts(): {
         if (e?.name === "AbortError" || e?.message?.includes("abort")) return;
         if (e?.name === "TypeError" && e?.message?.includes("fetch")) return;
         if (process.env.NODE_ENV !== "production") {
-          // eslint-disable-next-line no-console
           console.warn("[useHomeKindCounts] failed to load:", e?.message);
         }
       } finally {
