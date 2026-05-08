@@ -25,8 +25,6 @@ import { useUserAccessContext } from "../contexts/UserAccessContext";
 import { useAuthRedirect } from "../hooks/useAuthRedirect";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { usePremiumGate } from "../hooks/usePremiumGate";
-const AuthModal = nextDynamic(() => import("../components/AuthModal"), { ssr: false });
-const PremiumUpsellModal = nextDynamic(() => import("../components/PremiumUpsellModal"), { ssr: false });
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import Icon from "../components/Icon";
 import { PlaceCardGridSkeleton, MapSkeleton, Empty } from "../components/Skeleton";
@@ -1436,7 +1434,7 @@ function MapView({
   onToggleFavorite?: (placeId: string, e: React.MouseEvent) => void;
 }) {
   const isDesktop = useIsDesktop();
-  const { openPremiumLocation, closeAuthModal, closePremiumModal, modalOpen, modalPlaceTitle, authModalOpen, authRedirectPath, authModalVariant } = usePremiumGate();
+  const { openPremiumLocation } = usePremiumGate();
   const defaultAccess: UserAccess = userAccess ?? { role: "guest", hasPremium: false, isAdmin: false, plan: "free" };
   const [internalSelectedPlaceId, setInternalSelectedPlaceId] = useState<string | null>(null);
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
@@ -2126,18 +2124,6 @@ function MapView({
         )}
       </div>
     </div>
-    <AuthModal
-      isOpen={authModalOpen}
-      onClose={closeAuthModal}
-      redirectPath={authRedirectPath}
-      variant={authModalVariant}
-    />
-    <PremiumUpsellModal
-      open={modalOpen}
-      onClose={closePremiumModal}
-      context="place"
-      placeTitle={modalPlaceTitle}
-    />
     </>
   );
 }

@@ -8,9 +8,6 @@ import PlaceCard from "../../components/PlaceCard";
 import Icon from "../../components/Icon";
 import { usePremiumGate } from "../../hooks/usePremiumGate";
 import { useUserAccessContext } from "../../contexts/UserAccessContext";
-import nextDynamic from "next/dynamic";
-const AuthModal = nextDynamic(() => import("../../components/AuthModal"), { ssr: false });
-const PremiumUpsellModal = nextDynamic(() => import("../../components/PremiumUpsellModal"), { ssr: false });
 import type { Collection } from "../../types";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
@@ -42,14 +39,6 @@ export default function CollectionDetailPage(props: PageProps) {
     isPremium,
     loading: gateLoading,
     openPremiumCollection,
-    closePremiumModal,
-    closeAuthModal,
-    modalOpen,
-    modalContext,
-    modalCollectionTitle,
-    authModalOpen,
-    authRedirectPath,
-    authModalVariant,
   } = usePremiumGate();
 
   const [collection, setCollection] = useState<Collection | null>(null);
@@ -444,18 +433,6 @@ export default function CollectionDetailPage(props: PageProps) {
         </div>
       </main>
 
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={closeAuthModal}
-        redirectPath={authRedirectPath}
-        variant={authModalVariant}
-      />
-      <PremiumUpsellModal
-        open={modalOpen}
-        onClose={closePremiumModal}
-        context={modalContext}
-        placeTitle={modalContext === "collection" ? modalCollectionTitle : undefined}
-      />
     </>
   );
 }

@@ -15,8 +15,8 @@ import CategoryCarousel from "./components/CategoryCarousel";
 import StatsBanner from "./components/StatsBanner";
 import HomeHero from "./components/HomeHero";
 import HomeTabsSegmented from "./components/HomeTabsSegmented";
-import HomeSearchHero from "./components/HomeSearchHero";
 import StatsTicker from "./components/StatsTicker";
+import HomeBecomeProviderBanner from "./components/HomeBecomeProviderBanner";
 import { ActiveFilters } from "./components/FiltersModal";
 // Heavy modals — only loaded when the user actually opens them.
 // Same pattern is already used on /map; this keeps the home-page main
@@ -395,6 +395,11 @@ function HomePageInner() {
 
   function handleFiltersApply(filters: ActiveFilters) {
     setActiveFilters(filters);
+    // Если юзер выбрал в модале другой TYPE — синхронизируем таб главной.
+    // singleKindMode гарантирует ровно один элемент в kinds.
+    const nextKind = (filters.kinds?.[0] ?? "location") as HomeKind;
+    if (nextKind !== activeKind) setActiveKind(nextKind);
+
     // Always redirect to /map with applied filters
     const params = new URLSearchParams();
     if (selectedCity) params.set("city", selectedCity);
@@ -407,6 +412,11 @@ function HomePageInner() {
     }
     if (filters.sort) {
       params.set("sort", filters.sort);
+    }
+    // Передаём выбранный тип карточки в /map. На /map есть серверный
+    // .in("kind", kinds) — параметр readен через `kinds` (см. useEffect init).
+    if (filters.kinds && filters.kinds.length > 0) {
+      params.set("kinds", filters.kinds.join(","));
     }
     router.push(`/map?${params.toString()}`);
   }
@@ -484,12 +494,14 @@ function HomePageInner() {
         isOpen={filterOpen}
         onClose={() => setFilterOpen(false)}
         onApply={handleFiltersApply}
-        appliedFilters={activeFilters}
+        // Инициализируем kinds из активного таба главной — юзер заходит из
+        // раздела «Места» → в TYPE предвыбран Locations.
+        appliedFilters={{ ...activeFilters, kinds: [activeKind] }}
         userAccess={access}
-        // На главной типом карточки управляют табы (?tab=services|experiences),
-        // FiltersModal не должен дублировать TYPE — иначе выбор «Experiences»
-        // в модале применяется в activeFilters.kinds, но главная их игнорирует.
-        hideKindFilter
+        // singleKindMode: TYPE — radio (ровно один). На главной только
+        // один таб одновременно — multi-select был бы абсурдом.
+        // При apply мапим kinds[0] → setActiveKind + ?kinds= в URL для /map.
+        singleKindMode
         getCategoryCount={async (category: string, premiumOnly?: boolean) => {
           try {
             let query = supabase

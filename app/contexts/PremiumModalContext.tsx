@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import type { PremiumUpsellModalContent } from "../components/PremiumUpsellModal";
 
 type ModalContext = "place" | "collection";
 
@@ -9,6 +10,7 @@ type PremiumModalState = {
   context: ModalContext;
   placeTitle?: string;
   placeId?: string;
+  customContent?: PremiumUpsellModalContent;
 };
 
 type AuthModalState = {
@@ -23,7 +25,12 @@ type PremiumModalContextType = {
   setPremiumModalOpen: (open: boolean) => void;
   // Rich premium modal
   premiumModal: PremiumModalState;
-  openPremiumModal: (context: ModalContext, placeTitle?: string, placeId?: string) => void;
+  openPremiumModal: (
+    context: ModalContext,
+    placeTitle?: string,
+    placeId?: string,
+    customContent?: PremiumUpsellModalContent
+  ) => void;
   closePremiumModal: () => void;
   // Auth modal (for guests)
   authModal: AuthModalState;
@@ -50,8 +57,13 @@ export function PremiumModalProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const openPremiumModal = useCallback(
-    (context: ModalContext, placeTitle?: string, placeId?: string) => {
-      setPremiumModal({ isOpen: true, context, placeTitle, placeId });
+    (
+      context: ModalContext,
+      placeTitle?: string,
+      placeId?: string,
+      customContent?: PremiumUpsellModalContent
+    ) => {
+      setPremiumModal({ isOpen: true, context, placeTitle, placeId, customContent });
     },
     []
   );

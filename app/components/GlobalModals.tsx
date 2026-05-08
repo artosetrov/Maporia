@@ -30,6 +30,7 @@ export default function GlobalModals() {
         onClose={closePremiumModal}
         context={premiumModal.context}
         placeTitle={premiumModal.placeTitle}
+        customContent={premiumModal.customContent}
       />
     </>
   );

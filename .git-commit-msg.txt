@@ -1,0 +1,31 @@
+filters: TYPE on home is single-select synced with tab
+
+Прошлый фикс (hideKindFilter на главной) был неполным: юзер написал, что
+хочет видеть TYPE в фильтре главной — но в режиме «один выбран всегда»,
+с предвыбранным значением из активного таба. И с категориями только
+выбранного типа.
+
+UX:
+* На /, /(auth)/profile, /(auth)/saved, /feed, /id/[id] → hideKindFilter
+  (там TYPE-секция действительно не имела смысла).
+* На главной (/) → НЕТ hideKindFilter, но есть новый prop singleKindMode:
+  - TYPE работает как radio: один тип всегда выбран, клик — replace,
+    deselect невозможен. Хинт «Leave empty to show all types» скрыт.
+  - При открытии модала init kinds = [activeKind] — юзер заходит из
+    раздела «Места» → в TYPE предвыбран Locations.
+  - Категории показываются только для выбранного TYPE (через
+    visibleCategorySections — уже работало).
+  - При apply: kinds[0] !== activeKind → setActiveKind переключает
+    таб главной. Если результаты для нового TYPE открываются на /map
+    (как сейчас работает handleFiltersApply), URL получает ?kinds=…
+    параметр для серверного .in("kind", kinds).
+
+/map:
+* Читает ?kinds=service,experience из URL → инициализирует
+  activeFilters.kinds. Серверный .in("kind", kinds) уже был.
+* Поддерживает comma-separated список (заглядывая на будущее, если
+  где-то понадобится multi-kind URL).
+
+FiltersModal API:
+* Новый prop `singleKindMode?: boolean`. По умолчанию multi-toggle (как
+  на /map — там полезно отфильтровать «локации + сервисы» одновременно).

@@ -9,9 +9,6 @@ import PlaceCard from "../components/PlaceCard";
 import Icon from "../components/Icon";
 import { usePremiumGate } from "../hooks/usePremiumGate";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
-import nextDynamic from "next/dynamic";
-const AuthModal = nextDynamic(() => import("../components/AuthModal"), { ssr: false });
-const PremiumUpsellModal = nextDynamic(() => import("../components/PremiumUpsellModal"), { ssr: false });
 import { PlaceCardGridSkeleton } from "../components/Skeleton";
 import type { Collection } from "../types";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
@@ -102,14 +99,6 @@ function CollectionsPageContent() {
     isPremium,
     loading: gateLoading,
     openPremiumCollection,
-    closePremiumModal,
-    closeAuthModal,
-    modalOpen,
-    modalContext,
-    modalCollectionTitle,
-    authModalOpen,
-    authRedirectPath,
-    authModalVariant,
   } = usePremiumGate();
 
   const activeCollection = useMemo(
@@ -496,18 +485,6 @@ function CollectionsPageContent() {
         </div>
       </main>
 
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={closeAuthModal}
-        redirectPath={authRedirectPath}
-        variant={authModalVariant}
-      />
-      <PremiumUpsellModal
-        open={modalOpen}
-        onClose={closePremiumModal}
-        context={modalContext}
-        placeTitle={modalContext === "collection" ? modalCollectionTitle : undefined}
-      />
     </>
   );
 }

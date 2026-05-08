@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useCallback } from "react";
 import { usePremiumStatus } from "./usePremiumStatus";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import type { Place } from "../types";
@@ -19,39 +19,21 @@ type PremiumGateContext = "place" | "collection";
  */
 export function usePremiumGate() {
   const { isPremium, loading, access } = usePremiumStatus();
-  const { setPremiumModalOpen, openAuthModal: openGlobalAuthModal } = usePremiumModalContext();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalContext, setModalContext] = useState<PremiumGateContext>("place");
-  const [modalPlaceTitle, setModalPlaceTitle] = useState<string | undefined>();
-  const [modalCollectionTitle, setModalCollectionTitle] = useState<string | undefined>();
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authRedirectPath, setAuthRedirectPath] = useState<string | undefined>();
-  const [authModalVariant, setAuthModalVariant] = useState<AuthModalVariant>("default");
-
-  // Sync local modal state with global context
-  useEffect(() => {
-    setPremiumModalOpen(modalOpen);
-  }, [modalOpen, setPremiumModalOpen]);
+  const {
+    premiumModal,
+    openPremiumModal: openGlobalPremiumModal,
+    closePremiumModal,
+    authModal,
+    openAuthModal,
+    closeAuthModal,
+  } = usePremiumModalContext();
 
   const openPremiumModal = useCallback(
     (context: PremiumGateContext = "place", placeTitle?: string, collectionTitle?: string) => {
-      setModalContext(context);
-      setModalPlaceTitle(placeTitle);
-      setModalCollectionTitle(collectionTitle);
-      setModalOpen(true);
+      openGlobalPremiumModal(context, context === "collection" ? collectionTitle : placeTitle);
     },
-    []
+    [openGlobalPremiumModal]
   );
-
-  const closePremiumModal = useCallback(() => {
-    setModalOpen(false);
-  }, []);
-
-  const closeAuthModal = useCallback(() => {
-    setAuthModalOpen(false);
-    setAuthRedirectPath(undefined);
-    setAuthModalVariant("default");
-  }, []);
 
   /**
    * Открыть модалку входа для гостя при клике на «Профиль». После входа — редирект на /profile.
@@ -59,11 +41,9 @@ export function usePremiumGate() {
   const openAuthForProfile = useCallback(() => {
     if (loading) return;
     if (access.role === "guest") {
-      setAuthRedirectPath("/profile");
-      setAuthModalVariant("profile");
-      setAuthModalOpen(true);
+      openAuthModal("/profile", "profile");
     }
-  }, [loading, access.role]);
+  }, [loading, access.role, openAuthModal]);
 
   /**
    * Открыть модалку входа для гостя при клике на «Saved». После входа — редирект на /saved.
@@ -71,11 +51,9 @@ export function usePremiumGate() {
   const openAuthForSaved = useCallback(() => {
     if (loading) return;
     if (access.role === "guest") {
-      setAuthRedirectPath("/saved");
-      setAuthModalVariant("saved");
-      setAuthModalOpen(true);
+      openAuthModal("/saved", "saved");
     }
-  }, [loading, access.role]);
+  }, [loading, access.role, openAuthModal]);
 
   /**
    * Open the appropriate modal when user clicks a premium location they can't access.
@@ -87,14 +65,14 @@ export function usePremiumGate() {
     (context: PremiumGateContext = "place", placeTitle?: string, _placeId?: string) => {
       if (loading) return;
       if (access.role === "guest") {
-        openGlobalAuthModal(undefined, "premium");
+        openAuthModal(undefined, "premium");
         return;
       }
       if (!isPremium) {
         openPremiumModal(context, placeTitle);
       }
     },
-    [loading, isPremium, access.role, openPremiumModal, openGlobalAuthModal]
+    [loading, isPremium, access.role, openPremiumModal, openAuthModal]
   );
 
   /**
@@ -106,14 +84,15 @@ export function usePremiumGate() {
   const openPremiumCollection = useCallback(
     (_collectionId: string, collectionTitle?: string) => {
       if (loading) return;
+      if (access.role === "guest") {
+        openAuthModal(`/collections/${_collectionId}`, "premium");
+        return;
+      }
       if (!isPremium) {
-        setModalContext("collection");
-        setModalPlaceTitle(undefined);
-        setModalCollectionTitle(collectionTitle);
-        setModalOpen(true);
+        openGlobalPremiumModal("collection", collectionTitle);
       }
     },
-    [loading, isPremium]
+    [loading, isPremium, access.role, openAuthModal, openGlobalPremiumModal]
   );
 
   /**
@@ -155,13 +134,13 @@ export function usePremiumGate() {
     openPremiumCollection,
     closePremiumModal,
     closeAuthModal,
-    modalOpen,
-    modalContext,
-    modalPlaceTitle,
-    modalCollectionTitle,
-    authModalOpen,
-    authRedirectPath,
-    authModalVariant,
+    modalOpen: premiumModal.isOpen,
+    modalContext: premiumModal.context,
+    modalPlaceTitle: premiumModal.context === "place" ? premiumModal.placeTitle : undefined,
+    modalCollectionTitle: premiumModal.context === "collection" ? premiumModal.placeTitle : undefined,
+    authModalOpen: authModal.isOpen,
+    authRedirectPath: authModal.redirectPath,
+    authModalVariant: (authModal.variant ?? "default") as AuthModalVariant,
     openAuthForProfile,
     openAuthForSaved,
   };

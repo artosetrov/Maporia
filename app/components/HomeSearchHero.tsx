@@ -1,143 +1,138 @@
 "use client";
 
+import { useState } from "react";
 import Icon from "./Icon";
-import { DEFAULT_CITY } from "../constants";
 
 /**
- * HomeSearchHero — Airbnb-style composite search trigger for the home
- * page (DESKTOP ONLY).
+ * HomeSearchHero (v2) — REAL search input. NOT a trigger.
  *
- * It is a TRIGGER, not a real form: clicking any of the three zones
- * opens the existing <SearchModal> via `onSearchBarClick`, and the
- * Filters zone opens <FiltersModal> via `onFiltersClick`. The actual
- * city / query / filter state still lives in page.tsx and travels via
- * the same callbacks the legacy <SearchBar> uses — so URL contracts
- * (`/map?city=…&q=…&categories=…`) are untouched.
+ * v1 was a 3-zone trigger that opened SearchModal. v2 is a Dribbble-style
+ * pill with a real `<input>`: the user types, hits Enter (or clicks the
+ * green search button) and we call onSubmit(query). Page.tsx uses the
+ * same `handleSearchChange` it already uses — that means the URL
+ * contract `router.push("/map?q=…&city=…&categories=…")` is unchanged.
  *
- * Why three zones (Where / When / Filters) when "When" has no logic
- * yet: it's a UI anchor for the upcoming dates support on
- * service/experience cards. Wiring it to the SearchModal trigger now
- * keeps the layout future-proof; we'll plug real date logic later.
- * See open question #1 in HOME_REDESIGN_INTEGRATION_PLAN.md.
+ * Filters icon stays inside the pill (small button before the magnifier),
+ * because keeping it adjacent to search is the cheapest way to preserve
+ * "search + refine" as one mental unit.
  *
- * A11y:
- *   • Outer container has role="search" (no click handler — events
- *     come only from the buttons inside, no `<div onClick>` smell).
- *   • Each zone is a real <button type="button">: tab order is
- *     Where → When → Filters → magnifier; Enter/Space activate as
- *     expected without extra keyboard handlers.
- *   • Filters button calls `e.stopPropagation()` defensively even
- *     though the parent has no onClick — keeps behaviour stable if
- *     someone wraps this with a click handler in the future.
+ * Why ONE component for both desktop and mobile (unlike v1):
+ * the new layout is identical on both viewports — pill with input + two
+ * icon buttons. Only the size changes, controlled via Tailwind responsive
+ * utilities. One component, one source of truth, no hydration risk.
  *
- * Cross-link: docs/HOME_REDESIGN_INTEGRATION_PLAN.md (Phase 3).
+ * iOS zoom-on-focus prevention: input font-size is 16px (matches iOS
+ * Safari's threshold below which the page auto-zooms).
+ *
+ * Cross-link: docs/HOME_REDESIGN_V2_INTEGRATION.md (Phases D + G).
  */
 
 type Props = {
-  selectedCity: string | null;
-  searchValue: string;
-  activeFiltersCount: number;
-  onSearchBarClick: () => void;
+  /** Initial query value (e.g. when arriving from /?q=cafe). */
+  initialQuery?: string;
+  /** Submit (Enter or magnifier click). Page wires this to handleSearchChange. */
+  onSubmit: (query: string) => void;
+  /** Open FiltersModal trigger. */
   onFiltersClick: () => void;
+  /** Active filters count for the badge on the filter button. */
+  activeFiltersCount: number;
 };
 
 export default function HomeSearchHero({
-  selectedCity,
-  searchValue,
-  activeFiltersCount,
-  onSearchBarClick,
+  initialQuery = "",
+  onSubmit,
   onFiltersClick,
+  activeFiltersCount,
 }: Props) {
-  const cityLabel = selectedCity ? selectedCity : DEFAULT_CITY;
-  const isAnywhere = !selectedCity;
-  const queryLabel = searchValue?.trim() ? searchValue.trim() : null;
-  const filtersLabel =
-    activeFiltersCount > 0
-      ? `${activeFiltersCount} applied`
-      : "Cuisine, price, mood";
+  const [value, setValue] = useState(initialQuery);
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    onSubmit(value);
+  }
 
   return (
-    <div
+    <form
       role="search"
-      aria-label="Discover places, experiences and services"
-      className="grid items-stretch w-full max-w-[760px]
-                 grid-cols-[1.5fr_1fr_1fr_auto]
-                 bg-white border border-[#ECEEE4] rounded-full p-2
-                 shadow-[0_4px_16px_rgba(31,36,23,0.08)]
-                 hover:shadow-[0_6px_20px_rgba(31,36,23,0.10)] transition-shadow"
+      onSubmit={handleSubmit}
+      className={[
+        "w-full max-w-[560px]",
+        "flex items-center gap-2 sm:gap-3",
+        "bg-[#f1ece0] rounded-full",
+        "h-14 sm:h-16 pl-5 sm:pl-6 pr-1.5",
+        "border border-transparent transition-colors",
+        "focus-within:border-[#ebe7d8] hover:border-[#ebe7d8]",
+      ].join(" ")}
     >
-      {/* Where */}
-      <button
-        type="button"
-        onClick={onSearchBarClick}
-        className="text-left px-5 py-2.5 border-r border-[#ECEEE4]
-                   rounded-l-full hover:bg-[#FAFAF7] transition-colors
-                   focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-1"
-      >
-        <div className="text-[11px] font-semibold text-[#1F2A1F] tracking-[0.04em]">
-          Where
-        </div>
-        <div className="text-[14px] text-[#8A8F7D] mt-0.5 truncate">
-          {isAnywhere ? "City, region or vibe…" : cityLabel}
-        </div>
-      </button>
+      {/* leading pin icon — a quiet visual anchor, not interactive */}
+      <span aria-hidden className="text-[#8a8f7d] flex-shrink-0">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M12 2c4 0 7 3 7 7 0 5.2-7 13-7 13S5 14.2 5 9c0-4 3-7 7-7Z"
+            stroke="currentColor"
+            strokeWidth="1.8"
+          />
+        </svg>
+      </span>
 
-      {/* When (UI-якорь под будущие даты) */}
-      <button
-        type="button"
-        onClick={onSearchBarClick}
-        className="text-left px-5 py-2.5 border-r border-[#ECEEE4]
-                   hover:bg-[#FAFAF7] transition-colors
-                   focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-1"
-      >
-        <div className="text-[11px] font-semibold text-[#1F2A1F] tracking-[0.04em]">
-          {queryLabel ? "Search" : "When"}
-        </div>
-        <div className="text-[14px] text-[#8A8F7D] mt-0.5 truncate">
-          {queryLabel ?? "Any time"}
-        </div>
-      </button>
+      <input
+        type="search"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="Search beaches, bars, hidden gems…"
+        aria-label="Search places"
+        className={[
+          "flex-1 min-w-0 bg-transparent border-0 outline-none",
+          // 16px on mobile prevents iOS auto-zoom on focus.
+          "text-[16px] sm:text-[16px] font-medium text-[#16190f]",
+          "placeholder:text-[#8a8f7d] placeholder:font-normal",
+        ].join(" ")}
+      />
 
-      {/* Filters */}
+      {/* Filters trigger — small, neutral, sits inside the pill. */}
       <button
         type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onFiltersClick();
-        }}
-        className="text-left px-5 py-2.5 hover:bg-[#FAFAF7] transition-colors relative
-                   focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-1"
+        onClick={onFiltersClick}
+        aria-label={
+          activeFiltersCount > 0
+            ? `Filters (${activeFiltersCount} applied)`
+            : "Filters"
+        }
+        className={[
+          "relative flex-shrink-0 size-9 rounded-full",
+          "bg-white/0 hover:bg-white text-[#4a4f3d] border border-transparent hover:border-[#ebe7d8]",
+          "inline-flex items-center justify-center transition-colors",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-1",
+        ].join(" ")}
       >
-        <div className="text-[11px] font-semibold text-[#1F2A1F] tracking-[0.04em]">
-          Filters
-        </div>
-        <div className="text-[14px] text-[#8A8F7D] mt-0.5 truncate">
-          {filtersLabel}
-        </div>
+        <Icon name="filter" size={18} />
         {activeFiltersCount > 0 && (
           <span
             aria-hidden
-            className="absolute top-1.5 right-1.5 h-5 min-w-[20px] px-1 rounded-full
-                       bg-[#8F9E4F] text-white text-[10px] font-medium
-                       flex items-center justify-center"
+            className="absolute -top-0.5 -right-0.5 h-[18px] min-w-[18px] px-1 rounded-full bg-[#8F9E4F] text-white text-[10px] font-semibold flex items-center justify-center"
           >
             {activeFiltersCount > 9 ? "9+" : activeFiltersCount}
           </span>
         )}
       </button>
 
-      {/* Magnifier — primary CTA */}
+      {/* Primary CTA — submits the form. */}
       <button
-        type="button"
-        onClick={onSearchBarClick}
-        aria-label="Open search"
-        className="self-center mr-1 ml-2 size-12 rounded-full
-                   bg-[#8F9E4F] text-white inline-flex items-center justify-center
-                   hover:bg-[#556036] transition-colors
-                   focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-1"
+        type="submit"
+        aria-label="Search"
+        className={[
+          "flex-shrink-0 size-12 sm:size-13 rounded-full",
+          "bg-[#8F9E4F] text-white",
+          "inline-flex items-center justify-center",
+          "transition-colors hover:bg-[#4d5b27]",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-2",
+        ].join(" ")}
+        style={{
+          boxShadow: "0 4px 12px rgba(143,158,79,0.35)",
+        }}
       >
-        <Icon name="search" size={18} />
+        <Icon name="search" size={20} />
       </button>
-    </div>
+    </form>
   );
 }

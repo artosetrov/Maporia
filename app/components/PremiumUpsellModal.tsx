@@ -15,10 +15,7 @@ import { sanitizePostgrestValue } from "../utils";
 
 type PlaceCoverRow = Pick<Database["public"]["Tables"]["places"]["Row"], "id" | "cover_url" | "access_level" | "visibility">;
 
-type PremiumUpsellModalProps = {
-  open: boolean;
-  onClose: () => void;
-  customContent?: {
+export type PremiumUpsellModalContent = {
     title?: string;
     titleHighlight?: string;
     subtitle?: string;
@@ -41,6 +38,11 @@ type PremiumUpsellModalProps = {
     footerLinkText?: string;
     footerLinkUrl?: string;
   };
+
+type PremiumUpsellModalProps = {
+  open: boolean;
+  onClose: () => void;
+  customContent?: PremiumUpsellModalContent;
   context?: "place" | "collection";
   placeTitle?: string;
 };

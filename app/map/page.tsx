@@ -31,9 +31,6 @@ import { useAuthRedirect } from "../hooks/useAuthRedirect";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { usePremiumGate } from "../hooks/usePremiumGate";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
-// Heavy modals — only loaded when user opens them.
-const AuthModal = nextDynamic(() => import("../components/AuthModal"), { ssr: false });
-const PremiumUpsellModal = nextDynamic(() => import("../components/PremiumUpsellModal"), { ssr: false });
 import Icon from "../components/Icon";
 import { PlaceCardGridSkeleton, MapSkeleton, Empty } from "../components/Skeleton";
 import { sanitizePostgrestValue, normalizeCity, cx, initialsFromEmail, timeAgo, isValidPhotoUrl } from "../utils";
@@ -205,6 +202,7 @@ function MapPageContent() {
           initialQ: "",
           initialCategories: [] as string[],
           initialTags: [] as string[],
+          initialKinds: [] as ('location' | 'service' | 'experience')[],
           hasCityInUrl: false,
         };
       }
@@ -213,6 +211,7 @@ function MapPageContent() {
       const qParam = searchParams.get('q');
       const categoriesParam = searchParams.get('categories');
       const tagsParam = searchParams.get('tags');
+      const kindsParam = searchParams.get('kinds');
       
       let initialCity: string | null = null; // По умолчанию null для "Anywhere"
       let hasCityInUrl = false;
@@ -252,8 +251,15 @@ function MapPageContent() {
             }
           }).filter(Boolean)
         : [];
-      
-      return { initialCity, initialQ, initialCategories, initialTags, hasCityInUrl };
+
+      // ?kinds=service,experience — приходит с главной (singleKindMode → один элемент,
+      // но парсим как массив на случай ручного URL'а или будущей multi-select функции).
+      const VALID_KINDS = new Set(['location', 'service', 'experience']);
+      const initialKinds = kindsParam && kindsParam.trim()
+        ? kindsParam.split(',').map(k => k.trim()).filter(k => VALID_KINDS.has(k)) as ('location' | 'service' | 'experience')[]
+        : [];
+
+      return { initialCity, initialQ, initialCategories, initialTags, initialKinds, hasCityInUrl };
     } catch (e) {
       console.error('[MapPage] Error in getInitialValues:', e);
       // Fallback при ошибке парсинга
@@ -262,12 +268,13 @@ function MapPageContent() {
           initialQ: "",
           initialCategories: [] as string[],
           initialTags: [] as string[],
+          initialKinds: [] as ('location' | 'service' | 'experience')[],
           hasCityInUrl: false,
         };
     }
   };
-  
-  const { initialCity, initialQ, initialCategories, initialTags, hasCityInUrl: initialHasCityInUrl } = getInitialValues();
+
+  const { initialCity, initialQ, initialCategories, initialTags, initialKinds, hasCityInUrl: initialHasCityInUrl } = getInitialValues();
   
   // appliedCity всегда должен быть строкой (для фильтрации), используем DEFAULT_CITY если нет города
   const [appliedCity, setAppliedCity] = useState<string | null>(initialCity || DEFAULT_CITY);
@@ -276,6 +283,7 @@ function MapPageContent() {
     categories: initialCategories,
     sort: null,
     tags: initialTags,
+    kinds: initialKinds.length > 0 ? initialKinds : undefined,
     premium: false,
     hidden: false,
     vibe: false,
@@ -2108,7 +2116,7 @@ function MapView({
   isMapView?: boolean; // Whether map view is currently active
 }) {
   const isDesktop = useIsDesktop();
-  const { openPremiumLocation, closeAuthModal, closePremiumModal, modalOpen, modalPlaceTitle, authModalOpen, authRedirectPath, authModalVariant } = usePremiumGate();
+  const { openPremiumLocation } = usePremiumGate();
   const defaultAccess: UserAccess = userAccess ?? { role: "guest", hasPremium: false, isAdmin: false, plan: "free" };
   const [internalSelectedPlaceId, setInternalSelectedPlaceId] = useState<string | null>(null);
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
@@ -2828,18 +2836,6 @@ function MapView({
         )}
       </div>
     </div>
-    <AuthModal
-      isOpen={authModalOpen}
-      onClose={closeAuthModal}
-      redirectPath={authRedirectPath}
-      variant={authModalVariant}
-    />
-    <PremiumUpsellModal
-      open={modalOpen}
-      onClose={closePremiumModal}
-      context="place"
-      placeTitle={modalPlaceTitle}
-    />
     </>
   );
 }

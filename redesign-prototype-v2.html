@@ -1,0 +1,914 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maporia — UX redesign v2 · оптимизированный под Fort Lauderdale</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #faf8f1;
+    --surface: #ffffff;
+    --line: #ebe7d8;
+    --ink: #16190f;
+    --ink-2: #4a4f3d;
+    --muted: #8a8f7d;
+    --brand: #8F9E4F;
+    --brand-ink: #4d5b27;
+    --brand-soft: #eef0e0;
+    --pin: #d34736;
+    --shadow-1: 0 1px 2px rgba(31,36,23,.04), 0 8px 24px rgba(31,36,23,.06);
+    --shadow-2: 0 4px 16px rgba(31,36,23,.08), 0 24px 48px rgba(31,36,23,.10);
+    --r-md: 14px;
+    --r-pill: 999px;
+  }
+  *,*::before,*::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--ink);
+    background: #f1ede2;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* ───── page chrome ───── */
+  .page-head {
+    max-width: 1280px; margin: 0 auto;
+    padding: 32px 32px 12px;
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 16px;
+  }
+  .page-title {
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 600; font-size: 22px; letter-spacing: -0.01em; margin: 0;
+  }
+  .page-sub { color: var(--muted); font-size: 13px; }
+
+  .canvas {
+    max-width: 1280px; margin: 0 auto;
+    padding: 16px 32px 80px;
+    display: grid; grid-template-columns: 1fr 392px;
+    gap: 28px; align-items: start;
+  }
+  @media (max-width: 1080px) { .canvas { grid-template-columns: 1fr; } }
+
+  .frame {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: var(--shadow-1);
+  }
+  .frame-label {
+    font-size: 11px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted);
+    padding: 14px 22px 0;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .frame-label .dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--brand); margin-right: 8px; vertical-align: middle;
+  }
+
+  /* ───── shared atoms ───── */
+  .logo-mark {
+    width: 36px; height: 36px; border-radius: 9px;
+    background: var(--brand);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #f7f3da;
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.12);
+  }
+  .logo-mark svg { width: 18px; height: 18px; }
+  .word-mark {
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 800; font-size: 22px; letter-spacing: -0.015em;
+  }
+  .avatar {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: linear-gradient(135deg, #d6d2bb 0%, #b8be97 80%);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--brand-ink); font-weight: 600; font-size: 13px;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--line);
+    position: relative;
+  }
+  .avatar::after {
+    content: ""; position: absolute; right: -1px; bottom: -1px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #6abf6a; border: 2px solid #fff;
+  }
+  .icon-btn {
+    width: 38px; height: 38px; border-radius: 50%;
+    border: 0; background: transparent;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--ink); cursor: pointer; position: relative;
+  }
+  .icon-btn:hover { background: rgba(31,36,23,.05); }
+  .icon-btn .badge {
+    position: absolute; top: 6px; right: 6px;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--pin); border: 1.5px solid #fff;
+  }
+  .ghost-pill {
+    height: 40px; padding: 0 16px; border-radius: var(--r-pill);
+    background: transparent; border: 1px solid var(--line);
+    color: var(--ink); font-weight: 600; font-size: 14px;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .ghost-pill:hover { background: rgba(31,36,23,.04); }
+  .nav-link {
+    color: var(--ink); font-weight: 600; font-size: 14px;
+    padding: 8px 4px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 4px;
+    background: transparent; border: 0;
+  }
+  .nav-link svg { opacity: .55; }
+  .nav-link:hover { opacity: .7; }
+
+  /* ===================================================================
+     DESKTOP MOCK
+     =================================================================== */
+  .desktop { background: var(--bg); min-height: 720px; }
+
+  .d-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 22px 40px;
+  }
+  .d-nav-left { display: flex; align-items: center; gap: 36px; }
+  .d-nav-brand { display: flex; align-items: center; gap: 10px; }
+  .d-nav-menu { display: flex; gap: 22px; }
+  .d-nav-right { display: flex; align-items: center; gap: 8px; }
+
+  .d-hero {
+    display: grid; grid-template-columns: 1.05fr 1fr;
+    gap: 48px; padding: 12px 40px 12px;
+    align-items: start;
+  }
+
+  /* LEFT */
+  .d-eyebrow {
+    color: var(--brand-ink);
+    font-size: 12px; letter-spacing: 0.18em;
+    text-transform: uppercase; font-weight: 700;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .d-eyebrow .live-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--brand);
+    box-shadow: 0 0 0 4px rgba(143,158,79,.2);
+  }
+  .d-title {
+    font-family: "Inter", sans-serif;
+    font-weight: 800; font-size: 60px;
+    line-height: 1.02; letter-spacing: -0.025em;
+    margin: 14px 0 14px; color: var(--ink);
+  }
+  .d-title em {
+    font-family: "Fraunces", Georgia, serif;
+    font-style: italic; font-weight: 600; color: var(--brand);
+  }
+  .d-title .city {
+    font-family: "Inter", sans-serif;
+    font-weight: 800; font-style: normal; color: var(--ink);
+    border-bottom: 3px solid var(--brand);
+    cursor: pointer;
+    padding-bottom: 2px;
+  }
+  .d-title .city:hover { color: var(--brand); }
+
+  .d-lede {
+    color: var(--ink-2);
+    font-size: 17px; line-height: 1.5;
+    margin: 0 0 28px; max-width: 520px;
+  }
+
+  .d-tabs {
+    display: inline-flex; align-items: center;
+    gap: 6px; margin-bottom: 14px;
+  }
+  .d-tab {
+    border: 0; background: transparent;
+    height: 44px; padding: 0 18px;
+    border-radius: var(--r-pill);
+    font-size: 14px; font-weight: 600; color: var(--ink-2);
+    display: inline-flex; align-items: center; gap: 8px;
+    cursor: pointer;
+  }
+  .d-tab:hover { background: rgba(31,36,23,.04); }
+  .d-tab.active { background: var(--ink); color: #fff; }
+  .d-tab svg { width: 18px; height: 18px; }
+  .d-tab .count {
+    background: rgba(255,255,255,.15);
+    color: inherit;
+    font-size: 11px; font-weight: 700;
+    padding: 2px 7px; border-radius: 10px;
+    margin-left: 2px;
+  }
+  .d-tab:not(.active) .count {
+    background: rgba(31,36,23,.08);
+    color: var(--ink-2);
+  }
+
+  .d-search {
+    width: 100%; max-width: 560px; height: 64px;
+    background: #f1ece0;
+    border-radius: var(--r-pill);
+    padding: 6px 6px 6px 24px;
+    display: flex; align-items: center; gap: 12px;
+    border: 1px solid transparent;
+    transition: border-color .15s ease;
+  }
+  .d-search:hover { border-color: var(--line); }
+  .d-search input {
+    flex: 1; min-width: 0;
+    border: 0; outline: 0; background: transparent;
+    font: 500 16px/1.2 "Inter", sans-serif; color: var(--ink);
+  }
+  .d-search input::placeholder { color: var(--muted); }
+  .d-search button {
+    width: 52px; height: 52px;
+    border-radius: 50%; border: 0;
+    background: var(--brand); color: #fff;
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(143,158,79,.35);
+  }
+  .d-search button:hover { background: var(--brand-ink); }
+
+  .d-popular {
+    margin-top: 18px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    color: var(--ink); font-size: 14px;
+  }
+  .d-popular b { font-weight: 700; margin-right: 4px; }
+  .d-tag {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    height: 32px; padding: 0 14px;
+    border-radius: var(--r-pill);
+    font-size: 13px; color: var(--ink-2);
+    display: inline-flex; align-items: center; gap: 4px;
+    cursor: pointer; white-space: nowrap;
+  }
+  .d-tag:hover { border-color: var(--brand); color: var(--brand-ink); }
+  .d-tag .emo { font-size: 13px; }
+
+  /* RIGHT visual */
+  .d-visual {
+    background:
+      radial-gradient(120% 70% at 30% 20%, rgba(255,255,255,.85) 0%, transparent 60%),
+      linear-gradient(140deg, #e9e3c8 0%, #c8cf9e 100%);
+    border-radius: 22px;
+    height: 480px;
+    position: relative; overflow: hidden;
+    box-shadow: var(--shadow-2);
+  }
+  .d-visual::before {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(31,36,23,.08) 1px, transparent 0);
+    background-size: 16px 16px;
+    opacity: .6; pointer-events: none;
+  }
+
+  /* main featured card — Las Olas Boulevard */
+  .d-card-mock {
+    position: absolute;
+    left: 50%; top: 46%;
+    transform: translate(-58%, -50%) rotate(-3deg);
+    width: 268px; height: 320px;
+    background: #fff; border-radius: 22px;
+    box-shadow:
+      0 30px 60px rgba(0,0,0,.18),
+      0 8px 16px rgba(0,0,0,.10);
+    overflow: hidden;
+  }
+  /* "sunset over Las Olas" — gradient mimicking dusk on the water */
+  .d-card-mock .img {
+    height: 180px;
+    background:
+      linear-gradient(180deg, transparent 0%, rgba(0,0,0,.18) 100%),
+      linear-gradient(180deg, #f9c178 0%, #ec7c52 38%, #c84d54 70%, #5a3a6e 100%);
+    position: relative;
+  }
+  /* horizon strip + faux palm silhouettes */
+  .d-card-mock .img::before {
+    content: "";
+    position: absolute; left: 0; right: 0; bottom: 28px;
+    height: 1px; background: rgba(0,0,0,.18);
+  }
+  .d-card-mock .img::after {
+    content: "🌴";
+    position: absolute; left: 14px; bottom: -2px;
+    font-size: 36px; filter: brightness(.4) saturate(.6);
+  }
+  .d-card-mock .save {
+    position: absolute; top: 12px; right: 12px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: rgba(0,0,0,.32);
+    backdrop-filter: blur(6px);
+    color: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .d-card-mock .badge {
+    position: absolute; left: 12px; top: 12px;
+    background: rgba(255,255,255,.92);
+    color: var(--ink);
+    font-size: 11px; font-weight: 700;
+    padding: 5px 10px; border-radius: var(--r-pill);
+    letter-spacing: 0.02em;
+  }
+  .d-card-mock .body { padding: 14px 16px; }
+  .d-card-mock .ttl {
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 600; font-size: 18px; letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .d-card-mock .meta {
+    margin-top: 4px; font-size: 12px; color: var(--muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .d-card-mock .row {
+    margin-top: 14px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .d-card-mock .row .price { font-weight: 700; color: var(--ink); font-size: 14px; }
+  .d-card-mock .row .stars { color: var(--ink-2); font-size: 12px; }
+
+  /* secondary mini card to suggest a list */
+  .d-card-mini {
+    position: absolute;
+    right: 24px; top: 36px;
+    width: 168px; height: 110px;
+    background: #fff;
+    border-radius: 16px;
+    transform: rotate(5deg);
+    box-shadow: 0 12px 28px rgba(0,0,0,.16);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .d-card-mini .img {
+    flex: 1;
+    background:
+      linear-gradient(135deg, #6fb1c8 0%, #2f6f87 80%);
+    position: relative;
+  }
+  .d-card-mini .img::after {
+    content: "🥾";
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 28px; opacity: .85;
+  }
+  .d-card-mini .body {
+    padding: 6px 10px;
+    background: #fff;
+  }
+  .d-card-mini .ttl {
+    font-size: 12px; font-weight: 600; color: var(--ink);
+    line-height: 1.2;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .d-card-mini .meta {
+    font-size: 10px; color: var(--muted);
+  }
+
+  /* faux pins for FL coast hint */
+  .d-pin {
+    position: absolute;
+    width: 14px; height: 18px;
+    background: var(--pin);
+    -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2c4 0 7 3 7 7 0 5.2-7 13-7 13S5 14.2 5 9c0-4 3-7 7-7Z' fill='black'/></svg>") no-repeat center/contain;
+            mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2c4 0 7 3 7 7 0 5.2-7 13-7 13S5 14.2 5 9c0-4 3-7 7-7Z' fill='black'/></svg>") no-repeat center/contain;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,.25));
+  }
+  .d-pin.p1 { top: 64px; left: 56px; }
+  .d-pin.p2 { top: 130px; left: 200px; opacity: .8; }
+  .d-pin.p3 { bottom: 110px; left: 84px; opacity: .85; }
+  .d-pin.p4 { bottom: 140px; right: 72px; }
+  .d-pin.p5 { bottom: 56px; right: 220px; opacity: .7; }
+
+  /* live counter chip floating on visual */
+  .d-live-chip {
+    position: absolute;
+    right: 18px; bottom: 18px;
+    background: var(--ink);
+    color: #f7f3da;
+    border-radius: var(--r-pill);
+    padding: 8px 14px;
+    font-size: 12px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 8px;
+    box-shadow: var(--shadow-1);
+  }
+  .d-live-chip .pulse {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #6abf6a;
+    box-shadow: 0 0 0 4px rgba(106,191,106,.25);
+  }
+
+  /* CTA banner */
+  .d-cta {
+    margin: 22px 40px 32px;
+    background: var(--brand-soft);
+    border: 1px solid #d6dabd;
+    border-radius: 18px;
+    padding: 16px 22px;
+    display: flex; align-items: center; gap: 18px;
+  }
+  .d-cta .pill {
+    background: var(--ink); color: #fff;
+    border: 0;
+    height: 40px; padding: 0 16px; border-radius: var(--r-pill);
+    font-size: 14px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 8px;
+    cursor: pointer; flex-shrink: 0;
+  }
+  .d-cta .pill .new {
+    background: var(--pin); color: #fff;
+    font-size: 10px; font-weight: 700;
+    padding: 2px 6px; border-radius: 6px;
+    margin-left: 4px; letter-spacing: 0.04em;
+  }
+  .d-cta .text { color: var(--ink-2); font-size: 14px; }
+  .d-cta .text b { color: var(--ink); font-weight: 700; }
+
+  /* ticker stats */
+  .d-ticker {
+    margin: 0 40px 40px;
+    padding: 12px 0;
+    display: flex; justify-content: center; flex-wrap: wrap;
+    gap: 22px;
+    color: var(--ink-2); font-size: 13px;
+    border-top: 1px solid var(--line);
+  }
+  .d-ticker b { color: var(--ink); font-weight: 700; }
+  .d-ticker .pip { color: var(--muted); margin: 0 4px; }
+
+  /* ===================================================================
+     MOBILE MOCK
+     =================================================================== */
+  .mobile { padding: 22px; display: flex; justify-content: center; }
+  .phone {
+    width: 348px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 36px;
+    padding: 16px 18px 22px;
+    box-shadow: var(--shadow-2);
+    position: relative; overflow: hidden;
+  }
+  .phone::before {
+    content: ""; display: block;
+    width: 110px; height: 28px;
+    background: #1c1f15;
+    border-radius: 0 0 16px 16px;
+    margin: -16px auto 14px;
+  }
+
+  .m-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 0 18px;
+  }
+  .m-nav .left { display: flex; align-items: center; gap: 10px; }
+  .m-burger {
+    width: 36px; height: 36px; border-radius: 10px;
+    border: 0; background: transparent;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .m-nav .right { display: flex; align-items: center; gap: 4px; }
+
+  .m-hero { text-align: center; padding: 16px 4px 6px; }
+  .m-title {
+    font-family: "Inter", sans-serif;
+    font-weight: 800; font-size: 28px;
+    line-height: 1.04; letter-spacing: -0.022em;
+    color: var(--ink); margin: 0;
+  }
+  .m-title em {
+    font-family: "Fraunces", Georgia, serif;
+    font-style: italic; font-weight: 600; color: var(--brand);
+  }
+  .m-title .city {
+    font-family: "Inter", sans-serif;
+    font-weight: 800; color: var(--ink);
+    border-bottom: 3px solid var(--brand);
+    padding-bottom: 1px;
+  }
+  .m-lede {
+    color: var(--ink-2);
+    font-size: 14px; line-height: 1.5;
+    margin: 12px auto 22px; max-width: 280px;
+  }
+
+  .m-tabs {
+    display: flex; align-items: center; justify-content: center;
+    gap: 4px;
+    margin: 4px 0 14px;
+  }
+  .m-tab {
+    border: 0; background: transparent;
+    height: 38px; padding: 0 12px;
+    border-radius: var(--r-pill);
+    font-size: 13px; font-weight: 600; color: var(--ink-2);
+    display: inline-flex; align-items: center; gap: 6px;
+    cursor: pointer; white-space: nowrap;
+  }
+  .m-tab.active { background: var(--ink); color: #fff; }
+  .m-tab svg { width: 16px; height: 16px; }
+
+  .m-search {
+    background: #f1ece0;
+    border-radius: var(--r-pill);
+    padding: 5px 5px 5px 18px;
+    display: flex; align-items: center; gap: 8px;
+    height: 52px;
+  }
+  .m-search input {
+    flex: 1; min-width: 0;
+    border: 0; outline: 0; background: transparent;
+    font: 500 14px/1.2 "Inter", sans-serif; color: var(--ink);
+  }
+  .m-search input::placeholder { color: var(--muted); }
+  .m-search button {
+    width: 42px; height: 42px;
+    border-radius: 50%; border: 0;
+    background: var(--brand); color: #fff;
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 4px 10px rgba(143,158,79,.35);
+  }
+
+  .m-popular {
+    margin-top: 14px;
+    display: flex; align-items: center; gap: 6px;
+    overflow-x: auto;
+    padding: 4px 2px 6px;
+    scrollbar-width: none;
+  }
+  .m-popular::-webkit-scrollbar { display: none; }
+  .m-popular b { font-size: 13px; color: var(--ink); font-weight: 700; flex-shrink: 0; margin-right: 4px; }
+  .m-popular .d-tag { flex-shrink: 0; height: 30px; padding: 0 12px; font-size: 12px; }
+
+  .m-ticker {
+    margin-top: 18px;
+    display: flex; align-items: center; gap: 6px;
+    overflow-x: auto;
+    padding: 4px 2px 6px;
+    scrollbar-width: none;
+  }
+  .m-ticker::-webkit-scrollbar { display: none; }
+  .m-chip {
+    flex: 0 0 auto;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill);
+    padding: 7px 11px;
+    font-size: 12px; color: var(--ink-2);
+    white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .m-chip b { color: var(--ink); font-weight: 700; }
+
+  .m-cta {
+    margin-top: 18px;
+    background: var(--brand-soft);
+    border: 1px solid #d6dabd;
+    border-radius: 14px;
+    padding: 12px 14px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .m-cta .pill {
+    background: var(--ink); color: #fff;
+    border: 0;
+    height: 32px; padding: 0 12px; border-radius: var(--r-pill);
+    font-size: 12px; font-weight: 700;
+    display: inline-flex; align-items: center; gap: 4px;
+    flex-shrink: 0; cursor: pointer;
+  }
+  .m-cta .text { font-size: 12px; color: var(--ink-2); line-height: 1.35; }
+  .m-cta .text b { color: var(--ink); font-weight: 700; }
+
+  /* ───── notes ───── */
+  .notes {
+    max-width: 1280px; margin: 0 auto;
+    padding: 0 32px 64px;
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+  @media (max-width: 900px) { .notes { grid-template-columns: 1fr; } }
+  .note {
+    background: #fff; border: 1px solid var(--line);
+    border-radius: 16px; padding: 18px 20px;
+    box-shadow: var(--shadow-1);
+  }
+  .note h3 {
+    font-family: "Fraunces", Georgia, serif;
+    margin: 0 0 6px; font-size: 18px; font-weight: 600;
+  }
+  .note p { margin: 0; color: var(--ink-2); font-size: 13px; line-height: 1.55; }
+  .note code {
+    background: #f5f1e2;
+    padding: 1px 6px; border-radius: 6px;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<header class="page-head">
+  <div>
+    <h1 class="page-title">Maporia · UX redesign — v2 (Fort Lauderdale)</h1>
+    <div class="page-sub">Hero под наш контент: реальные категории, города и live-числа из Supabase.</div>
+  </div>
+  <div class="page-sub">07 May 2026</div>
+</header>
+
+<main class="canvas">
+
+  <!-- ============== DESKTOP ============== -->
+  <section class="frame">
+    <div class="frame-label"><span><span class="dot"></span>DESKTOP · 1440</span><span>home / discover · ?tab=locations</span></div>
+
+    <div class="desktop">
+
+      <!-- nav -->
+      <nav class="d-nav">
+        <div class="d-nav-left">
+          <div class="d-nav-brand">
+            <span class="logo-mark" aria-label="Maporia">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 2c4 0 7 3 7 7 0 5.2-7 13-7 13S5 14.2 5 9c0-4 3-7 7-7Z" stroke="#f7f3da" stroke-width="2"/>
+                <path d="M9 12V7l3 3 3-3v5" stroke="#f7f3da" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="word-mark">Maporia</span>
+          </div>
+          <div class="d-nav-menu">
+            <button class="nav-link">Map <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M9 4 3 7v13l6-3 6 3 6-3V4l-6 3-6-3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
+            <button class="nav-link">Cities <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+            <button class="nav-link">Hosts <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+            <button class="nav-link">Saved</button>
+          </div>
+        </div>
+        <div class="d-nav-right">
+          <button class="ghost-pill">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            Add a place
+          </button>
+          <button class="icon-btn" aria-label="Messages">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 1 1-3.4-6.5L21 4l-1.1 4.1A8 8 0 0 1 21 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            <span class="badge"></span>
+          </button>
+          <button class="icon-btn" aria-label="Notifications">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 8a6 6 0 0 1 12 0v5l1.5 3H4.5L6 13V8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+          <span class="avatar">A</span>
+        </div>
+      </nav>
+
+      <!-- hero split -->
+      <div class="d-hero">
+
+        <!-- LEFT -->
+        <div class="d-hero-left">
+          <div class="d-eyebrow">
+            <span class="live-dot"></span>
+            Curated by locals · Fort Lauderdale
+          </div>
+          <h2 class="d-title">
+            Discover<br/>
+            <em>local gems</em> of<br/>
+            <span class="city" title="Switch city">Fort Lauderdale.</span>
+          </h2>
+          <p class="d-lede">
+            Места, опыт и сервисы — отбираем локалы из Fort Lauderdale, Dania Beach, Lighthouse Point. Без рекламы и без бесконечных списков фильтров на старте.
+          </p>
+
+          <!-- tabs Maporia kinds -->
+          <div class="d-tabs" role="tablist">
+            <button class="d-tab active" role="tab" aria-selected="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 2c4 0 7 3 7 7 0 5.2-7 13-7 13S5 14.2 5 9c0-4 3-7 7-7Z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="9" r="2.5" stroke="currentColor" stroke-width="1.8"/></svg>
+              Locations <span class="count">276</span>
+            </button>
+            <button class="d-tab" role="tab">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 3l2 6h6l-5 4 2 7-5-4-5 4 2-7-5-4h6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+              Experiences <span class="count">0</span>
+            </button>
+            <button class="d-tab" role="tab">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M14 7l3-3 3 3-4 4M9 10l-5 5v5h5l5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Services <span class="count">1</span>
+            </button>
+          </div>
+
+          <!-- search pill -->
+          <form class="d-search" onsubmit="return false">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="color:var(--muted);flex-shrink:0">
+              <path d="M12 2c4 0 7 3 7 7 0 5.2-7 13-7 13S5 14.2 5 9c0-4 3-7 7-7Z" stroke="currentColor" stroke-width="1.8"/>
+            </svg>
+            <input type="text" placeholder="Search beaches, bars, hidden gems…" />
+            <button type="submit" aria-label="Search">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2"/>
+                <path d="m20 20-3.2-3.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </form>
+
+          <!-- popular tags — реальные категории Locations из constants.ts -->
+          <div class="d-popular">
+            <b>Popular:</b>
+            <button class="d-tag"><span class="emo">🌅</span> Scenic & Views</button>
+            <button class="d-tag"><span class="emo">🤫</span> Hidden & Unique</button>
+            <button class="d-tag"><span class="emo">🍸</span> Bars & Wine</button>
+            <button class="d-tag"><span class="emo">🍽</span> Food & Drinks</button>
+            <button class="d-tag"><span class="emo">🌳</span> Nature & Walks</button>
+          </div>
+        </div>
+
+        <!-- RIGHT visual -->
+        <aside class="d-visual" aria-hidden="true">
+          <span class="d-pin p1"></span>
+          <span class="d-pin p2"></span>
+          <span class="d-pin p3"></span>
+          <span class="d-pin p4"></span>
+          <span class="d-pin p5"></span>
+
+          <!-- secondary peeking card -->
+          <div class="d-card-mini">
+            <div class="img"></div>
+            <div class="body">
+              <div class="ttl">Hugh Taylor Birch SP</div>
+              <div class="meta">🌳 Nature & Walks</div>
+            </div>
+          </div>
+
+          <!-- main featured card -->
+          <div class="d-card-mock">
+            <div class="img">
+              <span class="badge">🤫 Hidden gem</span>
+              <span class="save">♡</span>
+            </div>
+            <div class="body">
+              <div class="ttl">Las Olas Boulevard</div>
+              <div class="meta">📍 Fort Lauderdale · 🌅 Scenic & Views</div>
+              <div class="row">
+                <span class="price">Free walk</span>
+                <span class="stars">★ 4.8 · 142 saved</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-live-chip">
+            <span class="pulse"></span>
+            276 places live in Fort Lauderdale
+          </div>
+        </aside>
+      </div>
+
+      <!-- CTA banner — про Become a provider, мапится на BecomeProviderModal -->
+      <div class="d-cta">
+        <button class="pill">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2v6m0 8v6M2 12h6m8 0h6M5 5l4 4m6 6 4 4M5 19l4-4m6-6 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Become a provider
+          <span class="new">NEW</span>
+        </button>
+        <div class="text">
+          Знаешь скрытое место, делаешь массаж на дому, водишь photo walks по A1A? <b>Опубликуй карточку за 2 минуты</b> — оплата идёт между тобой и гостем напрямую.
+        </div>
+      </div>
+
+      <!-- ticker — те же 4 счётчика что у нас сейчас в StatsBanner -->
+      <div class="d-ticker">
+        <span>👥 <b>1,387</b> travelers</span>
+        <span class="pip">·</span>
+        <span>📍 <b>276</b> places</span>
+        <span class="pip">·</span>
+        <span>🛠 <b>1</b> service</span>
+        <span class="pip">·</span>
+        <span>✨ <b>0</b> experiences</span>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============== MOBILE ============== -->
+  <section class="frame">
+    <div class="frame-label"><span><span class="dot"></span>MOBILE · 375</span><span>home</span></div>
+
+    <div class="mobile">
+      <div class="phone">
+
+        <nav class="m-nav">
+          <div class="left">
+            <button class="m-burger" aria-label="Menu">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+            <span class="logo-mark" style="width:32px;height:32px;border-radius:8px;">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 2c4 0 7 3 7 7 0 5.2-7 13-7 13S5 14.2 5 9c0-4 3-7 7-7Z" stroke="#f7f3da" stroke-width="2"/></svg>
+            </span>
+          </div>
+          <div class="right">
+            <button class="icon-btn" aria-label="Messages">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 1 1-3.4-6.5L21 4l-1.1 4.1A8 8 0 0 1 21 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+              <span class="badge"></span>
+            </button>
+            <span class="avatar" style="width:32px;height:32px;font-size:12px;">A</span>
+          </div>
+        </nav>
+
+        <div class="m-hero">
+          <h2 class="m-title">
+            Discover<br/>
+            <em>local gems</em> of<br/>
+            <span class="city">Fort Lauderdale.</span>
+          </h2>
+          <p class="m-lede">
+            Places, experiences and services — curated by locals across South Florida.
+          </p>
+
+          <div class="m-tabs" role="tablist">
+            <button class="m-tab active" role="tab" aria-selected="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 2c4 0 7 3 7 7 0 5.2-7 13-7 13S5 14.2 5 9c0-4 3-7 7-7Z" stroke="currentColor" stroke-width="1.8"/></svg>
+              Places
+            </button>
+            <button class="m-tab" role="tab">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 3l2 6h6l-5 4 2 7-5-4-5 4 2-7-5-4h6z" stroke="currentColor" stroke-width="1.6"/></svg>
+              Exp.
+            </button>
+            <button class="m-tab" role="tab">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M14 7l3-3 3 3-4 4M9 10l-5 5v5h5l5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Services
+            </button>
+          </div>
+
+          <form class="m-search" onsubmit="return false">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:var(--muted);flex-shrink:0">
+              <path d="M12 2c4 0 7 3 7 7 0 5.2-7 13-7 13S5 14.2 5 9c0-4 3-7 7-7Z" stroke="currentColor" stroke-width="1.8"/>
+            </svg>
+            <input type="text" placeholder="Beaches, bars, hidden gems…" />
+            <button type="submit" aria-label="Search">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2"/>
+                <path d="m20 20-3.2-3.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </form>
+
+          <div class="m-popular">
+            <b>Popular:</b>
+            <button class="d-tag"><span class="emo">🌅</span> Scenic</button>
+            <button class="d-tag"><span class="emo">🤫</span> Hidden</button>
+            <button class="d-tag"><span class="emo">🍸</span> Bars</button>
+            <button class="d-tag"><span class="emo">🍽</span> Food</button>
+          </div>
+
+          <div class="m-cta">
+            <button class="pill">
+              ✨ Add place
+            </button>
+            <div class="text"><b>Become a provider</b> — your spot in 2 min.</div>
+          </div>
+
+          <div class="m-ticker">
+            <span class="m-chip">👥 <b>1,387</b> travelers</span>
+            <span class="m-chip">📍 <b>276</b> places</span>
+            <span class="m-chip">🛠 <b>1</b> service</span>
+            <span class="m-chip">✨ <b>0</b> exp.</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<section class="notes">
+  <div class="note">
+    <h3>1 · Контент-привязка</h3>
+    <p>
+      Дефолтный город — <code>Fort Lauderdale</code> (из <code>app/constants.ts</code> → <code>DEFAULT_CITY</code>). Город подчёркнут зелёным в заголовке — кликабельный, ведёт на city-selector с реальным списком (Dania Beach, Fort Lauderdale, Lauderhill, Lighthouse Point).
+    </p>
+  </div>
+  <div class="note">
+    <h3>2 · Tabs со счётчиками</h3>
+    <p>
+      Live-счётчики в табах из тех же запросов, что StatsBanner: <code>kind='location'</code> = 276, <code>'service'</code> = 1, <code>'experience'</code> = 0. Когда счётчик = 0 — таб остаётся, но клик ведёт на <code>EmptyKindState</code> с CTA «Создать первый опыт».
+    </p>
+  </div>
+  <div class="note">
+    <h3>3 · Реальные категории и места</h3>
+    <p>
+      Popular теги — это <code>LOCATION_CATEGORIES</code> из <code>constants.ts</code> (5 самых релевантных для FL). При смене таба теги пересчитываются: Services → 📸 Photography, 💆 Massage, ✂️ Hair; Experiences → 🏊 Water Sports, 🗺 Tours & Walks, 🍷 Tastings. Карточки на визуале — <b>Las Olas Boulevard</b> и <b>Hugh Taylor Birch SP</b>: можно либо моки, либо тянуть top-rated из БД через <code>get_top_places</code>.
+    </p>
+  </div>
+</section>
+
+</body>
+</html>

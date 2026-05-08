@@ -24,13 +24,13 @@ import { useIsDesktop } from "../../hooks/useIsDesktop";
 import { isUserAdmin, isPlacePremium, canUserViewPlace, canUserAddPlace, type UserAccess } from "../../lib/access";
 import { PLAN_CONFIG, PLAN_ORDER, EXTRA_LISTING, formatPrice } from "../../lib/plans";
 import { DEFAULT_CITY, getTagEmoji, stripTagEmoji } from "../../constants";
-const PremiumUpsellModal = nextDynamic(() => import("../../components/PremiumUpsellModal"), { ssr: false });
 import PremiumBadge from "../../components/PremiumBadge";
 import { getRecentlyViewedPlaceIds } from "../../utils";
 import { ProfileSkeleton, PlaceCardGridSkeleton, SkeletonBase } from "../../components/Skeleton";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 import ImpersonationDisclaimer from "../../components/ImpersonationDisclaimer";
 import { useImpersonationStatus } from "../../hooks/useImpersonationStatus";
+import { usePremiumModalContext } from "../../contexts/PremiumModalContext";
 
 type Place = {
   id: string;
@@ -2779,7 +2779,6 @@ function currentAdminAssignable(u: User): AdminAssignable {
 }
 
 function ElementsSection() {
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -2811,6 +2810,7 @@ function ElementsSection() {
   };
 
   const [modalContent, setModalContent] = useState(defaultContent);
+  const { openPremiumModal } = usePremiumModalContext();
 
   // Load settings from API
   useEffect(() => {
@@ -2996,7 +2996,7 @@ function ElementsSection() {
                 {isEditing ? "Cancel" : "Edit"}
               </button>
               <button
-                onClick={() => setIsModalOpen(true)}
+                onClick={() => openPremiumModal("place", undefined, undefined, modalContent)}
                 className="px-4 py-2 rounded-xl bg-[#8F9E4F] text-white font-medium text-sm hover:brightness-110 transition-colors"
               >
                 Preview
@@ -3359,12 +3359,6 @@ function ElementsSection() {
         </Link>
       </div>
 
-      {/* Modal Preview with Custom Content */}
-      <PremiumUpsellModal
-        open={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        customContent={modalContent}
-      />
     </div>
   );
 }

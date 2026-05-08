@@ -504,10 +504,10 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
             scrollSnapType: 'x mandatory',
             WebkitOverflowScrolling: 'touch',
             // Для "Recently viewed": ограничиваем ширину контейнера для 5 карточек на десктопе
-            // Для остальных: 7 карточек + 6 gaps
-            maxWidth: section.recentlyViewed 
+            // Для остальных: 8 карточек + 7 gaps (раньше было 7, оставалось пустое место под стрелками справа)
+            maxWidth: section.recentlyViewed
               ? 'calc(5 * var(--recently-viewed-card-width, var(--home-card-width)) + 4 * var(--home-carousel-gap))'
-              : 'calc(7 * var(--home-card-width) + 6 * var(--home-carousel-gap))'
+              : 'calc(8 * var(--home-card-width) + 7 * var(--home-carousel-gap))'
           }}
         >
           <div 

@@ -15,7 +15,6 @@ import { useAuthRedirect } from "../hooks/useAuthRedirect";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { usePremiumGate } from "../hooks/usePremiumGate";
 import AuthCTA from "./AuthCTA";
-import AuthModal from "./AuthModal";
 import BecomeProviderModal from "./BecomeProviderModal";
 
 type TopBarProps = {
@@ -110,7 +109,7 @@ export default function TopBar({
   // Получаем права пользователя (from context — single session/profile request)
   const { access } = useUserAccessContext();
   const isDesktop = useIsDesktop();
-  const { openPremiumLocation, closeAuthModal, authModalOpen, authRedirectPath, authModalVariant } = usePremiumGate();
+  const { openPremiumLocation } = usePremiumGate();
 
   // Проверяем авторизацию
   useEffect(() => {
@@ -647,13 +646,6 @@ export default function TopBar({
           </div>
         )}
       </div>
-
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={closeAuthModal}
-        redirectPath={authRedirectPath}
-        variant={authModalVariant}
-      />
 
       <BecomeProviderModal
         isOpen={becomeProviderOpen}

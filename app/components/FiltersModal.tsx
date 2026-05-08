@@ -101,8 +101,19 @@ type FiltersModalProps = {
    * чем-то другим (например, главная использует табы `?tab=services|experiences`).
    * Если TYPE показан, но страница игнорирует `activeFilters.kinds` —
    * это бага: юзер выбирает «Experiences», а в результатах локации.
+   *
+   * NB: на главной TYPE НЕ скрывают — там вместо этого `singleKindMode` +
+   * страница перехватывает изменение kinds и синхронизирует с табом.
    */
   hideKindFilter?: boolean;
+  /**
+   * Single-select режим для TYPE: ровно один тип выбран всегда, клик по
+   * другому — replace, не toggle. Пустого состояния нет. Используется на
+   * страницах, где тип карточки — это первичный навигационный признак
+   * (главная: ?tab=places|services|experiences). Категории при этом
+   * показываются только для выбранного типа.
+   */
+  singleKindMode?: boolean;
 };
 
 export default function FiltersModal({
@@ -124,6 +135,7 @@ export default function FiltersModal({
   userAccess,
   onResetAll,
   hideKindFilter,
+  singleKindMode,
 }: FiltersModalProps) {
   // Ensure appliedFilters is always defined
   const safeAppliedFilters: ActiveFilters = appliedFilters || {
@@ -749,6 +761,13 @@ export default function FiltersModal({
                       if (isDisabled) return;
                       setDraftFilters((prev) => {
                         const current = prev.kinds ?? [];
+                        // singleKindMode: ровно один тип всегда выбран → клик
+                        // по другому всегда replace, deselect невозможен.
+                        if (singleKindMode) {
+                          if (current.length === 1 && current[0] === opt.value) return prev;
+                          return { ...prev, kinds: [opt.value] };
+                        }
+                        // Обычный режим — multi-toggle.
                         return {
                           ...prev,
                           kinds: current.includes(opt.value)
@@ -776,9 +795,12 @@ export default function FiltersModal({
                 );
               })}
             </div>
-            <p className="mt-3 text-xs text-[#6F7A5A]">
-              Leave empty to show all types.
-            </p>
+            {/* В singleKindMode ровно один выбран — хинт неуместен. */}
+            {!singleKindMode && (
+              <p className="mt-3 text-xs text-[#6F7A5A]">
+                Leave empty to show all types.
+              </p>
+            )}
           </div>
           )}
 

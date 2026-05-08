@@ -4,16 +4,13 @@
 // Removed — this page is a static design-system showcase. It has no
 // dynamic data, no searchParams, no cookies. force-dynamic was disabling
 // the static-prerender of the page shell for no reason.
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Icon, { type IconName } from "../components/Icon";
 import Wordmark from "../components/Wordmark";
 import PlaceCard from "../components/PlaceCard";
 import FavoriteIcon from "../components/FavoriteIcon";
-// Lazy — heavy modal, only loaded when the user opens the upsell sample.
-import nextDynamic from "next/dynamic";
-const PremiumUpsellModal = nextDynamic(() => import("../components/PremiumUpsellModal"), { ssr: false });
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
+import { usePremiumModalContext } from "../contexts/PremiumModalContext";
 
 // ——— Helpers ———
 
@@ -98,7 +95,7 @@ function IconGrid() {
 
 export default function BrandGuidePage() {
   const router = useRouter();
-  const [premiumModalOpen, setPremiumModalOpen] = useState(false);
+  const { openPremiumModal } = usePremiumModalContext();
 
   return (
     <main className="min-h-screen bg-[#FAFAF7] pb-24">
@@ -371,7 +368,7 @@ export default function BrandGuidePage() {
               </div>
               <button
                 type="button"
-                onClick={() => setPremiumModalOpen(true)}
+                onClick={() => openPremiumModal("place")}
                 className="mt-4 h-11 px-5 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium"
               >
                 Open Premium Upsell Modal
@@ -379,8 +376,6 @@ export default function BrandGuidePage() {
             </SubSection>
           </div>
         </Section>
-
-        <PremiumUpsellModal open={premiumModalOpen} onClose={() => setPremiumModalOpen(false)} />
 
         {/* 7. Product Patterns */}
         <Section id="patterns" title="7. Product Patterns">
