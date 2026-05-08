@@ -29,6 +29,32 @@ const RESEND_COOLDOWN_SECONDS = 30;
 type Step = "email" | "code";
 
 /**
+ * Перевод raw-ошибок Supabase Auth в дружелюбные сообщения.
+ *
+ * Самый частый кейс — "Error sending magic link email": внутренний SMTP
+ * Supabase падает (rate limit, AZ-инцидент, плохой шаблон). Показываем юзеру
+ * понятный fallback и ведём его на Google OAuth, который не зависит от SMTP.
+ */
+function friendlyOtpError(message: string | undefined | null): string {
+  if (!message) return "Something went wrong. Please try again.";
+  const m = message.toLowerCase();
+
+  if (m.includes("error sending") || m.includes("smtp") || m.includes("magic link")) {
+    return "Email sign-in is temporarily unavailable. Please try Continue with Google, or come back in a few minutes.";
+  }
+  if (m.includes("rate limit") || m.includes("too many") || m.includes("over_email_send_rate_limit")) {
+    return "Too many sign-in attempts. Please wait a minute and try again, or use Continue with Google.";
+  }
+  if (m.includes("invalid email") || m.includes("email address")) {
+    return "Please enter a valid email address.";
+  }
+  if (m.includes("network") || m.includes("failed to fetch")) {
+    return "Connection problem. Check your internet and try again.";
+  }
+  return message;
+}
+
+/**
  * Modal component for authentication — passwordless flow.
  *
  * Step 1: email or Google.
@@ -115,7 +141,7 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
 
     setLoading(false);
     if (otpError) {
-      setError(otpError.message);
+      setError(friendlyOtpError(otpError.message));
     } else {
       setStep("code");
       setResendCooldown(RESEND_COOLDOWN_SECONDS);

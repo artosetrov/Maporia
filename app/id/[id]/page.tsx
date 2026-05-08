@@ -1162,7 +1162,7 @@ export default function PlacePage(props: PageProps) {
           }
           router.push(`/map?${params.toString()}`);
         }}
-        onSearchSubmit={(city, query, tags) => {
+        onSearchSubmit={(city, query, tags, kind) => {
           setSelectedCity(city);
           setSearchValue(query);
           if (tags) {
@@ -1182,6 +1182,9 @@ export default function PlacePage(props: PageProps) {
           const categoriesToUse = tags || activeFilters.categories;
           if (categoriesToUse.length > 0) {
             params.set("categories", categoriesToUse.map(c => encodeURIComponent(c)).join(','));
+          }
+          if (kind) {
+            params.set("kinds", kind);
           }
           router.push(`/map?${params.toString()}`);
         }}

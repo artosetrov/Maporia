@@ -478,7 +478,7 @@ export default function ExplorePage() {
           }
           router.push(`/map?${params.toString()}`);
         }}
-        onSearchSubmit={(city, query, tags) => {
+        onSearchSubmit={(city, query, tags, kind) => {
           if (city) {
             setSelectedCities([city]);
           } else {
@@ -498,6 +498,9 @@ export default function ExplorePage() {
           const categoriesToUse = tags || selectedCategories;
           if (categoriesToUse.length > 0) {
             params.set("categories", categoriesToUse.map(c => encodeURIComponent(c)).join(','));
+          }
+          if (kind) {
+            params.set("kinds", kind);
           }
           router.push(`/map?${params.toString()}`);
         }}

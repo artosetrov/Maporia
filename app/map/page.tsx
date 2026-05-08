@@ -26,6 +26,7 @@ import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { DEFAULT_CITY, CATEGORIES, CITIES, getTagEmoji, stripTagEmoji } from "../constants";
+import type { HomeKind } from "../types/home";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
 import { useAuthRedirect } from "../hooks/useAuthRedirect";
 import { useIsDesktop } from "../hooks/useIsDesktop";
@@ -1383,7 +1384,7 @@ function MapPageContent() {
         isOpen={searchModalOpen}
         onClose={() => setSearchModalOpen(false)}
         onCitySelect={handleCityChange}
-        onSearchSubmit={(city, query, tags) => {
+        onSearchSubmit={(city, query, tags, kind) => {
           // Сбрасываем viewport карты — fitBounds сам определит новые границы
           setMapCenter(null);
           setMapZoom(null);
@@ -1402,13 +1403,19 @@ function MapPageContent() {
           setSearchDraft(query);
           if (tags) {
             setSelectedTags(tags);
-            // Update activeFilters with tags as categories
+            // Update activeFilters with tags as categories + kind
             setActiveFilters(prev => ({
               ...prev,
               categories: tags,
+              kinds: kind ? [kind] : prev.kinds ?? [],
+            }));
+          } else if (kind) {
+            setActiveFilters(prev => ({
+              ...prev,
+              kinds: [kind],
             }));
           }
-          
+
           // Update URL
           const params = new URLSearchParams();
           if (city && city.trim()) {
@@ -1422,11 +1429,14 @@ function MapPageContent() {
           if (categoriesToUse.length > 0) {
             params.set("categories", categoriesToUse.join(','));
           }
+          if (kind) {
+            params.set("kinds", kind);
+          }
           if (activeFilters.sort) {
             params.set("sort", activeFilters.sort);
           }
-          
-          const newUrl = params.toString() 
+
+          const newUrl = params.toString()
             ? `/map?${params.toString()}`
             : '/map';
           router.push(newUrl);
@@ -1435,6 +1445,11 @@ function MapPageContent() {
         selectedCity={selectedCity}
         searchQuery={searchDraft}
         selectedTags={selectedTags}
+        initialKind={
+          activeFilters.kinds && activeFilters.kinds.length === 1
+            ? (activeFilters.kinds[0] as HomeKind)
+            : null
+        }
       />
 
       {/* Filters Modal */}

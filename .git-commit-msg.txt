@@ -1,0 +1,31 @@
+SearchModal: add Type step (Locations/Experiences/Services) before categories
+
+After picking a city in SearchModal, instead of jumping straight to the
+"What's your vibe?" tag list, the user now sees a Type-selector with
+three cards — Locations / Experiences / Services — each showing the
+count of places of that kind in the selected city (city radius applies).
+
+Behavior:
+- Single-select with auto-next: clicking a type advances to the vibe step.
+- Types with 0 places in the city are disabled and dimmed.
+- Categories on the vibe step are now sourced from getCategoriesByKind(kind),
+  so service/experience taxonomies don't mix with location ones.
+- Switching kind on the kind step resets selected tags (categories of the
+  previous kind would otherwise show 0 counts).
+- Header title varies per step: Where? / What are you looking for? / What's your vibe?
+- Back button now: vibe -> kind -> where -> close.
+
+Plumbing:
+- onSearchSubmit signature extended: (city, query, tags?, kind?: HomeKind | null).
+- New initialKind prop on SearchModal — home prefills from activeKind,
+  /map prefills from activeFilters.kinds when length === 1.
+- Consumers updated to forward kind into /map URL via ?kinds=<kind>:
+  app/page.tsx, app/map/page.tsx, app/id/[id]/page.tsx,
+  app/explore/page.tsx, app/settings/page.tsx,
+  app/(auth)/saved/page.tsx, app/feed/page.tsx.
+- /profile handler is signature-compatible (kind unused — no /map navigation).
+- getTagCount and getFilteredPlacesCount now also constrain by kind so
+  the counts in the vibe rows and in the "Show N places" CTA reflect the
+  selected type.
+
+Typecheck: npx tsc --noEmit --skipLibCheck — clean.

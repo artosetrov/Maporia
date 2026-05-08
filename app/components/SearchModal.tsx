@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { DEFAULT_CITY, CATEGORIES } from "../constants";
+import { DEFAULT_CITY, getCategoriesByKind } from "../constants";
+import { HOME_TABS, type HomeKind } from "../types/home";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { getCitiesWithPlaces, type City } from "../lib/cities";
 import { supabase } from "../lib/supabase";
@@ -102,10 +103,21 @@ type SearchModalProps = {
   isOpen: boolean;
   onClose: () => void;
   onCitySelect: (city: string | null) => void;
-  onSearchSubmit?: (city: string | null, query: string, tags?: string[]) => void;
+  onSearchSubmit?: (
+    city: string | null,
+    query: string,
+    tags?: string[],
+    kind?: HomeKind | null,
+  ) => void;
   selectedCity?: string | null;
   searchQuery?: string;
   selectedTags?: string[];
+  /**
+   * Если SearchModal открывается со страницы, у которой уже есть выбранный
+   * тип карточки (главная с табами, /map с ?kinds=…), можно прокинуть его
+   * сюда — модал предвыберет соответствующую карту на шаге Type.
+   */
+  initialKind?: HomeKind | null;
 };
 
 type SearchResult = {
@@ -125,20 +137,38 @@ export default function SearchModal({
   selectedCity,
   searchQuery: initialSearchQuery = "",
   selectedTags: initialSelectedTags = [],
+  initialKind = null,
 }: SearchModalProps) {
   const router = useRouter();
   const isDesktop = useIsDesktop();
-  // Step management: "where" | "vibe"
-  const [step, setStep] = useState<"where" | "vibe">("where");
+  // Step management: "where" | "kind" | "vibe"
+  // После выбора города показываем шаг с тремя картами (Locations /
+  // Experiences / Services), и только потом — категории, отфильтрованные
+  // под выбранный тип (см. getCategoriesByKind в constants.ts).
+  const [step, setStep] = useState<"where" | "kind" | "vibe">("where");
   const [query, setQuery] = useState(initialSearchQuery);
   const [tempSelectedCity, setTempSelectedCity] = useState<string | null>(selectedCity || null);
   const [tempSelectedTags, setTempSelectedTags] = useState<string[]>(initialSelectedTags);
+  const [tempSelectedKind, setTempSelectedKind] = useState<HomeKind | null>(initialKind);
   const [cities, setCities] = useState<City[]>([]);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [placesCount, setPlacesCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [recentSearches, setRecentSearches] = useState<Array<{ city: string | null; query: string; tags?: string[] }>>([]);
   const [tagCounts, setTagCounts] = useState<Record<string, number>>({});
+  // Счётчики на шаге Type. null = ещё не загружено.
+  const [kindCounts, setKindCounts] = useState<Record<HomeKind, number | null>>({
+    location: null,
+    experience: null,
+    service: null,
+  });
+  const [kindCountsLoading, setKindCountsLoading] = useState(false);
+
+  // Категории, доступные на текущем шаге vibe.
+  const currentCategories = useMemo(
+    () => getCategoriesByKind(tempSelectedKind),
+    [tempSelectedKind],
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const [dynamicHeight, setDynamicHeight] = useState<string>("100dvh");
@@ -226,11 +256,15 @@ export default function SearchModal({
     [cities],
   );
 
-  // Get count for a single tag in a city
-  const getTagCount = useCallback(async (city: string | null, tag: string) => {
+  // Get count for a single tag in a city (optionally constrained by kind).
+  const getTagCount = useCallback(async (
+    city: string | null,
+    tag: string,
+    kind: HomeKind | null,
+  ) => {
     try {
       let countQuery = supabase.from("places").select("*", { count: 'exact', head: true });
-      
+
       // Filter by city (with radius)
       if (city) {
         const coords = getCityLatLng(city);
@@ -239,6 +273,11 @@ export default function SearchModal({
 
       // Filter by single tag (category)
       countQuery = countQuery.contains("categories", [tag]);
+
+      // Filter by kind so service/experience категории не давали 0 от location-карточек
+      if (kind) {
+        countQuery = countQuery.eq("kind", kind);
+      }
 
       const { count, error } = await countQuery;
       if (error) {
@@ -269,7 +308,7 @@ export default function SearchModal({
     }
   }, [getCityLatLng]);
 
-  // Load tag counts when city is selected
+  // Load tag counts when city + kind are selected
   useEffect(() => {
     if (!isOpen || step !== "vibe" || !tempSelectedCity) {
       setTagCounts({});
@@ -278,8 +317,8 @@ export default function SearchModal({
 
     const loadTagCounts = async () => {
       const counts: Record<string, number> = {};
-      for (const category of CATEGORIES) {
-        const count = await getTagCount(tempSelectedCity, category);
+      for (const category of currentCategories) {
+        const count = await getTagCount(tempSelectedCity, category, tempSelectedKind);
         counts[category] = count;
       }
       setTagCounts(counts);
@@ -287,21 +326,84 @@ export default function SearchModal({
 
     const timeoutId = setTimeout(loadTagCounts, 300);
     return () => clearTimeout(timeoutId);
-  }, [isOpen, step, tempSelectedCity, getTagCount]);
+  }, [isOpen, step, tempSelectedCity, tempSelectedKind, currentCategories, getTagCount]);
 
-  // Get filtered places count (with city, tags, query)
+  // Load kind counts on the "kind" step.
+  useEffect(() => {
+    if (!isOpen || step !== "kind" || !tempSelectedCity) {
+      return;
+    }
+
+    let cancelled = false;
+    const loadKindCounts = async () => {
+      setKindCountsLoading(true);
+      try {
+        const coords = getCityLatLng(tempSelectedCity);
+        const radiusFilter = buildCityRadiusFilter(
+          tempSelectedCity,
+          coords.lat,
+          coords.lng,
+        );
+        const next: Record<HomeKind, number | null> = {
+          location: 0,
+          experience: 0,
+          service: 0,
+        };
+        // Параллельные запросы — три типа независимы.
+        const tabs: HomeKind[] = ["location", "experience", "service"];
+        await Promise.all(
+          tabs.map(async (tab) => {
+            const { count, error } = await supabase
+              .from("places")
+              .select("*", { count: "exact", head: true })
+              .eq("kind", tab)
+              .or(radiusFilter);
+            if (error) {
+              if (process.env.NODE_ENV !== "production") {
+                console.error("Error counting kind:", { tab, error });
+              }
+              next[tab] = 0;
+              return;
+            }
+            next[tab] = count || 0;
+          }),
+        );
+        if (!cancelled) setKindCounts(next);
+      } catch (err: any) {
+        if (err?.name !== "AbortError" && !err?.message?.includes("abort")) {
+          console.error("Error loading kind counts:", err);
+        }
+      } finally {
+        if (!cancelled) setKindCountsLoading(false);
+      }
+    };
+
+    const timeoutId = setTimeout(loadKindCounts, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [isOpen, step, tempSelectedCity, getCityLatLng]);
+
+  // Get filtered places count (with city, tags, query, kind)
   const getFilteredPlacesCount = useCallback(async (
-    city: string | null, 
-    tags: string[], 
-    searchQuery: string
+    city: string | null,
+    tags: string[],
+    searchQuery: string,
+    kind: HomeKind | null,
   ) => {
     try {
       let countQuery = supabase.from("places").select("*", { count: 'exact', head: true });
-      
+
       // Filter by city (with radius)
       if (city) {
         const coords = getCityLatLng(city);
         countQuery = countQuery.or(buildCityRadiusFilter(city, coords.lat, coords.lng));
+      }
+
+      // Filter by kind (primary kind only — согласовано с FiltersModal)
+      if (kind) {
+        countQuery = countQuery.eq("kind", kind);
       }
 
       // Filter by tags (categories)
@@ -371,7 +473,12 @@ export default function SearchModal({
   }, [getCityLatLng]);
 
   // Search places and cities (for search results display)
-  const performSearch = useCallback(async (searchQuery: string, city: string | null, tags: string[]) => {
+  const performSearch = useCallback(async (
+    searchQuery: string,
+    city: string | null,
+    tags: string[],
+    kind: HomeKind | null,
+  ) => {
     if (!searchQuery.trim() && !city) {
       setSearchResults([]);
       setPlacesCount(null);
@@ -381,7 +488,7 @@ export default function SearchModal({
     setLoading(true);
     try {
       // Update count with current filters
-      const count = await getFilteredPlacesCount(city, tags, searchQuery);
+      const count = await getFilteredPlacesCount(city, tags, searchQuery, kind);
       setPlacesCount(count);
 
       // Get search results for display.
@@ -422,6 +529,11 @@ export default function SearchModal({
           placesQuery = placesQuery.or(
             buildCityRadiusFilter(city, coords.lat, coords.lng),
           );
+        }
+
+        // Сужаем выдачу под выбранный тип.
+        if (kind) {
+          placesQuery = placesQuery.eq("kind", kind);
         }
 
         // Pull a wider candidate set so client-side ranking has material to work with.
@@ -528,19 +640,24 @@ export default function SearchModal({
     if (!isOpen) return;
 
     const timeoutId = setTimeout(async () => {
-      const count = await getFilteredPlacesCount(tempSelectedCity, tempSelectedTags, query);
+      const count = await getFilteredPlacesCount(
+        tempSelectedCity,
+        tempSelectedTags,
+        query,
+        tempSelectedKind,
+      );
       setPlacesCount(count);
-      
+
       // Also perform search if there's a query
       if (query.trim()) {
-        performSearch(query, tempSelectedCity, tempSelectedTags);
+        performSearch(query, tempSelectedCity, tempSelectedTags, tempSelectedKind);
       } else {
         setSearchResults([]);
       }
     }, 200);
 
     return () => clearTimeout(timeoutId);
-  }, [query, tempSelectedCity, tempSelectedTags, isOpen, getFilteredPlacesCount, performSearch]);
+  }, [query, tempSelectedCity, tempSelectedTags, tempSelectedKind, isOpen, getFilteredPlacesCount, performSearch]);
 
   // Focus input when modal opens
   useEffect(() => {
@@ -557,9 +674,11 @@ export default function SearchModal({
       setQuery(initialSearchQuery);
       setTempSelectedCity(selectedCity || null);
       setTempSelectedTags(initialSelectedTags);
+      setTempSelectedKind(initialKind ?? null);
+      setKindCounts({ location: null, experience: null, service: null });
       setStep("where"); // Always start at "where" step
     }
-  }, [isOpen, initialSearchQuery, selectedCity, initialSelectedTags]);
+  }, [isOpen, initialSearchQuery, selectedCity, initialSelectedTags, initialKind]);
 
   // Handle ESC key
   useEffect(() => {
@@ -591,10 +710,22 @@ export default function SearchModal({
 
   const handleCitySelect = (city: string | null) => {
     setTempSelectedCity(city);
-    // Auto-advance to vibe step after city selection
+    // После выбора города ведём не сразу на vibe, а на шаг с типом карточки.
     if (city) {
-      setStep("vibe");
+      setStep("kind");
     }
+  };
+
+  const handleKindSelect = (kind: HomeKind) => {
+    // Disabled: тип, у которого 0 карточек в этом городе, не выбираем.
+    if (kindCounts[kind] === 0) return;
+    if (kind !== tempSelectedKind) {
+      // Меняем тип → старые теги (категории прежнего kind) сбрасываем,
+      // иначе на vibe появятся «инородные» категории, которые не дадут счёт.
+      setTempSelectedTags([]);
+    }
+    setTempSelectedKind(kind);
+    setStep("vibe");
   };
 
   const handleTagToggle = (tag: string) => {
@@ -615,10 +746,15 @@ export default function SearchModal({
     if (step === "vibe") {
       // Reset tags only on vibe step
       setTempSelectedTags([]);
+    } else if (step === "kind") {
+      // Сбрасываем тип и теги, но город оставляем — юзер уже выбрал.
+      setTempSelectedKind(null);
+      setTempSelectedTags([]);
     } else {
       // Reset everything on where step and close the modal
       setQuery("");
       setTempSelectedCity(null);
+      setTempSelectedKind(null);
       setTempSelectedTags([]);
       setPlacesCount(null);
       setSearchResults([]);
@@ -629,6 +765,8 @@ export default function SearchModal({
 
   const handleBack = () => {
     if (step === "vibe") {
+      setStep("kind");
+    } else if (step === "kind") {
       setStep("where");
     } else {
       onClose();
@@ -637,8 +775,11 @@ export default function SearchModal({
 
   const handleNext = () => {
     if (step === "where") {
-      // Move to vibe step if city is selected
       if (tempSelectedCity) {
+        setStep("kind");
+      }
+    } else if (step === "kind") {
+      if (tempSelectedKind) {
         setStep("vibe");
       }
     }
@@ -648,15 +789,25 @@ export default function SearchModal({
     saveToRecent(tempSelectedCity, query, tempSelectedTags);
     onCitySelect(tempSelectedCity);
     if (onSearchSubmit) {
-      onSearchSubmit(tempSelectedCity, query, tempSelectedTags);
+      onSearchSubmit(tempSelectedCity, query, tempSelectedTags, tempSelectedKind);
     }
     onClose();
   };
 
-  const canSubmit = tempSelectedCity !== null || query.trim() !== "" || tempSelectedTags.length > 0;
-  const hasChanges = step === "vibe" 
-    ? tempSelectedTags.length > 0 
-    : tempSelectedCity !== null || query.trim() !== "" || tempSelectedTags.length > 0;
+  const canSubmit =
+    tempSelectedCity !== null ||
+    query.trim() !== "" ||
+    tempSelectedTags.length > 0 ||
+    tempSelectedKind !== null;
+  const hasChanges =
+    step === "vibe"
+      ? tempSelectedTags.length > 0
+      : step === "kind"
+        ? tempSelectedKind !== null || tempSelectedTags.length > 0
+        : tempSelectedCity !== null ||
+          query.trim() !== "" ||
+          tempSelectedTags.length > 0 ||
+          tempSelectedKind !== null;
 
   // Get popular cities (first 6 from cities list)
   const popularCities = useMemo(() => cities.slice(0, 6), [cities]);
@@ -688,14 +839,18 @@ export default function SearchModal({
             className="w-10 h-10 rounded-full hover:bg-[#FAFAF7] transition flex items-center justify-center"
             aria-label="Back"
           >
-            {step === "vibe" ? (
+            {step !== "where" ? (
               <Icon name="back" size={20} className="text-[#1F2A1F]" />
             ) : (
               <div className="w-10" /> // Spacer when no back needed
             )}
           </button>
           <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F]">
-            {step === "where" ? "Where?" : "What's your vibe?"}
+            {step === "where"
+              ? "Where?"
+              : step === "kind"
+                ? "What are you looking for?"
+                : "What's your vibe?"}
           </h2>
           <button
             onClick={onClose}
@@ -903,9 +1058,105 @@ export default function SearchModal({
           </>
         )}
 
-        {/* Step 2: Vibe (Tags selection) */}
+        {/* Step 2: Kind (Locations / Experiences / Services) */}
+        {step === "kind" && (
+          <div
+            className="flex-1 overflow-y-auto"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Selected City Info */}
+            {tempSelectedCity && (
+              <div className="px-6 pt-6 pb-4 border-b border-[#ECEEE4]">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 rounded-xl bg-[#E8F0E8] flex items-center justify-center flex-shrink-0">
+                    <Icon name="location" size={20} className="text-[#8F9E4F]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-base font-semibold text-[#1F2A1F] mb-0.5">
+                      {tempSelectedCity}
+                    </div>
+                    <div className="text-xs text-[#A8B096] mt-0.5">
+                      Including places within {CITY_RADIUS_MILES} miles
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setStep("where")}
+                    className="text-sm font-medium text-[#8F9E4F] hover:text-[#7A8A42] transition underline"
+                  >
+                    Change
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Section Title */}
+            <div className="px-6 pt-6 pb-4">
+              <h3 className="text-lg font-semibold font-fraunces text-[#1F2A1F] mb-1">
+                What are you looking for?
+              </h3>
+              <p className="text-sm text-[#6F7A5A]">
+                Pick a type — we'll show categories for it next.
+              </p>
+            </div>
+
+            {/* Three big cards (Locations / Experiences / Services) */}
+            <div className="px-6 grid grid-cols-3 gap-3">
+              {HOME_TABS.map((tab) => {
+                const count = kindCounts[tab.id];
+                const isSelected = tempSelectedKind === tab.id;
+                const isEmpty = count === 0;
+                const isLoading = count === null && kindCountsLoading;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => handleKindSelect(tab.id)}
+                    disabled={isEmpty}
+                    className={`relative flex flex-col items-center justify-center gap-2 rounded-2xl border px-3 py-5 transition ${
+                      isSelected
+                        ? "border-[#8F9E4F] bg-[#F4F7E8] ring-2 ring-[#8F9E4F]/30"
+                        : isEmpty
+                          ? "border-[#ECEEE4] bg-[#FAFAF7] opacity-50 cursor-not-allowed"
+                          : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
+                    }`}
+                  >
+                    {count !== null && (
+                      <span
+                        className={`absolute top-2 right-3 text-xs font-medium ${
+                          isEmpty ? "text-[#C4C9B6]" : "text-[#6F7A5A]"
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    )}
+                    {isLoading && (
+                      <span className="absolute top-2 right-3 text-xs text-[#C4C9B6]">…</span>
+                    )}
+                    <span className="text-3xl leading-none">{tab.emoji}</span>
+                    <span className="text-sm font-medium text-[#1F2A1F]">
+                      {tab.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Помощь, если в этом городе вообще нет ни одного типа */}
+            {tempSelectedCity &&
+              kindCounts.location === 0 &&
+              kindCounts.experience === 0 &&
+              kindCounts.service === 0 && (
+                <div className="px-6 pt-4 pb-2">
+                  <p className="text-sm text-[#6F7A5A] text-center">
+                    Nothing here yet — try another city.
+                  </p>
+                </div>
+              )}
+          </div>
+        )}
+
+        {/* Step 3: Vibe (Tags selection) */}
         {step === "vibe" && (
-          <div className="flex-1 overflow-y-auto" style={{ 
+          <div className="flex-1 overflow-y-auto" style={{
             paddingBottom: 'env(safe-area-inset-bottom, 0px)',
           }}>
             {/* Selected City Info */}
@@ -921,11 +1172,17 @@ export default function SearchModal({
                     </div>
                     {placesCount !== null && placesCount > 0 ? (
                       <div className="text-sm text-[#6F7A5A]">
-                        {placesCount} {placesCount === 1 ? 'location' : 'locations'} available
+                        {placesCount}{" "}
+                        {tempSelectedKind === "service"
+                          ? placesCount === 1 ? "service" : "services"
+                          : tempSelectedKind === "experience"
+                            ? placesCount === 1 ? "experience" : "experiences"
+                            : placesCount === 1 ? "location" : "locations"}
+                        {" "}available
                       </div>
                     ) : (
                       <div className="text-sm text-[#6F7A5A]">
-                        Searching locations...
+                        Searching...
                       </div>
                     )}
                     <div className="text-xs text-[#A8B096] mt-0.5">
@@ -933,7 +1190,7 @@ export default function SearchModal({
                     </div>
                   </div>
                   <button
-                    onClick={() => setStep("where")}
+                    onClick={() => setStep("kind")}
                     className="text-sm font-medium text-[#8F9E4F] hover:text-[#7A8A42] transition underline"
                   >
                     Change
@@ -954,20 +1211,20 @@ export default function SearchModal({
 
             {/* Tag Selection Rows (Airbnb-style) */}
             <div className="px-6 space-y-0">
-              {CATEGORIES.map((category, idx) => {
+              {currentCategories.map((category, idx) => {
                 const isSelected = tempSelectedTags.includes(category);
                 const emoji = category.match(/^[^\s]+/)?.[0] || "✨";
                 const label = category.replace(/^[^\s]+\s/, "");
-                
+
                 return (
                   <button
                     key={category}
                     onClick={() => handleTagToggle(category)}
                     className={`w-full text-left px-0 py-4 transition-colors ${
-                      idx < CATEGORIES.length - 1 ? "border-b border-[#ECEEE4]" : ""
+                      idx < currentCategories.length - 1 ? "border-b border-[#ECEEE4]" : ""
                     } ${
-                      isSelected 
-                        ? "bg-[#FAFAF7]" 
+                      isSelected
+                        ? "bg-[#FAFAF7]"
                         : "hover:bg-[#FAFAF7]"
                     }`}
                   >
@@ -981,7 +1238,7 @@ export default function SearchModal({
                           </div>
                         </div>
                       </div>
-                      
+
                       {/* Right: Count + Selection Indicator */}
                       <div className="flex items-center gap-3 flex-shrink-0 ml-4">
                         {tempSelectedCity && tagCounts[category] !== undefined && (
@@ -1028,34 +1285,61 @@ export default function SearchModal({
             disabled={!hasChanges}
             className="px-0 py-2 text-sm font-medium text-[#1F2A1F] underline disabled:text-[#A8B096] disabled:no-underline disabled:cursor-not-allowed hover:text-[#6F7A5A] transition"
           >
-            {step === "vibe" ? "Clear tags" : "Clear all"}
+            {step === "vibe"
+              ? "Clear tags"
+              : step === "kind"
+                ? "Clear type"
+                : "Clear all"}
           </button>
-          <button
-            onClick={step === "where" && query.trim() ? handleSubmit : step === "where" ? handleNext : handleSubmit}
-            disabled={step === "where" && query.trim() ? !canSubmit : step === "where" ? !tempSelectedCity : !canSubmit}
-            className="h-11 rounded-xl bg-[#8F9E4F] text-white px-5 text-sm font-medium disabled:bg-[#DADDD0] disabled:cursor-not-allowed hover:bg-[#7A8A42] transition flex items-center justify-center gap-2"
-          >
-            {step === "where" && query.trim() ? (
-              <>
-                <Icon name="search" size={20} className="text-white flex-shrink-0" />
-                <span>Search</span>
-              </>
-            ) : step === "where" ? (
-              <>
-                <span>Next</span>
-                <Icon name="forward" size={20} className="text-white flex-shrink-0" />
-              </>
-            ) : (
-              <>
-                <Icon name="search" size={20} className="text-white flex-shrink-0" />
-                <span>
-                  {placesCount !== null
-                    ? `Show ${placesCount} ${placesCount === 1 ? 'place' : 'places'}`
-                    : 'Show places'}
-                </span>
-              </>
-            )}
-          </button>
+          {(() => {
+            // Логика основной кнопки:
+            //   where + query → сразу Search (как раньше — поиск по тексту)
+            //   where         → Next (требует город)
+            //   kind          → Next (требует выбранный тип)
+            //   vibe          → Show N places (с учётом всех фильтров)
+            const isWhereWithQuery = step === "where" && query.trim() !== "";
+            const onClick =
+              isWhereWithQuery
+                ? handleSubmit
+                : step === "vibe"
+                  ? handleSubmit
+                  : handleNext;
+            const disabled = isWhereWithQuery
+              ? !canSubmit
+              : step === "where"
+                ? !tempSelectedCity
+                : step === "kind"
+                  ? !tempSelectedKind
+                  : !canSubmit;
+            return (
+              <button
+                onClick={onClick}
+                disabled={disabled}
+                className="h-11 rounded-xl bg-[#8F9E4F] text-white px-5 text-sm font-medium disabled:bg-[#DADDD0] disabled:cursor-not-allowed hover:bg-[#7A8A42] transition flex items-center justify-center gap-2"
+              >
+                {isWhereWithQuery ? (
+                  <>
+                    <Icon name="search" size={20} className="text-white flex-shrink-0" />
+                    <span>Search</span>
+                  </>
+                ) : step === "where" || step === "kind" ? (
+                  <>
+                    <span>Next</span>
+                    <Icon name="forward" size={20} className="text-white flex-shrink-0" />
+                  </>
+                ) : (
+                  <>
+                    <Icon name="search" size={20} className="text-white flex-shrink-0" />
+                    <span>
+                      {placesCount !== null
+                        ? `Show ${placesCount} ${placesCount === 1 ? 'place' : 'places'}`
+                        : 'Show places'}
+                    </span>
+                  </>
+                )}
+              </button>
+            );
+          })()}
         </div>
       </div>
     </div>

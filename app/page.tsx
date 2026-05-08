@@ -359,7 +359,12 @@ function HomePageInner() {
   }
 
   // Handle search modal submit
-  function handleSearchSubmit(city: string | null, query: string, tags?: string[]) {
+  function handleSearchSubmit(
+    city: string | null,
+    query: string,
+    tags?: string[],
+    kind?: HomeKind | null,
+  ) {
     setSelectedCity(city);
     setSearchValue(query);
     if (tags) {
@@ -369,6 +374,10 @@ function HomePageInner() {
         ...prev,
         categories: tags,
       }));
+    }
+    // Если из модала пришёл другой тип — синхронизируем таб главной.
+    if (kind && kind !== activeKind) {
+      setActiveKind(kind);
     }
     const params = new URLSearchParams();
     if (city && city.trim()) {
@@ -381,6 +390,10 @@ function HomePageInner() {
     const categoriesToUse = tags || activeFilters.categories;
     if (categoriesToUse.length > 0) {
       params.set("categories", categoriesToUse.map(c => encodeURIComponent(c)).join(','));
+    }
+    // Прокидываем тип в /map: фильтр по kind применится сразу.
+    if (kind) {
+      params.set("kinds", kind);
     }
     router.push(`/map?${params.toString()}`);
   }
@@ -502,6 +515,7 @@ function HomePageInner() {
         selectedCity={selectedCity}
         searchQuery={searchValue}
         selectedTags={selectedTags}
+        initialKind={activeKind}
       />
 
       {/* Filters Modal */}
@@ -653,16 +667,17 @@ function HomePageInner() {
                 "Become a provider" + перед "Browse by category"), и
                 визуально оказывалась слишком низко. Теперь это «пульс»
                 сразу после заголовка. Для legacy-ветки StatsBanner
-                остаётся в старом месте. */}
-            <div
-              className="mx-auto mt-2 lg:mt-4 max-w-full lg:max-w-[1200px]"
-              style={{
-                paddingLeft: 'var(--home-page-padding, 16px)',
-                paddingRight: 'var(--home-page-padding, 16px)',
-              }}
-            >
-              <StatsTicker />
-            </div>
+                остаётся в старом месте.
+
+                Структура контейнера повторяет hero/banner/sections —
+                внешний `px-4 sm:px-6 lg:px-10` + `max-w-[1200px]` без
+                внутреннего padding, чтобы все «полосы» страницы
+                выравнивались по одинаковым левому/правому краям. */}
+            <section className="px-4 sm:px-6 lg:px-10 mt-2 lg:mt-4">
+              <div className="mx-auto max-w-[1200px]">
+                <StatsTicker />
+              </div>
+            </section>
             <HomeBecomeProviderBanner />
           </>
         ) : (
@@ -728,19 +743,27 @@ function HomePageInner() {
 
         <div
           className={
-            // v2 redesign: align content width to the hero's max-w-[1200px]
-            // so StatsTicker / CategoryCarousel / HomeSection feeds don't
-            // visually outrun the hero rail. Legacy keeps its original
-            // 1920px ceiling so nothing visually shifts when the flag is off.
+            // v2 redesign: внешний контейнер несёт padding (`px-4 sm:px-6
+            // lg:px-10`), внутренний — `mx-auto max-w-[1200px]` без padding.
+            // Это совпадает 1-в-1 с hero/banner/stats, давая одинаковую
+            // контент-ширину 1200 px у всех «полос» главной. Пять карточек
+            // (5×220+4×16=1164 px) теперь свободно помещаются.
+            // Legacy keeps its original 1920px ceiling so nothing visually
+            // shifts when the flag is off.
             HOME_REDESIGN_ENABLED
-              ? "mx-auto pb-6 lg:py-8 max-w-full lg:max-w-[1200px]"
+              ? "pb-6 lg:py-8 px-4 sm:px-6 lg:px-10"
               : "mx-auto pb-6 lg:py-8 max-w-full lg:max-w-[960px] lg:max-w-[1120px] lg:max-w-[1440px] lg:max-w-[1920px]"
           }
-          style={{
-            paddingLeft: 'var(--home-page-padding, 16px)',
-            paddingRight: 'var(--home-page-padding, 16px)',
-          }}
+          style={
+            HOME_REDESIGN_ENABLED
+              ? undefined
+              : {
+                  paddingLeft: 'var(--home-page-padding, 16px)',
+                  paddingRight: 'var(--home-page-padding, 16px)',
+                }
+          }
         >
+          <div className={HOME_REDESIGN_ENABLED ? "mx-auto max-w-[1200px]" : "contents"}>
           {/*
             Sections render immediately. Each <HomeSection> kicks off its own
             Supabase fetch in parallel, independent of auth, so the user sees
@@ -797,6 +820,7 @@ function HomePageInner() {
               </SectionErrorBoundary>
             ))
           )}
+          </div>
         </div>
       </div>
 

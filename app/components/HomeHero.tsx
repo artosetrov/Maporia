@@ -108,7 +108,7 @@ export default function HomeHero({
 
             <h1
               id="home-hero-title"
-              className="font-extrabold text-[44px] sm:text-[60px] lg:text-[80px] leading-[1.02] tracking-[-0.025em] text-[#16190f]"
+              className="font-extrabold text-[52px] sm:text-[72px] lg:text-[96px] leading-[1.02] tracking-[-0.025em] text-[#16190f]"
             >
               Discover<br />
               <em className="not-italic font-fraunces italic font-semibold text-[#8F9E4F]">

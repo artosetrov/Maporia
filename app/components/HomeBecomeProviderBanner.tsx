@@ -39,12 +39,17 @@ export default function HomeBecomeProviderBanner() {
 
   return (
     <>
-      <div
-        className="mx-auto max-w-[1200px] mt-6 mb-2 px-4 sm:px-6"
+      {/* 2026-05-08: контейнер выровнен под hero/stats/sections —
+          внешний padding `px-4 sm:px-6 lg:px-10` + `mx-auto max-w-[1200px]`
+          без внутреннего padding. Это даёт одинаковую контент-ширину
+          (1200 px на десктопе) у всех «полос» главной, чтобы их левые/
+          правые края совпадали. */}
+      <section
+        className="px-4 sm:px-6 lg:px-10 mt-6 mb-2"
         role="region"
         aria-label="Become a provider"
       >
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 bg-[#eef0e0] border border-[#d6dabd] rounded-2xl px-5 py-4">
+        <div className="mx-auto max-w-[1200px] flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 bg-[#eef0e0] border border-[#d6dabd] rounded-2xl px-5 py-4">
           <button
             type="button"
             onClick={() => setOpen(true)}
@@ -85,7 +90,7 @@ export default function HomeBecomeProviderBanner() {
             {" "}— payments go directly between you and your guest.
           </div>
         </div>
-      </div>
+      </section>
 
       <BecomeProviderModal isOpen={open} onClose={() => setOpen(false)} />
     </>
