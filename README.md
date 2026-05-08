@@ -165,6 +165,14 @@ maporia/
 └── docs/wiki/             # Product/technical wiki and audit
 ```
 
+## Documentation For Agents
+
+If you are an LLM/coding agent, start with:
+
+- `AGENTS.md`
+- `docs/wiki/00-llm-brief.md`
+- `docs/wiki/README.md`
+
 ## Available Scripts
 
 - `npm run dev` - Start development server

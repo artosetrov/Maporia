@@ -1,8 +1,8 @@
 # Search Index
 
-Последнее обновление: 2026-05-07.
+Последнее обновление: 2026-05-08.
 
-## По Доменаm
+## По Доменам
 
 | Термин | Что искать | Где обычно живет |
 | --- | --- | --- |
@@ -23,6 +23,8 @@
 | AI description | `generate-description`, `placeDescription` | `app/api/ai/generate-description`, `app/lib/ai/` |
 | Impersonation | `impersonate`, `admin_impersonation_log` | `app/api/admin/impersonate/**`, `app/lib/impersonation.ts` |
 | Health | `health`, `CheckResult`, `health:json` | `scripts/health/**`, `app/api/health/route.ts` |
+| LLM orientation | `AGENTS.md`, `LLM Brief`, `wiki` | `AGENTS.md`, `docs/wiki/00-llm-brief.md`, `docs/wiki/README.md` |
+| Home redesign | `HOME_REDESIGN`, `HomeHero`, `HomeSearchHero`, `HomeTabsSegmented` | `app/config/homeRedesign.ts`, `app/components/Home*.tsx`, `docs/HOME_REDESIGN_*` |
 
 ## Быстрые Команды
 
@@ -50,6 +52,9 @@ rg "google_place_id|google-import|place-import|GoogleImport" app
 
 # TODO и известные долги
 rg "TODO|FIXME|deprecated|CRITICAL" app scripts docs
+
+# LLM/agent context
+rg "LLM|agent|source of truth|health:json|HOME_REDESIGN" AGENTS.md docs/wiki docs
 ```
 
 ## Файлы-Источники Правды
@@ -67,6 +72,9 @@ rg "TODO|FIXME|deprecated|CRITICAL" app scripts docs
 | Google Maps config | `app/config/googleMaps.ts` |
 | Place layout config | `app/config/placeLayout.ts` |
 | Health check rules | `scripts/health/healthChecks.ts` |
+| Agent entrypoint | `AGENTS.md` |
+| LLM short brief | `docs/wiki/00-llm-brief.md` |
+| Home redesign flag | `app/config/homeRedesign.ts` |
 
 ## Где Не Искать Первым
 

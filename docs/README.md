@@ -7,6 +7,7 @@
 ## Актуальная Вики
 
 - [Maporia Wiki](./wiki/README.md) - навигация и быстрый поиск.
+- [LLM Brief](./wiki/00-llm-brief.md) - краткая ориентация для новой LLM/agent.
 - [Product Audit](./wiki/01-product-audit.md) - что за продукт, монетизация, сценарии и приоритеты.
 - [Feature Map](./wiki/02-feature-map.md) - страницы, API routes, компоненты и поисковые команды.
 - [Architecture](./wiki/03-architecture.md) - стек, данные, роли, billing, интеграции.
