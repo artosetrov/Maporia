@@ -1,70 +1,86 @@
 "use client";
 
-import { useState } from "react";
 import Icon from "./Icon";
 
 /**
- * HomeSearchHero (v2) — REAL search input. NOT a trigger.
+ * HomeSearchHero (v2.3) — Dribbble-style search PILL that acts as a
+ * TRIGGER for the existing SearchModal.
  *
- * v1 was a 3-zone trigger that opened SearchModal. v2 is a Dribbble-style
- * pill with a real `<input>`: the user types, hits Enter (or clicks the
- * green search button) and we call onSubmit(query). Page.tsx uses the
- * same `handleSearchChange` it already uses — that means the URL
- * contract `router.push("/map?q=…&city=…&categories=…")` is unchanged.
+ * Why trigger again (vs the real input we tried earlier):
+ *   The home page sends every search through `<SearchModal>` because
+ *   that's where city + tag pickers live. Splitting "type query here"
+ *   from "pick city + filters there" felt natural in the prototype but
+ *   in practice forced users to fill out a 2nd modal anyway. One tap →
+ *   one modal that owns all of search input is simpler.
  *
- * Filters icon stays inside the pill (small button before the magnifier),
- * because keeping it adjacent to search is the cheapest way to preserve
- * "search + refine" as one mental unit.
+ *   Filters button stays a separate trigger for FiltersModal — same
+ *   contract as the legacy SearchBar.
  *
- * Why ONE component for both desktop and mobile (unlike v1):
- * the new layout is identical on both viewports — pill with input + two
- * icon buttons. Only the size changes, controlled via Tailwind responsive
- * utilities. One component, one source of truth, no hydration risk.
+ * Visual:
+ *   • Pill with leading pin glyph + placeholder/selected text + filter
+ *     button + green primary magnifier. The whole pill is one big
+ *     clickable surface; the filter button stops propagation so it
+ *     opens FiltersModal instead of SearchModal.
  *
- * iOS zoom-on-focus prevention: input font-size is 16px (matches iOS
- * Safari's threshold below which the page auto-zooms).
+ * A11y:
+ *   • Pill is a real <button>; placeholder reads as the button's name.
+ *   • Filter and magnifier are nested buttons — keyboard tab order is
+ *     pill → filter → magnifier; Enter/Space on each does the right
+ *     thing.
  *
- * Cross-link: docs/HOME_REDESIGN_V2_INTEGRATION.md (Phases D + G).
+ * Cross-link: docs/HOME_REDESIGN_V2_INTEGRATION.md (Phase D revision).
  */
 
 type Props = {
-  /** Initial query value (e.g. when arriving from /?q=cafe). */
-  initialQuery?: string;
-  /** Submit (Enter or magnifier click). Page wires this to handleSearchChange. */
-  onSubmit: (query: string) => void;
-  /** Open FiltersModal trigger. */
+  /** Currently selected city (used in the trigger label). */
+  selectedCity: string | null;
+  /** Currently typed query, if any (used in the trigger label). */
+  searchValue: string;
+  /** Click on the pill (or magnifier) opens SearchModal. */
+  onSearchBarClick: () => void;
+  /** Click on filter icon opens FiltersModal. */
   onFiltersClick: () => void;
   /** Active filters count for the badge on the filter button. */
   activeFiltersCount: number;
 };
 
+const PLACEHOLDER = "Search beaches, bars, hidden gems…";
+
+function summary(city: string | null, query: string): string {
+  const q = query.trim();
+  if (q && city) return `${q} · ${city}`;
+  if (q) return q;
+  if (city) return city;
+  return PLACEHOLDER;
+}
+
 export default function HomeSearchHero({
-  initialQuery = "",
-  onSubmit,
+  selectedCity,
+  searchValue,
+  onSearchBarClick,
   onFiltersClick,
   activeFiltersCount,
 }: Props) {
-  const [value, setValue] = useState(initialQuery);
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    onSubmit(value);
-  }
+  const hasContent = !!searchValue.trim() || !!selectedCity;
+  const label = summary(selectedCity, searchValue);
 
   return (
-    <form
-      role="search"
-      onSubmit={handleSubmit}
+    <button
+      type="button"
+      onClick={onSearchBarClick}
+      aria-label={hasContent ? `Search: ${label}` : "Open search"}
       className={[
         "w-full max-w-[560px]",
         "flex items-center gap-2 sm:gap-3",
         "bg-[#f1ece0] rounded-full",
         "h-14 sm:h-16 pl-5 sm:pl-6 pr-1.5",
         "border border-transparent transition-colors",
-        "focus-within:border-[#ebe7d8] hover:border-[#ebe7d8]",
+        "hover:border-[#ebe7d8]",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-1",
+        "text-left",
       ].join(" ")}
     >
-      {/* leading pin icon — a quiet visual anchor, not interactive */}
+      {/* leading pin icon */}
       <span aria-hidden className="text-[#8a8f7d] flex-shrink-0">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path
@@ -75,24 +91,35 @@ export default function HomeSearchHero({
         </svg>
       </span>
 
-      <input
-        type="search"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="Search beaches, bars, hidden gems…"
-        aria-label="Search places"
+      <span
         className={[
-          "flex-1 min-w-0 bg-transparent border-0 outline-none",
-          // 16px on mobile prevents iOS auto-zoom on focus.
-          "text-[16px] sm:text-[16px] font-medium text-[#16190f]",
-          "placeholder:text-[#8a8f7d] placeholder:font-normal",
+          "flex-1 min-w-0 truncate",
+          // 16px on mobile prevents iOS auto-zoom if/when this ever
+          // becomes a real input again.
+          "text-[16px] font-medium",
+          hasContent ? "text-[#16190f]" : "text-[#8a8f7d] font-normal",
         ].join(" ")}
-      />
+      >
+        {label}
+      </span>
 
-      {/* Filters trigger — small, neutral, sits inside the pill. */}
-      <button
-        type="button"
-        onClick={onFiltersClick}
+      {/* Filters trigger — small, neutral, sits inside the pill.
+          stopPropagation so the parent button's onClick doesn't also
+          fire and open SearchModal on top of FiltersModal. */}
+      <span
+        role="button"
+        tabIndex={0}
+        onClick={(e) => {
+          e.stopPropagation();
+          onFiltersClick();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            e.stopPropagation();
+            onFiltersClick();
+          }
+        }}
         aria-label={
           activeFiltersCount > 0
             ? `Filters (${activeFiltersCount} applied)`
@@ -114,25 +141,23 @@ export default function HomeSearchHero({
             {activeFiltersCount > 9 ? "9+" : activeFiltersCount}
           </span>
         )}
-      </button>
+      </span>
 
-      {/* Primary CTA — submits the form. */}
-      <button
-        type="submit"
-        aria-label="Search"
+      {/* Primary CTA — opens SearchModal (same as the pill itself). */}
+      <span
+        aria-hidden
         className={[
           "flex-shrink-0 size-12 sm:size-13 rounded-full",
           "bg-[#8F9E4F] text-white",
           "inline-flex items-center justify-center",
-          "transition-colors hover:bg-[#4d5b27]",
-          "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-2",
+          "transition-colors",
         ].join(" ")}
         style={{
           boxShadow: "0 4px 12px rgba(143,158,79,0.35)",
         }}
       >
         <Icon name="search" size={20} />
-      </button>
-    </form>
+      </span>
+    </button>
   );
 }

@@ -39,9 +39,10 @@ type Props = {
   activeKind: HomeKind;
   onChangeKind: (kind: HomeKind) => void;
 
-  // Search
-  initialQuery?: string;
-  onSubmitSearch: (query: string) => void;
+  // Search — pill is a trigger that opens SearchModal (where the actual
+  // city + tag + query inputs live).
+  searchValue: string;
+  onSearchBarClick: () => void;
 
   // Filters
   onFiltersClick: () => void;
@@ -56,8 +57,8 @@ export default function HomeHero({
   onCityChange,
   activeKind,
   onChangeKind,
-  initialQuery,
-  onSubmitSearch,
+  searchValue,
+  onSearchBarClick,
   onFiltersClick,
   activeFiltersCount,
   onTagClick,
@@ -96,13 +97,13 @@ export default function HomeHero({
         <div className="grid lg:grid-cols-[1.05fr_1fr] gap-8 lg:gap-12 items-start">
           {/* ── LEFT column ─────────────────────────────────────────── */}
           <div className="text-center lg:text-left">
-            <p className="inline-flex items-center gap-1.5 text-[12px] tracking-[0.18em] uppercase font-bold text-[#4d5b27]">
+            <p className="inline-flex items-center gap-1.5 text-[10px] tracking-[0.16em] uppercase font-bold text-[#4d5b27]">
               <span
                 aria-hidden
-                className="w-1.5 h-1.5 rounded-full bg-[#8F9E4F]"
-                style={{ boxShadow: "0 0 0 4px rgba(143,158,79,0.2)" }}
+                className="w-1 h-1 rounded-full bg-[#8F9E4F]"
+                style={{ boxShadow: "0 0 0 3px rgba(143,158,79,0.2)" }}
               />
-              Curated by locals · {cityLabel}
+              Curated by locals · Florida
             </p>
 
             <h1
@@ -180,9 +181,9 @@ export default function HomeHero({
             </h1>
 
             <p className="mt-4 text-[15px] sm:text-[17px] leading-[1.5] text-[#4a4f3d] max-w-[520px] mx-auto lg:mx-0">
-              Места, опыт и сервисы — отбираем локалы из Fort Lauderdale,
-              Dania Beach, Lighthouse Point. Без рекламы и без бесконечных
-              списков фильтров на старте.
+              Places, experiences, and services — handpicked by locals
+              from Fort Lauderdale to Lighthouse Point. No ads, no
+              endless filter walls.
             </p>
 
             <div className="mt-6 flex flex-col items-center lg:items-start gap-3.5">
@@ -192,8 +193,9 @@ export default function HomeHero({
                 counts={counts}
               />
               <HomeSearchHero
-                initialQuery={initialQuery}
-                onSubmit={onSubmitSearch}
+                selectedCity={selectedCity}
+                searchValue={searchValue}
+                onSearchBarClick={onSearchBarClick}
                 onFiltersClick={onFiltersClick}
                 activeFiltersCount={activeFiltersCount}
               />

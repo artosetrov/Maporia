@@ -286,6 +286,99 @@ input[type="radio"]:disabled {
   .stats-banner-shimmer { animation: none; opacity: 0.6; }
 }
 
+/* ───── HomeVisualPanel (v2 redesign) ─────────────────────────────────
+   Drifting radial-gradient blobs, slow card "ken-burns" zoom, soft pin
+   pulse, and a card crossfade. Everything respects reduced motion. */
+@keyframes home-hero-drift-1 {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(8%, -6%, 0) scale(1.08); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes home-hero-drift-2 {
+  0%   { transform: translate3d(0, 0, 0) scale(1.05); }
+  50%  { transform: translate3d(-7%, 5%, 0) scale(1); }
+  100% { transform: translate3d(0, 0, 0) scale(1.05); }
+}
+@keyframes home-hero-pin-pulse {
+  0%, 100% { opacity: var(--pin-base, 1); transform: translateY(0); }
+  50%      { opacity: calc(var(--pin-base, 1) * 0.6); transform: translateY(-2px); }
+}
+@keyframes home-hero-card-in {
+  from { opacity: 0; transform: translate(-58%, -50%) rotate(-3deg) scale(0.96); }
+  to   { opacity: 1; transform: translate(-58%, -50%) rotate(-3deg) scale(1); }
+}
+@keyframes home-hero-card-zoom {
+  /* Subtle "ken burns" zoom on the card photo so the image breathes
+     between auto-rotations even when the same card is shown longer. */
+  0%   { transform: scale(1.02); }
+  100% { transform: scale(1.10); }
+}
+@keyframes home-hero-mini-bob {
+  0%, 100% { transform: rotate(5deg) translateY(0); }
+  50%      { transform: rotate(5deg) translateY(-4px); }
+}
+
+.home-hero-blob-1 {
+  animation: home-hero-drift-1 14s ease-in-out infinite;
+  will-change: transform;
+}
+.home-hero-blob-2 {
+  animation: home-hero-drift-2 18s ease-in-out infinite;
+  will-change: transform;
+}
+.home-hero-pin {
+  animation: home-hero-pin-pulse 3.2s ease-in-out infinite;
+  will-change: opacity, transform;
+}
+.home-hero-card-in {
+  animation: home-hero-card-in 480ms cubic-bezier(.2,.7,.2,1) both;
+  will-change: opacity, transform;
+}
+.home-hero-card-photo {
+  animation: home-hero-card-zoom 7s ease-out both;
+  will-change: transform;
+}
+.home-hero-mini {
+  animation: home-hero-mini-bob 6s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Constellation satellites — 6 small photo chips that orbit the main
+   featured card. Two orbits in opposite directions; satellites within
+   the same orbit are evenly distributed via negative animation-delay
+   (no JS needed). */
+@keyframes home-hero-orbit-1 {
+  from { transform: rotate(0deg)   translateX(var(--orbit-r, 180px)) rotate(0deg); }
+  to   { transform: rotate(360deg) translateX(var(--orbit-r, 180px)) rotate(-360deg); }
+}
+@keyframes home-hero-orbit-2 {
+  from { transform: rotate(0deg)    translateX(var(--orbit-r, 140px)) rotate(0deg); }
+  to   { transform: rotate(-360deg) translateX(var(--orbit-r, 140px)) rotate(360deg); }
+}
+.home-hero-orbit-1 {
+  animation: home-hero-orbit-1 var(--orbit-duration, 22s) linear infinite;
+  animation-delay: var(--orbit-delay, 0s);
+  will-change: transform;
+}
+.home-hero-orbit-2 {
+  animation: home-hero-orbit-2 var(--orbit-duration, 28s) linear infinite;
+  animation-delay: var(--orbit-delay, 0s);
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-hero-blob-1,
+  .home-hero-blob-2,
+  .home-hero-pin,
+  .home-hero-card-in,
+  .home-hero-card-photo,
+  .home-hero-mini,
+  .home-hero-orbit-1,
+  .home-hero-orbit-2 {
+    animation: none !important;
+  }
+}
+
 @keyframes slide-up {
   from {
     transform: translateY(100%);

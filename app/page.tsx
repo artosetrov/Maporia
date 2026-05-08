@@ -14,8 +14,6 @@ import Pill from "./components/Pill";
 import CategoryCarousel from "./components/CategoryCarousel";
 import StatsBanner from "./components/StatsBanner";
 import HomeHero from "./components/HomeHero";
-import HomeTabsSegmented from "./components/HomeTabsSegmented";
-import HomeSearchHero from "./components/HomeSearchHero";
 import StatsTicker from "./components/StatsTicker";
 import HomeBecomeProviderBanner from "./components/HomeBecomeProviderBanner";
 import { ActiveFilters } from "./components/FiltersModal";
@@ -607,52 +605,46 @@ function HomePageInner() {
 
       <div className="flex-1 pt-[64px]">
         {/*
-          Phase 1 — Hero block (Where to next?). Renders ONLY when
-          HOME_REDESIGN_ENABLED. Sits ABOVE the sticky tabs+search row
-          so it scrolls away on its own — sticky behaviour is unchanged.
-          Cross-link: docs/HOME_REDESIGN_INTEGRATION_PLAN.md.
-        */}
-        {HOME_REDESIGN_ENABLED && (
-          <HomeHero
-            selectedCity={selectedCity}
-            onCityChange={handleCityChange}
-            activeKind={activeKind}
-            onChangeKind={setActiveKind}
-            initialQuery={searchValue}
-            onSubmitSearch={handleSearchChange}
-            onFiltersClick={handleFiltersClick}
-            activeFiltersCount={activeFiltersCount}
-            onTagClick={(category) => {
-              const params = new URLSearchParams();
-              params.set("categories", encodeURIComponent(category));
-              if (selectedCity) params.set("city", selectedCity);
-              router.push(`/map?${params.toString()}`);
-            }}
-          />
-        )}
+          v2 redesign branch: HomeHero v2 is a COMPOSER — it owns the
+          eyebrow, large headline with city picker, segmented tabs (with
+          live counts via useHomeKindCounts), real input search hero,
+          popular tag chips, and the right-column visual panel (≥ lg).
+          Below it: HomeBecomeProviderBanner (hidden for existing
+          providers). The StatsTicker further down lives in the shared
+          content wrapper.
 
-        {/*
-          Airbnb-style sticky header zone: tabs row → search row.
-          Обе строки залипают вместе при скролле, поэтому пользователь
-          всегда видит и тип контента, и строку поиска.
+          Legacy branch keeps the byte-for-byte original sticky zone
+          with Pill tabs + mobile/desktop SearchBar. The two branches
+          render entirely different layouts; v2 is NOT sticky.
+
+          Cross-link: docs/HOME_REDESIGN_V2_INTEGRATION.md.
         */}
-        <div className="border-b border-[#ECEEE4] bg-white sticky top-[64px] z-50">
-          <div
-            className="mx-auto max-w-[1920px]"
-            style={{
-              paddingLeft: 'var(--home-page-padding, 16px)',
-              paddingRight: 'var(--home-page-padding, 16px)',
-            }}
-          >
-            {/* Row 1: Tabs — centered, like Airbnb's Homes/Experiences/Services.
-                When the redesign flag is on, render the new segmented control;
-                otherwise fall back to the legacy <Pill> tab strip byte-for-byte. */}
-            <div className="flex justify-center">
-              {HOME_REDESIGN_ENABLED ? (
-                <div className="pt-3 pb-2">
-                  <HomeTabsSegmented active={activeKind} onChange={setActiveKind} />
-                </div>
-              ) : (
+        {HOME_REDESIGN_ENABLED ? (
+          <>
+            <HomeHero
+              selectedCity={selectedCity}
+              onCityChange={handleCityChange}
+              activeKind={activeKind}
+              onChangeKind={setActiveKind}
+              searchValue={searchValue}
+              onSearchBarClick={() => setSearchModalOpen(true)}
+              onFiltersClick={handleFiltersClick}
+              activeFiltersCount={activeFiltersCount}
+              onTagClick={handleTagClick}
+            />
+            <HomeBecomeProviderBanner />
+          </>
+        ) : (
+          <div className="border-b border-[#ECEEE4] bg-white sticky top-[64px] z-50">
+            <div
+              className="mx-auto max-w-[1920px]"
+              style={{
+                paddingLeft: 'var(--home-page-padding, 16px)',
+                paddingRight: 'var(--home-page-padding, 16px)',
+              }}
+            >
+              {/* Row 1: legacy Pill tabs */}
+              <div className="flex justify-center">
                 <div className="flex gap-2 overflow-x-auto pt-3 pb-2 max-w-full">
                   {HOME_TABS.map((tab) => {
                     const isActive = activeKind === tab.id;
@@ -671,40 +663,23 @@ function HomePageInner() {
                     );
                   })}
                 </div>
-              )}
-            </div>
-
-            {/* Row 2: SearchBar — always under the tabs.
-                Mobile vs desktop через CSS, без JS-флага, чтобы не было
-                hydration-моргания. */}
-            <div className="pb-3 pt-1">
-              {/* Mobile (< lg) */}
-              <div className="lg:hidden">
-                <SearchBar
-                  selectedCity={selectedCity}
-                  onCityChange={handleCityChange}
-                  searchValue={searchValue}
-                  onSearchChange={handleSearchChange}
-                  onFiltersClick={handleFiltersClick}
-                  activeFiltersCount={activeFiltersCount}
-                  isMobile={true}
-                  onSearchBarClick={() => setSearchModalOpen(true)}
-                />
               </div>
-              {/* Desktop (>= lg). Phase 3: redesign flag swaps the legacy
-                  pill SearchBar for the Airbnb-style HomeSearchHero. Both
-                  are TRIGGERS that open <SearchModal>; the URL contract
-                  (router.push("/map?…") via handleSearch* / handleFiltersApply)
-                  is unchanged. Mobile stays on legacy SearchBar isMobile. */}
-              <div className="hidden lg:flex justify-center">
-                {HOME_REDESIGN_ENABLED ? (
-                  <HomeSearchHero
-                    initialQuery={searchValue}
-                    onSubmit={handleSearchChange}
-                    activeFiltersCount={activeFiltersCount}
+
+              {/* Row 2: legacy SearchBar (mobile + desktop via CSS) */}
+              <div className="pb-3 pt-1">
+                <div className="lg:hidden">
+                  <SearchBar
+                    selectedCity={selectedCity}
+                    onCityChange={handleCityChange}
+                    searchValue={searchValue}
+                    onSearchChange={handleSearchChange}
                     onFiltersClick={handleFiltersClick}
+                    activeFiltersCount={activeFiltersCount}
+                    isMobile={true}
+                    onSearchBarClick={() => setSearchModalOpen(true)}
                   />
-                ) : (
+                </div>
+                <div className="hidden lg:flex justify-center">
                   <SearchBar
                     selectedCity={selectedCity}
                     onCityChange={handleCityChange}
@@ -714,14 +689,22 @@ function HomePageInner() {
                     activeFiltersCount={activeFiltersCount}
                     onSearchBarClick={() => setSearchModalOpen(true)}
                   />
-                )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div
-          className="mx-auto pb-6 lg:py-8 max-w-full lg:max-w-[960px] lg:max-w-[1120px] lg:max-w-[1440px] lg:max-w-[1920px]"
+          className={
+            // v2 redesign: align content width to the hero's max-w-[1200px]
+            // so StatsTicker / CategoryCarousel / HomeSection feeds don't
+            // visually outrun the hero rail. Legacy keeps its original
+            // 1920px ceiling so nothing visually shifts when the flag is off.
+            HOME_REDESIGN_ENABLED
+              ? "mx-auto pb-6 lg:py-8 max-w-full lg:max-w-[1200px]"
+              : "mx-auto pb-6 lg:py-8 max-w-full lg:max-w-[960px] lg:max-w-[1120px] lg:max-w-[1440px] lg:max-w-[1920px]"
+          }
           style={{
             paddingLeft: 'var(--home-page-padding, 16px)',
             paddingRight: 'var(--home-page-padding, 16px)',

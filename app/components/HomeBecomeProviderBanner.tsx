@@ -79,10 +79,10 @@ export default function HomeBecomeProviderBanner() {
             </span>
           </button>
           <div className="text-[14px] text-[#4a4f3d] leading-relaxed">
-            Знаешь скрытое место, делаешь массаж на дому, водишь photo walks
-            по A1A?{" "}
-            <b className="text-[#16190f]">Опубликуй карточку за 2 минуты</b>{" "}
-            — оплата идёт между тобой и гостем напрямую.
+            Know a hidden gem, run mobile massages, lead photo walks down
+            A1A?{" "}
+            <b className="text-[#16190f]">List your spot in 2 minutes</b>
+            {" "}— payments go directly between you and your guest.
           </div>
         </div>
       </div>
