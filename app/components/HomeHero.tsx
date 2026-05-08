@@ -48,8 +48,11 @@ type Props = {
   onFiltersClick: () => void;
   activeFiltersCount: number;
 
-  // Popular tag click → /map?categories=…
-  onTagClick: (category: string) => void;
+  // Popular category click → /map?categories=…
+  // Это именно категории (LOCATION_CATEGORIES / SERVICE_CATEGORIES /
+  // EXPERIENCE_CATEGORIES из app/constants.ts), а не свободные tags
+  // с карточек. Семантика разная: tag → ?q=…, category → ?categories=…
+  onCategoryClick: (category: string) => void;
 };
 
 export default function HomeHero({
@@ -61,9 +64,12 @@ export default function HomeHero({
   onSearchBarClick,
   onFiltersClick,
   activeFiltersCount,
-  onTagClick,
+  onCategoryClick,
 }: Props) {
-  const cityLabel = selectedCity ?? DEFAULT_CITY;
+  // Заголовок по умолчанию говорит "Florida" (бренд Maporia = весь штат),
+  // а не подставляет DEFAULT_CITY. Если юзер вручную выбрал город из
+  // дропдауна — отображаем выбранный город.
+  const cityLabel = selectedCity ?? "Florida";
   const { counts } = useHomeKindCounts();
 
   // City picker — local dropdown state. Closes on outside-click and on Esc.
@@ -97,18 +103,12 @@ export default function HomeHero({
         <div className="grid lg:grid-cols-[1.05fr_1fr] gap-8 lg:gap-12 items-start">
           {/* ── LEFT column ─────────────────────────────────────────── */}
           <div className="text-center lg:text-left">
-            <p className="inline-flex items-center gap-1.5 text-[10px] tracking-[0.16em] uppercase font-bold text-[#4d5b27]">
-              <span
-                aria-hidden
-                className="w-1 h-1 rounded-full bg-[#8F9E4F]"
-                style={{ boxShadow: "0 0 0 3px rgba(143,158,79,0.2)" }}
-              />
-              Curated by locals · Florida
-            </p>
+            {/* Eyebrow "CURATED BY LOCALS · FLORIDA" удалён по запросу
+                2026-05-08 — заголовок и так несёт регион в "of Florida". */}
 
             <h1
               id="home-hero-title"
-              className="mt-4 font-extrabold text-[36px] sm:text-[48px] lg:text-[60px] leading-[1.02] tracking-[-0.025em] text-[#16190f]"
+              className="font-extrabold text-[44px] sm:text-[60px] lg:text-[80px] leading-[1.02] tracking-[-0.025em] text-[#16190f]"
             >
               Discover<br />
               <em className="not-italic font-fraunces italic font-semibold text-[#8F9E4F]">
@@ -201,7 +201,7 @@ export default function HomeHero({
               />
               <HomePopularTags
                 activeKind={activeKind}
-                onTagClick={onTagClick}
+                onCategoryClick={onCategoryClick}
               />
             </div>
           </div>

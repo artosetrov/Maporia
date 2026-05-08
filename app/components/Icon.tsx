@@ -40,11 +40,13 @@ import {
   Search,
   Settings,
   Share2,
+  Sparkles,
   Star,
   Trash2,
   Unlock,
   User,
   Users,
+  Wrench,
   X,
   ZoomIn,
   ZoomOut,
@@ -120,7 +122,9 @@ export type IconName =
   | "calendar-days"
   | "mail"
   | "alert-circle"
-  | "activity";
+  | "activity"
+  | "sparkles"
+  | "wrench";
 
 type IconProps = {
   name: IconName;
@@ -194,6 +198,8 @@ const iconMap: Record<IconName, LucideIcon> = {
   mail: Mail,
   "alert-circle": AlertCircle,
   activity: Activity,
+  sparkles: Sparkles,
+  wrench: Wrench,
 };
 
 /** Icons that visually swap to a filled style when `filled`/`active` is true. */

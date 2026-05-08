@@ -12,11 +12,15 @@ import type { HomeKind } from "../types/home";
  * recognisable taps are more useful than a wall of options.
  *
  * Click semantics:
- *   onTagClick(category) is the same handler page.tsx uses for tag clicks
- *   inside HomeSection (router.push("/map?categories=…")). We pass the
- *   *full* category string with emoji — that matches what FiltersModal
- *   stores in `activeFilters.categories` and what `places.categories`
- *   column contains.
+ *   onCategoryClick(category) → page.tsx делает
+ *   router.push("/map?categories=<encoded>"). Передаём *полную* строку
+ *   категории с эмодзи — это совпадает с тем, что FiltersModal хранит
+ *   в `activeFilters.categories` и что лежит в колонке `places.categories`.
+ *
+ *   ВАЖНО: это НЕ то же самое, что onTagClick на PlaceCard. PlaceCard
+ *   передаёт свободные `places.tags[]` — они идут в ?q=… (поиск). А
+ *   здесь жёсткие категории — они идут в ?categories=… (фильтр). См.
+ *   handleCategoryClick / handleTagClick в app/page.tsx.
  *
  * Future: this list could come from `app_settings(id='home_popular_tags')`
  * so that admins can re-curate without a redeploy. For MVP it's hardcoded.
@@ -58,10 +62,10 @@ function splitEmoji(label: string): { emoji: string | null; text: string } {
 
 export default function HomePopularTags({
   activeKind,
-  onTagClick,
+  onCategoryClick,
 }: {
   activeKind: HomeKind;
-  onTagClick: (category: string) => void;
+  onCategoryClick: (category: string) => void;
 }) {
   const tags = useMemo(() => POPULAR_BY_KIND[activeKind] ?? [], [activeKind]);
 
@@ -74,7 +78,7 @@ export default function HomePopularTags({
           <button
             key={tag}
             type="button"
-            onClick={() => onTagClick(tag)}
+            onClick={() => onCategoryClick(tag)}
             className={[
               "h-8 px-3.5 rounded-full",
               "bg-white border border-[#ebe7d8]",

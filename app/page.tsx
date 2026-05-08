@@ -420,13 +420,29 @@ function HomePageInner() {
     router.push(`/map?${params.toString()}`);
   }
 
-  // Handle tag click - redirect to /map with tag as search query
+  // Handle tag click - redirect to /map with tag as search query.
+  // Используется для свободных tags из карточек (PlaceCard.onTagClick).
   function handleTagClick(tag: string) {
     const params = new URLSearchParams();
     if (selectedCity) params.set("city", selectedCity);
     params.set("q", tag);
     if (activeFilters.categories.length > 0) {
       params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+    }
+    router.push(`/map?${params.toString()}`);
+  }
+
+  // Handle popular CATEGORY click — отдельный путь от свободных тегов.
+  // HomePopularTags даёт строку из LOCATION/SERVICE/EXPERIENCE_CATEGORIES,
+  // и /map ожидает её именно в ?categories=…, а не в ?q=… — иначе текстовый
+  // поиск не находит места и появляется пустой результат.
+  function handleCategoryClick(category: string) {
+    const params = new URLSearchParams();
+    if (selectedCity) params.set("city", selectedCity);
+    params.set("categories", encodeURIComponent(category));
+    // Передаём активный таб, чтобы /map сразу открылся с правильным kind.
+    if (activeKind && activeKind !== "location") {
+      params.set("kinds", activeKind);
     }
     router.push(`/map?${params.toString()}`);
   }
@@ -630,8 +646,23 @@ function HomePageInner() {
               onSearchBarClick={() => setSearchModalOpen(true)}
               onFiltersClick={handleFiltersClick}
               activeFiltersCount={activeFiltersCount}
-              onTagClick={handleTagClick}
+              onCategoryClick={handleCategoryClick}
             />
+            {/* Stats-строка перенесена сюда, под hero, по запросу 2026-05-08:
+                раньше она жила внутри content-обёртки (после
+                "Become a provider" + перед "Browse by category"), и
+                визуально оказывалась слишком низко. Теперь это «пульс»
+                сразу после заголовка. Для legacy-ветки StatsBanner
+                остаётся в старом месте. */}
+            <div
+              className="mx-auto mt-2 lg:mt-4 max-w-full lg:max-w-[1200px]"
+              style={{
+                paddingLeft: 'var(--home-page-padding, 16px)',
+                paddingRight: 'var(--home-page-padding, 16px)',
+              }}
+            >
+              <StatsTicker />
+            </div>
             <HomeBecomeProviderBanner />
           </>
         ) : (
@@ -729,9 +760,12 @@ function HomePageInner() {
             Числа тянутся из Supabase через дешёвые count-запросы внутри компонента.
           */}
           {/* Phase 4: redesign flag swaps the 4-card StatsBanner for the
-              compact StatsTicker. Both read the same `app_settings.stats_banner`
-              row + same supabase counts; admin overrides keep working. */}
-          {HOME_REDESIGN_ENABLED ? <StatsTicker /> : <StatsBanner />}
+              compact StatsTicker. Legacy ветка по-прежнему показывает
+              StatsBanner здесь. В redesign-ветке StatsTicker отрисован
+              ВЫШЕ — сразу под hero (см. блок выше), чтобы быть ближе
+              к заголовку. Оба источника читают `app_settings.stats_banner`
+              + supabase counts, admin overrides работают одинаково. */}
+          {!HOME_REDESIGN_ENABLED && <StatsBanner />}
 
           {/* Category carousel — только для service/experience табов */}
           {activeKind !== "location" && kindIsEmpty !== true && (

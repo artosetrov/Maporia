@@ -5,6 +5,7 @@ import {
   type StatsMetricKey,
 } from "../hooks/useStatsBannerSettings";
 import { useHomeKindCounts } from "../hooks/useHomeKindCounts";
+import Icon, { type IconName } from "./Icon";
 
 /**
  * StatsTicker — компактная одно-строчная версия StatsBanner для нового
@@ -35,11 +36,15 @@ import { useHomeKindCounts } from "../hooks/useHomeKindCounts";
  * docs/HOME_REDESIGN_V2_INTEGRATION.md (Phase A migration).
  */
 
-const EMOJI: Record<StatsMetricKey, string> = {
-  users: "👥",
-  locations: "📍",
-  services: "🛠",
-  experiences: "✨",
+// 2026-05-08: эмодзи заменены на Lucide-иконки через фасад `Icon`
+// (см. memory: maporia_project / Icons). Это держит главную в едином
+// design-system визуальном языке — те же штрихи и веса, что и кнопки/
+// табы, без «случайных» emoji-глифов разной ширины.
+const ICONS: Record<StatsMetricKey, IconName> = {
+  users: "users",
+  locations: "location",
+  services: "wrench",
+  experiences: "sparkles",
 };
 
 const ORDER: StatsMetricKey[] = ["users", "locations", "services", "experiences"];
@@ -72,7 +77,7 @@ export default function StatsTicker() {
           const value = cfg.manual !== null ? cfg.manual : live[key];
           return (
             <span key={key} className="inline-flex items-center gap-1.5">
-              <span aria-hidden>{EMOJI[key]}</span>
+              <Icon name={ICONS[key]} size={16} className="text-[#6F7A5A]" />
               <b className="text-[#1F2A1F] font-semibold">
                 {value == null ? "—" : fmt(value)}
               </b>
@@ -103,7 +108,7 @@ export default function StatsTicker() {
                          bg-white border border-[#ECEEE4] rounded-full
                          px-3 py-1.5 text-[12px] text-[#5A5F4D] whitespace-nowrap"
             >
-              <span aria-hidden>{EMOJI[key]}</span>
+              <Icon name={ICONS[key]} size={14} className="text-[#6F7A5A]" />
               <b className="text-[#1F2A1F] font-semibold">
                 {value == null ? "—" : fmt(value)}
               </b>
