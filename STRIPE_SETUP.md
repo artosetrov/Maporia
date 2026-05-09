@@ -20,6 +20,7 @@
 | Plan ID | Stripe product | Price | Billing | Env |
 | --- | --- | ---: | --- | --- |
 | `premium_viewer` | Maporia Premium | $35 | one-time | `STRIPE_PRICE_PREMIUM_ONETIME` |
+| `creator_location` | Maporia Pro Location | $9.99 | monthly subscription | `STRIPE_PRICE_CREATOR_LOCATION_MONTH` |
 | `creator_service` | Maporia Pro Service | $14.99 | monthly subscription | `STRIPE_PRICE_CREATOR_SERVICE_MONTH` |
 | `creator_experience` | Maporia Pro Experience | $14.99 | monthly subscription | `STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH` |
 | `creator_all` | Maporia Pro All-in | $34.99 | monthly subscription | `STRIPE_PRICE_CREATOR_ALL_MONTH` |
@@ -39,6 +40,7 @@ STRIPE_SECRET_KEY=sk_test_XXXXX npm run setup:stripe -- \
 ```
 📋 Env vars:
 STRIPE_PRICE_PREMIUM_ONETIME=price_1AbCd…
+STRIPE_PRICE_CREATOR_LOCATION_MONTH=price_1AbCd…
 STRIPE_PRICE_CREATOR_SERVICE_MONTH=price_1AbCd…
 STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH=price_1AbCd…
 STRIPE_PRICE_CREATOR_ALL_MONTH=price_1AbCd…
@@ -78,6 +80,7 @@ STRIPE_SECRET_KEY=sk_live_XXXXX npm run setup:stripe -- \
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 STRIPE_PRICE_PREMIUM_ONETIME=
+STRIPE_PRICE_CREATOR_LOCATION_MONTH=
 STRIPE_PRICE_CREATOR_SERVICE_MONTH=
 STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH=
 STRIPE_PRICE_CREATOR_ALL_MONTH=
@@ -121,7 +124,7 @@ invoice.payment_failed
 { "access_token": "...", "addon": "extra_listing" }
 ```
 
-Поддерживаемые plans: `premium_viewer`, `creator_service`, `creator_experience`, `creator_all`.
+Поддерживаемые plans: `premium_viewer`, `creator_location`, `creator_service`, `creator_experience`, `creator_all`.
 
 Поддерживаемый addon: `extra_listing`.
 

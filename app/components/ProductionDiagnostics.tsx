@@ -89,7 +89,7 @@ export function ProductionDiagnostics() {
         }
         
         return response;
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Log first fetch error
         const url = typeof args[0] === 'string' 
           ? args[0] 

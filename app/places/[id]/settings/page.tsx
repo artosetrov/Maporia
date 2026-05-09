@@ -201,7 +201,7 @@ export default function PlaceSettingsPage(props: PageProps) {
     const newHiddenState = !isHidden;
 
     // Try multiple possible field names
-    const payload: any = {
+    const payload: Record<string, boolean | string> = {
       is_hidden: newHiddenState,
       visibility: newHiddenState ? 'hidden' : 'public',
     };

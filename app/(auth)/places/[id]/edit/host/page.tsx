@@ -20,6 +20,7 @@ import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../../lib/access";
 import Icon from "../../../../../components/Icon";
+import { ErrorBoundary } from "../../../../../components/ErrorBoundary";
 
 type PlaceHostRow = Pick<
   Database["public"]["Tables"]["places"]["Row"],
@@ -42,6 +43,14 @@ function cx(...a: Array<string | false | undefined | null>) {
 type PageProps = { params: Promise<{ id: string }> };
 
 export default function HostEditorPage(props: PageProps) {
+  return (
+    <ErrorBoundary>
+      <HostEditorPageContent {...props} />
+    </ErrorBoundary>
+  );
+}
+
+function HostEditorPageContent(props: PageProps) {
   const router = useRouter();
   const { id: placeId } = use(props.params);
 

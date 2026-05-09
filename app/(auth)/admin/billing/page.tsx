@@ -22,6 +22,7 @@ import { useUserAccessContext } from "../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../lib/access";
 import Icon from "../../../components/Icon";
 import { PLAN_CONFIG } from "../../../lib/plans";
+import { ErrorBoundary } from "../../../components/ErrorBoundary";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -140,8 +141,9 @@ export default function AdminBillingPage() {
   const plans = Array.from(planSet).sort();
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7]">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+    <ErrorBoundary>
+      <main className="min-h-screen bg-[#FAFAF7]">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         <header className="flex items-center justify-between mb-8">
           <div>
             <h1 className="font-fraunces text-3xl font-semibold text-[#1F2A1F]">Billing</h1>
@@ -325,7 +327,8 @@ export default function AdminBillingPage() {
             Generated at {new Date(data.generated_at).toLocaleString("en-US")}
           </p>
         )}
-      </div>
-    </main>
+        </div>
+      </main>
+    </ErrorBoundary>
   );
 }

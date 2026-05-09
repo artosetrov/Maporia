@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import type { Place } from "@/app/types";
+
+type ResolvePlaceRow = Pick<Place, "id" | "lat" | "lng" | "google_place_id" | "title">;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey =

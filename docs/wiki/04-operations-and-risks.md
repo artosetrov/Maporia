@@ -1,6 +1,6 @@
 # Operations And Risks
 
-Последнее обновление: 2026-05-08.
+Последнее обновление: 2026-05-09.
 
 ## Audit Snapshot
 
@@ -10,26 +10,24 @@
 npm run health:json
 ```
 
-Результат на 2026-05-08:
+Результат на 2026-05-09:
 
-- Status: `YELLOW`.
-- Passed: 20.
-- Warnings: 50.
+- Status: `GREEN`.
+- Passed: 25.
+- Warnings: 0.
 - Failures: 0.
 - Navigation check: all 53 `page.tsx` files export default; internal links валидны.
 - Security criticals: не найдено real keys в `.env.example`, anon key не найден в admin routes, server-only keys не найдены в client files, raw `.or()` filters sanitized.
+- Performance/UI/error/API/type hygiene: batch loading, skeleton loading, ErrorBoundary coverage, logger usage, API response typing and explicit-`any` checks are clear.
 - Docs freshness: `npm run docs:check` проходит и проверяет agent/wiki entrypoints, source-of-truth файлы и markdown-ссылки.
 
 ## Top Risks
 
 | Priority | Риск | Где | Почему важно | Что сделать |
 | --- | --- | --- | --- | --- |
-| P1 | Несколько list surfaces с `PlaceCard` без batch loading | `brand-guide`, collections, home sections, explore, map, profile, saved | Риск N+1, разного UI и разной производительности | Вынести общий loader и перевести списки на `useBatchPlaceData` |
-| P2 | Много `any` и untyped API responses | `app/(auth)/profile/page.tsx`, `app/id/[id]/page.tsx`, `app/explore/page.tsx`, `app/map/page.tsx`, `app/page.tsx`, API routes | Регрессии ловятся поздно | Типизировать hotspots и response contracts |
-| P2 | ErrorBoundary покрытие неполное | auth/login/pricing/signup/admin/edit pages | Краш секции может ронять всю страницу | Обернуть risky pages/sections |
-| P2 | Missing skeleton/empty states | pricing, settings, add/google/edit pages, brand-guide | UX выглядит сломанным при загрузке или пустых данных | Добавить `Skeleton` и явные empty states |
+| P1 | Нужен реальный production smoke с внешними сервисами | Auth, Supabase RLS, Stripe, Google Maps, OpenAI | Static health не доказывает, что live keys, webhooks, RLS и billing metadata настроены правильно | Прогнать manual checklist ниже на staging с реальными env и webhook events |
+| P2 | Supabase generated types всё еще placeholder-style | `app/types/supabase.ts` | Часть Supabase SDK overloads infer `never`, поэтому отдельные writes типизируются через `as never` | Сгенерировать реальные типы через Supabase CLI и снять локальные обходы |
 | P3 | Deprecated Google `Marker` | `/map`, `/id/[id]`, edit location | Будущая миграционная боль и warnings | Provision Map ID и перейти на `AdvancedMarkerElement` |
-| P3 | Raw console usage in server helpers/routes | `app/lib/**`, `app/api/**` | Сложнее наблюдаемость и шум в production logs | Перевести на `logger.ts` или убрать временные логи |
 
 ## Release Checklist
 
@@ -76,6 +74,7 @@ OPENAI_MODEL=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 STRIPE_PRICE_PREMIUM_ONETIME=
+STRIPE_PRICE_CREATOR_LOCATION_MONTH=
 STRIPE_PRICE_CREATOR_SERVICE_MONTH=
 STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH=
 STRIPE_PRICE_CREATOR_ALL_MONTH=

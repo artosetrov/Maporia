@@ -422,7 +422,7 @@ export default function PlaceEditorHub(props: PageProps) {
     // Try multiple possible field names
     // manually_hidden — explicit user intent. Когда true, auto-publish effect ниже
     // не будет переоткрывать карточку, даже если все обязательные поля заполнены.
-    const payload: any = {
+    const payload: Record<string, boolean | string> = {
       is_hidden: newHiddenState,
       visibility: newHiddenState ? "hidden" : "public",
       manually_hidden: newHiddenState,

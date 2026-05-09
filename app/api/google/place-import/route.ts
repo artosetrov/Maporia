@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { logger } from "@/app/lib/logger";
+import type { Place } from "@/app/types";
+
+type ImportedPlacePreview = Pick<Place, "title" | "address" | "city" | "lat" | "lng" | "google_place_id">;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -277,12 +280,12 @@ async function findPlaceFromText(apiKey: string, query: string, skipNearbySearch
 
       try {
         const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?${params.toString()}`;
-        console.log("[place-import] Text Search request:", variation.substring(0, 100));
+        logger.debug("[place-import] Text Search request:", variation.substring(0, 100));
 
         const response = await fetch(url);
         const responseText = await response.text();
 
-        console.log("[place-import] Text Search response:", {
+        logger.debug("[place-import] Text Search response:", {
           status: response.status,
           bodyLength: responseText.length,
           bodyPreview: responseText.substring(0, 300),
@@ -306,7 +309,7 @@ async function findPlaceFromText(apiKey: string, query: string, skipNearbySearch
           continue;
         }
 
-        console.log("[place-import] Text Search status:", data.status, "results:", data.results?.length ?? 0);
+        logger.debug("[place-import] Text Search status:", data.status, "results:", data.results?.length ?? 0);
 
         if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
           console.error("[place-import] Text Search API error:", data.status, data.error_message);
@@ -315,7 +318,7 @@ async function findPlaceFromText(apiKey: string, query: string, skipNearbySearch
 
         if (data.results && data.results.length > 0) {
           const placeId = data.results[0].place_id;
-          console.log("[place-import] Found place:", placeId, data.results[0].name);
+          logger.debug("[place-import] Found place:", placeId, data.results[0].name);
           return placeId;
         }
       } catch (variationError) {
@@ -1128,7 +1131,10 @@ export async function POST(request: NextRequest) {
       if (cachedData && typeof cachedData === "object") {
         // Update google_maps_url if query was a URL
         if (queryIsUrl) {
-          (cachedData as any).google_maps_url = trimmedQuery;
+          return NextResponse.json({
+            ...(cachedData as Record<string, unknown>),
+            google_maps_url: trimmedQuery,
+          });
         }
         return NextResponse.json(cachedData);
       }

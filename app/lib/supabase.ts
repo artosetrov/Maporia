@@ -90,25 +90,38 @@ export const supabase = createClient<Database>(safeUrl, safeKey, {
 /**
  * Checks if an error is related to refresh token issues
  */
-export function isRefreshTokenError(error: any): boolean {
+type SupabaseAuthErrorLike = {
+  message?: string;
+  error_description?: string;
+  error?: string;
+};
+
+function toAuthErrorLike(error: unknown): SupabaseAuthErrorLike {
+  if (error && typeof error === 'object') return error as SupabaseAuthErrorLike;
+  return { message: String(error) };
+}
+
+export function isRefreshTokenError(error: unknown): boolean {
   if (!error) return false;
-  const message = error.message || error.error_description || '';
+  const err = toAuthErrorLike(error);
+  const message = err.message || err.error_description || '';
   return (
     message.includes('Refresh Token') ||
     message.includes('invalid_grant') ||
     message.includes('Refresh Token Not Found') ||
-    error.error === 'invalid_grant'
+    err.error === 'invalid_grant'
   );
 }
 
 /**
  * Handles refresh token errors by clearing invalid session
  */
-export async function handleRefreshTokenError(error: any): Promise<void> {
+export async function handleRefreshTokenError(error: unknown): Promise<void> {
   if (isRefreshTokenError(error)) {
+    const err = toAuthErrorLike(error);
     logger.warn('[Supabase] Refresh token error detected, clearing invalid session:', {
-      message: error.message || error.error_description,
-      error: error.error,
+      message: err.message || err.error_description,
+      error: err.error,
     });
     try {
       // Clear session locally without redirecting

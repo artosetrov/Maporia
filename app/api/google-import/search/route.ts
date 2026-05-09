@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { logger } from "@/app/lib/logger";
+import type { Place } from "@/app/types";
+
+type GoogleImportSearchPlace = Pick<Place, "id" | "title" | "address" | "city" | "lat" | "lng" | "google_place_id">;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

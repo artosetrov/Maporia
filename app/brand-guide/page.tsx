@@ -13,6 +13,8 @@ import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 import { usePremiumModalContext } from "../contexts/PremiumModalContext";
 
 // ——— Helpers ———
+// Static showcase only: no dynamic list empty state; no useBatchPlaceData
+// needed because demo cards pass fixed batchPhotos and non-UUID ids.
 
 function ColorRow({
   name,
@@ -347,6 +349,7 @@ export default function BrandGuidePage() {
                       created_by: null,
                     }}
                     userAccess={{ role: "guest", hasPremium: false, isAdmin: false, plan: "free" }}
+                    batchPhotos={["https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=400&h=300&fit=crop"]}
                   />
                 </div>
                 <div className="max-w-[200px]">
@@ -363,6 +366,7 @@ export default function BrandGuidePage() {
                     userAccess={{ role: "standard", hasPremium: false, isAdmin: false, plan: "free" }}
                     userId="u1"
                     hauntedGemIndex={1}
+                    batchPhotos={["https://images.unsplash.com/photo-1513694203232-719a280e022f?w=400&h=300&fit=crop"]}
                   />
                 </div>
               </div>

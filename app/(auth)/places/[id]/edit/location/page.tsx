@@ -14,6 +14,19 @@ import { useUserAccessContext } from "../../../../../contexts/UserAccessContext"
 import { isUserAdmin } from "../../../../../lib/access";
 
 type PlaceLocationRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "address" | "city" | "city_id" | "city_name_cached" | "google_place_id" | "lat" | "lng">;
+type GooglePlaceDetails = {
+  name?: string | null;
+  formatted_address?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  rating?: number | null;
+  reviews_count?: number | null;
+  category?: string | null;
+  types?: string[] | null;
+  photos?: unknown[] | null;
+  opening_hours?: unknown | null;
+  price_level?: number | null;
+};
 import { getMapOptions } from "../../../../../config/googleMaps";
 import dynamicImport from "next/dynamic";
 import Icon from "../../../../../components/Icon";
@@ -62,10 +75,10 @@ export default function LocationEditorPage(props: PageProps) {
   const [originalLng, setOriginalLng] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [googlePlaceData, setGooglePlaceData] = useState<any>(null);
+  const isDragging = false;
+  const [googlePlaceData, setGooglePlaceData] = useState<GooglePlaceDetails | null>(null);
   const [loadingGoogleData, setLoadingGoogleData] = useState(false);
-  const autocompleteRef = useRef<any>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Load available cities
@@ -280,7 +293,8 @@ export default function LocationEditorPage(props: PageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
       {/* Header */}
       <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
@@ -415,7 +429,7 @@ export default function LocationEditorPage(props: PageProps) {
                         });
 
                         if (response.ok) {
-                          const data = await response.json();
+                          const data = (await response.json()) as GooglePlaceDetails;
                           setGooglePlaceData(data);
                         } else {
                           let errorMessage = "Failed to load Google Places data";
@@ -699,7 +713,7 @@ export default function LocationEditorPage(props: PageProps) {
                         <span className="text-[#1F2A1F]">{googlePlaceData.photos.length} available</span>
                       </div>
                     )}
-                    {googlePlaceData.opening_hours && (
+                    {Boolean(googlePlaceData.opening_hours) && (
                       <div className="flex items-start gap-2">
                         <span className="text-[#6F7A5A] min-w-[80px]">Hours:</span>
                         <span className="text-[#1F2A1F]">Available</span>
@@ -746,6 +760,7 @@ export default function LocationEditorPage(props: PageProps) {
           </div>
         </div>
       </div>
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

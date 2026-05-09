@@ -16,6 +16,7 @@ import {
 } from "../../../../lib/googleImport";
 import Icon from "../../../../components/Icon";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
+import { PageSkeleton } from "../../../../components/Skeleton";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
@@ -316,11 +317,7 @@ export default function GoogleImportPreviewPage() {
   }, [selectedPhotos, coverPhotoId]);
 
   if (accessLoading || stored === null) {
-    return (
-      <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
-        <div className="text-sm text-[#6F7A5A]">Loading...</div>
-      </main>
-    );
+    return <PageSkeleton />;
   }
 
   if (!user) {

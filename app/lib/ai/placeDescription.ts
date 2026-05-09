@@ -75,7 +75,7 @@ export function buildAiPrompt(ctx: GooglePlaceAiContext): { system: string; user
   if (reviews.length) {
     facts.push(
       `Review snippets:\n${reviews
-        .map((r, i) => `- ${stripUrls(stripEmojis(r)).slice(0, 240)}`)
+        .map((r) => `- ${stripUrls(stripEmojis(r)).slice(0, 240)}`)
         .join("\n")}`
     );
   }
@@ -254,4 +254,3 @@ export async function fetchGooglePlaceAiContext(args: {
     reviews,
   };
 }
-

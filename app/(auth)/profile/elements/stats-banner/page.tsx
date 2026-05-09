@@ -19,6 +19,7 @@ import Icon from "../../../../components/Icon";
 import StatsBannerView, {
   type StatsBannerItem,
 } from "../../../../components/StatsBannerView";
+import { ErrorBoundary } from "../../../../components/ErrorBoundary";
 import {
   DEFAULT_STATS_BANNER_SETTINGS,
   type StatsBannerSettings,
@@ -312,7 +313,8 @@ export default function StatsBannerSettingsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7] pb-24 flex flex-col">
+    <ErrorBoundary>
+      <main className="min-h-screen bg-[#FAFAF7] pb-24 flex flex-col">
       {/* Desktop Header */}
       <div className="hidden lg:block sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-2xl mx-auto px-4 sm:px-6">
@@ -510,7 +512,8 @@ export default function StatsBannerSettingsPage() {
           </div>
         )}
       </div>
-    </main>
+      </main>
+    </ErrorBoundary>
   );
 }
 

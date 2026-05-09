@@ -14,6 +14,7 @@ import { supabase } from "../../../lib/supabase";
 import { useUserAccessContext } from "../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../lib/access";
 import Icon from "../../../components/Icon";
+import { ErrorBoundary } from "../../../components/ErrorBoundary";
 
 type Person = {
   display_name: string | null;
@@ -139,7 +140,8 @@ export default function ImpersonationLogPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAF7]">
+    <ErrorBoundary>
+      <div className="min-h-screen bg-[#FAFAF7]">
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-[#ECEEE4]">
         <div className="max-w-4xl mx-auto flex items-center justify-between h-14 px-4">
           <Link
@@ -278,6 +280,7 @@ export default function ImpersonationLogPage() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }

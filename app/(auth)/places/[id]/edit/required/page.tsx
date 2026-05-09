@@ -10,7 +10,10 @@ import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../../lib/access";
 
-type PlaceRequiredRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "cover_url" | "title">;
+type PlaceRequiredRow = Pick<
+  Database["public"]["Tables"]["places"]["Row"],
+  "created_by" | "cover_url" | "title" | "categories" | "lat" | "lng" | "description"
+>;
 type PlacePhotoRow = Pick<Database["public"]["Tables"]["place_photos"]["Row"], "url">;
 import Icon from "../../../../../components/Icon";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
@@ -30,8 +33,8 @@ export default function RequiredStepsPage(props: PageProps) {
 
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const [loading, setLoading] = useState(true);
-  const [place, setPlace] = useState<any>(null);
-  const [photos, setPhotos] = useState<any[]>([]);
+  const [place, setPlace] = useState<PlaceRequiredRow | null>(null);
+  const [photos, setPhotos] = useState<string[]>([]);
 
   // Load place data
   useEffect(() => {
@@ -138,7 +141,8 @@ export default function RequiredStepsPage(props: PageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7] pb-20">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-[#FAFAF7] pb-20">
       {/* Header */}
       <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-2xl mx-auto px-4 sm:px-6">
@@ -206,6 +210,7 @@ export default function RequiredStepsPage(props: PageProps) {
           </div>
         )}
       </div>
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

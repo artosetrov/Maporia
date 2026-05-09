@@ -13,11 +13,13 @@ type ProfileResult = { data: ProfileDisplay | null; error: PostgrestError | null
 import { ActiveFilters } from "../components/FiltersModal";
 import SearchModal from "../components/SearchModal";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
+import { PageSkeleton } from "../components/Skeleton";
 
 export default function SettingsPage() {
   const router = useRouter();
   const { replaceToAuth } = useAuthRedirect();
   const [userId, setUserId] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -47,6 +49,7 @@ export default function SettingsPage() {
     (async () => {
       const { data } = await supabase.auth.getUser();
       if (!data.user) {
+        setAuthLoading(false);
         replaceToAuth();
         return;
       }
@@ -70,12 +73,17 @@ export default function SettingsPage() {
       if (profile?.avatar_url) {
         setUserAvatar(profile.avatar_url);
       }
+      setAuthLoading(false);
     })();
-  }, [router]);
+  }, [replaceToAuth]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
     router.push("/");
+  }
+
+  if (authLoading) {
+    return <PageSkeleton />;
   }
 
   return (

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CITIES, DEFAULT_CITY } from "../constants";
+import { fetchTopCities, topCityNames } from "../lib/topCities";
 import type { HomeKind } from "../types/home";
 import { useHomeKindCounts } from "../hooks/useHomeKindCounts";
 import HomeTabsSegmented from "./HomeTabsSegmented";
@@ -76,6 +77,24 @@ export default function HomeHero({
   const [cityOpen, setCityOpen] = useState(false);
   const cityRef = useRef<HTMLDivElement | null>(null);
 
+  // Cities shown in the dropdown. Init = static `CITIES` snapshot from
+  // constants (so SSR/first-paint renders a sane list with no flash).
+  // On mount we replace it with the live top-N from Supabase RPC
+  // `get_top_cities`. If the fetch fails, the static fallback stays put.
+  // See `app/lib/topCities.ts`.
+  const [cities, setCities] = useState<readonly string[]>(CITIES);
+  useEffect(() => {
+    let cancelled = false;
+    fetchTopCities(5).then((rows) => {
+      if (cancelled) return;
+      const names = topCityNames(rows);
+      if (names.length > 0) setCities(names);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     if (!cityOpen) return;
     function onClick(e: MouseEvent) {
@@ -133,7 +152,7 @@ export default function HomeHero({
                     aria-label="Choose a city"
                     className="absolute left-1/2 lg:left-0 -translate-x-1/2 lg:translate-x-0 top-[calc(100%+8px)] z-30 min-w-[240px] bg-white border border-[#ebe7d8] rounded-2xl py-1.5 shadow-[0_8px_24px_rgba(31,36,23,0.10)]"
                   >
-                    {CITIES.map((c) => {
+                    {cities.map((c) => {
                       const isSelected = (selectedCity ?? DEFAULT_CITY) === c;
                       return (
                         <button
@@ -187,8 +206,7 @@ export default function HomeHero({
                 чтобы линия не вытягивалась под весь широкий экран. */}
             <p className="mt-4 text-[15px] sm:text-[17px] leading-[1.5] text-[#4a4f3d] max-w-full sm:max-w-[520px] mx-auto lg:mx-0">
               Places, experiences, and services — handpicked by locals
-              from Fort Lauderdale to Lighthouse Point. No ads, no
-              endless filter walls.
+              across South Florida. No ads, no endless filter walls.
             </p>
 
             <div className="mt-6 flex flex-col items-center lg:items-start gap-3.5">

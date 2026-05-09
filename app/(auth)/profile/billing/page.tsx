@@ -10,18 +10,21 @@
 
 import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { ErrorBoundary } from "../../../components/ErrorBoundary";
 
 export default function BillingRedirect() {
   return (
-    <Suspense
-      fallback={
-        <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
-          <div className="text-sm text-[#6F7A5A]">Opening Premium…</div>
-        </main>
-      }
-    >
-      <BillingRedirectInner />
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense
+        fallback={
+          <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
+            <div className="text-sm text-[#6F7A5A]">Opening Premium…</div>
+          </main>
+        }
+      >
+        <BillingRedirectInner />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 

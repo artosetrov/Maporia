@@ -62,7 +62,13 @@ export async function resolveCity(
 /**
  * Extract city from Google Places address components
  */
-export function extractCityFromAddressComponents(addressComponents: any[]): {
+type AddressComponent = {
+  long_name?: string;
+  short_name?: string;
+  types?: string[];
+};
+
+export function extractCityFromAddressComponents(addressComponents: AddressComponent[]): {
   city: string | null;
   state: string | null;
   country: string | null;
@@ -77,27 +83,27 @@ export function extractCityFromAddressComponents(addressComponents: any[]): {
     // Prefer locality, fallback to postal_town, then sublocality
     if (!city) {
       if (types.includes("locality")) {
-        city = component.long_name || component.short_name;
+        city = (component.long_name || component.short_name) ?? null;
       } else if (types.includes("postal_town")) {
-        city = component.long_name || component.short_name;
+        city = (component.long_name || component.short_name) ?? null;
       } else if (types.includes("sublocality") || types.includes("sublocality_level_1")) {
-        city = component.long_name || component.short_name;
+        city = (component.long_name || component.short_name) ?? null;
       }
     }
     
     // State/province
     if (!state) {
       if (types.includes("administrative_area_level_1")) {
-        state = component.short_name || component.long_name;
+        state = (component.short_name || component.long_name) ?? null;
       } else if (types.includes("administrative_area_level_2")) {
-        state = component.short_name || component.long_name;
+        state = (component.short_name || component.long_name) ?? null;
       }
     }
     
     // Country
     if (!country) {
       if (types.includes("country")) {
-        country = component.long_name || component.short_name;
+        country = (component.long_name || component.short_name) ?? null;
       }
     }
   }

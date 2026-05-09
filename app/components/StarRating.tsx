@@ -9,7 +9,7 @@
  * Цвет — Premium gold (#D6B25E) из brand-guide. Размер настраивается через size.
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 
 type StarRatingProps = {
   value: number; // 0–5, можно дробное (для read-only avg)
@@ -71,7 +71,8 @@ function Star({
   onClick?: () => void;
   onMouseEnter?: () => void;
 }) {
-  const id = `star-clip-${index}-${Math.random().toString(36).slice(2, 7)}`;
+  const reactId = useId();
+  const id = `star-clip-${reactId.replace(/:/g, "")}-${index}`;
   const path =
     "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z";
   const Tag = interactive ? "button" : "span";

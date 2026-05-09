@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GoogleMap, InfoWindow } from "@react-google-maps/api";
@@ -20,7 +21,6 @@ import { getCategoryEmoji, createMarkerIcon } from "../lib/mapMarkers";
 import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
-import { DEFAULT_CITY } from "../constants";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
 import { useAuthRedirect } from "../hooks/useAuthRedirect";
 import { useIsDesktop } from "../hooks/useIsDesktop";
@@ -28,10 +28,11 @@ import { usePremiumGate } from "../hooks/usePremiumGate";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import Icon from "../components/Icon";
 import { PlaceCardGridSkeleton, MapSkeleton, Empty } from "../components/Skeleton";
-import { sanitizePostgrestValue, cx, initialsFromEmail, timeAgo, isValidPhotoUrl } from "../utils";
+import { sanitizePostgrestValue, cx, isValidPhotoUrl } from "../utils";
 import type { PlaceListItem as Place } from "../types";
 import { buildMultiCityRadiusFilter } from "../lib/cityRadius";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
+import { useBatchPlaceData } from "../hooks/useBatchPlaceData";
 
 // Result types for Supabase (Database['public']['Tables'][table]['Row'] + Pick)
 type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
@@ -43,10 +44,19 @@ type PlacesResult = { data: PlacesRow[] | null; error: PostgrestError | null };
 type ReactionPlaceId = Pick<ReactionsRow, "place_id">;
 type ReactionsPlaceIdResult = { data: ReactionPlaceId[] | null; error: PostgrestError | null };
 
-type PlacePhotoUrl = Pick<PlacePhotosRow, "url">;
-type PlacePhotosUrlResult = { data: PlacePhotoUrl[] | null; error: PostgrestError | null };
 type PlacePhotoPlaceIdUrl = Pick<PlacePhotosRow, "place_id" | "url">;
 type PlacePhotosBatchResult = { data: PlacePhotoPlaceIdUrl[] | null; error: PostgrestError | null };
+type FullscreenHTMLElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+  msRequestFullscreen?: () => Promise<void> | void;
+};
+type FullscreenDocument = Document & {
+  webkitExitFullscreen?: () => Promise<void> | void;
+  msExitFullscreen?: () => Promise<void> | void;
+  webkitFullscreenElement?: Element | null;
+  msFullscreenElement?: Element | null;
+};
+type PlaceMarker = google.maps.Marker & { __placeId: string };
 
 export default function ExplorePage() {
   const router = useRouter();
@@ -56,10 +66,7 @@ export default function ExplorePage() {
   const [view, setView] = useState<"list" | "map">("list");
   
   const shouldLoadMap = view === "map";
-  const [showMapMobile, setShowMapMobile] = useState(false);
   const [bottomSheetPosition, setBottomSheetPosition] = useState<number>(0.6); // 0.3, 0.6, or 0.9
-  const [searchFocused, setSearchFocused] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [hoveredPlaceId, setHoveredPlaceId] = useState<string | null>(null);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
@@ -68,27 +75,38 @@ export default function ExplorePage() {
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  // Batch-loaded place photos: one IN(...) query per `places` change instead
-  // of N parallel requests from each PlaceCard. Keyed by place_id; falls back
-  // to cover_url when there are no photos in `place_photos`.
-  const [placePhotosMap, setPlacePhotosMap] = useState<Map<string, string[]>>(new Map());
-  // Batch-loaded creator profiles for cards (display name + avatar). Same
-  // motivation as placePhotosMap but for the profiles table.
-  const [creatorsMap, setCreatorsMap] = useState<Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>>(new Map());
+  const cardPlaceIds = useMemo(() => places.map((place) => place.id), [places]);
+  const cardCreatorIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          places
+            .map((place) => place.created_by)
+            .filter((id): id is string => Boolean(id))
+        )
+      ),
+    [places]
+  );
+  const batchData = useBatchPlaceData(cardPlaceIds, cardCreatorIds);
 
   // User access and profile from context (single session/profile request; no pathname re-fetch)
-  const { loading: accessLoading, access, user, profile } = useUserAccessContext();
+  const { access, user, profile } = useUserAccessContext();
   const userId = user?.id ?? null;
   const userEmail = user?.email ?? null;
   const userDisplayName = profile?.display_name ?? user?.email?.split("@")[0] ?? null;
   const userAvatar = profile?.avatar_url ?? null;
 
   // Calculate locked premium places for Haunted Gem indexing
-  const defaultUserAccess: UserAccess = access ?? { 
-    role: "guest", plan: "free",
-    hasPremium: false, 
-    isAdmin: false 
-  };
+  const defaultUserAccess: UserAccess = useMemo(
+    () =>
+      access ?? {
+        role: "guest",
+        plan: "free",
+        hasPremium: false,
+        isAdmin: false,
+      },
+    [access],
+  );
   
   const lockedPlacesMap = useMemo(() => {
     const lockedPlaces = places
@@ -114,84 +132,6 @@ export default function ExplorePage() {
     });
     return map;
   }, [places, defaultUserAccess, userId]);
-
-  // Batch-load creator profiles whenever the `places` list changes.
-  // One IN(...) query replaces N per-card profile fetches.
-  const creatorIdsKey = useMemo(() => {
-    const ids = Array.from(new Set(places.map(p => p.created_by).filter(Boolean) as string[]));
-    return ids.sort().join(",");
-  }, [places]);
-  useEffect(() => {
-    if (!creatorIdsKey) {
-      setCreatorsMap(new Map());
-      return;
-    }
-    const userIds = creatorIdsKey.split(",");
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("id, display_name, username, avatar_url")
-          .in("id", userIds);
-        if (cancelled || error || !data) return;
-        const map = new Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>();
-        for (const row of data as Array<{ id: string; display_name: string | null; username: string | null; avatar_url: string | null }>) {
-          map.set(row.id, { display_name: row.display_name, username: row.username, avatar_url: row.avatar_url });
-        }
-        if (!cancelled) setCreatorsMap(map);
-      } catch {
-        // PlaceCard will fall back to "Unknown".
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [creatorIdsKey]);
-
-  // Batch-load photos whenever the `places` list changes. One IN(place_id...)
-  // query replaces what used to be N parallel queries from each <PlaceCard>.
-  // Keyed by joined-and-sorted ids so we don't re-fetch on identical lists.
-  const placeIdsKey = useMemo(() => places.map(p => p.id).sort().join(","), [places]);
-  useEffect(() => {
-    if (places.length === 0) {
-      setPlacePhotosMap(new Map());
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("place_photos")
-          .select("place_id,url")
-          .in("place_id", places.map(p => p.id))
-          .order("sort", { ascending: true });
-        if (cancelled) return;
-        const grouped = new Map<string, string[]>();
-        if (!error && data) {
-          for (const row of data as { place_id: string; url: string }[]) {
-            if (!row.place_id || !row.url) continue;
-            if (!grouped.has(row.place_id)) grouped.set(row.place_id, []);
-            grouped.get(row.place_id)!.push(row.url);
-          }
-        }
-        // Fallback to cover_url for places without any rows in place_photos.
-        for (const p of places) {
-          if (!grouped.has(p.id) && p.cover_url) {
-            grouped.set(p.id, [p.cover_url]);
-          }
-        }
-        if (!cancelled) setPlacePhotosMap(grouped);
-      } catch {
-        if (cancelled) return;
-        const fallback = new Map<string, string[]>();
-        for (const p of places) {
-          if (p.cover_url) fallback.set(p.id, [p.cover_url]);
-        }
-        setPlacePhotosMap(fallback);
-      }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placeIdsKey]);
 
   // search + filters - инициализируем из query params
   const [searchDraft, setSearchDraft] = useState("");
@@ -228,23 +168,6 @@ export default function ExplorePage() {
     const list = Array.from(new Set(cityNames));
     list.sort((a, b) => a.localeCompare(b));
     return list;
-  }, [places]);
-
-  // Получаем популярные теги из всех мест
-  const popularTags = useMemo(() => {
-    const tagCounts = new Map<string, number>();
-    places.forEach((place) => {
-      if (place.tags && Array.isArray(place.tags)) {
-        place.tags.forEach((tag) => {
-          tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
-        });
-      }
-    });
-    const sortedTags = Array.from(tagCounts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([tag]) => tag);
-    return sortedTags;
   }, [places]);
 
   // Fetch places when filters change
@@ -417,7 +340,8 @@ export default function ExplorePage() {
   const quickSearchChips = ["Romantic", "Quiet", "Sunset", "Coffee", "Nature"];
 
   return (
-    <main className="h-screen bg-[#FAFAF7] flex flex-col overflow-hidden">
+    <SectionErrorBoundary>
+      <main className="h-screen bg-[#FAFAF7] flex flex-col overflow-hidden">
       <TopBar
         showSearchBar={true}
         searchValue={q}
@@ -641,7 +565,6 @@ export default function ExplorePage() {
                 {/* Cards: min 320px, ideal 360-380px, max 420px */}
                 {places.map((p) => {
                   const isFavorite = favorites.has(p.id);
-                  const isHovered = hoveredPlaceId === p.id || selectedPlaceId === p.id;
                   const hauntedGemIndex = lockedPlacesMap.get(p.id);
                   return (
                     <div
@@ -663,8 +586,8 @@ export default function ExplorePage() {
                         userAccess={access}
                         userId={userId}
                         isFavorite={isFavorite}
-                        batchPhotos={placePhotosMap.get(p.id)}
-                        batchProfile={p.created_by ? creatorsMap.get(p.created_by) : undefined}
+                        batchPhotos={batchData.photos.get(p.id)}
+                        batchProfile={p.created_by ? batchData.profiles.get(p.created_by) : undefined}
                         hauntedGemIndex={hauntedGemIndex}
                         favoriteButton={
                           userId ? (
@@ -793,8 +716,8 @@ export default function ExplorePage() {
                         userAccess={access}
                         userId={userId}
                         isFavorite={isFavorite}
-                        batchPhotos={placePhotosMap.get(p.id)}
-                        batchProfile={p.created_by ? creatorsMap.get(p.created_by) : undefined}
+                        batchPhotos={batchData.photos.get(p.id)}
+                        batchProfile={p.created_by ? batchData.profiles.get(p.created_by) : undefined}
                         hauntedGemIndex={lockedPlacesMap.get(p.id)}
                         favoriteButton={
                           userId ? (
@@ -899,8 +822,8 @@ export default function ExplorePage() {
                         userAccess={access}
                         userId={userId}
                         isFavorite={isFavorite}
-                        batchPhotos={placePhotosMap.get(p.id)}
-                        batchProfile={p.created_by ? creatorsMap.get(p.created_by) : undefined}
+                        batchPhotos={batchData.photos.get(p.id)}
+                        batchProfile={p.created_by ? batchData.profiles.get(p.created_by) : undefined}
                         hauntedGemIndex={lockedPlacesMap.get(p.id)}
                         favoriteButton={
                           userId ? (
@@ -1204,8 +1127,8 @@ export default function ExplorePage() {
                         userAccess={access}
                         userId={userId}
                         isFavorite={isFavorite}
-                        batchPhotos={placePhotosMap.get(p.id)}
-                        batchProfile={p.created_by ? creatorsMap.get(p.created_by) : undefined}
+                        batchPhotos={batchData.photos.get(p.id)}
+                        batchProfile={p.created_by ? batchData.profiles.get(p.created_by) : undefined}
                         hauntedGemIndex={lockedPlacesMap.get(p.id)}
                         favoriteButton={
                           userId ? (
@@ -1396,15 +1319,8 @@ export default function ExplorePage() {
         </div>
       )}
 
-    </main>
-  );
-}
-
-function Card({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl bg-white border border-[#6b7d47]/10 shadow-sm p-4 hover:shadow-md transition cursor-pointer">
-      {children}
-    </div>
+      </main>
+    </SectionErrorBoundary>
   );
 }
 
@@ -1450,7 +1366,7 @@ function MapView({
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Refs for imperative markers and MarkerClusterer
-  const markersRef = useRef<google.maps.Marker[]>([]);
+  const markersRef = useRef<PlaceMarker[]>([]);
   const clustererRef = useRef<MarkerClusterer | null>(null);
 
   // Обновляем ref при изменении callback
@@ -1496,25 +1412,26 @@ function MapView({
 
   const handleFullscreen = () => {
     // Находим ближайший родительский контейнер карты
-    const mapContainer = document.querySelector('[data-map-container]')?.closest('.rounded-2xl') as HTMLElement;
-    const targetElement = mapContainer || document.querySelector('[data-map-container]') as HTMLElement;
+    const mapContainer = document.querySelector('[data-map-container]')?.closest('.rounded-2xl') as FullscreenHTMLElement | null;
+    const targetElement = mapContainer || document.querySelector('[data-map-container]') as FullscreenHTMLElement | null;
     if (!targetElement) return;
+    const fullscreenDocument = document as FullscreenDocument;
 
     if (!isFullscreen) {
       if (targetElement.requestFullscreen) {
         targetElement.requestFullscreen();
-      } else if ((targetElement as any).webkitRequestFullscreen) {
-        (targetElement as any).webkitRequestFullscreen();
-      } else if ((targetElement as any).msRequestFullscreen) {
-        (targetElement as any).msRequestFullscreen();
+      } else if (targetElement.webkitRequestFullscreen) {
+        targetElement.webkitRequestFullscreen();
+      } else if (targetElement.msRequestFullscreen) {
+        targetElement.msRequestFullscreen();
       }
     } else {
       if (document.exitFullscreen) {
         document.exitFullscreen();
-      } else if ((document as any).webkitExitFullscreen) {
-        (document as any).webkitExitFullscreen();
-      } else if ((document as any).msExitFullscreen) {
-        (document as any).msExitFullscreen();
+      } else if (fullscreenDocument.webkitExitFullscreen) {
+        fullscreenDocument.webkitExitFullscreen();
+      } else if (fullscreenDocument.msExitFullscreen) {
+        fullscreenDocument.msExitFullscreen();
       }
     }
   };
@@ -1522,10 +1439,11 @@ function MapView({
   // Отслеживаем изменение fullscreen
   useEffect(() => {
     const handleFullscreenChange = () => {
+      const fullscreenDocument = document as FullscreenDocument;
       setIsFullscreen(
         !!(document.fullscreenElement || 
-           (document as any).webkitFullscreenElement || 
-           (document as any).msFullscreenElement)
+           fullscreenDocument.webkitFullscreenElement || 
+           fullscreenDocument.msFullscreenElement)
       );
     };
 
@@ -1577,6 +1495,10 @@ function MapView({
     () => places.filter((p) => p.lat != null && p.lng != null),
     [places]
   );
+  const placesWithCoordsKey = useMemo(
+    () => placesWithCoords.map((p) => p.id).join(","),
+    [placesWithCoords],
+  );
 
   // Загружаем фото для всех мест одним запросом (batch)
   useEffect(() => {
@@ -1623,7 +1545,7 @@ function MapView({
       }
     })();
     return () => { cancelled = true; };
-  }, [placesWithCoords.map((p) => p.id).join(","), isLoaded]);
+  }, [placesWithCoords, placesWithCoordsKey, isLoaded]);
 
   // Вычисляем центр карты на основе всех мест с координатами или используем внешний
   const center = useMemo(() => {
@@ -1688,9 +1610,9 @@ function MapView({
         position: { lat: place.lat!, lng: place.lng! },
         title: place.title,
         icon: createMarkerIcon(emoji, "default", isPremium),
-      });
+      }) as PlaceMarker;
 
-      (marker as any).__placeId = place.id;
+      marker.__placeId = place.id;
 
       marker.addListener("click", () => {
         if (!externalSelectedPlaceId) {
@@ -1731,7 +1653,6 @@ function MapView({
       });
       markersRef.current = [];
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapInstance, isLoaded, placesWithCoords, externalSelectedPlaceId]);
 
   // Обновляем иконку выбранного маркера без пересоздания кластерера
@@ -1739,7 +1660,7 @@ function MapView({
     if (!isLoaded || markersRef.current.length === 0) return;
 
     for (const marker of markersRef.current) {
-      const placeId = (marker as any).__placeId as string;
+      const placeId = marker.__placeId;
       const isSelected = placeId === selectedPlaceId;
       const place = placesWithCoords.find((p) => p.id === placeId);
       if (!place) continue;
@@ -1914,7 +1835,7 @@ function MapView({
           {selectedPlaceId && (() => {
             const place = placesWithCoords.find((p) => p.id === selectedPlaceId);
             if (!place || !place.lat || !place.lng) return null;
-            if (typeof window === "undefined" || !(window as any).google?.maps) return null;
+            if (typeof google === "undefined" || !google.maps) return null;
 
             const photos = placePhotos.get(place.id) || (isValidPhotoUrl(place.cover_url) ? [place.cover_url!] : []);
             const currentIndex = currentPhotoIndex.get(place.id) || 0;
@@ -1958,7 +1879,7 @@ function MapView({
                   }
                 }}
                 options={{
-                  pixelOffset: new (window as any).google.maps.Size(0, -10),
+                  pixelOffset: new google.maps.Size(0, -10),
                 }}
               >
                 <div className="w-80 bg-white rounded-xl shadow-xl overflow-hidden">
@@ -1966,9 +1887,11 @@ function MapView({
                   <div className="relative w-full" style={{ paddingBottom: '100%' }}>
                     {currentPhoto ? (
                       <div className="absolute inset-0">
-                        <img
+                        <Image
                           src={currentPhoto}
                           alt={place.title}
+                          fill
+                          sizes="320px"
                           className="absolute inset-0 w-full h-full object-cover rounded-t-xl"
                         />
                         

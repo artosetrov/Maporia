@@ -9,6 +9,7 @@
  */
 
 import type { Plan, Profile, Place } from "../types";
+import { planCoversKind, computeQuota, type PlanId } from "./pricing";
 
 export type UserRole = "guest" | "standard" | "premium" | "admin";
 export type SubscriptionStatus = "active" | "inactive";
@@ -17,14 +18,17 @@ export type AccessLevel = "public" | "premium";
 /**
  * Тарифы, дающие право создавать карточки соответствующих kind'ов.
  *
- *   creator_service     → создаёт услуги + локации
- *   creator_experience  → создаёт впечатления + локации
- *   creator_all         → всё
+ *   creator_location    → создаёт locations (v2)
+ *   creator_service     → создаёт services + secondary location free
+ *   creator_experience  → создаёт experiences + secondary location free
+ *   creator_all         → всё (combined-pool 10)
  *
- * premium_viewer не создаёт ничего сам, но видит скрытые локации.
+ * premium_viewer не создаёт ничего сам, но видит скрытые локации (v2 — чисто consumer).
+ * premium_grandfathered — internal план для legacy-юзеров, мигрированных pre-deploy.
  * Любой creator-тариф автоматически даёт право premium_viewer.
  */
 export const CREATOR_PLANS = [
+  "creator_location",
   "creator_service",
   "creator_experience",
   "creator_all",
@@ -187,45 +191,36 @@ export function canUserAddPlace(userAccess: UserAccess): boolean {
 }
 
 /**
- * Право публиковать карточку определённого типа.
+ * Право публиковать карточку определённого типа (v2).
  *
- *  - location:   любой платный план (premium_viewer тоже — такая модель сейчас).
+ *  - location:   creator_location / creator_all / premium_grandfathered / admin.
  *  - service:    creator_service / creator_all / admin
  *  - experience: creator_experience / creator_all / admin
  *
- * Why: location — почти бесплатная фича каталога; основная монетизация
- * на услугах и впечатлениях, поэтому только creator-тарифы их публикуют.
+ * premium_viewer (v2) — чисто consumer, ничего не публикует. Legacy-юзеры с уже
+ * опубликованными locations переведены в premium_grandfathered grandfather-миграцией
+ * (`pricing_v2_creator_location_and_grandfather`, 2026-05-08, sanity-checked: 0 кандидатов).
+ *
+ * Делегируем в `app/lib/pricing/quota.ts` — single source of truth.
  */
 export function canUserCreate(
   userAccess: UserAccess,
   kind: "location" | "service" | "experience"
 ): boolean {
   if (userAccess.isAdmin) return true;
-
-  if (kind === "location") {
-    // Сохраняем текущее поведение: публиковать локации может любой платный.
-    return userAccess.hasPremium === true;
-  }
-
-  if (kind === "service") {
-    return userAccess.plan === "creator_service" || userAccess.plan === "creator_all";
-  }
-
-  if (kind === "experience") {
-    return userAccess.plan === "creator_experience" || userAccess.plan === "creator_all";
-  }
-
-  return false;
+  return planCoversKind(userAccess.plan as PlanId, kind);
 }
 
 /**
  * Какой минимальный тариф нужен для публикации kind'а.
  * Полезно в пейволле, чтобы предложить апгрейд.
+ *
+ * v2: location → creator_location (был premium_viewer).
  */
 export function requiredPlanFor(
   kind: "location" | "service" | "experience"
 ): Plan {
-  if (kind === "location") return "premium_viewer";
+  if (kind === "location") return "creator_location";
   if (kind === "service") return "creator_service";
   return "creator_experience";
 }
@@ -256,14 +251,18 @@ export function canUserCreateMulti(
 /**
  * Подсчёт квоты с учётом текущих карточек юзера и докупленных слотов.
  *
- *   activeServices, activeExperiences — текущие НЕ-удалённые карточки юзера
- *   данного kind'а (с учётом скрытых черновиков).
+ *   activeLocations, activeServices, activeExperiences —
+ *     текущие НЕ-удалённые карточки юзера данного kind'а (учитываем primary kind).
  *
  * Возвращает:
  *   - allowed: можно ли создать ещё одну карточку
  *   - limit: общий лимит (план + бонусные слоты), null = безлимит
  *   - used: сколько уже занято (с учётом combined-pool у Pro All)
  *   - reason: 'no_plan' | 'limit_reached' | 'ok'
+ *
+ * v2: делегируем в `computeQuota` из registry — single source of truth.
+ * Старая сигнатура (без `activeLocations`) сохранена; если location-count не нужен,
+ * пропусти 0 для legacy callers (kind='service'|'experience').
  */
 export type QuotaCheck = {
   allowed: boolean;
@@ -275,49 +274,36 @@ export type QuotaCheck = {
 
 export function checkQuota(
   access: UserAccess,
-  kind: "service" | "experience",
+  kind: "location" | "service" | "experience",
   activeServices: number,
   activeExperiences: number,
-  bonusCredits: number = 0
+  bonusCredits: number = 0,
+  activeLocations: number = 0
 ): QuotaCheck {
-  if (access.isAdmin) {
-    return { allowed: true, limit: null, used: 0, bonusCredits, reason: "ok" };
-  }
+  const decision = computeQuota({
+    plan: access.plan as PlanId,
+    primaryKind: kind,
+    counts: {
+      location: activeLocations,
+      service: activeServices,
+      experience: activeExperiences,
+    },
+    bonusCredits,
+    isAdmin: access.isAdmin,
+  });
 
-  const plan = access.plan;
-  // Pro All — общий пул. Иначе считаем по конкретному kind'у.
-  // Эта логика дублирует quotaFor() из plans.ts, но избегаем циклической зависимости:
-  //   plans.ts ← access.ts уже импортирует её обратно, не хочется.
-  let baseLimit: number;
-  let used: number;
+  // Маппим reason'ы registry на legacy public reason'ы.
+  // Legacy не различал 'no_plan_for_kind' от других no-plan кейсов — оставляем 'no_plan'.
+  const legacyReason: QuotaCheck["reason"] =
+    decision.reason === "no_plan_for_kind" ? "no_plan" : decision.reason;
 
-  if (plan === "creator_all") {
-    baseLimit = 10;
-    used = activeServices + activeExperiences;
-  } else if (plan === "creator_service" && kind === "service") {
-    baseLimit = 5;
-    used = activeServices;
-  } else if (plan === "creator_experience" && kind === "experience") {
-    baseLimit = 5;
-    used = activeExperiences;
-  } else {
-    // План не позволяет создавать этот kind вообще
-    return { allowed: false, limit: 0, used: 0, bonusCredits, reason: "no_plan" };
-  }
-
-  const totalLimit = baseLimit + bonusCredits;
-
-  if (used >= totalLimit) {
-    return {
-      allowed: false,
-      limit: totalLimit,
-      used,
-      bonusCredits,
-      reason: "limit_reached",
-    };
-  }
-
-  return { allowed: true, limit: totalLimit, used, bonusCredits, reason: "ok" };
+  return {
+    allowed: decision.allowed,
+    limit: decision.limit,
+    used: decision.used,
+    bonusCredits: decision.bonusCredits,
+    reason: legacyReason,
+  };
 }
 
 /**

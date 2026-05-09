@@ -9,6 +9,7 @@ import { canUserAddPlace } from "../../../lib/access";
 import GoogleImportField from "../../../components/GoogleImportField";
 import Icon from "../../../components/Icon";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
+import { PageSkeleton } from "../../../components/Skeleton";
 
 export default function GoogleImportPage() {
   const router = useRouter();
@@ -35,13 +36,7 @@ export default function GoogleImportPage() {
   }, [router, user, access, accessLoading]);
 
   if (accessLoading) {
-    return (
-      <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-sm text-[#6F7A5A] mb-2">Loading...</div>
-        </div>
-      </main>
-    );
+    return <PageSkeleton />;
   }
 
   if (!user) {

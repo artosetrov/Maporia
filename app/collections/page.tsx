@@ -12,6 +12,7 @@ import { useUserAccessContext } from "../contexts/UserAccessContext";
 import { PlaceCardGridSkeleton } from "../components/Skeleton";
 import type { Collection } from "../types";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
+import { useBatchPlaceData } from "../hooks/useBatchPlaceData";
 
 type PlaceRow = {
   id: string;
@@ -84,11 +85,19 @@ function CollectionsPageContent() {
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(urlCollectionId);
   const [places, setPlaces] = useState<PlaceRow[]>([]);
   const [placesLoading, setPlacesLoading] = useState(false);
-  // Batch-loaded photos + creator profiles for the collection's places.
-  // One IN(...) query each; replaces N per-card fetches PlaceCard would
-  // otherwise issue.
-  const [placePhotosMap, setPlacePhotosMap] = useState<Map<string, string[]>>(new Map());
-  const [creatorsMap, setCreatorsMap] = useState<Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>>(new Map());
+  const collectionPlaceIds = useMemo(() => places.map((place) => place.id), [places]);
+  const collectionCreatorIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          places
+            .map((place) => place.created_by)
+            .filter((id): id is string => Boolean(id))
+        )
+      ),
+    [places]
+  );
+  const batchData = useBatchPlaceData(collectionPlaceIds, collectionCreatorIds);
 
   const { access, user, profile } = useUserAccessContext();
   const userAvatar = profile?.avatar_url ?? null;
@@ -165,76 +174,6 @@ function CollectionsPageContent() {
     };
   }, []);
 
-  // Batch-load photos + creator profiles whenever the active collection's
-  // place list changes. Same N→1 fix as on /explore and /map.
-  const collectionPlaceIdsKey = useMemo(() => places.map(p => p.id).sort().join(","), [places]);
-  const collectionCreatorIdsKey = useMemo(() => {
-    const ids = Array.from(new Set(places.map(p => p.created_by).filter(Boolean) as string[]));
-    return ids.sort().join(",");
-  }, [places]);
-  useEffect(() => {
-    if (places.length === 0) {
-      setPlacePhotosMap(new Map());
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("place_photos")
-          .select("place_id,url")
-          .in("place_id", places.map(p => p.id))
-          .order("sort", { ascending: true });
-        if (cancelled) return;
-        const grouped = new Map<string, string[]>();
-        if (!error && data) {
-          for (const row of data as { place_id: string; url: string }[]) {
-            if (!row.place_id || !row.url) continue;
-            if (!grouped.has(row.place_id)) grouped.set(row.place_id, []);
-            grouped.get(row.place_id)!.push(row.url);
-          }
-        }
-        for (const p of places) {
-          if (!grouped.has(p.id) && p.cover_url) grouped.set(p.id, [p.cover_url]);
-        }
-        if (!cancelled) setPlacePhotosMap(grouped);
-      } catch {
-        const fallback = new Map<string, string[]>();
-        for (const p of places) {
-          if (p.cover_url) fallback.set(p.id, [p.cover_url]);
-        }
-        setPlacePhotosMap(fallback);
-      }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collectionPlaceIdsKey]);
-  useEffect(() => {
-    if (!collectionCreatorIdsKey) {
-      setCreatorsMap(new Map());
-      return;
-    }
-    const userIds = collectionCreatorIdsKey.split(",");
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("id, display_name, username, avatar_url")
-          .in("id", userIds);
-        if (cancelled || error || !data) return;
-        const map = new Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>();
-        for (const row of data as Array<{ id: string; display_name: string | null; username: string | null; avatar_url: string | null }>) {
-          map.set(row.id, { display_name: row.display_name, username: row.username, avatar_url: row.avatar_url });
-        }
-        if (!cancelled) setCreatorsMap(map);
-      } catch {
-        // PlaceCard will fall back to "Unknown".
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [collectionCreatorIdsKey]);
-
   useEffect(() => {
     if (!activeCollectionId || !canAccessActive) {
       setPlaces([]);
@@ -272,7 +211,10 @@ function CollectionsPageContent() {
       rows.forEach((r, i) => {
         orderMap[r.place_id] = i;
       });
-      const { data: placesData } = await supabase.from("places").select("id,title,description,city,country,cover_url,categories,tags,created_by,access_level,address").in("id", placeIds);
+      const { data: placesData } = await supabase
+        .from("places")
+        .select("id,title,description,city,country,cover_url,categories,tags,created_by,access_level,is_premium,premium_only,visibility,address")
+        .in("id", placeIds);
       if (cancelled) return;
       const rawList = (placesData ?? []) as Record<string, unknown>[];
       const list = rawList.map((p) => ({
@@ -473,8 +415,8 @@ function CollectionsPageContent() {
                             userAccess={access}
                             userId={user?.id ?? null}
                             showPhotoSlider={true}
-                            batchPhotos={placePhotosMap.get(place.id)}
-                            batchProfile={place.created_by ? creatorsMap.get(place.created_by) : undefined}
+                            batchPhotos={batchData.photos.get(place.id)}
+                            batchProfile={place.created_by ? batchData.profiles.get(place.created_by) : undefined}
                           />
                         </li>
                       ))}

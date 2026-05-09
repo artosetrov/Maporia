@@ -3,6 +3,7 @@
 import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getAuthUrl, getSafeRedirectFrom } from "../lib/authRedirect";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 
 /**
  * /auth — bridge для обратной совместимости.
@@ -18,9 +19,11 @@ import { getAuthUrl, getSafeRedirectFrom } from "../lib/authRedirect";
  */
 export default function AuthBridgePage() {
   return (
-    <Suspense fallback={null}>
-      <AuthBridge />
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={null}>
+        <AuthBridge />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import type { Place } from "@/app/types";
+
+type PlaceTagsRow = Pick<Place, "tags" | "categories">;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 // Public read endpoint — service role preferred but anon key is acceptable
@@ -82,8 +85,9 @@ export async function GET(request: NextRequest) {
 
     // Extract all unique tags
     const allTags = new Set<string>();
-    if (places) {
-      for (const place of places) {
+    const placeRows = (places ?? []) as PlaceTagsRow[];
+    if (placeRows.length > 0) {
+      for (const place of placeRows) {
         if (place.tags && Array.isArray(place.tags)) {
           for (const tag of place.tags) {
             if (typeof tag === "string" && tag.trim().length > 0) {

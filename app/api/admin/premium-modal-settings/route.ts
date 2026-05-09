@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { logger } from "@/app/lib/logger";
+import type { Profile } from "@/app/types";
+
+type AdminProfileRow = Pick<Profile, "is_admin" | "role">;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -64,7 +67,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    if (!profile.is_admin && profile.role !== "admin") {
+    const adminProfile = profile as AdminProfileRow;
+    if (!adminProfile.is_admin && adminProfile.role !== "admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -163,7 +167,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    if (!profile.is_admin && profile.role !== "admin") {
+    const adminProfile = profile as AdminProfileRow;
+    if (!adminProfile.is_admin && adminProfile.role !== "admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

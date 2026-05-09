@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import CallbackPageContent from "./CallbackPageContent";
+import { ErrorBoundary } from "../../components/ErrorBoundary";
 
 export const metadata: Metadata = {
   title: "Signing you in… — Maporia",
@@ -9,9 +10,11 @@ export const metadata: Metadata = {
 
 export default function AuthCallbackPage() {
   return (
-    <Suspense fallback={<CallbackSkeleton />}>
-      <CallbackPageContent />
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={<CallbackSkeleton />}>
+        <CallbackPageContent />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 

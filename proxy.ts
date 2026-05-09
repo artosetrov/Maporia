@@ -47,6 +47,7 @@ export function proxy(request: NextRequest) {
       },
     },
   });
+  void supabase;
 
   // Note: getUser() is async but proxy in Next.js 16 should be sync for routing.
   // For async auth checks, we rely on the client-side RequireAuth component.

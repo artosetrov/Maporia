@@ -517,11 +517,15 @@ export default function FiltersModal({
           setFilteredCount(count);
           setCountLoading(false);
         })
-        .catch(error => {
+        .catch((error: unknown) => {
+          const err =
+            error && typeof error === "object"
+              ? (error as { message?: string; name?: string; code?: string })
+              : { message: String(error) };
           console.error("Error getting filtered count:", {
-            message: error?.message,
-            name: error?.name,
-            code: (error as any)?.code,
+            message: err.message,
+            name: err.name,
+            code: err.code,
           });
           setFilteredCount(null);
           setCountLoading(false);

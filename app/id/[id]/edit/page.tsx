@@ -3,6 +3,7 @@
 import { use, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
+import { PageSkeleton } from "@/app/components/Skeleton";
 
 /**
  * Legacy edit route - redirects to new Airbnb-style editor
@@ -23,9 +24,5 @@ export default function EditPlacePage(props: PageProps) {
   }, [placeId, router]);
 
   // Show loading while redirecting
-  return (
-    <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
-      <div className="text-sm text-[#6F7A5A]">Redirecting…</div>
-    </main>
-  );
+  return <PageSkeleton />;
 }

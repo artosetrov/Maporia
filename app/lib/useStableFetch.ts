@@ -16,14 +16,14 @@ interface FetchOptions<T> {
   ttl?: number; // Time to live in milliseconds (default: 5 minutes)
   enabled?: boolean; // Whether to fetch (default: true)
   onSuccess?: (data: T) => void;
-  onError?: (error: any) => void;
+  onError?: (error: unknown) => void;
   skipCache?: boolean; // Skip cache check (default: false)
 }
 
 interface UseStableFetchResult<T> {
   data: T | null;
   loading: boolean;
-  error: any;
+  error: unknown;
   refetch: () => Promise<void>;
   invalidate: () => void;
 }
@@ -42,7 +42,7 @@ export function useStableFetch<T>({
 }: FetchOptions<T>): UseStableFetchResult<T> {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<any>(null);
+  const [error, setError] = useState<unknown>(null);
   const requestKeyRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -109,9 +109,13 @@ export function useStableFetch<T>({
         setError(null);
         onSuccess?.(result);
         return result;
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (abortController.signal.aborted) return;
-        if (err?.name === 'AbortError' || err?.message?.includes('abort') || err?.code === 'ECONNABORTED') return;
+        const error =
+          err && typeof err === "object"
+            ? (err as { name?: string; message?: string; code?: string })
+            : { message: String(err) };
+        if (error.name === 'AbortError' || error.message?.includes('abort') || error.code === 'ECONNABORTED') return;
         if (requestKeyRef.current !== requestKey) return;
 
         setError(err);
@@ -127,7 +131,7 @@ export function useStableFetch<T>({
     // Wait for result
     try {
       await fetchPromise;
-    } catch (err) {
+    } catch {
       // Error already handled above
     }
   }, [requestKey, fetcher, ttl, enabled, skipCache, onSuccess, onError]);
@@ -185,7 +189,7 @@ export function useStableFetch<T>({
 export function useStableQuery<T>(
   options: Omit<FetchOptions<T>, 'requestKey'> & {
     table: string;
-    params?: Record<string, any>;
+    params?: Record<string, unknown>;
   }
 ): UseStableFetchResult<T> {
   const requestKey = generateRequestKey(options.table, options.params || {});

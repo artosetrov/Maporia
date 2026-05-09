@@ -96,9 +96,9 @@ export default function DescriptionEditorPage(props: PageProps) {
       });
 
       const text = await res.text();
-      let data: any;
+      let data: { error?: string; description?: string };
       try {
-        data = JSON.parse(text);
+        data = JSON.parse(text) as { error?: string; description?: string };
       } catch {
         data = { error: text };
       }
@@ -111,8 +111,12 @@ export default function DescriptionEditorPage(props: PageProps) {
       const newDescription = String(data?.description || "").trim();
       setDescription(newDescription);
       if (navigator.vibrate) navigator.vibrate(10);
-    } catch (e: any) {
-      setError(e?.message || "Failed to generate description");
+    } catch (e: unknown) {
+      const error =
+        e && typeof e === "object"
+          ? (e as { message?: string })
+          : { message: String(e) };
+      setError(error.message || "Failed to generate description");
     } finally {
       setGenerating(false);
     }

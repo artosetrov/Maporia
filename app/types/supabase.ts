@@ -56,7 +56,7 @@ export type PlaceSchedule = Json;
 export interface Database {
   public: {
     Tables: {
-      // TODO: Generate actual types from database
+      // Placeholder until full generated Supabase types are committed.
       // This is a placeholder structure
       profiles: {
         Row: {
@@ -68,6 +68,11 @@ export interface Database {
           role: string | null
           subscription_status: string | null
           is_admin: boolean | null
+          plan: string | null
+          plan_period: 'month' | 'year' | 'lifetime' | null
+          plan_renews_at: string | null
+          stripe_customer_id: string | null
+          bonus_listing_credits: number | null
           created_at: string
           updated_at: string | null
           favorite_categories: string[] | null
@@ -82,6 +87,11 @@ export interface Database {
           role?: string | null
           subscription_status?: string | null
           is_admin?: boolean | null
+          plan?: string | null
+          plan_period?: 'month' | 'year' | 'lifetime' | null
+          plan_renews_at?: string | null
+          stripe_customer_id?: string | null
+          bonus_listing_credits?: number | null
           created_at?: string
           updated_at?: string | null
           favorite_categories?: string[] | null
@@ -96,6 +106,11 @@ export interface Database {
           role?: string | null
           subscription_status?: string | null
           is_admin?: boolean | null
+          plan?: string | null
+          plan_period?: 'month' | 'year' | 'lifetime' | null
+          plan_renews_at?: string | null
+          stripe_customer_id?: string | null
+          bonus_listing_credits?: number | null
           created_at?: string
           updated_at?: string | null
           favorite_categories?: string[] | null
@@ -272,6 +287,53 @@ export interface Database {
         Row: { id: string; settings: Json | null }
         Insert: { id: string; settings?: Json | null }
         Update: { id?: string; settings?: Json | null }
+      }
+      subscriptions: {
+        Row: {
+          id: string
+          user_id: string
+          plan: string
+          period: 'month' | 'year' | 'lifetime'
+          status: string
+          stripe_subscription_id: string
+          stripe_customer_id: string | null
+          current_period_start: string | null
+          current_period_end: string | null
+          cancel_at_period_end: boolean | null
+          cancelled_at: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          plan: string
+          period: 'month' | 'year' | 'lifetime'
+          status: string
+          stripe_subscription_id: string
+          stripe_customer_id?: string | null
+          current_period_start?: string | null
+          current_period_end?: string | null
+          cancel_at_period_end?: boolean | null
+          cancelled_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          plan?: string
+          period?: 'month' | 'year' | 'lifetime'
+          status?: string
+          stripe_subscription_id?: string
+          stripe_customer_id?: string | null
+          current_period_start?: string | null
+          current_period_end?: string | null
+          cancel_at_period_end?: boolean | null
+          cancelled_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
       }
       cities: {
         Row: { id: string; name: string | null }

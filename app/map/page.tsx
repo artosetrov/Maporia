@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useMemo, useState, Suspense, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 // NOTE: google.maps.Marker is deprecated; full migration to AdvancedMarkerElement is a separate task.
@@ -21,11 +22,11 @@ const SearchModal = nextDynamic(() => import("../components/SearchModal"), { ssr
 import FavoriteIcon from "../components/FavoriteIcon";
 import PremiumBadge from "../components/PremiumBadge";
 import { getMapOptions } from "../config/googleMaps";
-import { getCategoryEmoji, createMarkerIcon, getMarkerEmoji } from "../lib/mapMarkers";
+import { createMarkerIcon, getMarkerEmoji } from "../lib/mapMarkers";
 import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
-import { DEFAULT_CITY, CATEGORIES, CITIES, getTagEmoji, stripTagEmoji } from "../constants";
+import { DEFAULT_CITY, CITIES, getTagEmoji, stripTagEmoji } from "../constants";
 import type { HomeKind } from "../types/home";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
 import { useAuthRedirect } from "../hooks/useAuthRedirect";
@@ -34,21 +35,18 @@ import { usePremiumGate } from "../hooks/usePremiumGate";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import Icon from "../components/Icon";
 import { PlaceCardGridSkeleton, MapSkeleton, Empty } from "../components/Skeleton";
-import { sanitizePostgrestValue, normalizeCity, cx, initialsFromEmail, timeAgo, isValidPhotoUrl } from "../utils";
+import { sanitizePostgrestValue, isValidPhotoUrl } from "../utils";
 import type { PlaceListItem as Place } from "../types";
 import { buildCityRadiusFilter, getCityCoords } from "../lib/cityRadius";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 import { filterPlaces } from "../lib/filterPlaces";
+import { useBatchPlaceData } from "../hooks/useBatchPlaceData";
 
 // Result types for Supabase queries (Database['public']['Tables'][table]['Row'] + Pick)
-type ProfilesRow = Database["public"]["Tables"]["profiles"]["Row"];
 type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
 type ReactionsRow = Database["public"]["Tables"]["reactions"]["Row"];
 type CommentsRow = Database["public"]["Tables"]["comments"]["Row"];
 type PlacePhotosRow = Database["public"]["Tables"]["place_photos"]["Row"];
-
-type ProfileDisplay = Pick<ProfilesRow, "display_name" | "avatar_url">;
-type ProfileResult = { data: ProfileDisplay | null; error: PostgrestError | null };
 
 type PlacesSelectRow = Pick<PlacesRow, "id" | "title" | "description" | "city" | "city_name_cached" | "lat" | "lng" | "cover_url" | "categories" | "tags" | "created_at" | "created_by" | "access_level" | "country" | "kind">;
 type PlacesResult = { data: PlacesSelectRow[] | null; error: PostgrestError | null; count?: number | null };
@@ -59,10 +57,31 @@ type ReactionsPlaceIdResult = { data: ReactionPlaceId[] | null; error: Postgrest
 type CommentPlaceId = Pick<CommentsRow, "place_id">;
 type CommentsPlaceIdResult = { data: CommentPlaceId[] | null; error: PostgrestError | null };
 
-type PlacePhotoUrl = Pick<PlacePhotosRow, "url">;
-type PlacePhotosUrlResult = { data: PlacePhotoUrl[] | null; error: PostgrestError | null };
 type PlacePhotoPlaceIdUrl = Pick<PlacePhotosRow, "place_id" | "url">;
 type PlacePhotosBatchResult = { data: PlacePhotoPlaceIdUrl[] | null; error: PostgrestError | null };
+type ErrorLike = {
+  name?: string;
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+  stack?: string;
+};
+type PlaceMarker = google.maps.Marker & { __placeId: string };
+
+const toErrorLike = (error: unknown): ErrorLike => {
+  if (error && typeof error === "object") return error as ErrorLike;
+  return { message: String(error) };
+};
+
+const isAbortLikeError = (error: unknown): boolean => {
+  const err = toErrorLike(error);
+  return (
+    err.name === "AbortError" ||
+    err.message?.includes("abort") === true ||
+    err.code === "ECONNABORTED"
+  );
+};
 
 function MapPageContent() {
   const router = useRouter();
@@ -90,12 +109,19 @@ function MapPageContent() {
   const [loading, setLoading] = useState(true); // Start with true to show skeleton initially
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [filteredPlacesState, setFilteredPlacesState] = useState<Place[]>([]);
-  // Batch-loaded photos: one IN(...) query per `places` change, instead of
-  // per-card fetches. Keyed by place_id; cover_url fallback when there are
-  // no rows in place_photos.
-  const [placePhotosMap, setPlacePhotosMap] = useState<Map<string, string[]>>(new Map());
-  // Batch-loaded creator profiles. Same motivation as placePhotosMap.
-  const [creatorsMap, setCreatorsMap] = useState<Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>>(new Map());
+  const cardPlaceIds = useMemo(() => places.map((place) => place.id), [places]);
+  const cardCreatorIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          places
+            .map((place) => place.created_by)
+            .filter((id): id is string => Boolean(id))
+        )
+      ),
+    [places]
+  );
+  const batchData = useBatchPlaceData(cardPlaceIds, cardCreatorIds);
 
   // User access and profile from context (single session/profile request; no duplicate loadUser)
   const { access, user, profile } = useUserAccessContext();
@@ -105,83 +131,6 @@ function MapPageContent() {
   const userAvatar = profile?.avatar_url ?? null;
   
   
-  // Batch-load creator profiles whenever the `places` list changes.
-  // One IN(...) query replaces N per-card profile fetches.
-  const creatorIdsKeyForMap = useMemo(() => {
-    const ids = Array.from(new Set(places.map(p => p.created_by).filter(Boolean) as string[]));
-    return ids.sort().join(",");
-  }, [places]);
-  useEffect(() => {
-    if (!creatorIdsKeyForMap) {
-      setCreatorsMap(new Map());
-      return;
-    }
-    const userIds = creatorIdsKeyForMap.split(",");
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("id, display_name, username, avatar_url")
-          .in("id", userIds);
-        if (cancelled || error || !data) return;
-        const map = new Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>();
-        for (const row of data as Array<{ id: string; display_name: string | null; username: string | null; avatar_url: string | null }>) {
-          map.set(row.id, { display_name: row.display_name, username: row.username, avatar_url: row.avatar_url });
-        }
-        if (!cancelled) setCreatorsMap(map);
-      } catch {
-        // PlaceCard will fall back to "Unknown".
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [creatorIdsKeyForMap]);
-
-  // Batch-load photos when `places` changes. One IN(...) query replaces
-  // N parallel queries from each <PlaceCard>. Memoised key avoids re-fetch
-  // on identical lists.
-  const placeIdsKeyForPhotos = useMemo(() => places.map(p => p.id).sort().join(","), [places]);
-  useEffect(() => {
-    if (places.length === 0) {
-      setPlacePhotosMap(new Map());
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("place_photos")
-          .select("place_id,url")
-          .in("place_id", places.map(p => p.id))
-          .order("sort", { ascending: true });
-        if (cancelled) return;
-        const grouped = new Map<string, string[]>();
-        if (!error && data) {
-          for (const row of data as { place_id: string; url: string }[]) {
-            if (!row.place_id || !row.url) continue;
-            if (!grouped.has(row.place_id)) grouped.set(row.place_id, []);
-            grouped.get(row.place_id)!.push(row.url);
-          }
-        }
-        for (const p of places) {
-          if (!grouped.has(p.id) && p.cover_url) {
-            grouped.set(p.id, [p.cover_url]);
-          }
-        }
-        if (!cancelled) setPlacePhotosMap(grouped);
-      } catch {
-        if (cancelled) return;
-        const fallback = new Map<string, string[]>();
-        for (const p of places) {
-          if (p.cover_url) fallback.set(p.id, [p.cover_url]);
-        }
-        setPlacePhotosMap(fallback);
-      }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placeIdsKeyForPhotos]);
-
   // Previously this gated the places fetch on auth resolution. Removed:
   // place data doesn't depend on the user (premium filtering happens later
   // on the client via filterPlaces). Waiting for getSession() before even
@@ -302,7 +251,6 @@ function MapPageContent() {
   const [selectedCity, setSelectedCity] = useState<string | null>(initialCity);
   
   const [selectedTag, setSelectedTag] = useState<string>("");
-  const [cameFromHome, setCameFromHome] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -332,7 +280,6 @@ function MapPageContent() {
       const categoriesParam = searchParams.get('categories');
       const tagsParam = searchParams.get('tags');
       const qParam = searchParams.get('q');
-      const ref = searchParams.get('ref');
       
       // Устанавливаем applied filters из URL
       if (city && city.trim()) {
@@ -343,7 +290,7 @@ function MapPageContent() {
           setAppliedCities([decodedCity]);
           setSelectedCity(decodedCity);
           setHasExplicitCityInUrlState(true); // Город явно указан в URL
-        } catch (e) {
+        } catch {
           const trimmedCity = city.trim();
           setAppliedCity(trimmedCity);
           setAppliedCities([trimmedCity]);
@@ -412,13 +359,6 @@ function MapPageContent() {
       } else {
         setActiveFilters(prev => ({ ...prev, tags: [] }));
         setFiltersVersion(prev => prev + 1);
-      }
-      
-      // Проверяем, пришли ли с Home
-      if (categoriesParam || tagsParam || ref === 'home') {
-        setCameFromHome(true);
-      } else {
-        setCameFromHome(false);
       }
     } catch (error) {
       console.error("Error parsing search params:", error);
@@ -527,29 +467,19 @@ function MapPageContent() {
 
   // Cities are now fixed from constants, no need to compute from places
 
-  // Получаем популярные теги из всех мест
-  const popularTags = useMemo(() => {
-    const tagCounts = new Map<string, number>();
-    places.forEach((place) => {
-      if (place.tags && Array.isArray(place.tags)) {
-        place.tags.forEach((tag) => {
-          tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
-        });
-      }
-    });
-    const sortedTags = Array.from(tagCounts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([tag]) => tag);
-    return sortedTags;
-  }, [places]);
-
-  // Track total count separately
-  const [totalPlacesCount, setTotalPlacesCount] = useState<number | null>(null);
   const [placesData, setPlacesData] = useState<Place[] | null>(null);
   const [placesLoading, setPlacesLoading] = useState(true);
-  const [placesError, setPlacesError] = useState<any>(null);
+  const [placesError, setPlacesError] = useState<unknown>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const placesDataLength = placesData?.length ?? 0;
+  const serverKindsKey = useMemo(() => {
+    const sorted = [...(activeFilters.kinds ?? [])].sort();
+    return JSON.stringify(sorted);
+  }, [activeFilters.kinds]);
+  const serverKindsForQuery = useMemo(
+    () => JSON.parse(serverKindsKey) as HomeKind[],
+    [serverKindsKey],
+  );
 
   // Tags are now loaded dynamically by FiltersModal based on selected categories
   // (via getAvailableTags callback that queries Supabase tags table with category_ids filter)
@@ -589,9 +519,8 @@ function MapPageContent() {
 
       // Фильтрация по типу карточки (location / service / experience).
       // Применяется серверно через .in() — меньше передаваемых данных.
-      const kinds = activeFilters.kinds ?? [];
-      if (kinds.length > 0) {
-        query = query.in("kind", kinds);
+      if (serverKindsForQuery.length > 0) {
+        query = query.in("kind", serverKindsForQuery);
       }
 
       // Применяем сортировку
@@ -612,13 +541,14 @@ function MapPageContent() {
       
       if (error) {
         // Enhanced error logging with full error details
+        const errorInfo = toErrorLike(error);
         const errorDetails = {
           message: error.message || 'No error message',
           code: error.code || 'No error code',
           details: error.details || 'No details',
           hint: error.hint || 'No hint',
-          name: (error as any).name || 'No name',
-          stack: (error as any).stack || 'No stack',
+          name: errorInfo.name || 'No name',
+          stack: errorInfo.stack || 'No stack',
           fullError: error,
         };
         
@@ -677,11 +607,6 @@ function MapPageContent() {
         throw error;
       }
       
-      // Update total count
-      if (count !== null && count !== undefined) {
-        setTotalPlacesCount(count);
-      }
-      
       // Return empty array if no data (this is valid - means no places match filters)
       if (!data || data.length === 0) {
         if (process.env.NODE_ENV === 'development') {
@@ -692,10 +617,6 @@ function MapPageContent() {
             selectedTag,
             totalCount: count,
           });
-        }
-        // Update total count even if no data
-        if (count !== null && count !== undefined) {
-          setTotalPlacesCount(count);
         }
         return [];
       }
@@ -806,7 +727,7 @@ function MapPageContent() {
   // activeFilters.kinds — server-side фильтр (.in("kind", kinds) выше), поэтому ОБЯЗАН быть в deps,
   // иначе при смене типа карточки в FiltersModal список не перезапрашивается.
   // Стабилизируем массив через JSON.stringify, чтобы избежать новой ссылки на каждый рендер.
-  }, [appliedCity, appliedCities, appliedQ, appliedCategories, selectedTag, activeFilters.sort, JSON.stringify(activeFilters.kinds ?? []), hasExplicitCityInUrlState, userId, bootReady, refreshKey]);
+  }, [appliedCity, appliedCities, appliedQ, appliedCategories, selectedTag, activeFilters.sort, serverKindsForQuery, hasExplicitCityInUrlState, userId, bootReady, refreshKey]);
 
   // No pagination - placesData contains all places directly
 
@@ -871,6 +792,19 @@ function MapPageContent() {
     return JSON.stringify(sorted);
   }, [activeFilters.tags]);
 
+  const activeCategoriesForFilter = useMemo(
+    () => JSON.parse(categoriesKey) as string[],
+    [categoriesKey],
+  );
+  const activeTagsForFilter = useMemo(
+    () => JSON.parse(tagsKey) as string[],
+    [tagsKey],
+  );
+  const activeKindsForFilter = useMemo(
+    () => JSON.parse(serverKindsKey) as HomeKind[],
+    [serverKindsKey],
+  );
+
       // Apply client-side filters (Premium/Hidden/Vibe/Categories/Cities/Search) to placesData
       // Все фильтры применяются на клиенте для мгновенной скорости
       // Используем useMemo для вычисления, но обновляем через useEffect для гарантии обновления
@@ -906,12 +840,11 @@ function MapPageContent() {
         }
         
         // Затем применяем остальные фильтры (с радиусом для городов)
-        const activeKinds = activeFilters.kinds ?? [];
         result = filterPlaces(result, {
           premium: activeFilters.premium,
-          categories: activeFilters.categories.length > 0 ? activeFilters.categories : undefined,
-          tags: (activeFilters.tags ?? []).length > 0 ? (activeFilters.tags ?? []) : undefined,
-          kinds: activeKinds.length > 0 ? activeKinds : undefined,
+          categories: activeCategoriesForFilter.length > 0 ? activeCategoriesForFilter : undefined,
+          tags: activeTagsForFilter.length > 0 ? activeTagsForFilter : undefined,
+          kinds: activeKindsForFilter.length > 0 ? activeKindsForFilter : undefined,
           cities: citiesForFilter,
           cityCoordsMap,
         });
@@ -932,7 +865,7 @@ function MapPageContent() {
             appliedQ: appliedQ.trim(),
             appliedCities,
             citiesForFilter,
-            categories: activeFilters.categories,
+            categories: categoriesKey,
             sort: activeFilters.sort,
             categoriesKey,
             citiesKey,
@@ -948,7 +881,9 @@ function MapPageContent() {
         // Используем строковые ключи для отслеживания изменений массивов
         categoriesKey,
         citiesKey,
-        tagsKey,
+        activeCategoriesForFilter,
+        activeTagsForFilter,
+        activeKindsForFilter,
         appliedCities,
         appliedCity, 
         hasExplicitCityInUrlState,
@@ -960,24 +895,22 @@ function MapPageContent() {
       useEffect(() => {
         if (process.env.NODE_ENV === 'development') {
           console.log('[MapPage] filteredPlaces updating:', {
-            inputCount: placesData?.length || 0,
+            inputCount: placesDataLength,
             outputCount: filteredPlacesMemo.length,
             filters: {
               premium: activeFilters.premium,
-              categories: activeFilters.categories,
+              categories: categoriesKey,
             },
             appliedCities,
             categoriesKey,
             citiesKey,
-            prevLength: filteredPlacesState.length,
-            prevState: filteredPlacesState.slice(0, 3).map(p => p.id),
             newState: filteredPlacesMemo.slice(0, 3).map(p => p.id),
           });
         }
         // Всегда обновляем состояние, даже если длина не изменилась
         // Это гарантирует перерендер компонентов
         setFilteredPlacesState(filteredPlacesMemo);
-      }, [filteredPlacesMemo, categoriesKey, citiesKey, appliedCities, activeFilters.premium]);
+      }, [filteredPlacesMemo, categoriesKey, citiesKey, appliedCities, activeFilters.premium, placesDataLength]);
       
       // Используем состояние для отображения
       const filteredPlaces = filteredPlacesState;
@@ -998,21 +931,22 @@ function MapPageContent() {
     if (process.env.NODE_ENV === 'development') {
       console.log('[MapPage] filteredPlaces updated:', {
         length: filteredPlaces.length,
-        placesDataLength: placesData?.length || 0,
+        placesDataLength,
         activeFilters: {
           premium: activeFilters.premium,
         },
       });
     }
-  }, [filteredPlaces.length, placesData?.length || 0, activeFilters.premium]);
+  }, [filteredPlaces.length, placesDataLength, activeFilters.premium]);
 
   // Handle errors
   useEffect(() => {
     if (placesError) {
-      const msg = placesError?.message ?? (placesError as any)?.code ?? '';
-      const isTransient = !msg || placesError?.name === 'AbortError' || (msg && (String(msg).includes('fetch') || String(msg).includes('network') || String(msg).includes('abort')));
+      const errorInfo = toErrorLike(placesError);
+      const msg = errorInfo.message ?? errorInfo.code ?? '';
+      const isTransient = !msg || errorInfo.name === 'AbortError' || (msg && (String(msg).includes('fetch') || String(msg).includes('network') || String(msg).includes('abort')));
       if (!isTransient) {
-        const logMsg = msg || (placesError as any)?.details || (placesError as any)?.hint || 'Unknown error';
+        const logMsg = msg || errorInfo.details || errorInfo.hint || 'Unknown error';
         console.error("Error loading places:", logMsg);
       }
       setPlaces([]);
@@ -1025,11 +959,11 @@ function MapPageContent() {
       console.log('[MapPage] Data state:', {
         bootReady,
         placesLoading,
-        placesDataLength: placesData?.length ?? 0,
+        placesDataLength,
         filteredPlacesLength: filteredPlaces.length,
       });
     }
-  }, [bootReady, placesLoading, placesData?.length ?? 0, filteredPlaces.length]);
+  }, [bootReady, placesLoading, placesDataLength, filteredPlaces.length]);
 
 
   // User data now comes from useUserAccessContext — no separate loadUser needed
@@ -1088,10 +1022,6 @@ function MapPageContent() {
 
     return () => clearTimeout(timer);
   }, [searchDraft]);
-
-  function applySearch() {
-    setAppliedQ(searchDraft);
-  }
 
   const handleCityChange = (city: string | null) => {
     // Сбрасываем viewport карты — fitBounds сам определит новые границы
@@ -1253,9 +1183,6 @@ function MapPageContent() {
     return count;
   }, [appliedCategories, appliedCity, appliedQ, hasExplicitCityInUrlState]);
 
-  // Quick search chips
-  const quickSearchChips = ["Romantic", "Quiet", "Sunset", "Coffee", "Nature"];
-
   // Проверяем, есть ли активные фильтры (для показа кнопки "назад")
   const hasActiveFilters = useMemo(() => {
     return (
@@ -1298,11 +1225,16 @@ function MapPageContent() {
   };
 
   // Calculate locked premium places for Haunted Gem indexing
-  const defaultUserAccess: UserAccess = access ?? { 
-    role: "guest", plan: "free",
-    hasPremium: false, 
-    isAdmin: false 
-  };
+  const defaultUserAccess: UserAccess = useMemo(
+    () =>
+      access ?? {
+        role: "guest",
+        plan: "free",
+        hasPremium: false,
+        isAdmin: false,
+      },
+    [access],
+  );
   
   const lockedPlacesMap = useMemo(() => {
     const lockedPlaces = places
@@ -1536,7 +1468,7 @@ function MapPageContent() {
             const { count, error } = await query;
             if (error) {
               // Silently ignore AbortError
-              if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+              if (isAbortLikeError(error)) {
                 return 0;
               }
               // Enhanced logging for production
@@ -1549,9 +1481,9 @@ function MapPageContent() {
               }
             }
             return count || 0;
-          } catch (err: any) {
+          } catch (err: unknown) {
             // Silently ignore AbortError
-            if (err?.name === 'AbortError' || err?.message?.includes('abort') || err?.code === 'ECONNABORTED') {
+            if (isAbortLikeError(err)) {
               return 0;
             }
             return 0;
@@ -1764,7 +1696,6 @@ function MapPageContent() {
                   `}</style>
                   {filteredPlaces.map((p) => {
                     const isFavorite = favorites.has(p.id);
-                    const isHovered = hoveredPlaceId === p.id || selectedPlaceId === p.id;
                     const hauntedGemIndex = lockedPlacesMap.get(p.id);
                     return (
                     <div
@@ -1779,8 +1710,8 @@ function MapPageContent() {
                         userAccess={access}
                         userId={userId}
                         isFavorite={isFavorite}
-                        batchPhotos={placePhotosMap.get(p.id)}
-                        batchProfile={p.created_by ? creatorsMap.get(p.created_by) : undefined}
+                        batchPhotos={batchData.photos.get(p.id)}
+                        batchProfile={p.created_by ? batchData.profiles.get(p.created_by) : undefined}
                         hauntedGemIndex={hauntedGemIndex}
                         favoriteButton={
                           userId ? (
@@ -1974,8 +1905,8 @@ function MapPageContent() {
                               userAccess={access}
                               userId={userId}
                               isFavorite={isFavorite}
-                              batchPhotos={placePhotosMap.get(p.id)}
-                              batchProfile={p.created_by ? creatorsMap.get(p.created_by) : undefined}
+                              batchPhotos={batchData.photos.get(p.id)}
+                              batchProfile={p.created_by ? batchData.profiles.get(p.created_by) : undefined}
                               hauntedGemIndex={hauntedGemIndex}
                               favoriteButton={
                                 userId ? (
@@ -2089,16 +2020,10 @@ export default function MapPage() {
         </div>
       </main>
     }>
-      <MapPageContent />
+      <SectionErrorBoundary>
+        <MapPageContent />
+      </SectionErrorBoundary>
     </Suspense>
-  );
-}
-
-function Card({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl bg-white border border-[#6b7d47]/10 shadow-sm p-4 hover:shadow-md transition cursor-pointer">
-      {children}
-    </div>
   );
 }
 
@@ -2146,7 +2071,7 @@ function MapView({
   const prevPlacesIdsRef = useRef<string>("");
 
   // Refs for imperative markers and MarkerClusterer
-  const markersRef = useRef<google.maps.Marker[]>([]);
+  const markersRef = useRef<PlaceMarker[]>([]);
   const clustererRef = useRef<MarkerClusterer | null>(null);
 
   // Обновляем ref при изменении callback
@@ -2225,11 +2150,16 @@ function MapView({
   const selectedPlaceId = externalSelectedPlaceId ?? internalSelectedPlaceId;
 
   // Filter premium places for non-premium users on map (but keep them in list)
-  const defaultUserAccess: UserAccess = userAccess ?? { 
-    role: "guest", plan: "free",
-    hasPremium: false, 
-    isAdmin: false 
-  };
+  const defaultUserAccess: UserAccess = useMemo(
+    () =>
+      userAccess ?? {
+        role: "guest",
+        plan: "free",
+        hasPremium: false,
+        isAdmin: false,
+      },
+    [userAccess],
+  );
 
   const placesWithCoords = useMemo(
     () => {
@@ -2250,6 +2180,10 @@ function MapView({
       });
     },
     [places, defaultUserAccess, userId]
+  );
+  const placesWithCoordsKey = useMemo(
+    () => placesWithCoords.map((p) => p.id).join(","),
+    [placesWithCoords],
   );
 
   // Загружаем фото для всех мест одним запросом (batch)
@@ -2297,7 +2231,7 @@ function MapView({
       }
     })();
     return () => { cancelled = true; };
-  }, [placesWithCoords.map((p) => p.id).join(","), isLoaded]);
+  }, [placesWithCoords, placesWithCoordsKey, isLoaded]);
 
   // Вычисляем центр карты на основе всех мест с координатами или используем внешний
   const center = useMemo(() => {
@@ -2384,10 +2318,10 @@ function MapView({
         position: { lat: place.lat!, lng: place.lng! },
         title: place.title,
         icon: createMarkerIcon(emoji, "default", isPremium),
-      });
+      }) as PlaceMarker;
 
       // Привязываем place.id к маркеру для быстрого поиска
-      (marker as any).__placeId = place.id;
+      marker.__placeId = place.id;
 
       // Клик по индивидуальному маркеру — показать InfoWindow
       marker.addListener("click", () => {
@@ -2434,7 +2368,6 @@ function MapView({
       });
       markersRef.current = [];
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapInstance, isLoaded, placesWithCoords, externalSelectedPlaceId]);
 
   // Обновляем иконку выбранного маркера (увеличение) без пересоздания кластерера
@@ -2442,7 +2375,7 @@ function MapView({
     if (!isLoaded || markersRef.current.length === 0) return;
 
     for (const marker of markersRef.current) {
-      const placeId = (marker as any).__placeId as string;
+      const placeId = marker.__placeId;
       const isSelected = placeId === selectedPlaceId;
       const place = placesWithCoords.find((p) => p.id === placeId);
       if (!place) continue;
@@ -2648,7 +2581,7 @@ function MapView({
           {selectedPlaceId && (() => {
             const place = placesWithCoords.find((p) => p.id === selectedPlaceId);
             if (!place || !place.lat || !place.lng) return null;
-            if (typeof window === "undefined" || !(window as any).google?.maps) return null;
+            if (typeof google === "undefined" || !google.maps) return null;
 
             const photos = placePhotos.get(place.id) || (isValidPhotoUrl(place.cover_url) ? [place.cover_url!] : []);
             const currentIndex = currentPhotoIndex.get(place.id) || 0;
@@ -2692,7 +2625,7 @@ function MapView({
                   }
                 }}
                 options={{
-                  pixelOffset: new (window as any).google.maps.Size(0, -10),
+                  pixelOffset: new google.maps.Size(0, -10),
                 }}
               >
                 <div className="w-80 bg-white rounded-xl shadow-xl overflow-hidden">
@@ -2700,9 +2633,11 @@ function MapView({
                   <div className="relative w-full" style={{ paddingBottom: '100%' }}>
                     {currentPhoto ? (
                       <div className="absolute inset-0">
-                        <img
+                        <Image
                           src={currentPhoto}
                           alt={place.title}
+                          fill
+                          sizes="320px"
                           className="absolute inset-0 w-full h-full object-cover rounded-t-xl"
                         />
                         

@@ -47,16 +47,17 @@ export default function AddressAutocomplete({
     if (place.geometry?.location) {
       const location = place.geometry.location;
       
+      const maybeLatLng = location as google.maps.LatLng;
+      const maybeLiteral = location as unknown as { lat: number; lng: number };
+      const latValue = (location as { lat?: unknown }).lat;
       // Проверяем, является ли location объектом LatLng с методами
-      if (location && typeof (location as any).lat === 'function') {
-        const latLng = location as google.maps.LatLng;
-        lat = latLng.lat();
-        lng = latLng.lng();
-      } else if (location && typeof (location as any).lat === 'number') {
+      if (typeof latValue === 'function') {
+        lat = maybeLatLng.lat();
+        lng = maybeLatLng.lng();
+      } else if (typeof latValue === 'number') {
         // Если это объект с полями lat и lng
-        const coords = location as unknown as { lat: number; lng: number };
-        lat = coords.lat;
-        lng = coords.lng;
+        lat = maybeLiteral.lat;
+        lng = maybeLiteral.lng;
       }
     }
 

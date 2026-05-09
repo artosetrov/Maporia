@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState, useMemo, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -31,6 +30,27 @@ import { DEFAULT_CITY } from "./constants";
 
 type ReactionPlaceId = Pick<Database["public"]["Tables"]["reactions"]["Row"], "place_id">;
 type ReactionsPlaceIdResult = { data: ReactionPlaceId[] | null; error: PostgrestError | null };
+type ErrorLike = {
+  name?: string;
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+};
+
+const toErrorLike = (error: unknown): ErrorLike => {
+  if (error && typeof error === "object") return error as ErrorLike;
+  return { message: String(error) };
+};
+
+const isAbortLikeError = (error: unknown): boolean => {
+  const err = toErrorLike(error);
+  return (
+    err.name === "AbortError" ||
+    err.message?.includes("abort") === true ||
+    err.code === "ECONNABORTED"
+  );
+};
 import { useUserAccessContext } from "./contexts/UserAccessContext";
 import { SectionErrorBoundary } from "./components/SectionErrorBoundary";
 import { sanitizePostgrestValue } from "./utils";
@@ -205,10 +225,11 @@ function HomePageInner() {
           access_level: r.access_level ?? null,
         }))
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const error = toErrorLike(err);
       placesForTagsLoadedRef.current = false; // allow retry on next open
-      if (err?.name === 'AbortError' || err?.message?.includes('abort')) return;
-      if (err?.name === 'TypeError' && err?.message?.includes('fetch')) {
+      if (isAbortLikeError(err)) return;
+      if (error.name === 'TypeError' && error.message?.includes('fetch')) {
         if (process.env.NODE_ENV === 'development') {
           console.warn('[HomePage] Не удалось загрузить теги (сеть недоступна).');
         }
@@ -246,7 +267,7 @@ function HomePageInner() {
 
         if (error) {
           // Silently ignore AbortError
-          if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+          if (isAbortLikeError(error)) {
             return;
           }
           
@@ -257,13 +278,14 @@ function HomePageInner() {
         if (!isUnmounting && userId === capturedUserId && data) {
           setFavorites(new Set(data.map((r) => r.place_id)));
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const error = toErrorLike(err);
         // Silently ignore AbortError
-        if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+        if (isAbortLikeError(err)) {
           return;
         }
         // Сетевые ошибки — тихо обрабатываем
-        if (err?.name === 'TypeError' && (err?.message === 'Failed to fetch' || err?.message?.includes('fetch'))) {
+        if (error.name === 'TypeError' && (error.message === 'Failed to fetch' || error.message?.includes('fetch'))) {
           if (process.env.NODE_ENV === 'development') {
             console.warn('[HomePage] Не удалось загрузить избранное (сеть недоступна).');
           }
@@ -606,28 +628,29 @@ function HomePageInner() {
             const { count, error } = await countQuery;
             if (error) {
               // Silently ignore AbortError
-              if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+              if (isAbortLikeError(error)) {
                 return 0;
               }
               console.error("Error counting filtered places:", {
                 message: error.message,
-                code: (error as any).code,
-                details: (error as any).details,
-                hint: (error as any).hint,
+                code: error.code,
+                details: error.details,
+                hint: error.hint,
                 context: { selectedCity, categories: draftFilters.categories, searchValue },
               });
               return 0;
             }
             return count || 0;
-          } catch (error: any) {
+          } catch (error: unknown) {
+            const err = toErrorLike(error);
             // Silently ignore AbortError
-            if (error?.name === 'AbortError' || error?.message?.includes('abort') || error?.code === 'ECONNABORTED') {
+            if (isAbortLikeError(error)) {
               return 0;
             }
             console.error("Error in getFilteredCount:", {
-              message: error?.message,
-              name: error?.name,
-              code: (error as any)?.code,
+              message: err.message,
+              name: err.name,
+              code: err.code,
               string: String(error),
             });
             return 0;

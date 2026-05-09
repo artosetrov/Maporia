@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import LoginPageContent from "./LoginPageContent";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 
 export const metadata: Metadata = {
   title: "Sign in — Maporia",
@@ -9,9 +10,11 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<AuthSkeleton />}>
-      <LoginPageContent />
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={<AuthSkeleton />}>
+        <LoginPageContent />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 

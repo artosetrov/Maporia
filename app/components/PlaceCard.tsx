@@ -16,6 +16,7 @@ type ProfileResult = { data: ProfileSelect | null; error: PostgrestError | null 
 type PlacePhotoRow = Database["public"]["Tables"]["place_photos"]["Row"];
 type PlacePhotoSelect = Pick<PlacePhotoRow, "url">;
 type PlacePhotosResult = { data: PlacePhotoSelect[] | null; error: PostgrestError | null };
+type ErrorLike = { name?: string; message?: string; code?: string };
 import PremiumBadge from "./PremiumBadge";
 import Icon from "./Icon";
 import { usePremiumGate } from "../hooks/usePremiumGate";
@@ -35,9 +36,9 @@ type PlaceCardProps = {
     tags?: string[] | null;
     created_by?: string | null;
     accessLevel?: "public" | "premium"; // For draft places in wizard
-    is_premium?: boolean | null; // TODO: Use when schema has this field
-    premium_only?: boolean | null; // TODO: Use when schema has this field
-    access_level?: string | null; // TODO: Use when schema has this field
+    is_premium?: boolean | null; // Legacy premium flag.
+    premium_only?: boolean | null; // Legacy premium flag.
+    access_level?: string | null; // Current access-level field.
     visibility?: string | null;
   };
   userAccess?: UserAccess; // User's access level
@@ -278,11 +279,12 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
         if (error) {
           // Silently ignore AbortError and network errors
           const errorMessage = error.message;
-          const errorName = (error as any).name;
+          const errorInfo = error as ErrorLike;
+          const errorName = errorInfo.name;
           
           if (errorMessage?.includes('abort') || 
               errorName === 'AbortError' || 
-              (error as any).code === 'ECONNABORTED' ||
+              errorInfo.code === 'ECONNABORTED' ||
               (errorName === 'TypeError' && errorMessage?.includes('Failed to fetch'))) {
             // Fallback на cover_url silently
             if (place.cover_url && !isUnmounting && place.id === placeId) {

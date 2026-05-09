@@ -1,17 +1,21 @@
 /**
- * Тарифы Maporia: единый источник правды для UI, биллинга и пейволлов.
+ * Тарифы Maporia (LEGACY v1).
  *
- * Окончательная сетка (от пользователя):
+ * @deprecated С v2 источник правды — `app/lib/pricing/registry.ts`.
+ * Этот файл оставлен для обратной совместимости с UI на /pricing, /add,
+ * /profile/billing, чтобы не ломать билд во время поэтапной миграции.
+ * Будет удалён после Φ7 (UI-рефакторинг на registry).
+ *
+ * Текущая сетка v1 (4 плана, без yearly):
  *  - Premium: $35 one-time, открывает скрытые локации навсегда.
  *  - Pro Service: $14.99 / мес, можно опубликовать 5 услуг (плюс Premium бесплатно).
  *  - Pro Experience: $14.99 / мес, можно опубликовать 5 впечатлений (плюс Premium).
  *  - Pro All: $34.99 / мес, **10 в сумме** (services + experiences) + Premium.
+ *  - Pro Location $9.99/мес — добавлен v2 как stub в этом файле, реальные данные в registry.
  *  - Каждая карточка сверх лимита докупается за $2.99 (one-time, листинг навсегда).
  *
- * Любой Pro-тариф автоматически даёт hasPremium = true (через `isPaidPlan` в access.ts),
- * так что отдельно покупать Premium при наличии Pro не нужно.
- *
- * ⚠️ Цены здесь должны совпадать с Stripe Price'ами по env-переменным.
+ * ⚠️ Цены здесь должны совпадать с registry. Когда расходятся — проверять оба места,
+ * пока Φ7 не удалит этот модуль.
  */
 
 import type { CreatorPlan, PaidPlan, Plan } from "../types";
@@ -77,6 +81,32 @@ export const EXTRA_LISTING = {
 const PREMIUM_PRICE_ENV = "STRIPE_PRICE_PREMIUM_ONETIME";
 
 export const PLAN_CONFIG: Record<PaidPlan, PlanConfig> = {
+  // v2 stub — реальные данные в app/lib/pricing/registry.ts (creator_location).
+  // Этот entry оставлен только чтобы Record<PaidPlan, ...> был exhaustive.
+  // UI на /pricing/v2 будет читать из registry, не отсюда.
+  creator_location: {
+    id: "creator_location",
+    display: {
+      name: "Pro Location",
+      tagline: "Publish places on the map",
+      emoji: "📍",
+      price: 9.99,
+      currency: "USD",
+      priceSuffix: "/ mo",
+      audience: "Local business owners, café/bar/spot keepers",
+      features: [
+        { label: "Premium included for free", included: true },
+        { label: "Up to 5 active locations", included: true },
+        { label: "Extra listing over the limit — $2.99", included: true },
+        { label: "Publish services", included: false },
+        { label: "Publish experiences", included: false },
+      ],
+    },
+    billing: { kind: "subscription", period: "month" },
+    quota: { service: 0, experience: 0 },
+    priceIdEnv: "STRIPE_PRICE_CREATOR_LOCATION_MONTH",
+  },
+
   premium_viewer: {
     id: "premium_viewer",
     display: {
@@ -176,12 +206,14 @@ export const PLAN_CONFIG: Record<PaidPlan, PlanConfig> = {
 /** Список тарифов слева направо в /pricing. */
 export const PLAN_ORDER: PaidPlan[] = [
   "premium_viewer",
+  "creator_location",
   "creator_service",
   "creator_experience",
   "creator_all",
 ];
 
 export const CREATOR_PLAN_IDS: CreatorPlan[] = [
+  "creator_location",
   "creator_service",
   "creator_experience",
   "creator_all",
@@ -196,14 +228,14 @@ export function formatPrice(amount: number, currency: "USD" = "USD"): string {
 
 /**
  * Какой тариф минимально достаточен для публикации kind'а.
- *  - location → premium_viewer (любой Pro тоже подойдёт, но минимум — Premium).
+ *  - location → creator_location.
  *  - service → creator_service.
  *  - experience → creator_experience.
  */
 export function suggestPlanForKind(
   kind: "location" | "service" | "experience"
 ): PaidPlan {
-  if (kind === "location") return "premium_viewer";
+  if (kind === "location") return "creator_location";
   if (kind === "service") return "creator_service";
   return "creator_experience";
 }
@@ -216,7 +248,7 @@ export function suggestPlanForKind(
  *  - есть и service, и experience → creator_all (только он покрывает оба).
  *  - есть только service (с/без location) → creator_service.
  *  - есть только experience (с/без location) → creator_experience.
- *  - только location → premium_viewer.
+ *  - только location → creator_location.
  *
  * Used by BecomeProviderModal/wizard для авто-подбора тарифа перед оплатой.
  * Пустой массив трактуется как location-only (defensive default).
@@ -231,7 +263,7 @@ export function suggestPlanForKinds(
   if (hasService && hasExperience) return "creator_all";
   if (hasService) return "creator_service";
   if (hasExperience) return "creator_experience";
-  return "premium_viewer";
+  return "creator_location";
 }
 
 /**

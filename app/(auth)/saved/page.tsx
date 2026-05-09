@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import TopBar from "../../components/TopBar";
@@ -12,9 +12,9 @@ import { supabase } from "../../lib/supabase";
 import { DEFAULT_CITY } from "../../constants";
 import { useUserAccessContext } from "../../contexts/UserAccessContext";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../../lib/access";
-import { useMemo } from "react";
 import { PlaceCardGridSkeleton } from "../../components/Skeleton";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
+import { useBatchPlaceData } from "../../hooks/useBatchPlaceData";
 
 type Place = {
   id: string;
@@ -58,6 +58,19 @@ export default function SavedPage() {
   const userEmail = user?.email ?? null;
   const userDisplayName = profile?.display_name ?? null;
   const userAvatar = profile?.avatar_url ?? null;
+  const placeIds = useMemo(() => places.map((place) => place.id), [places]);
+  const creatorIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          places
+            .map((place) => place.created_by)
+            .filter((id): id is string => Boolean(id))
+        )
+      ),
+    [places]
+  );
+  const batchData = useBatchPlaceData(placeIds, creatorIds);
 
   useEffect(() => {
     if (!accessLoading && userId) {
@@ -94,7 +107,7 @@ export default function SavedPage() {
       const placeIds = reactions.map((r) => r.place_id);
       const { data, error } = await supabase
         .from("places")
-        .select("id,title,city,country,address,cover_url,categories")
+        .select("id,title,city,country,address,cover_url,categories,created_at,created_by,access_level,is_premium,premium_only,visibility")
         .in("id", placeIds)
         .order("created_at", { ascending: false });
 
@@ -310,6 +323,8 @@ export default function SavedPage() {
                         userId={userId}
                         isFavorite={isFavorite}
                         hauntedGemIndex={hauntedGemIndex}
+                        batchPhotos={batchData.photos.get(place.id)}
+                        batchProfile={place.created_by ? batchData.profiles.get(place.created_by) : undefined}
                         favoriteButton={
                           userId ? (
                             <button

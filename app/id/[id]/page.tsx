@@ -101,12 +101,41 @@ type ProfileData = {
   avatar_url: string | null;
 };
 
+type ErrorLike = {
+  name?: string;
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+};
+
 type CommentData = {
   id: string;
   text: string;
   rating: number | null;
   created_at: string;
   user_id: string;
+};
+
+type CommentProfileRow = {
+  id: string;
+  display_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+};
+
+const toErrorLike = (error: unknown): ErrorLike => {
+  if (error && typeof error === "object") return error as ErrorLike;
+  return { message: String(error) };
+};
+
+const isAbortLikeError = (error: unknown): boolean => {
+  const err = toErrorLike(error);
+  return (
+    err.name === "AbortError" ||
+    err.message?.includes("abort") === true ||
+    err.code === "ECONNABORTED"
+  );
 };
 
 function cx(...a: Array<string | false | undefined | null>) {
@@ -490,7 +519,7 @@ export default function PlacePage(props: PageProps) {
               .select("display_name, username, avatar_url")
               .eq("id", placeItem.created_by)
               .maybeSingle()
-          : Promise.resolve({ data: null, error: null } as { data: ProfileData | null; error: any }),
+          : Promise.resolve({ data: null, error: null }),
         supabase
           .from("comments")
           .select("id,text,rating,created_at,user_id")
@@ -546,7 +575,8 @@ export default function PlacePage(props: PageProps) {
 
       // Process creator profile.
       if (placeItem.created_by) {
-        const { data: profileData, error: profileError } = creatorRes as { data: ProfileData | null; error: any };
+        const profileData = creatorRes.data as ProfileData | null;
+        const profileError = creatorRes.error as ErrorLike | null;
         if (profileError) {
           const msg = String(profileError.message ?? "").trim();
           const code = String(profileError.code ?? "").trim();
@@ -573,7 +603,8 @@ export default function PlacePage(props: PageProps) {
           setCommentError("Failed to load comments. Please refresh the page.");
         }
       } else {
-        const userIds = Array.from(new Set((commentData ?? []).map((c: any) => c.user_id)));
+        const loadedComments = (commentData ?? []) as CommentData[];
+        const userIds = Array.from(new Set(loadedComments.map((c) => c.user_id)));
         const profilesMap = new Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>();
 
         if (userIds.length > 0) {
@@ -582,7 +613,7 @@ export default function PlacePage(props: PageProps) {
             .select("id, display_name, username, avatar_url")
             .in("id", userIds);
 
-          (profilesData ?? []).forEach((p: any) => {
+          ((profilesData ?? []) as CommentProfileRow[]).forEach((p) => {
             profilesMap.set(p.id, {
               display_name: p.display_name,
               username: p.username,
@@ -591,7 +622,7 @@ export default function PlacePage(props: PageProps) {
           });
         }
 
-        const commentsWithProfiles: Comment[] = (commentData ?? []).map((c: any) => {
+        const commentsWithProfiles: Comment[] = loadedComments.map((c) => {
           const profile = profilesMap.get(c.user_id);
           return {
             ...c,
@@ -708,7 +739,7 @@ export default function PlacePage(props: PageProps) {
               place_id: id,
               user_id: userId,
               reaction: "like",
-            } as any);
+            } as never);
 
           if (error) {
             console.error("Error adding favorite:", error);
@@ -889,9 +920,9 @@ export default function PlacePage(props: PageProps) {
           user_id: user.id,
           text: trimmedText,
           rating: ratingToSave,
-        } as any)
+        } as never)
         .select("id,text,rating,created_at,user_id")
-        .single() as { data: CommentData | null; error: any };
+        .single() as unknown as { data: CommentData | null; error: ErrorLike | null };
 
       setSending(false);
       
@@ -906,7 +937,7 @@ export default function PlacePage(props: PageProps) {
           .from("profiles")
           .select("display_name, username, avatar_url")
           .eq("id", user.id)
-          .single() as { data: ProfileData | null; error: any };
+          .single() as unknown as { data: ProfileData | null; error: ErrorLike | null };
         
         const profileData = profileResult.data;
 
@@ -2431,28 +2462,29 @@ export default function PlacePage(props: PageProps) {
             const { count, error } = await countQuery;
             if (error) {
               // Silently ignore AbortError
-              if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+              if (isAbortLikeError(error)) {
                 return 0;
               }
               console.error("Error counting filtered places:", {
                 message: error.message,
-                code: (error as any).code,
-                details: (error as any).details,
-                hint: (error as any).hint,
+                code: error.code,
+                details: error.details,
+                hint: error.hint,
                 categories: draftFilters.categories,
               });
               return 0;
             }
             return count || 0;
-          } catch (error: any) {
+          } catch (error: unknown) {
+            const err = toErrorLike(error);
             // Silently ignore AbortError
-            if (error?.name === 'AbortError' || error?.message?.includes('abort') || error?.code === 'ECONNABORTED') {
+            if (isAbortLikeError(error)) {
               return 0;
             }
             console.error("Error in getFilteredCount:", {
-              message: error?.message,
-              name: error?.name,
-              code: (error as any)?.code,
+              message: err.message,
+              name: err.name,
+              code: err.code,
               string: String(error),
             });
             return 0;

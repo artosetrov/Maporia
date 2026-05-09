@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { logger } from "@/app/lib/logger";
+import type { Place, Profile } from "@/app/types";
+
+type AdminProfileRow = Pick<Profile, "is_admin" | "role">;
+type PlaceTagsRow = Pick<Place, "tags">;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -22,7 +27,7 @@ const supabaseAdmin = supabaseUrl && supabaseServiceKey ? createClient(supabaseU
 
 const SERVICE_ROLE_REQUIRED_MESSAGE = "SUPABASE_SERVICE_ROLE_KEY is required for admin routes. Set it in your environment.";
 
-async function checkAdminAccess(request: NextRequest): Promise<{ user: any; supabase: any } | null> {
+async function checkAdminAccess(request: NextRequest): Promise<{ user: User; supabase: SupabaseClient } | null> {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !supabaseAdmin) {
     return null;
   }
@@ -53,7 +58,8 @@ async function checkAdminAccess(request: NextRequest): Promise<{ user: any; supa
     return null;
   }
 
-  if (!profile.is_admin && profile.role !== "admin") {
+  const adminProfile = profile as AdminProfileRow;
+  if (!adminProfile.is_admin && adminProfile.role !== "admin") {
     return null;
   }
 
@@ -117,8 +123,9 @@ export async function GET(request: NextRequest) {
 
     // Extract all unique tags
     const allTags = new Set<string>();
-    if (places) {
-      for (const place of places) {
+    const placeRows = (places ?? []) as PlaceTagsRow[];
+    if (placeRows.length > 0) {
+      for (const place of placeRows) {
         if (place.tags && Array.isArray(place.tags)) {
           for (const tag of place.tags) {
             if (typeof tag === "string" && tag.trim().length > 0) {
@@ -201,8 +208,9 @@ export async function POST(request: NextRequest) {
         .not("tags", "is", null);
 
       const existingTags = new Set<string>();
-      if (places) {
-        for (const place of places) {
+      const placeRows = (places ?? []) as PlaceTagsRow[];
+      if (placeRows.length > 0) {
+        for (const place of placeRows) {
           if (place.tags && Array.isArray(place.tags)) {
             for (const tag of place.tags) {
               if (typeof tag === "string" && tag.trim().length > 0) {

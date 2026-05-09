@@ -4,12 +4,13 @@
  */
 
 import Stripe from "stripe";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // --- Environment ---
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+type SupabaseAdminClient = SupabaseClient;
 
 // --- Stripe (lazy singleton — avoids crash when STRIPE_SECRET_KEY is missing) ---
 
@@ -30,13 +31,21 @@ export const getStripe = (): Stripe | null => {
 
 // --- Supabase admin client (bypasses RLS) ---
 
-export const supabaseAdmin = createClient(
-  supabaseUrl || "",
-  supabaseServiceKey || "",
-  {
-    auth: { persistSession: false, autoRefreshToken: false },
+let _supabaseAdmin: SupabaseAdminClient | null = null;
+
+export const getSupabaseAdmin = (): SupabaseAdminClient | null => {
+  if (_supabaseAdmin) return _supabaseAdmin;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error("[stripe] Missing Supabase admin environment variables");
+    return null;
   }
-);
+
+  _supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  return _supabaseAdmin;
+};
 
 // --- Helpers ---
 
@@ -54,6 +63,9 @@ export const getOrCreateStripeCustomer = async (
 ): Promise<string> => {
   const stripe = getStripe();
   if (!stripe) throw new Error("Stripe is not configured");
+
+  const supabaseAdmin = getSupabaseAdmin();
+  if (!supabaseAdmin) throw new Error("Supabase admin is not configured");
 
   // 1. Check if user already has a stripe_customer_id
   const { data: profile, error } = await supabaseAdmin

@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getStripe, supabaseAdmin } from "../../../lib/stripe";
+import { getStripe, getSupabaseAdmin } from "../../../lib/stripe";
 import { isImpersonatingFromRequest } from "../../../lib/impersonation";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +32,10 @@ export async function POST(request: NextRequest) {
 
     const stripe = getStripe();
     if (!stripe) return jsonError("Stripe is not configured.", 503, "MISSING_STRIPE_KEY");
+    const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+      return jsonError("Supabase admin is not configured.", 503, "MISSING_SUPABASE_ADMIN");
+    }
 
     const body = (await request.json().catch(() => ({}))) as { access_token?: string };
     if (!body.access_token) return jsonError("Unauthorized", 401, "UNAUTHORIZED");

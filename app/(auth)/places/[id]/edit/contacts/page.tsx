@@ -16,6 +16,7 @@ import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../../lib/access";
 import Icon from "../../../../../components/Icon";
+import { ErrorBoundary } from "../../../../../components/ErrorBoundary";
 
 type PlaceContactsRow = Pick<
   Database["public"]["Tables"]["places"]["Row"],
@@ -56,6 +57,14 @@ function normalizeContacts(input: {
 type PageProps = { params: Promise<{ id: string }> };
 
 export default function ContactsEditorPage(props: PageProps) {
+  return (
+    <ErrorBoundary>
+      <ContactsEditorPageContent {...props} />
+    </ErrorBoundary>
+  );
+}
+
+function ContactsEditorPageContent(props: PageProps) {
   const router = useRouter();
   const { id: placeId } = use(props.params);
 

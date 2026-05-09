@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import type { Collection, Comment, Place, PlacePhoto, Profile, Reaction } from "@/app/types";
 
 // ---------------------------------------------------------------------------
 // Supabase admin client (service role only)
@@ -47,6 +48,17 @@ type DbHealthReport = {
   stats: DataStats;
 };
 
+type HealthTableRows = {
+  places: Place;
+  profiles: Profile;
+  collections: Collection;
+  reactions: Reaction;
+  comments: Comment;
+  place_photos: PlacePhoto;
+};
+
+type HealthTableName = keyof HealthTableRows;
+
 // ---------------------------------------------------------------------------
 // Admin auth helper
 // ---------------------------------------------------------------------------
@@ -84,7 +96,7 @@ const authenticateAdmin = async (
 /** Check RLS is enabled on critical tables */
 const checkRls = async (): Promise<DbCheckResult[]> => {
   const results: DbCheckResult[] = [];
-  const criticalTables = [
+  const criticalTables: HealthTableName[] = [
     "places",
     "profiles",
     "collections",

@@ -6,6 +6,9 @@ import {
   fetchGooglePlaceAiContext,
   OpenAiApiError,
 } from "../../../lib/ai/placeDescription";
+import type { Place, Profile } from "@/app/types";
+
+type AiProfileRow = Pick<Profile, "role" | "subscription_status" | "is_admin">;
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -17,11 +20,7 @@ if (!supabaseUrl || !supabaseServiceKey) {
   console.error("[ai/generate-description] Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
 }
 
-function hasPremiumAccessFromProfile(profile: {
-  role?: string | null;
-  subscription_status?: string | null;
-  is_admin?: boolean | null;
-} | null): boolean {
+function hasPremiumAccessFromProfile(profile: AiProfileRow | null): boolean {
   if (!profile) return false;
   if (profile.is_admin) return true;
   if (profile.role === "admin" || profile.role === "premium") return true;
@@ -97,7 +96,7 @@ export async function POST(request: NextRequest) {
       .eq("id", user.id)
       .single();
 
-    if (!hasPremiumAccessFromProfile(profile)) {
+    if (!hasPremiumAccessFromProfile(profile as AiProfileRow | null)) {
       return NextResponse.json(
         { error: "Premium required to generate descriptions.", code: "PREMIUM_REQUIRED" },
         { status: 403 }
@@ -107,7 +106,7 @@ export async function POST(request: NextRequest) {
     // If place_id provided — enforce ownership/admin & fetch google_place_id and optional fields from DB
     let effectiveGooglePlaceId: string | null = hasGooglePlaceId ? google_place_id! : null;
     const effectivePlaceId: string | null = hasPlaceId ? place_id! : null;
-    let placeRowForContext: { title?: string | null; address?: string | null; city_name_cached?: string | null } | null = null;
+    let placeRowForContext: Pick<Place, "title" | "address" | "city_name_cached"> | null = null;
 
     if (hasPlaceId) {
       const { data: placeRow, error: placeError } = await supabase
@@ -256,4 +255,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message, code: "AI_ERROR" }, { status: 500 });
   }
 }
-

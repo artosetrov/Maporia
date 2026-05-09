@@ -121,9 +121,9 @@ export default function AvatarEditorPage() {
     setSaving(true);
     setError(null);
 
-    const { error: updateError } = await (supabase
-      .from("profiles") as any)
-      .update({ avatar_url: avatarUrl })
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ avatar_url: avatarUrl } as never)
       .eq("id", user.id);
 
     setSaving(false);
@@ -153,9 +153,9 @@ export default function AvatarEditorPage() {
     }
 
     // Update profile
-    const { error: updateError } = await (supabase
-      .from("profiles") as any)
-      .update({ avatar_url: null } as any)
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ avatar_url: null } as never)
       .eq("id", user.id);
 
     setUploading(false);

@@ -7,6 +7,29 @@ import { getUserAccess, type UserAccess } from "../lib/access";
 import { getAuthUrl } from "../lib/authRedirect";
 import type { Profile } from "../types";
 
+type ErrorLike = {
+  name?: string;
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+  status?: number;
+};
+
+const toErrorLike = (error: unknown): ErrorLike => {
+  if (error && typeof error === "object") return error as ErrorLike;
+  return { message: String(error) };
+};
+
+const isAbortLikeError = (error: unknown): boolean => {
+  const err = toErrorLike(error);
+  return (
+    err.name === "AbortError" ||
+    err.message?.includes("abort") === true ||
+    err.code === "ECONNABORTED"
+  );
+};
+
 export type UseUserAccessResult = {
   loading: boolean;
   user: { id: string; email: string | null } | null;
@@ -58,7 +81,7 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
 
         if (sessionError) {
           // Silently ignore AbortError, but still stop loading so UI can render
-          if (sessionError.message?.includes('abort') || sessionError.name === 'AbortError') {
+          if (isAbortLikeError(sessionError)) {
             if (!isUnmounting && currentRequestId === requestId) {
               setUser(null);
               setProfile(null);
@@ -101,7 +124,7 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
             console.error('[useUserAccess] Session error:', {
               message: sessionError.message,
               name: sessionError.name,
-              status: (sessionError as any).status,
+              status: toErrorLike(sessionError).status,
               url: window.location.href,
             });
           } else {
@@ -144,7 +167,7 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
         // Load profile with role, subscription, and interests fields
         const { data: profileData, error: profileError } = await supabase
           .from("profiles")
-          .select("id,display_name,username,avatar_url,bio,role,subscription_status,is_admin,favorite_categories,favorite_tags,created_at")
+          .select("id,display_name,username,avatar_url,bio,role,subscription_status,is_admin,favorite_categories,favorite_tags,created_at,plan,plan_period,plan_renews_at,stripe_customer_id,bonus_listing_credits")
           .eq("id", currentUser.id)
           .maybeSingle();
 
@@ -155,7 +178,7 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
 
         if (profileError) {
           // Silently ignore AbortError, but still stop loading so UI can render
-          if (profileError.message?.includes('abort') || profileError.name === 'AbortError' || (profileError as any).code === 'ECONNABORTED') {
+          if (isAbortLikeError(profileError)) {
             if (!isUnmounting && currentRequestId === requestId) {
               setProfile(null);
               setAccess(getUserAccess(null));
@@ -201,7 +224,7 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
 
           // Check if profile is required
           if (requireProfile && !currentProfile) {
-            // TODO: Redirect to profile setup if route exists
+            // Future flow: redirect to profile setup if that route exists.
             // router.replace("/profile/setup");
             if (process.env.NODE_ENV === 'development') {
               console.warn("Profile required but not found");
@@ -214,9 +237,10 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
 
           setLoading(false);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const error = toErrorLike(err);
         // Silently ignore AbortError, but still stop loading so UI can render
-        if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+        if (isAbortLikeError(err)) {
           if (!isUnmounting && currentRequestId === requestId) {
             setLoading(false);
           }
@@ -224,7 +248,7 @@ export function useUserAccess(requireAuth: boolean = false, requireProfile: bool
         }
 
         // Сетевые ошибки (Failed to fetch) — показываем гостя без сырого TypeError в консоли
-        if (err?.name === 'TypeError' && (err?.message === 'Failed to fetch' || err?.message?.includes?.('fetch'))) {
+        if (error.name === 'TypeError' && (error.message === 'Failed to fetch' || error.message?.includes('fetch'))) {
           if (!isUnmounting && currentRequestId === requestId) {
             setUser(null);
             setProfile(null);

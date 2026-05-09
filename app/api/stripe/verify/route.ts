@@ -8,7 +8,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getStripe, supabaseAdmin } from "../../../lib/stripe";
+import { getStripe, getSupabaseAdmin } from "../../../lib/stripe";
+import { logger } from "../../../lib/logger";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -21,6 +22,10 @@ export async function POST(request: NextRequest) {
     const stripe = getStripe();
     if (!stripe) {
       return jsonError("Stripe is not configured.", 503, "MISSING_STRIPE_KEY");
+    }
+    const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+      return jsonError("Supabase admin is not configured.", 503, "MISSING_SUPABASE_ADMIN");
     }
 
     // --- Auth ---
@@ -83,7 +88,7 @@ export async function POST(request: NextRequest) {
       return jsonError("Failed to activate premium.", 500, "DB_ERROR");
     }
 
-    console.log("[stripe/verify] Premium activated for user:", user.id);
+    logger.info("[stripe/verify] Premium activated for user:", user.id);
     return NextResponse.json({ status: "activated", activated: true });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Verification failed";

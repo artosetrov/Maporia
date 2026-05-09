@@ -184,13 +184,17 @@ export default function PremiumUpsellModal({
         console.log(`Loaded ${placesWithCovers.length} premium places with covers for slider`);
         setPremiumPlaces(placesWithCovers);
         setCurrentImageIndex(0);
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const err =
+          error && typeof error === "object"
+            ? (error as { name?: string; message?: string })
+            : { message: String(error) };
         // Silently handle errors - use fallback gradient
-        if (error?.name === 'AbortError' || error?.message?.includes('abort')) {
+        if (err.name === 'AbortError' || err.message?.includes('abort')) {
           return;
         }
         // Log for debugging
-        console.error("Exception loading premium places:", error?.message || error, error);
+        console.error("Exception loading premium places:", err.message || error, error);
         setPremiumPlaces([]);
       }
     }

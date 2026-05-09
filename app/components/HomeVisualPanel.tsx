@@ -16,7 +16,7 @@ import { useFeaturedPlaces, type FeaturedPlace } from "../hooks/useFeaturedPlace
  *   • Subtle drifting "sun" blob over the ocean for warmth.
  *   • Five floating map pins clustered around the Atlantic coast where
  *     Fort Lauderdale / Lighthouse Point / Dania Beach actually sit.
- *   • Featured card — the SAME `<PlaceCard>` used in the home feed and
+ *   • Featured card — the same production place-card visual used in the home feed and
  *     /map list. Auto-rotates every ~6s with a fade-in + slight zoom.
  *     Pulls real places from `useFeaturedPlaces`. Hover pauses rotation.
  *   • Progress dots underneath as a quiet rotation indicator.

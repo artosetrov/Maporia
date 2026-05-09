@@ -1,40 +1,56 @@
 "use client";
 
 /**
- * /pricing — публичная страница тарифов.
+ * /pricing — публичная страница тарифов (v2).
  *
- * Сетка:
- *   - Free: $0
- *   - Premium: $35 one-time, скрытые локации навсегда
- *   - Pro Service: $14.99/мес, 5 услуг
- *   - Pro Experience: $14.99/мес, 5 впечатлений
- *   - Pro All: $34.99/мес, 10 в сумме (services + experiences)
+ * Сетка (5 платных тарифов):
+ *   - Premium: $35 one-time (consumer — скрытые локации)
+ *   - Pro Location: $9.99/mo, 5 locations
+ *   - Pro Service: $14.99/mo, 5 services + secondary location free
+ *   - Pro Experience: $14.99/mo, 5 experiences + secondary location free
+ *   - Pro All: $34.99/mo, 10 combined всех 3 типов
  *
- * Любой Pro включает Premium бесплатно.
- * Карточка сверх лимита — $2.99 (см. footer).
+ * Любой Pro-тариф автоматически включает Premium.
+ * Yearly billing toggle — скидка 20%, default = Yearly.
  *
- * CTA → POST /api/stripe/checkout.
+ * Источник данных — `app/lib/pricing/registry.ts` (single source of truth).
+ * См. docs/PRICING_V2_PLAN.md § 1.
  */
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
 import {
+  PRICING_REGISTRY,
+  PUBLIC_PLANS,
   EXTRA_LISTING,
-  PLAN_CONFIG,
-  PLAN_ORDER,
-  formatPrice,
-} from "../lib/plans";
-import type { PaidPlan } from "../types";
+  ANNUAL_DISCOUNT,
+  getFeatures,
+  priceDisplay,
+  formatUSD,
+  type PlanId,
+  type Cycle,
+} from "../lib/pricing";
 import TopBar from "../components/TopBar";
 import Icon from "../components/Icon";
 import ImpersonationDisclaimer from "../components/ImpersonationDisclaimer";
 import { useImpersonationStatus } from "../hooks/useImpersonationStatus";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
+}
+
+/**
+ * Эффективный cycle для plan'а: для one-time-only (Premium) всегда `lifetime`,
+ * для recurring — берём выбранный toggle.
+ */
+function effectiveCycle(plan: PlanId, toggle: "month" | "year"): Cycle {
+  const usd = PRICING_REGISTRY[plan].prices.USD;
+  if (usd?.lifetime && !usd.month) return "lifetime";
+  return toggle;
 }
 
 export default function PricingPage() {
@@ -42,17 +58,32 @@ export default function PricingPage() {
   const { user, profile, access } = useUserAccessContext();
   const impersonation = useImpersonationStatus();
   const isImpersonating = !!impersonation?.active;
-  const [checkoutPlan, setCheckoutPlan] = useState<PaidPlan | null>(null);
+  const [checkoutPlan, setCheckoutPlan] = useState<PlanId | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cycleToggle, setCycleToggle] = useState<"month" | "year">("year");
 
-  const currentPlan = access?.plan ?? "free";
-  const plans = PLAN_ORDER.map((id) => PLAN_CONFIG[id]);
+  const currentPlan: PlanId = (access?.plan as PlanId | undefined) ?? "free";
 
-  async function startCheckout(plan: PaidPlan) {
+  // Список планов в порядке отображения. Premium первым (consumer entry-point),
+  // дальше creator-планы по возрастанию цены.
+  const orderedPlans = useMemo<PlanId[]>(
+    () =>
+      [
+        "premium_viewer",
+        "creator_location",
+        "creator_service",
+        "creator_experience",
+        "creator_all",
+      ].filter((p) => PUBLIC_PLANS.includes(p as PlanId)) as PlanId[],
+    [],
+  );
+  const hasPlans = orderedPlans.length > 0;
+
+  async function startCheckout(plan: PlanId) {
     setError(null);
 
     if (isImpersonating) {
-      setError("Stripe-операции отключены в режиме impersonation.");
+      setError("Stripe operations are disabled while impersonating.");
       return;
     }
 
@@ -75,11 +106,8 @@ export default function PricingPage() {
         return;
       }
 
-      const cfg = PLAN_CONFIG[plan];
-      const body: Record<string, string> = { access_token: accessToken, plan };
-      if (cfg.billing.kind === "subscription") {
-        body.period = cfg.billing.period;
-      }
+      const cycle = effectiveCycle(plan, cycleToggle);
+      const body: Record<string, string> = { access_token: accessToken, plan, cycle };
 
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
@@ -102,158 +130,237 @@ export default function PricingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7]">
-      <TopBar
-        showBackButton
-        onBackClick={() => router.back()}
-        userAvatar={profile?.avatar_url ?? null}
-        userDisplayName={profile?.display_name ?? null}
-        userEmail={user?.email ?? null}
-      />
+    <ErrorBoundary>
+      <main className="min-h-screen bg-[#FAFAF7]">
+        <TopBar
+          showBackButton
+          onBackClick={() => router.back()}
+          userAvatar={profile?.avatar_url ?? null}
+          userDisplayName={profile?.display_name ?? null}
+          userEmail={user?.email ?? null}
+        />
 
-      {/* pt компенсирует sticky TopBar (~64px) + дыхание */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-[88px] sm:pt-[112px] pb-8 sm:pb-14">
-        <header className="text-center mb-8 sm:mb-10">
-          <h1 className="font-fraunces text-3xl sm:text-4xl font-semibold text-[#1F2A1F] mb-3">
-            Maporia plans
-          </h1>
-          <p className="text-[15px] text-[#6F7A5A] max-w-2xl mx-auto">
-            Premium unlocks hidden locations with a one-time payment. Pro plans
-            let you publish services and experiences — Premium is included.
-          </p>
-        </header>
+        {/* pt компенсирует sticky TopBar */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-[88px] sm:pt-[112px] pb-8 sm:pb-14">
+          <header className="text-center mb-6 sm:mb-8">
+            <h1 className="font-fraunces text-3xl sm:text-4xl font-semibold text-[#1F2A1F] mb-3">
+              Maporia plans
+            </h1>
+            <p className="text-[15px] text-[#6F7A5A] max-w-2xl mx-auto">
+              Premium unlocks hidden locations with a one-time payment. Pro plans
+              let you publish places, services and experiences — Premium is included.
+            </p>
+          </header>
 
-        {/* Disclaimer для impersonation */}
-        <div className="mb-6">
-          <ImpersonationDisclaimer />
-        </div>
-
-        {/* 4 платных тарифа */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {plans.map((p) => {
-            const isCurrent = currentPlan === p.id;
-            const isLoading = checkoutPlan === p.id;
-            const ctaLabel = isCurrent
-              ? "Current plan"
-              : isImpersonating
-              ? "Locked"
-              : isLoading
-              ? "Loading…"
-              : p.billing.kind === "one_time"
-              ? "Buy"
-              : "Subscribe";
-
-            return (
-              <div
-                key={p.id}
+          {/* Monthly | Yearly toggle */}
+          <div className="flex items-center justify-center mb-6 sm:mb-10">
+            <div
+              role="tablist"
+              aria-label="Billing cycle"
+              className="inline-flex items-center gap-1 rounded-full border border-[#ECEEE4] bg-white p-1 shadow-sm"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={cycleToggle === "month"}
+                onClick={() => setCycleToggle("month")}
                 className={cx(
-                  "relative rounded-2xl border bg-white p-5 sm:p-6 flex flex-col",
-                  p.display.highlighted
-                    ? "border-[#8F9E4F] shadow-md"
-                    : "border-[#ECEEE4] shadow-sm"
+                  "h-9 px-4 rounded-full text-sm font-medium transition",
+                  cycleToggle === "month"
+                    ? "bg-[#1F2A1F] text-white"
+                    : "text-[#6F7A5A] hover:text-[#1F2A1F]",
                 )}
               >
-                {p.display.highlighted && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#8F9E4F] text-white text-[11px] font-semibold uppercase tracking-wide px-3 py-1 rounded-full">
-                    Popular
-                  </div>
+                Monthly
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={cycleToggle === "year"}
+                onClick={() => setCycleToggle("year")}
+                className={cx(
+                  "h-9 px-4 rounded-full text-sm font-medium transition flex items-center gap-2",
+                  cycleToggle === "year"
+                    ? "bg-[#1F2A1F] text-white"
+                    : "text-[#6F7A5A] hover:text-[#1F2A1F]",
                 )}
-                {p.billing.kind === "one_time" && (
-                  <div className="absolute -top-3 right-4 bg-[#1F2A1F] text-white text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full">
-                    one-time
-                  </div>
-                )}
+              >
+                Yearly
+                <span
+                  className={cx(
+                    "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                    cycleToggle === "year"
+                      ? "bg-[#A4B968] text-[#1F2A1F]"
+                      : "bg-[#A4B968]/20 text-[#556036]",
+                  )}
+                >
+                  Save {Math.round(ANNUAL_DISCOUNT * 100)}%
+                </span>
+              </button>
+            </div>
+          </div>
 
-                <div className="mb-4">
-                  <div className="text-3xl mb-2" aria-hidden>
-                    {p.display.emoji}
-                  </div>
-                  <div className="font-fraunces text-xl font-semibold text-[#1F2A1F]">
-                    {p.display.name}
-                  </div>
-                  <div className="text-sm text-[#6F7A5A]">{p.display.tagline}</div>
-                </div>
+          <div className="mb-6">
+            <ImpersonationDisclaimer />
+          </div>
 
-                <div className="mb-4">
-                  <div className="flex items-baseline gap-1">
-                    <span className="font-fraunces text-3xl font-semibold text-[#1F2A1F]">
-                      {formatPrice(p.display.price)}
-                    </span>
-                    <span className="text-sm text-[#6F7A5A]">{p.display.priceSuffix}</span>
+          {/* 5 platных тарифов: Premium + 4 Pro */}
+          {!hasPlans ? (
+            <div className="rounded-2xl border border-[#ECEEE4] bg-white p-8 text-center">
+              <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-2">
+                Plans are temporarily unavailable
+              </h2>
+              <p className="text-sm text-[#6F7A5A]">Please try again later.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+              {orderedPlans.map((planId) => {
+              const spec = PRICING_REGISTRY[planId];
+              const display = spec.display;
+              if (!display) return null;
+
+              const cycle = effectiveCycle(planId, cycleToggle);
+              const price = priceDisplay(planId, cycle);
+              const features = getFeatures(planId);
+
+              const isCurrent = currentPlan === planId;
+              const isLoading = checkoutPlan === planId;
+              const isOneTime = cycle === "lifetime";
+
+              const ctaLabel = isCurrent
+                ? "Current plan"
+                : isImpersonating
+                  ? "Locked"
+                  : isLoading
+                    ? "Loading…"
+                    : isOneTime
+                      ? "Buy"
+                      : "Subscribe";
+
+              return (
+                <div
+                  key={planId}
+                  className={cx(
+                    "relative rounded-2xl border bg-white p-5 sm:p-6 flex flex-col",
+                    display.highlighted
+                      ? "border-[#8F9E4F] shadow-md"
+                      : "border-[#ECEEE4] shadow-sm",
+                  )}
+                >
+                  {display.highlighted && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#8F9E4F] text-white text-[11px] font-semibold uppercase tracking-wide px-3 py-1 rounded-full">
+                      Popular
+                    </div>
+                  )}
+                  {isOneTime && (
+                    <div className="absolute -top-3 right-4 bg-[#1F2A1F] text-white text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full">
+                      one-time
+                    </div>
+                  )}
+
+                  <div className="mb-4">
+                    <div className="text-3xl mb-2" aria-hidden>
+                      {display.emoji}
+                    </div>
+                    <div className="font-fraunces text-xl font-semibold text-[#1F2A1F]">
+                      {display.name}
+                    </div>
+                    <div className="text-sm text-[#6F7A5A]">{display.tagline}</div>
                   </div>
-                </div>
 
-                <div className="mb-5 text-xs text-[#3F4A35]">{p.display.audience}</div>
+                  <div className="mb-4 min-h-[64px]">
+                    {price && (
+                      <>
+                        <div className="flex items-baseline gap-1">
+                          <span className="font-fraunces text-3xl font-semibold text-[#1F2A1F]">
+                            {price.primary}
+                          </span>
+                          <span className="text-sm text-[#6F7A5A]">
+                            {price.suffix}
+                          </span>
+                        </div>
+                        {price.secondary && (
+                          <div className="text-xs text-[#6F7A5A] mt-1">
+                            {price.secondary}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
 
-                <ul className="space-y-2 mb-6 flex-1">
-                  {p.display.features.map((f) => (
-                    <li key={f.label} className="flex items-start gap-2 text-sm">
-                      {f.included ? (
+                  <div className="mb-5 text-xs text-[#3F4A35]">{display.audience}</div>
+
+                  <ul className="space-y-2 mb-6 flex-1">
+                    {features.map((f) => (
+                      <li key={f.label} className="flex items-start gap-2 text-sm">
                         <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#8F9E4F]/15 text-[#556036]">
                           <Icon name="check" size={12} />
                         </span>
-                      ) : (
-                        <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#ECEEE4] text-[#A8B096]">
-                          ×
-                        </span>
-                      )}
-                      <span className={cx(f.included ? "text-[#1F2A1F]" : "text-[#A8B096] line-through")}>
-                        {f.label}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                        <span className="text-[#1F2A1F]">{f.label}</span>
+                      </li>
+                    ))}
+                  </ul>
 
-                <button
-                  type="button"
-                  onClick={() => startCheckout(p.id)}
-                  disabled={isCurrent || isLoading || isImpersonating}
-                  title={isImpersonating ? "Покупки отключены в режиме impersonation" : undefined}
-                  className={cx(
-                    "w-full h-11 rounded-xl text-sm font-medium transition",
-                    isCurrent || isImpersonating
-                      ? "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
-                      : p.display.highlighted
-                      ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
-                      : "border border-[#8F9E4F] bg-white text-[#556036] hover:bg-[#FAFAF7]",
-                    isLoading && "opacity-70 cursor-wait"
-                  )}
-                >
-                  {ctaLabel}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => startCheckout(planId)}
+                    disabled={isCurrent || isLoading || isImpersonating}
+                    title={
+                      isImpersonating
+                        ? "Purchases are disabled in impersonation mode"
+                        : undefined
+                    }
+                    className={cx(
+                      "w-full h-11 rounded-xl text-sm font-medium transition",
+                      isCurrent || isImpersonating
+                        ? "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
+                        : display.highlighted
+                          ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
+                          : "border border-[#8F9E4F] bg-white text-[#556036] hover:bg-[#FAFAF7]",
+                      isLoading && "opacity-70 cursor-wait animate-pulse",
+                    )}
+                  >
+                    {ctaLabel}
+                  </button>
+                </div>
+              );
+              })}
+            </div>
+          )}
+
+          {/* Add-on info */}
+          <div className="mt-6 rounded-2xl border border-[#ECEEE4] bg-white p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 justify-between">
+            <div>
+              <div className="font-fraunces font-semibold text-[#1F2A1F] mb-1">
+                Hit the limit? Buy more slots
               </div>
-            );
-          })}
-        </div>
-
-        {/* Add-on info */}
-        <div className="mt-6 rounded-2xl border border-[#ECEEE4] bg-white p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 justify-between">
-          <div>
-            <div className="font-fraunces font-semibold text-[#1F2A1F] mb-1">
-              Hit the limit? Buy more slots
+              <div className="text-sm text-[#6F7A5A]">
+                {formatUSD(EXTRA_LISTING.amount)} per extra listing (one-time, kept
+                forever). Bought right from the editor when you need it.
+              </div>
             </div>
-            <div className="text-sm text-[#6F7A5A]">
-              {formatPrice(EXTRA_LISTING.price)} per extra listing (one-time, kept forever). Bought right from the editor when you need it.
+            <div className="rounded-full bg-[#FAFAF7] border border-[#ECEEE4] px-4 py-2 text-sm font-medium text-[#1F2A1F]">
+              +1 slot for {formatUSD(EXTRA_LISTING.amount)}
             </div>
           </div>
-          <div className="rounded-full bg-[#FAFAF7] border border-[#ECEEE4] px-4 py-2 text-sm font-medium text-[#1F2A1F]">
-            +1 slot for {formatPrice(EXTRA_LISTING.price)}
+
+          {error && (
+            <div className="mt-6 rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/5 p-3 text-sm text-[#C96A5B] text-center">
+              {error}
+            </div>
+          )}
+
+          <div className="mt-10 text-center text-xs text-[#A8B096] max-w-2xl mx-auto">
+            Prices exclude taxes. Maporia is a directory — we don&apos;t process
+            payments between buyers and providers; deals happen directly. You can
+            cancel any subscription from your{" "}
+            <Link className="underline" href="/profile?section=premium">
+              account
+            </Link>
+            .
           </div>
         </div>
-
-        {error && (
-          <div className="mt-6 rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/5 p-3 text-sm text-[#C96A5B] text-center">
-            {error}
-          </div>
-        )}
-
-        <div className="mt-10 text-center text-xs text-[#A8B096] max-w-2xl mx-auto">
-          Prices exclude taxes. Maporia is a directory — we don&apos;t process
-          payments between buyers and providers; deals happen directly. You can
-          cancel any subscription from your{" "}
-          <Link className="underline" href="/profile?section=premium">account</Link>.
-        </div>
-      </div>
-    </main>
+      </main>
+    </ErrorBoundary>
   );
 }

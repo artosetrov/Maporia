@@ -31,6 +31,7 @@ import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 import ImpersonationDisclaimer from "../../components/ImpersonationDisclaimer";
 import { useImpersonationStatus } from "../../hooks/useImpersonationStatus";
 import { usePremiumModalContext } from "../../contexts/PremiumModalContext";
+import { useBatchPlaceData } from "../../hooks/useBatchPlaceData";
 
 type Place = {
   id: string;
@@ -81,6 +82,24 @@ type Profile = {
   favorite_categories?: string[] | null;
   favorite_tags?: string[] | null;
 };
+
+type ReactionActivityRow = {
+  place_id: string;
+  reaction?: string | null;
+  created_at: string;
+};
+
+type CommentActivityRow = {
+  id: string;
+  text: string;
+  created_at: string;
+  place_id: string;
+  user_id?: string;
+};
+
+type ReviewerProfileRow = Pick<Profile, "id" | "display_name" | "username" | "avatar_url">;
+type ReviewPlaceRow = Pick<Place, "id" | "title" | "address">;
+type ActivityPlaceRow = Pick<Place, "id" | "title" | "cover_url" | "address">;
 
 function initialsFromEmail(email?: string | null) {
   if (!email) return "U";
@@ -470,12 +489,13 @@ function ProfileInner() {
         }
 
         if (mounted) {
-          setProfile((prof as unknown as Profile | null) ?? null);
-          setDisplayNameDraft((prof as any)?.display_name ?? (user.email ?? ""));
-          setBioDraft((prof as any)?.bio ?? "");
-          setAvatarDraft((prof as any)?.avatar_url ?? null);
-          const profileRole = (prof as any)?.role;
-          const profileIsAdmin = (prof as any)?.is_admin === true;
+          const profileData = (prof as unknown as Profile | null) ?? null;
+          setProfile(profileData);
+          setDisplayNameDraft(profileData?.display_name ?? (user.email ?? ""));
+          setBioDraft(profileData?.bio ?? "");
+          setAvatarDraft(profileData?.avatar_url ?? null);
+          const profileRole = profileData?.role;
+          const profileIsAdmin = profileData?.is_admin === true;
           setUserRole(profileRole ?? null);
           setUserIsAdmin(profileIsAdmin);
           setProfileLoading(false);
@@ -531,11 +551,11 @@ function ProfileInner() {
 
         if (!mounted) return;
 
-        const addedPlaces = (addedPlacesResult.data ?? []) as any[];
-        const reactions = reactionsResult.data ?? [];
+        const addedPlaces = (addedPlacesResult.data ?? []) as Place[];
+        const reactions = (reactionsResult.data ?? []) as ReactionActivityRow[];
         const commentsCountData = commentsCountResult.count ?? 0;
-        const commentsWritten = commentsWrittenResult.data ?? [];
-        const comments = commentsForActivityResult.data ?? [];
+        const commentsWritten = (commentsWrittenResult.data ?? []) as CommentActivityRow[];
+        const comments = (commentsForActivityResult.data ?? []) as CommentActivityRow[];
 
         if (mounted) setAdded(addedPlaces as Place[]);
 
@@ -549,8 +569,8 @@ function ProfileInner() {
         if (mounted) setRecentlyViewed(recentlyViewedPlaces);
         if (mounted) setCommentsCount(commentsCountData || 0);
 
-        const placeIds = (reactions as any[]).map((r: any) => r.place_id);
-        const addedPlaceIds = addedPlaces.map((p: any) => p.id);
+        const placeIds = reactions.map((r) => r.place_id);
+        const addedPlaceIds = addedPlaces.map((p) => p.id);
 
         const [savedPlacesResult, commentsReceivedResult] = await Promise.all([
           placeIds.length > 0
@@ -576,36 +596,38 @@ function ProfileInner() {
         const savedPlaces = (savedPlacesResult.data ?? []) as Place[];
         if (mounted) setSaved(savedPlaces);
 
-        const commentsReceived = commentsReceivedResult.data ?? [];
+        const commentsReceived = (commentsReceivedResult.data ?? []) as CommentActivityRow[];
         let reviewsReceivedData: Review[] = [];
 
         if (commentsReceived.length > 0) {
-          const reviewerIds = Array.from(new Set(commentsReceived.map((c: any) => c.user_id)));
-          const placeIdsForReviews = Array.from(new Set(commentsReceived.map((c: any) => c.place_id)));
+          const reviewerIds = Array.from(
+            new Set(commentsReceived.map((c) => c.user_id).filter((id): id is string => Boolean(id)))
+          );
+          const placeIdsForReviews = Array.from(new Set(commentsReceived.map((c) => c.place_id)));
 
           const [profilesData, placesData] = await Promise.all([
             supabase.from("profiles").select("id, display_name, username, avatar_url").in("id", reviewerIds),
             supabase.from("places").select("id, title, address").in("id", placeIdsForReviews),
           ]);
 
-          const profilesMap = new Map();
-          (profilesData.data ?? []).forEach((p: any) => {
+          const profilesMap = new Map<string, { name: string; avatar: string | null }>();
+          ((profilesData.data ?? []) as ReviewerProfileRow[]).forEach((p) => {
             profilesMap.set(p.id, {
               name: p.display_name || p.username || "User",
               avatar: p.avatar_url,
             });
           });
 
-          const placesMap = new Map();
-          (placesData.data ?? []).forEach((p: any) => {
+          const placesMap = new Map<string, { title: string | null; address: string | null }>();
+          ((placesData.data ?? []) as ReviewPlaceRow[]).forEach((p) => {
             placesMap.set(p.id, {
               title: p.title,
               address: p.address,
             });
           });
 
-          reviewsReceivedData = (commentsReceived as any[]).map((c: any) => {
-            const reviewer = profilesMap.get(c.user_id);
+          reviewsReceivedData = commentsReceived.map((c) => {
+            const reviewer = c.user_id ? profilesMap.get(c.user_id) : null;
             const place = placesMap.get(c.place_id);
             return {
               id: c.id,
@@ -614,7 +636,7 @@ function ProfileInner() {
               place_id: c.place_id,
               place_title: place?.title ?? null,
               place_address: place?.address ?? null,
-              reviewer_id: c.user_id,
+              reviewer_id: c.user_id ?? "",
               reviewer_name: reviewer?.name ?? "User",
               reviewer_avatar: reviewer?.avatar ?? null,
               reviewer_location: null,
@@ -624,24 +646,25 @@ function ProfileInner() {
 
         let reviewsWrittenData: Review[] = [];
         if (commentsWritten.length > 0) {
-          const placeIdsForWritten = Array.from(new Set((commentsWritten as any[]).map((c: any) => c.place_id)));
+          const placeIdsForWritten = Array.from(new Set(commentsWritten.map((c) => c.place_id)));
           const { data: placesData } = await supabase
             .from("places")
             .select("id, title, address, created_by")
             .in("id", placeIdsForWritten);
 
-          const placesMap = new Map();
-          (placesData ?? []).forEach((p: any) => {
+          const placesMap = new Map<string, { title: string | null; address: string | null }>();
+          ((placesData ?? []) as ReviewPlaceRow[]).forEach((p) => {
             placesMap.set(p.id, {
               title: p.title,
               address: p.address,
             });
           });
 
-          const currentDisplayName = (prof as any)?.display_name || (prof as any)?.username || user.email || "User";
-          const currentAvatar = (prof as any)?.avatar_url ?? null;
+          const profileData = (prof as unknown as Profile | null) ?? null;
+          const currentDisplayName = profileData?.display_name || profileData?.username || user.email || "User";
+          const currentAvatar = profileData?.avatar_url ?? null;
 
-          reviewsWrittenData = (commentsWritten as any[]).map((c: any) => {
+          reviewsWrittenData = commentsWritten.map((c) => {
             const place = placesMap.get(c.place_id);
             return {
               id: c.id,
@@ -658,20 +681,20 @@ function ProfileInner() {
           });
         }
 
-        const likesAct: ActivityItem[] = (reactions as any[]).map((r: any) => ({
+        const likesAct: ActivityItem[] = reactions.map((r) => ({
           type: "liked",
           created_at: r.created_at,
           placeId: r.place_id,
         }));
 
-        const commentsAct: ActivityItem[] = (comments as any[]).map((c: any) => ({
+        const commentsAct: ActivityItem[] = comments.map((c) => ({
           type: "commented",
           created_at: c.created_at,
           placeId: c.place_id,
           commentText: c.text,
         }));
 
-        const addedAct: ActivityItem[] = addedPlaces.map((p: any) => ({
+        const addedAct: ActivityItem[] = addedPlaces.map((p) => ({
           type: "added",
           created_at: p.created_at,
           placeId: p.id,
@@ -686,7 +709,7 @@ function ProfileInner() {
 
         if (actPlaceIds.length) {
           const { data: ps } = await supabase.from("places").select("id,title,cover_url,address").in("id", actPlaceIds);
-          (ps ?? []).forEach((p: any) => actPlacesMap.set(p.id, { title: p.title, cover_url: p.cover_url, address: p.address }));
+          ((ps ?? []) as ActivityPlaceRow[]).forEach((p) => actPlacesMap.set(p.id, { title: p.title, cover_url: p.cover_url, address: p.address }));
         }
 
         const actWithTitles = act.map((a) => {
@@ -2129,6 +2152,19 @@ function TripsSection({
     });
     return map;
   }, [places, defaultUserAccess, userId]);
+  const cardPlaceIds = useMemo(() => places.map((place) => place.id), [places]);
+  const cardCreatorIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          places
+            .map((place) => place.created_by)
+            .filter((id): id is string => Boolean(id))
+        )
+      ),
+    [places]
+  );
+  const batchData = useBatchPlaceData(cardPlaceIds, cardCreatorIds);
 
   async function handleRemoveFavorite(placeId: string, e: React.MouseEvent) {
     e.preventDefault();
@@ -2198,6 +2234,8 @@ function TripsSection({
               userId={userId}
               isFavorite={true}
               hauntedGemIndex={hauntedGemIndex}
+              batchPhotos={batchData.photos.get(place.id)}
+              batchProfile={place.created_by ? batchData.profiles.get(place.created_by) : undefined}
               favoriteButton={
                 <button
                   onClick={(e) => {
@@ -2722,6 +2760,19 @@ function HistorySection({
     });
     return map;
   }, [places, defaultUserAccess, userId]);
+  const cardPlaceIds = useMemo(() => places.map((place) => place.id), [places]);
+  const cardCreatorIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          places
+            .map((place) => place.created_by)
+            .filter((id): id is string => Boolean(id))
+        )
+      ),
+    [places]
+  );
+  const batchData = useBatchPlaceData(cardPlaceIds, cardCreatorIds);
 
   if (loading) {
     return (
@@ -2762,6 +2813,8 @@ function HistorySection({
               userAccess={access}
               userId={userId ?? undefined}
               hauntedGemIndex={hauntedGemIndex}
+              batchPhotos={batchData.photos.get(place.id)}
+              batchProfile={place.created_by ? batchData.profiles.get(place.created_by) : undefined}
             />
           );
         })}
@@ -2902,17 +2955,21 @@ function ElementsSection() {
             console.error("Error loading premium modal settings:", response.status, response.statusText);
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const err =
+          error && typeof error === "object"
+            ? (error as { message?: string; name?: string; code?: string })
+            : { message: String(error) };
         // Silently ignore AbortError, network/connection errors (Failed to fetch, offline, CORS)
-        const msg = String(error?.message ?? '');
-        const isNetwork = error?.name === 'AbortError' || msg.includes('abort') || error?.code === 'ECONNABORTED' ||
-          msg.includes('Failed to fetch') || msg.includes('NetworkError') || (error?.name === 'TypeError' && msg.toLowerCase().includes('fetch'));
+        const msg = String(err.message ?? '');
+        const isNetwork = err.name === 'AbortError' || msg.includes('abort') || err.code === 'ECONNABORTED' ||
+          msg.includes('Failed to fetch') || msg.includes('NetworkError') || (err.name === 'TypeError' && msg.toLowerCase().includes('fetch'));
         if (isNetwork) {
           setIsLoading(false);
           return;
         }
         // Log with a guaranteed non-empty message so we never log "{}"
-        const logMsg = msg || error?.name || error?.code || (typeof error === 'object' ? 'Unknown error' : String(error));
+        const logMsg = msg || err.name || err.code || (typeof error === 'object' ? 'Unknown error' : String(error));
         if (process.env.NODE_ENV === 'production') {
           console.warn("Premium modal settings not available:", logMsg);
         } else {

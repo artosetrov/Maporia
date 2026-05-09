@@ -14,7 +14,7 @@ type GoogleImportData = {
   rating: number | null;
   reviews_count: number | null;
   user_ratings_total?: number | null;
-  opening_hours: any | null;
+  opening_hours: unknown | null;
   price_level?: number | null;
   category: string | null;
   types: string[];
@@ -31,6 +31,12 @@ type GoogleImportData = {
   city_country?: string | null;
   photos?: Array<{ reference: string; url: string | null }>;
   photo_urls?: string[];
+};
+
+type GoogleImportResponse = GoogleImportData & {
+  code?: string | null;
+  error?: string | null;
+  message?: string | null;
 };
 
 type UnifiedGoogleImportFieldProps = {
@@ -85,13 +91,13 @@ export default function UnifiedGoogleImportField({
         }),
       });
 
-      let data;
+      let data: GoogleImportResponse;
       try {
         const text = await response.text();
         if (!text) {
           throw new Error("Empty response from server");
         }
-        data = JSON.parse(text);
+        data = JSON.parse(text) as GoogleImportResponse;
       } catch (parseError) {
         console.error("Failed to parse API response:", {
           status: response.status,
@@ -151,13 +157,14 @@ export default function UnifiedGoogleImportField({
       // Call success callback - catch errors from callback
       try {
         await onImportSuccess(importData);
-      } catch (callbackError: any) {
+      } catch (callbackError: unknown) {
         // If callback throws an error, show it to the user
+        const errorMessage = callbackError instanceof Error ? callbackError.message : String(callbackError);
         console.error("Callback error:", {
-          error: callbackError instanceof Error ? callbackError.message : String(callbackError),
+          error: errorMessage,
           stack: callbackError instanceof Error ? callbackError.stack : undefined,
         });
-        throw new Error(callbackError?.message || "Failed to save imported data");
+        throw new Error(errorMessage || "Failed to save imported data");
       }
 
       setImportSuccess(true);
@@ -168,7 +175,7 @@ export default function UnifiedGoogleImportField({
           setShowForm(false);
         }
       }, 3000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       let errorMessage = "Failed to import from Google";
       
       if (error instanceof Error) {

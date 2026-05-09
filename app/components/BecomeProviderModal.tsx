@@ -19,12 +19,20 @@
  * чтобы при логине через redirect не потерять выбор.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import type { PlaceKind } from "../types/supabase";
 import { supabase } from "../lib/supabase";
 import { usePremiumModalContext } from "../contexts/PremiumModalContext";
+import { useUserAccessContext } from "../contexts/UserAccessContext";
+import {
+  PRICING_REGISTRY,
+  planCoversKind,
+  suggestPlanForKinds,
+  priceDisplay,
+  type PlanId,
+} from "../lib/pricing";
 
 type KindOption = {
   kind: PlaceKind;
@@ -72,6 +80,20 @@ export default function BecomeProviderModal({ isOpen, onClose }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const { openAuthModal } = usePremiumModalContext();
+  const { access } = useUserAccessContext();
+  const currentPlan: PlanId = (access?.plan as PlanId | undefined) ?? "free";
+
+  // Suggested plan по выбранным kind'ам — динамически. Показываем с monthly-ценой
+  // в нижней подсказке. Если plan уже у юзера — не показываем upsell.
+  const suggested = useMemo(() => {
+    if (selected.size === 0) return null;
+    const planId = suggestPlanForKinds(Array.from(selected));
+    if (planId === currentPlan) return null;
+    const monthly = priceDisplay(planId, "month");
+    const display = PRICING_REGISTRY[planId].display;
+    if (!monthly || !display) return null;
+    return { planId, name: display.name, primary: monthly.primary, suffix: monthly.suffix };
+  }, [selected, currentPlan]);
 
   // На открытии — хайдрейтим выбор из localStorage (если был сохранён до логина).
   useEffect(() => {
@@ -230,6 +252,7 @@ export default function BecomeProviderModal({ isOpen, onClose }: Props) {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {KIND_OPTIONS.map((opt) => {
               const isSelected = selected.has(opt.kind);
+              const isCovered = planCoversKind(currentPlan, opt.kind);
               return (
                 <button
                   key={opt.kind}
@@ -242,6 +265,25 @@ export default function BecomeProviderModal({ isOpen, onClose }: Props) {
                       : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F]"
                   }`}
                 >
+                  {/* Covered-бейдж: текущий план юзера уже покрывает этот kind */}
+                  {isCovered && (
+                    <span className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-[#A4B968]/20 text-[#556036] text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5">
+                      <svg
+                        width="10"
+                        height="10"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      Covered
+                    </span>
+                  )}
                   {/* Чекбокс — visual only; реальный state в кнопке через aria-pressed */}
                   <span
                     className={`absolute top-3 right-3 w-[22px] h-[22px] rounded-md flex items-center justify-center transition border-2 ${
@@ -288,10 +330,22 @@ export default function BecomeProviderModal({ isOpen, onClose }: Props) {
             })}
           </div>
 
-          <div className="mt-4 text-[12px] text-[#A8B096] bg-[#FAFAF7] rounded-xl px-3 py-2.5 leading-relaxed">
-            💡 Pricing depends on the types you pick and is shown on the final
-            step. Filling out the form is free.
-          </div>
+          {suggested ? (
+            <div className="mt-4 text-[12px] bg-[#A4B968]/15 text-[#3F4A35] rounded-xl px-3 py-2.5 leading-relaxed flex items-start gap-2">
+              <span aria-hidden>💡</span>
+              <span>
+                Suggested plan:{" "}
+                <strong className="text-[#1F2A1F]">{suggested.name}</strong>
+                {" "}from {suggested.primary}{suggested.suffix}. You&apos;ll see
+                Monthly/Yearly options after you fill the form.
+              </span>
+            </div>
+          ) : (
+            <div className="mt-4 text-[12px] text-[#A8B096] bg-[#FAFAF7] rounded-xl px-3 py-2.5 leading-relaxed">
+              💡 Pricing depends on the types you pick and is shown on the final
+              step. Filling out the form is free.
+            </div>
+          )}
         </div>
 
         {/* Footer */}

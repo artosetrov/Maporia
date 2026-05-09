@@ -33,9 +33,40 @@ export default function TitleEditorPage(props: PageProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleGoogleImport(data: any) {
+  type GoogleImportTitleData = {
+    name?: string | null;
+    business_name?: string | null;
+    formatted_address?: string | null;
+    address?: string | null;
+    website?: string | null;
+    place_id?: string | null;
+    google_place_id?: string | null;
+    lat?: number | null;
+    latitude?: number | null;
+    lng?: number | null;
+    longitude?: number | null;
+    city?: string | null;
+    city_state?: string | null;
+    city_country?: string | null;
+    types?: string[];
+  };
+
+  type PlaceTitleUpdate = {
+    title: string | null;
+    address: string | null;
+    link: string | null;
+    google_place_id: string | null;
+    lat: number | null;
+    lng: number | null;
+    city: string | null;
+    city_id: string | null;
+    city_name_cached: string | null;
+    categories?: string[];
+  };
+
+  async function handleGoogleImport(data: GoogleImportTitleData) {
     if (data.name || data.business_name) {
-      setTitle(data.name || data.business_name);
+      setTitle(data.name || data.business_name || "");
     }
     // Also save other fields to place
     if (user && placeId) {
@@ -55,7 +86,7 @@ export default function TitleEditorPage(props: PageProps) {
         }
       }
 
-      const updates: any = {
+      const updates: PlaceTitleUpdate = {
         title: data.name || data.business_name || null,
         address: data.formatted_address || data.address || null,
         link: data.website || null,

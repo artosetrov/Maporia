@@ -23,7 +23,7 @@ export type Profile = {
   google_maps_url?: string | null;
   google_rating?: number | null;
   google_reviews_count?: number | null;
-  google_opening_hours?: any | null; // JSONB
+  google_opening_hours?: unknown | null; // JSONB
   website?: string | null;
   phone?: string | null;
   address?: string | null;
@@ -40,26 +40,27 @@ export type Profile = {
 };
 
 /**
- * Тарифы Maporia.
- * - free: регистрация, видит только публичные локации.
- * - premium_viewer: $-флаг для потребителей — открывает скрытые локации.
- * - creator_service / creator_experience / creator_all: для поставщиков.
- *   Включают всё premium_viewer + право публикации соответствующих kind'ов.
+ * Тарифы Maporia. Источник правды — `app/lib/pricing/registry.ts` (PlanId).
+ * Этот файл просто реэкспортирует тип, чтобы старые импорты продолжали работать.
+ *
+ * v2 расширил union: добавились `creator_location` и `premium_grandfathered`.
+ * См. docs/PRICING_V2_PLAN.md § 1.
  */
-export type Plan =
-  | 'free'
-  | 'premium_viewer'
-  | 'creator_service'
-  | 'creator_experience'
-  | 'creator_all';
+import type { PlanId } from "./lib/pricing/registry";
+
+export type Plan = PlanId;
 
 export type PlanPeriod = 'month' | 'year' | 'lifetime';
 
-/** Тариф, который реально продаётся (free не продаётся). */
-export type PaidPlan = Exclude<Plan, 'free'>;
+/** Тариф, который реально продаётся (free и internal не продаются). */
+export type PaidPlan = Exclude<Plan, 'free' | 'premium_grandfathered'>;
 
 /** Любой creator-тариф — даёт право публиковать. */
-export type CreatorPlan = 'creator_service' | 'creator_experience' | 'creator_all';
+export type CreatorPlan =
+  | 'creator_location'
+  | 'creator_service'
+  | 'creator_experience'
+  | 'creator_all';
 
 /**
  * Place from the places table

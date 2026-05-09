@@ -6,6 +6,10 @@ import {
   callOpenAiForDescription,
   fetchGooglePlaceAiContext,
 } from "../../../lib/ai/placeDescription";
+import type { Place, Profile } from "@/app/types";
+
+type ImportProfileRow = Pick<Profile, "role" | "subscription_status" | "is_admin">;
+type ImportedPlaceRow = Pick<Place, "id" | "title" | "created_by" | "google_place_id">;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -14,11 +18,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 // Service role key is required for import operations (needs to bypass RLS for place creation)
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-function hasPremiumAccessFromProfile(profile: {
-  role?: string | null;
-  subscription_status?: string | null;
-  is_admin?: boolean | null;
-} | null): boolean {
+function hasPremiumAccessFromProfile(profile: ImportProfileRow | null): boolean {
   if (!profile) return false;
   if (profile.is_admin) return true;
   if (profile.role === "admin" || profile.role === "premium") return true;
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
         console.error("Failed to load profile for access check:", profileError);
       } else {
         isAdmin = !!profile?.is_admin || profile?.role === "admin";
-        const ok = hasPremiumAccessFromProfile(profile);
+        const ok = hasPremiumAccessFromProfile(profile as ImportProfileRow | null);
         if (!ok) {
           return NextResponse.json(
             {
@@ -257,9 +257,17 @@ export async function POST(request: NextRequest) {
 
       // Replace photos if provided
       if (Array.isArray(selectedFields?.photos)) {
-        const photos = selectedFields.photos
-          .filter((p: any) => p && typeof p.url === "string" && p.url.length > 0)
-          .map((p: any) => p.url);
+        const selectedPhotos = selectedFields.photos as unknown[];
+        const photos = selectedPhotos
+          .filter((p: unknown): p is { url: string } => {
+            return Boolean(
+              p &&
+                typeof p === "object" &&
+                typeof (p as { url?: unknown }).url === "string" &&
+                (p as { url: string }).url.length > 0,
+            );
+          })
+          .map((p) => p.url);
 
         // If user selected photos, replace Photo tour
         if (photos.length > 0) {

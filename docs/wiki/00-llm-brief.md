@@ -51,7 +51,8 @@ Places have a primary kind:
 Publishing rights and pricing:
 
 - `free`: public browsing.
-- `premium_viewer`: one-time Premium, sees premium places, can publish locations.
+- `premium_viewer`: one-time Premium, sees premium places; v2 treats it as consumer-only for new buyers.
+- `creator_location`: monthly, Premium included, location quota.
 - `creator_service`: monthly, Premium included, service quota.
 - `creator_experience`: monthly, Premium included, experience quota.
 - `creator_all`: monthly, combined service/experience quota.
@@ -59,7 +60,7 @@ Publishing rights and pricing:
 
 Source of truth:
 
-- Plans/prices: `app/lib/plans.ts`.
+- Plans/prices: `app/lib/plans.ts` for current UI; v2 registry lives in `app/lib/pricing/`.
 - Roles/access/quota: `app/lib/access.ts`.
 - Shared domain types: `app/types.ts`.
 - DB generated types: `app/types/supabase.ts`.
@@ -67,7 +68,7 @@ Source of truth:
 ## Recent Important Decisions
 
 - Wiki and LLM orientation are the canonical knowledge layer.
-- Stripe billing docs are synced to `PLAN_CONFIG`.
+- Stripe billing is being migrated from legacy `PLAN_CONFIG` to the v2 pricing registry.
 - Premium/access filtering P1 warnings are closed.
 - `.or()` PostgREST filter warnings are closed.
 - Auth and Premium modals are centralized through `GlobalModals`.

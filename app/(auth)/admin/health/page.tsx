@@ -7,6 +7,7 @@ import { supabase } from "../../../lib/supabase";
 import { useUserAccessContext } from "../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../lib/access";
 import Icon from "../../../components/Icon";
+import { ErrorBoundary } from "../../../components/ErrorBoundary";
 
 // ---------------------------------------------------------------------------
 // Types mirroring the API response
@@ -212,7 +213,8 @@ export default function AdminHealthPage() {
   const overall = report ? OVERALL_COLORS[report.status] : null;
 
   return (
-    <div className="min-h-screen bg-[#FAFAF7]">
+    <ErrorBoundary>
+      <div className="min-h-screen bg-[#FAFAF7]">
       {/* Sticky Header */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-[#ECEEE4]">
         <div className="max-w-2xl mx-auto flex items-center justify-between h-14 px-4">
@@ -365,6 +367,7 @@ export default function AdminHealthPage() {
           </>
         )}
       </div>
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }

@@ -20,6 +20,7 @@ import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../../lib/access";
 import Icon from "../../../../../components/Icon";
+import { ErrorBoundary } from "../../../../../components/ErrorBoundary";
 
 type PlaceScheduleRow = Pick<
   Database["public"]["Tables"]["places"]["Row"],
@@ -78,6 +79,14 @@ function parseSchedule(raw: unknown): Schedule {
 type PageProps = { params: Promise<{ id: string }> };
 
 export default function ScheduleEditorPage(props: PageProps) {
+  return (
+    <ErrorBoundary>
+      <ScheduleEditorPageContent {...props} />
+    </ErrorBoundary>
+  );
+}
+
+function ScheduleEditorPageContent(props: PageProps) {
   const router = useRouter();
   const { id: placeId } = use(props.params);
 

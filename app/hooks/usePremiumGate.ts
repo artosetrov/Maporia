@@ -2,7 +2,7 @@
 
 import { useCallback } from "react";
 import { usePremiumStatus } from "./usePremiumStatus";
-import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
+import { isPlacePremium, canUserViewPlace } from "../lib/access";
 import type { Place } from "../types";
 import { usePremiumModalContext } from "../contexts/PremiumModalContext";
 import type { AuthModalVariant } from "../components/AuthModal";
@@ -62,7 +62,8 @@ export function usePremiumGate() {
    * - premium → no-op (caller should not call this when user has access)
    */
   const openPremiumLocation = useCallback(
-    (context: PremiumGateContext = "place", placeTitle?: string, _placeId?: string) => {
+    (context: PremiumGateContext = "place", placeTitle?: string, placeId?: string) => {
+      void placeId;
       if (loading) return;
       if (access.role === "guest") {
         openAuthModal(undefined, "premium");

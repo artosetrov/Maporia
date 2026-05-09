@@ -14,6 +14,7 @@ import { HomeSectionSkeleton } from "./Skeleton";
 import { getRecentlyViewedPlaceIds, sanitizePostgrestValue } from "../utils";
 import type { PlaceListItem as Place } from "../types";
 import { buildCityRadiusFilter, getCityCoords } from "../lib/cityRadius";
+import { useBatchPlaceData } from "../hooks/useBatchPlaceData";
 
 function HomeSectionCollageImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
   const [failed, setFailed] = useState(false);
@@ -66,11 +67,22 @@ type HomeSectionProps = {
 export default function HomeSection({ section, userId, favorites, userAccess, onToggleFavorite, onTagClick, isFirst = false, kindFilter }: HomeSectionProps) {
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
-  // Batch-loaded creator profiles: one IN(...) query per section instead of N
-  // separate profile fetches (one per <PlaceCard>). Was the second N+1 on the
-  // home page after photos.
-  const [creatorsMap, setCreatorsMap] = useState<Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const creatorIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          places
+            .map((place) => place.created_by)
+            .filter((id): id is string => Boolean(id))
+        )
+      ),
+    [places]
+  );
+  const noPhotoIds = useMemo<string[]>(() => [], []);
+  // Home cards intentionally keep `showPhotoSlider={false}` and use cover_url,
+  // so we batch creator profiles only and avoid fetching off-screen photos.
+  const batchData = useBatchPlaceData(noPhotoIds, creatorIds);
 
   const categoriesKey = section.categories ? section.categories.join(",") : "";
   const [refreshKey, setRefreshKey] = useState(0);
@@ -98,7 +110,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
           if (kindFilter) recentlyViewedQuery = recentlyViewedQuery.eq("kind", kindFilter);
           const { data, error } = await recentlyViewedQuery.limit(10);
           if (error) throw error;
-          const placesMap = new Map((data || []).map((p: any) => [p.id, p]));
+          const placesMap = new Map(((data ?? []) as Place[]).map((p) => [p.id, p]));
           const result = recentlyViewedIds
             .map(id => placesMap.get(id))
             .filter((p): p is Place => p !== undefined)
@@ -287,41 +299,6 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
     
     return score;
   }
-
-  // Batch-load creator profiles whenever `places` changes. One IN(...) query
-  // replaces N separate per-card profile fetches.
-  useEffect(() => {
-    const userIds = Array.from(
-      new Set(places.map(p => p.created_by).filter((id): id is string => Boolean(id)))
-    );
-    if (userIds.length === 0) {
-      setCreatorsMap(new Map());
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("id, display_name, username, avatar_url")
-          .in("id", userIds);
-        if (cancelled || error || !data) return;
-        const map = new Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>();
-        for (const row of data as Array<{ id: string; display_name: string | null; username: string | null; avatar_url: string | null }>) {
-          map.set(row.id, {
-            display_name: row.display_name,
-            username: row.username,
-            avatar_url: row.avatar_url,
-          });
-        }
-        if (!cancelled) setCreatorsMap(map);
-      } catch {
-        // Silently fall back; PlaceCard will render "Unknown" creator name.
-      }
-    })();
-    return () => { cancelled = true; };
-    // Depend on a key derived from creator ids so we don't refetch on identical sets.
-  }, [places.map(p => p.created_by ?? "").sort().join(",")]);
 
   // Reload when page becomes visible, but only if data is stale (5 min TTL)
   const lastFetchTimeRef = useRef<number>(Date.now());
@@ -544,7 +521,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
                       userAccess={userAccess}
                       userId={userId}
                       isFavorite={isFavorite}
-                      batchProfile={place.created_by ? creatorsMap.get(place.created_by) : undefined}
+                      batchProfile={place.created_by ? batchData.profiles.get(place.created_by) : undefined}
                       hauntedGemIndex={hauntedGemIndex}
                       showPhotoSlider={false}
                       priority={isFirst && placeIndex < 4}

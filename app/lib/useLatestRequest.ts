@@ -33,13 +33,17 @@ export function useLatestRequest() {
         return undefined;
       }
       return res;
-    } catch (e: any) {
+    } catch (e: unknown) {
       // If request was superseded, ignore error
       if (id !== requestIdRef.current) {
         return undefined;
       }
+      const error =
+        e && typeof e === "object"
+          ? (e as { name?: string; message?: string; code?: string })
+          : { message: String(e) };
       // Silently ignore AbortError - don't log or throw
-      if (e?.name === 'AbortError' || e?.message?.includes('abort') || (e as any)?.code === 'ECONNABORTED') {
+      if (error.name === 'AbortError' || error.message?.includes('abort') || error.code === 'ECONNABORTED') {
         return undefined;
       }
       // Re-throw other errors

@@ -87,12 +87,15 @@ export const CATEGORIES = [
     { value: "10", label: "10 mi" },
   ] as const;
 
-  // Available cities for filtering (Airbnb-style)
+  // Available cities for filtering (Airbnb-style).
+  // Top-5 by visible place count (snapshot 2026-05-08, Supabase places table).
+  // Sorted by count desc, not alphabetically.
   export const CITIES = [
-    "Dania Beach",
-    "Fort Lauderdale",
-    "Lauderhill",
-    "Lighthouse Point",
+    "Fort Lauderdale", // 43
+    "Miami",           // 26
+    "West Palm Beach", // 12
+    "Coral Gables",    // 11
+    "Boca Raton",      // 10
   ] as const;
   
   export type City = (typeof CITIES)[number];

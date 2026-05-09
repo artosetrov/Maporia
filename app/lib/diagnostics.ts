@@ -3,6 +3,40 @@
  * Only runs in production to help diagnose desktop vs mobile issues
  */
 
+type ErrorLike = {
+  name?: string;
+  message?: string;
+};
+
+type ExtensionWindow = Window & {
+  adblock?: unknown;
+  uBlock?: unknown;
+  PrivacyBadger?: unknown;
+};
+
+type SupabaseSessionResponse = {
+  data: {
+    session?: {
+      user?: {
+        id?: string | null;
+        email?: string | null;
+      } | null;
+    } | null;
+  };
+  error?: ErrorLike | null;
+};
+
+type SupabaseAuthLike = {
+  auth: {
+    getSession: () => Promise<SupabaseSessionResponse>;
+  };
+};
+
+const toErrorLike = (error: unknown): ErrorLike => {
+  if (error && typeof error === "object") return error as ErrorLike;
+  return { message: String(error) };
+};
+
 export function logProductionDiagnostics() {
   if (process.env.NODE_ENV !== 'production') {
     return;
@@ -47,9 +81,10 @@ export function logProductionDiagnostics() {
   }
 
   // Check for browser extensions that might interfere
+  const extensionWindow = window as ExtensionWindow;
   const hasExtensions = {
-    adBlock: !!(window as any).adblock || !!(window as any).uBlock,
-    privacyBadger: !!(window as any).PrivacyBadger,
+    adBlock: !!extensionWindow.adblock || !!extensionWindow.uBlock,
+    privacyBadger: !!extensionWindow.PrivacyBadger,
   };
   if (Object.values(hasExtensions).some(Boolean)) {
     console.warn('⚠️ Browser extensions detected:', hasExtensions);
@@ -61,14 +96,14 @@ export function logProductionDiagnostics() {
 /**
  * Log Supabase session status
  */
-export async function logSupabaseStatus(supabase: any) {
+export async function logSupabaseStatus(supabase: SupabaseAuthLike) {
   if (process.env.NODE_ENV !== 'production') {
     return;
   }
 
   try {
     // Add timeout to prevent hanging
-    const timeoutPromise = new Promise((_, reject) => {
+    const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => reject(new Error('Session check timeout')), 5000);
     });
     
@@ -76,7 +111,7 @@ export async function logSupabaseStatus(supabase: any) {
     const { data: sessionData, error: sessionError } = await Promise.race([
       sessionPromise,
       timeoutPromise,
-    ]) as any;
+    ]);
     
     console.group('🔐 Supabase Status');
     console.log('Session:', {
@@ -89,17 +124,18 @@ export async function logSupabaseStatus(supabase: any) {
       } : null,
     });
     console.groupEnd();
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const error = toErrorLike(err);
     // Silently ignore AbortError and timeout
-    if (err?.name === 'AbortError' || 
-        err?.message?.includes('abort') || 
-        err?.message?.includes('signal is aborted') ||
-        err?.message?.includes('timeout')) {
+    if (error.name === 'AbortError' || 
+        error.message?.includes('abort') || 
+        error.message?.includes('signal is aborted') ||
+        error.message?.includes('timeout')) {
       return;
     }
     console.error('❌ Error checking Supabase status:', {
-      name: err?.name,
-      message: err?.message,
+      name: error.name,
+      message: error.message,
     });
   }
 }
@@ -107,7 +143,7 @@ export async function logSupabaseStatus(supabase: any) {
 /**
  * Log Google Maps loading status
  */
-export function logGoogleMapsStatus(isLoaded: boolean, loadError: any) {
+export function logGoogleMapsStatus(isLoaded: boolean, loadError: unknown) {
   if (process.env.NODE_ENV !== 'production') {
     return;
   }
@@ -115,9 +151,10 @@ export function logGoogleMapsStatus(isLoaded: boolean, loadError: any) {
   console.group('🗺️ Google Maps Status');
   console.log('Loaded:', isLoaded);
   if (loadError) {
+    const error = toErrorLike(loadError);
     console.error('Load Error:', {
-      message: loadError.message,
-      name: loadError.name,
+      message: error.message,
+      name: error.name,
       details: loadError,
     });
   } else {
@@ -131,7 +168,7 @@ export function logGoogleMapsStatus(isLoaded: boolean, loadError: any) {
  */
 let firstFailureLogged = false;
 
-export function logFirstFailure(url: string, status: number, error: any) {
+export function logFirstFailure(url: string, status: number, error: unknown) {
   if (process.env.NODE_ENV !== 'production') {
     return;
   }

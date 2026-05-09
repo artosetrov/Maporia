@@ -14,6 +14,68 @@ import {
 
 type SearchResult = GoogleImportSearchResult;
 
+type ErrorLike = {
+  message?: string;
+};
+
+type GooglePhotoInput =
+  | string
+  | {
+      reference?: string | null;
+      photo_reference?: string | null;
+    };
+
+type GoogleImportApiResponse = {
+  name?: string | null;
+  business_name?: string | null;
+  formatted_address?: string | null;
+  address?: string | null;
+  category?: string | null;
+  types?: string[] | null;
+  photos?: GooglePhotoInput[] | null;
+  photo_urls?: GooglePhotoInput[] | null;
+  lat?: number | null;
+  latitude?: number | null;
+  lng?: number | null;
+  longitude?: number | null;
+  google_place_id?: string | null;
+  place_id?: string | null;
+  google_maps_url?: string | null;
+  city?: string | null;
+  city_state?: string | null;
+  city_country?: string | null;
+  is_coordinate_only?: boolean | null;
+  code?: string | null;
+  error?: string | null;
+  message?: string | null;
+  details?: string | null;
+  description?: string | null;
+  existing_place_id?: string | null;
+  existing_title?: string | null;
+};
+
+type SelectedFieldsPayload = {
+  lat: number | null;
+  lng: number | null;
+  google_maps_url: string | null;
+  city: string | null;
+  city_state: string | null;
+  city_country: string | null;
+  is_coordinate_only: boolean;
+  title: boolean;
+  titleData?: string;
+  address: boolean;
+  addressData?: string;
+  description: boolean;
+  descriptionData?: string;
+  photos: SearchResult["photos"];
+};
+
+const toErrorLike = (error: unknown): ErrorLike => {
+  if (error && typeof error === "object") return error as ErrorLike;
+  return { message: String(error) };
+};
+
 // Helper to generate photo URL from photo reference (legacy Places API)
 // Returns a URL that can be used directly in img src
 function getPhotoUrl(photoReference: string, maxWidth: number = 800): string {
@@ -92,14 +154,14 @@ export default function GoogleImportField({
         url: response.url,
       });
 
-      let data;
+      let data: GoogleImportApiResponse;
       try {
         const responseText = await response.text();
         console.log("📄 Response text length:", responseText.length);
         if (!responseText) {
           throw new Error("Empty response from server");
         }
-        data = JSON.parse(responseText);
+        data = JSON.parse(responseText) as GoogleImportApiResponse;
         console.log("✅ Parsed data:", {
           hasName: !!data?.name,
           hasAddress: !!data?.formatted_address,
@@ -142,11 +204,11 @@ export default function GoogleImportField({
         photoType: typeof photosArray[0],
       });
 
-      const processedPhotos = photosArray.slice(0, 9).map((photo: any, index: number) => {
+      const processedPhotos = photosArray.slice(0, 9).map((photo, index: number) => {
         // Handle both formats: {reference: "..."} or string (photo_reference)
         const photoRef = typeof photo === 'string' 
           ? photo 
-          : (photo?.reference || photo?.photo_reference || photo);
+          : (photo.reference || photo.photo_reference || "");
         
         if (!photoRef || typeof photoRef !== 'string') {
           console.warn("⚠️ Empty photo reference at index", index);
@@ -224,9 +286,9 @@ export default function GoogleImportField({
           });
 
           const aiText = await aiRes.text();
-          let aiData: any;
+          let aiData: Pick<GoogleImportApiResponse, "code" | "error" | "message" | "description">;
           try {
-            aiData = JSON.parse(aiText);
+            aiData = JSON.parse(aiText) as Pick<GoogleImportApiResponse, "code" | "error" | "message" | "description">;
           } catch {
             aiData = { error: aiText };
           }
@@ -261,9 +323,9 @@ export default function GoogleImportField({
           setGeneratingDescription(false);
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Search error:", error);
-      setError(error.message || "Failed to search place");
+      setError(toErrorLike(error).message || "Failed to search place");
     } finally {
       setSearching(false);
     }
@@ -290,7 +352,7 @@ export default function GoogleImportField({
 
       // Prepare selected fields data
       const isCoordinateOnly = searchResult.is_coordinate_only === true || !searchResult.google_place_id;
-      const selectedFieldsData: any = {
+      const selectedFieldsData: SelectedFieldsPayload = {
         lat: searchResult.lat,
         lng: searchResult.lng,
         google_maps_url: searchResult.google_maps_url,
@@ -357,12 +419,12 @@ export default function GoogleImportField({
       });
 
       const responseText = await response.text();
-      let data: any;
+      let data: GoogleImportApiResponse;
       try {
         if (!responseText) {
           throw new Error("Empty response from server");
         }
-        data = JSON.parse(responseText);
+        data = JSON.parse(responseText) as GoogleImportApiResponse;
       } catch (parseError) {
         console.error("Failed to parse import response:", parseError);
         console.error("Raw import response:", {
@@ -423,9 +485,9 @@ export default function GoogleImportField({
 
       // Otherwise we created a new place — go to its editor
       window.location.href = `/places/${data.place_id}/edit`;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Import error:", error);
-      setError(error.message || "Failed to import place");
+      setError(toErrorLike(error).message || "Failed to import place");
       setImporting(false);
     }
   }

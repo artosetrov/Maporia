@@ -8,7 +8,7 @@ import { HOME_TABS, type HomeKind } from "../types/home";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { getCitiesWithPlaces, type City } from "../lib/cities";
 import { supabase } from "../lib/supabase";
-import Icon from "./Icon";
+import Icon, { type IconName } from "./Icon";
 import { sanitizePostgrestValue, tokenizeQuery, buildTokenSearchExpr } from "../utils";
 import {
   CITY_RADIUS_MILES,
@@ -29,6 +29,43 @@ const PLACE_SEARCH_FIELDS = [
   "kind",
 ] as const;
 
+type ErrorLike = {
+  name?: string;
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+};
+
+type SearchPlaceRow = {
+  id: string;
+  title: string | null;
+  description: string | null;
+  country: string | null;
+  city: string | null;
+  city_name_cached: string | null;
+  address: string | null;
+  kind: string | null;
+  categories: string[] | null;
+  cover_url: string | null;
+};
+
+const toErrorLike = (error: unknown): ErrorLike => {
+  if (error && typeof error === "object") {
+    return error as ErrorLike;
+  }
+  return { message: String(error) };
+};
+
+const isAbortLikeError = (error: unknown): boolean => {
+  const err = toErrorLike(error);
+  return (
+    err.name === "AbortError" ||
+    err.message?.includes("abort") === true ||
+    err.code === "ECONNABORTED"
+  );
+};
+
 // Component for search result item with image error handling
 function SearchResultItem({ 
   result, 
@@ -43,7 +80,7 @@ function SearchResultItem({
 }: { 
   result: SearchResult; 
   color: { bg: string; hover: string; icon: string };
-  iconName: string;
+  iconName: IconName;
   idx: number;
   totalResults: number;
   onCitySelect: (city: string) => void;
@@ -83,7 +120,7 @@ function SearchResultItem({
       ) : (
         <div className={`w-12 h-12 rounded-xl ${color.bg} ${color.hover} flex items-center justify-center flex-shrink-0 transition-colors`}>
           <Icon 
-            name={iconName as any} 
+            name={iconName} 
             size={24} 
             className={color.icon} 
           />
@@ -125,7 +162,7 @@ type SearchResult = {
   id: string;
   title: string;
   subtitle?: string;
-  icon?: string;
+  icon?: IconName;
   coverUrl?: string | null;
 };
 
@@ -207,8 +244,8 @@ export default function SearchModal({
         if (isUnmounting) return;
         setCities(citiesData);
         populateCityCoordsCache(citiesData);
-      } catch (err: any) {
-        if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+      } catch (err: unknown) {
+        if (isAbortLikeError(err)) {
           return;
         }
         console.error("Error loading cities:", err);
@@ -282,7 +319,7 @@ export default function SearchModal({
       const { count, error } = await countQuery;
       if (error) {
         // Silently ignore AbortError
-        if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+        if (isAbortLikeError(error)) {
           return 0;
         }
         // Enhanced logging for production
@@ -300,8 +337,8 @@ export default function SearchModal({
         return 0;
       }
       return count || 0;
-    } catch (err: any) {
-      if (err?.name !== 'AbortError' && !err?.message?.includes('abort')) {
+    } catch (err: unknown) {
+      if (!isAbortLikeError(err)) {
         console.error("Error in getTagCount:", err);
       }
       return 0;
@@ -369,8 +406,8 @@ export default function SearchModal({
           }),
         );
         if (!cancelled) setKindCounts(next);
-      } catch (err: any) {
-        if (err?.name !== "AbortError" && !err?.message?.includes("abort")) {
+      } catch (err: unknown) {
+        if (!isAbortLikeError(err)) {
           console.error("Error loading kind counts:", err);
         }
       } finally {
@@ -432,7 +469,7 @@ export default function SearchModal({
       const { count, error } = await countQuery;
       if (error) {
         // Silently ignore AbortError
-        if (error.message?.includes('abort') || error.name === 'AbortError' || (error as any).code === 'ECONNABORTED') {
+        if (isAbortLikeError(error)) {
           return 0;
         }
         // Enhanced logging for production
@@ -452,18 +489,19 @@ export default function SearchModal({
         return 0;
       }
       return count || 0;
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Silently ignore AbortError
-      if (err?.name === 'AbortError' || err?.message?.includes('abort') || (err as any).code === 'ECONNABORTED') {
+      if (isAbortLikeError(err)) {
         return 0;
       }
+      const error = toErrorLike(err);
       // Enhanced logging for production
       if (process.env.NODE_ENV === 'production') {
         console.error("Error in getFilteredPlacesCount:", {
           city,
           tags,
           query: searchQuery,
-          error: err?.message || String(err),
+          error: error.message || String(err),
         });
       } else {
         console.error("Error in getFilteredPlacesCount:", err);
@@ -542,7 +580,8 @@ export default function SearchModal({
         const { data: placesData } = await placesQuery;
         if (placesData && placesData.length > 0) {
           const normFullQ = normalizeForMatch(fullQ);
-          const ranked = (placesData as any[])
+          const places = placesData as SearchPlaceRow[];
+          const ranked = places
             .map((place) => {
               const title = normalizeForMatch(String(place.title ?? ""));
               const haystack = [
@@ -624,8 +663,8 @@ export default function SearchModal({
       }
 
       setSearchResults(results);
-    } catch (err: any) {
-      if (err?.name !== 'AbortError' && !err?.message?.includes('abort')) {
+    } catch (err: unknown) {
+      if (!isAbortLikeError(err)) {
         console.error("Error searching:", err);
       }
       setSearchResults([]);
@@ -893,7 +932,7 @@ export default function SearchModal({
                 {/* Nearby */}
                 <button
                   onClick={() => {
-                    // TODO: Implement geolocation
+                    // Future flow: implement geolocation.
                     handleCitySelect(currentCity);
                   }}
                   className="w-full text-left px-0 py-4 border-b border-[#ECEEE4] hover:bg-[#FAFAF7] transition flex items-center gap-4 group"

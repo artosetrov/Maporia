@@ -28,6 +28,8 @@ import Icon from "../../components/Icon";
 import ImpersonationDisclaimer from "../../components/ImpersonationDisclaimer";
 import { useImpersonationStatus } from "../../hooks/useImpersonationStatus";
 import { sanitizePostgrestValue } from "../../utils";
+import { PageSkeleton } from "../../components/Skeleton";
+import { ErrorBoundary } from "../../components/ErrorBoundary";
 
 type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
 type PlaceIdResult = { data: Pick<PlacesRow, "id"> | null; error: PostgrestError | null };
@@ -335,49 +337,41 @@ export default function AddPlacePage() {
 
   // Создание идёт — показываем спиннер
   if (creating) {
-    return (
-      <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-sm text-[#6F7A5A] mb-2">Creating…</div>
-          {error && <div className="text-sm text-[#C96A5B] mt-2">{error}</div>}
-        </div>
-      </main>
-    );
+    return <PageSkeleton />;
   }
 
   // While access is loading
   if (accessLoading) {
-    return (
-      <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
-        <div className="text-sm text-[#6F7A5A]">Loading…</div>
-      </main>
-    );
+    return <PageSkeleton />;
   }
 
   // Premium-гейт
   if (!canAdd) {
     return (
-      <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
-        <div className="max-w-md mx-auto px-6 text-center">
-          <div className="text-lg font-semibold text-[#1F2A1F] mb-2">Premium Required</div>
-          <div className="text-sm text-[#6F7A5A] mb-4">
-            Only Premium users can create places. Please upgrade to Premium to add new entries.
+      <ErrorBoundary>
+        <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
+          <div className="max-w-md mx-auto px-6 text-center">
+            <div className="text-lg font-semibold text-[#1F2A1F] mb-2">Premium Required</div>
+            <div className="text-sm text-[#6F7A5A] mb-4">
+              Only Premium users can create places. Please upgrade to Premium to add new entries.
+            </div>
+            <button
+              onClick={() => router.push("/")}
+              className="px-4 py-2 bg-[#1F2A1F] text-white rounded-lg hover:bg-[#2A3A2A] transition-colors"
+            >
+              Go Home
+            </button>
           </div>
-          <button
-            onClick={() => router.push("/")}
-            className="px-4 py-2 bg-[#1F2A1F] text-white rounded-lg hover:bg-[#2A3A2A] transition-colors"
-          >
-            Go Home
-          </button>
-        </div>
-      </main>
+        </main>
+      </ErrorBoundary>
     );
   }
 
   // Главный экран — три карточки
   return (
-    <main className="min-h-screen bg-[#FAFAF7]">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+    <ErrorBoundary>
+      <main className="min-h-screen bg-[#FAFAF7]">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         <div className="mb-6 sm:mb-10">
           <h1 className="font-fraunces text-2xl sm:text-3xl font-semibold text-[#1F2A1F] mb-2">
             What are you adding?
@@ -437,27 +431,27 @@ export default function AddPlacePage() {
             Cancel
           </button>
         </div>
-      </div>
+        </div>
 
-      {/* Пейволл при выборе service/experience без подходящего тарифа */}
-      {paywallKind && (
-        <PaywallModal
-          kind={paywallKind}
-          isImpersonating={isImpersonating}
-          onClose={() => setPaywallKind(null)}
-          onUpgrade={() => router.push("/pricing")}
-        />
-      )}
+        {/* Пейволл при выборе service/experience без подходящего тарифа */}
+        {paywallKind && (
+          <PaywallModal
+            kind={paywallKind}
+            isImpersonating={isImpersonating}
+            onClose={() => setPaywallKind(null)}
+            onUpgrade={() => router.push("/pricing")}
+          />
+        )}
 
-      {/* Модалка достигнутого лимита */}
-      {limitState && (
-        <LimitReachedModal
-          kind={limitState.kind}
-          quota={limitState.quota}
-          buying={buyingAddon}
-          isImpersonating={isImpersonating}
-          onClose={() => setLimitState(null)}
-          onBuyAddon={async () => {
+        {/* Модалка достигнутого лимита */}
+        {limitState && (
+          <LimitReachedModal
+            kind={limitState.kind}
+            quota={limitState.quota}
+            buying={buyingAddon}
+            isImpersonating={isImpersonating}
+            onClose={() => setLimitState(null)}
+            onBuyAddon={async () => {
             if (isImpersonating) {
               setError("Stripe-операции отключены в режиме impersonation.");
               return;
@@ -487,11 +481,12 @@ export default function AddPlacePage() {
               setError(err instanceof Error ? err.message : "Не удалось открыть оплату");
               setBuyingAddon(false);
             }
-          }}
-          onUpgrade={() => router.push("/pricing")}
-        />
-      )}
-    </main>
+            }}
+            onUpgrade={() => router.push("/pricing")}
+          />
+        )}
+      </main>
+    </ErrorBoundary>
   );
 }
 

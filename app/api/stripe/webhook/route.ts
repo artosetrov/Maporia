@@ -15,16 +15,51 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { getStripe, supabaseAdmin } from "../../../lib/stripe";
+import { getStripe, getSupabaseAdmin } from "../../../lib/stripe";
+import { logger } from "../../../lib/logger";
+import { resolvePlanByPriceId } from "../../../lib/pricing";
 import type { Plan, PlanPeriod } from "../../../types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+type SupabaseAdminClient = NonNullable<ReturnType<typeof getSupabaseAdmin>>;
+
+/**
+ * Идемпотентность: пробуем INSERT в stripe_webhook_events. Если row уже была —
+ * это retry уже обработанного event'а, возвращаем false → handler skip'ает работу.
+ *
+ * См. docs/PRICING_V2_PLAN.md § 11.3 (Webhook resilience).
+ */
+async function tryClaimWebhookEvent(
+  supabaseAdmin: SupabaseAdminClient,
+  eventId: string,
+  eventType: string,
+  requestId: string | null,
+): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from("stripe_webhook_events")
+    .insert({ event_id: eventId, event_type: eventType, request_id: requestId })
+    .select("event_id");
+
+  if (error) {
+    // 23505 = unique_violation — duplicate, нормально, skip.
+    const code = (error as { code?: string }).code;
+    if (code === "23505") return false;
+    // Любая другая ошибка — пробрасываем, Stripe заретраит.
+    throw new Error(`stripe_webhook_events insert failed: ${error.message}`);
+  }
+
+  return Array.isArray(data) && data.length > 0;
+}
 
 export async function POST(request: NextRequest) {
   const stripe = getStripe();
   if (!stripe) {
     return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
+  }
+  const supabaseAdmin = getSupabaseAdmin();
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: "Supabase admin not configured" }, { status: 503 });
   }
 
   const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
@@ -48,25 +83,43 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
+  // ── Idempotency: пробуем застолбить event.id ──
+  // Если не получилось — Stripe ретраит уже обработанное событие, отвечаем 200.
+  try {
+    const claimed = await tryClaimWebhookEvent(
+      supabaseAdmin,
+      event.id,
+      event.type,
+      request.headers.get("stripe-signature")?.slice(0, 64) ?? null,
+    );
+    if (!claimed) {
+      logger.info(`[stripe/webhook] duplicate event skipped: ${event.id} (${event.type})`);
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+  } catch (err: unknown) {
+    // Если не смогли проверить idempotency — лучше отказать с 500, чем дважды активировать план.
+    const message = err instanceof Error ? err.message : "Idempotency check failed";
+    console.error("[stripe/webhook] Idempotency check error:", message);
+    return NextResponse.json({ error: "Idempotency unavailable" }, { status: 500 });
+  }
+
   try {
     switch (event.type) {
       case "checkout.session.completed":
-        await handleCheckoutCompleted(event.data.object);
+        await handleCheckoutCompleted(event.data.object, supabaseAdmin);
         break;
       case "customer.subscription.created":
       case "customer.subscription.updated":
-        await handleSubscriptionUpsert(event.data.object);
+        await handleSubscriptionUpsert(event.data.object, supabaseAdmin);
         break;
       case "customer.subscription.deleted":
-        await handleSubscriptionDeleted(event.data.object);
+        await handleSubscriptionDeleted(event.data.object, supabaseAdmin);
         break;
       case "invoice.payment_failed":
-        await handlePaymentFailed(event.data.object);
+        await handlePaymentFailed(event.data.object, supabaseAdmin);
         break;
       default:
-        if (process.env.NODE_ENV === "development") {
-          console.log(`[stripe/webhook] Unhandled event type: ${event.type}`);
-        }
+        logger.info(`[stripe/webhook] Unhandled event type: ${event.type}`);
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Webhook handler error";
@@ -85,6 +138,8 @@ export async function POST(request: NextRequest) {
 const PLAN_VALUES: Plan[] = [
   "free",
   "premium_viewer",
+  "premium_grandfathered",
+  "creator_location",
   "creator_service",
   "creator_experience",
   "creator_all",
@@ -115,7 +170,10 @@ function mapStripeStatusToOurs(
  * One-time payments: либо Premium (lifetime premium_viewer), либо add-on
  * (+1 слот за $2.99). Различаем по metadata.kind.
  */
-async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+async function handleCheckoutCompleted(
+  session: Stripe.Checkout.Session,
+  supabaseAdmin: SupabaseAdminClient
+) {
   const userId = session.metadata?.supabase_user_id;
   if (!userId) {
     console.error("[stripe/webhook] checkout.session.completed без supabase_user_id", {
@@ -128,7 +186,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   if (session.mode !== "payment") return;
 
   if (session.payment_status !== "paid") {
-    console.warn("[stripe/webhook] checkout payment_status !== 'paid':", session.payment_status);
+    logger.warn("[stripe/webhook] checkout payment_status !== 'paid':", session.payment_status);
     return;
   }
 
@@ -156,7 +214,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       console.error("[stripe/webhook] extra_listing update failed:", uErr.message);
       throw new Error(uErr.message);
     }
-    console.log("[stripe/webhook] +1 listing credit for", userId, "→", next);
+    logger.info("[stripe/webhook] +1 listing credit for", userId, "→", next);
     return;
   }
 
@@ -177,7 +235,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     console.error("[stripe/webhook] Failed to activate premium:", error.message);
     throw new Error(`Failed to activate premium for ${userId}: ${error.message}`);
   }
-  console.log("[stripe/webhook] Premium (lifetime) activated for", userId);
+  logger.info("[stripe/webhook] Premium (lifetime) activated for", userId);
 }
 
 /**
@@ -188,7 +246,10 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
  *    можно использовать как фоллбэк, если подписку создали в Dashboard вручную.
  * 3. Делаем upsert в public.subscriptions и обновляем profiles.plan для быстрых проверок.
  */
-async function handleSubscriptionUpsert(sub: Stripe.Subscription) {
+async function handleSubscriptionUpsert(
+  sub: Stripe.Subscription,
+  supabaseAdmin: SupabaseAdminClient
+) {
   const userId = sub.metadata?.supabase_user_id;
   if (!userId) {
     console.error("[stripe/webhook] subscription без supabase_user_id в metadata", {
@@ -197,8 +258,27 @@ async function handleSubscriptionUpsert(sub: Stripe.Subscription) {
     return;
   }
 
-  const plan = asPlan(sub.metadata?.plan);
-  const period = asPeriod(sub.metadata?.period);
+  // Plan + period: сначала из metadata (наш checkout пишет туда). Если metadata пустые —
+  // например, подписку создали вручную в Stripe Dashboard — резолвим из subscription items[0].price.id
+  // через `resolvePlanByPriceId` (registry reverse-map).
+  let plan = asPlan(sub.metadata?.plan);
+  let period = asPeriod(sub.metadata?.period);
+
+  if (plan === "free") {
+    const priceId =
+      sub.items.data[0]?.price?.id ?? null;
+    if (priceId) {
+      const resolved = resolvePlanByPriceId(priceId);
+      if (resolved) {
+        plan = resolved.plan;
+        period = resolved.cycle === "lifetime" ? "lifetime" : resolved.cycle;
+        logger.info(
+          `[stripe/webhook] plan resolved from price_id (no metadata): ${plan}/${period}`,
+        );
+      }
+    }
+  }
+
   const status = mapStripeStatusToOurs(sub.status);
   const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
 
@@ -249,17 +329,20 @@ async function handleSubscriptionUpsert(sub: Stripe.Subscription) {
       console.error("[stripe/webhook] profile update failed:", profErr.message);
       throw new Error(profErr.message);
     }
-    console.log("[stripe/webhook] subscription active:", { userId, plan, period });
+    logger.info("[stripe/webhook] subscription active:", { userId, plan, period });
   } else if (status === "past_due") {
     // Не сбрасываем план сразу — даём Stripe пройти retry-цикл.
-    console.warn("[stripe/webhook] subscription past_due:", { userId, subId: sub.id });
+    logger.warn("[stripe/webhook] subscription past_due:", { userId, subId: sub.id });
   }
 }
 
 /**
  * Подписка удалена/закончилась — возвращаем юзера на free, если активной нет.
  */
-async function handleSubscriptionDeleted(sub: Stripe.Subscription) {
+async function handleSubscriptionDeleted(
+  sub: Stripe.Subscription,
+  supabaseAdmin: SupabaseAdminClient
+) {
   const userId = sub.metadata?.supabase_user_id;
   if (!userId) return;
 
@@ -295,15 +378,18 @@ async function handleSubscriptionDeleted(sub: Stripe.Subscription) {
     })
     .eq("id", userId);
 
-  console.log("[stripe/webhook] subscription cancelled, user → free:", userId);
+  logger.info("[stripe/webhook] subscription cancelled, user → free:", userId);
 }
 
-async function handlePaymentFailed(invoice: Stripe.Invoice) {
+async function handlePaymentFailed(
+  invoice: Stripe.Invoice,
+  supabaseAdmin: SupabaseAdminClient
+) {
   const subId = (invoice as unknown as { subscription?: string }).subscription;
   if (!subId) return;
   await supabaseAdmin
     .from("subscriptions")
     .update({ status: "past_due" })
     .eq("stripe_subscription_id", subId);
-  console.warn("[stripe/webhook] payment failed for sub:", subId);
+  logger.warn("[stripe/webhook] payment failed for sub:", subId);
 }

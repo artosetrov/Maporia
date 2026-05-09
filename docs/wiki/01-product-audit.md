@@ -33,13 +33,14 @@ Maporia сейчас выглядит как local discovery marketplace:
 | План | Цена | Право доступа | Право публикации |
 | --- | ---: | --- | --- |
 | `free` | $0 | public locations | нет публикации через текущий `canUserAddPlace` |
-| `premium_viewer` | $35 one-time | premium locations | locations |
+| `premium_viewer` | $35 one-time | premium locations | no new creator publishing in v2 |
+| `creator_location` | $9.99/mo | premium included | до 5 locations |
 | `creator_service` | $14.99/mo | premium included | до 5 services + locations |
 | `creator_experience` | $14.99/mo | premium included | до 5 experiences + locations |
 | `creator_all` | $34.99/mo | premium included | 10 combined services/experiences + locations |
 | extra listing | $2.99 one-time | не меняет план | +1 bonus listing credit |
 
-Важный аудитный вывод: billing env и Stripe setup должны оставаться синхронизированы с `PLAN_CONFIG` и `EXTRA_LISTING`: `STRIPE_PRICE_PREMIUM_ONETIME`, `STRIPE_PRICE_CREATOR_SERVICE_MONTH`, `STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH`, `STRIPE_PRICE_CREATOR_ALL_MONTH`, `STRIPE_PRICE_EXTRA_LISTING`. `STRIPE_PRICE_ID` нужен только как legacy fallback для старого Premium checkout.
+Важный аудитный вывод: billing env и Stripe setup должны оставаться синхронизированы с текущей pricing-моделью: `STRIPE_PRICE_PREMIUM_ONETIME`, `STRIPE_PRICE_CREATOR_LOCATION_MONTH`, `STRIPE_PRICE_CREATOR_SERVICE_MONTH`, `STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH`, `STRIPE_PRICE_CREATOR_ALL_MONTH`, `STRIPE_PRICE_EXTRA_LISTING`. `STRIPE_PRICE_ID` нужен только как legacy fallback для старого Premium checkout.
 
 ## Продуктовая Ясность
 
