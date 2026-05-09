@@ -119,21 +119,29 @@ export default function HomeHero({
       className="px-4 sm:px-6 lg:px-10 pt-6 sm:pt-10 lg:pt-6"
     >
       <div className="mx-auto max-w-[1200px]">
-        <div className="grid lg:grid-cols-[1.05fr_1fr] gap-8 lg:gap-12 items-start">
+        <div className="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] gap-8 lg:gap-12 items-start">
           {/* ── LEFT column ─────────────────────────────────────────── */}
-          <div className="text-center lg:text-left">
+          {/* 2026-05-09: min-w-0 обязателен — grid item по умолчанию имеет
+              min-width:auto = intrinsic content size, поэтому если внутри
+              есть широкий ряд табов (~520 px), grid-item раздувается
+              шире viewport и тащит за собой весь body horizontal scroll.
+              min-w-0 ломает intrinsic-min, и overflow-x-auto на обёртке
+              табов начинает работать как задумано. */}
+          <div className="min-w-0 text-center lg:text-left">
             {/* Eyebrow "CURATED BY LOCALS · FLORIDA" удалён по запросу
                 2026-05-08 — заголовок и так несёт регион в "of Florida". */}
 
             <h1
               id="home-hero-title"
-              className="font-extrabold text-[60px] sm:text-[88px] lg:text-[120px] leading-[0.98] tracking-[-0.03em] text-[#16190f]"
+              className="font-extrabold text-[44px] sm:text-[76px] lg:text-[120px] leading-[0.98] tracking-[-0.02em] text-[#16190f]"
             >
               Discover<br />
               <em className="not-italic font-fraunces italic font-semibold text-[#8F9E4F]">
                 local gems
-              </em>{" "}
-              of{" "}
+              </em>
+              <span className="sm:inline">
+                <br className="sm:hidden" /> of{" "}
+              </span>
               {/* Inline city picker. The button itself is the hit target;
                   the dropdown is absolutely positioned beneath it. */}
               <span ref={cityRef} className="relative inline-block">
@@ -209,7 +217,7 @@ export default function HomeHero({
               across South Florida. No ads, no endless filter walls.
             </p>
 
-            <div className="mt-6 flex flex-col items-center lg:items-start gap-3.5">
+            <div className="mt-6 flex flex-col items-center lg:items-start gap-3.5 min-w-0 w-full">
               <HomeTabsSegmented
                 active={activeKind}
                 onChange={onChangeKind}

@@ -120,7 +120,13 @@ export default function HomeTabsSegmented({
   // фокус и счётчики не меняются.
   return (
     <div
-      className="max-w-full w-full overflow-x-auto [&::-webkit-scrollbar]:hidden"
+      // 2026-05-09: min-w-0 критичен. Без него flex item по умолчанию
+      // получает min-width:auto = intrinsic ширина детей (~520 px на трёх
+      // whitespace-nowrap табах с counts). Тогда w-full / max-w-full
+      // игнорируются, обёртка раздувается, body уходит в horizontal
+      // scroll. С min-w-0 flex item корректно сжимается до 100%
+      // родителя, и overflow-x-auto активируется на оставшемся контенте.
+      className="min-w-0 max-w-full w-full overflow-x-auto [&::-webkit-scrollbar]:hidden"
       style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
     >
       <div
