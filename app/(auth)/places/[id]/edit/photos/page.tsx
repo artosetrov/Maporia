@@ -4,6 +4,7 @@
 
 import { use, useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabase } from "../../../../../lib/supabase";
 import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
@@ -163,7 +164,7 @@ export default function PhotosEditorPage(props: PageProps) {
       const path = `places/${generateUUID()}.${ext}`;
 
 
-      const { data: uploadData, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from("place-photos")
         .upload(path, file, {
           cacheControl: "3600",
@@ -452,7 +453,8 @@ export default function PhotosEditorPage(props: PageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7]">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-[#FAFAF7]">
       {/* Header */}
       <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
@@ -517,7 +519,14 @@ export default function PhotosEditorPage(props: PageProps) {
           {photos.map((photo) => (
             <div key={photo.id} className="relative group">
               <div className="aspect-square rounded-2xl overflow-hidden bg-[#FAFAF7] border border-[#ECEEE4]">
-                <img src={photo.url} alt="" className="w-full h-full object-cover" />
+                <Image
+                  src={photo.url}
+                  alt=""
+                  width={320}
+                  height={240}
+                  sizes="(max-width: 640px) 50vw, 320px"
+                  className="h-full w-full object-cover"
+                />
                 {photo.uploading && (
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                     <div className="text-white text-xs">Uploading…</div>
@@ -677,6 +686,7 @@ export default function PhotosEditorPage(props: PageProps) {
           </div>
         </div>
       </div>
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

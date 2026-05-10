@@ -5,6 +5,7 @@
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "../../../../../lib/supabase";
 import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
@@ -205,7 +206,8 @@ export default function PlaceCollectionsEditorPage(props: PageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-warm-white pb-24">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-warm-white pb-24">
       <div className="sticky top-0 z-30 bg-white border-b border-border-light">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16">
@@ -253,7 +255,14 @@ export default function PlaceCollectionsEditorPage(props: PageProps) {
                   />
                   <div className="w-12 h-12 rounded-lg bg-border-light overflow-hidden flex-shrink-0">
                     {c.cover_image ? (
-                      <img src={c.cover_image} alt="" className="w-full h-full object-cover" />
+                      <Image
+                        src={c.cover_image}
+                        alt=""
+                        width={48}
+                        height={48}
+                        sizes="48px"
+                        className="h-full w-full object-cover"
+                      />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-content-muted">
                         <Icon name="photo" size={20} />
@@ -291,6 +300,7 @@ export default function PlaceCollectionsEditorPage(props: PageProps) {
           </button>
         </div>
       </div>
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

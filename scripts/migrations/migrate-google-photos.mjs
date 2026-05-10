@@ -102,14 +102,6 @@ function getExtFromContentType(ct) {
   return CONTENT_TYPE_TO_EXT[ct?.toLowerCase()?.split(";")[0]?.trim()] || "jpg";
 }
 
-function isGooglePhotoUrl(url) {
-  if (!url) return false;
-  return (
-    url.includes("places.googleapis.com/") ||
-    url.includes("maps.googleapis.com/maps/api/place/photo")
-  );
-}
-
 /**
  * Rebuild the photo URL with a fresh API key and desired maxWidth.
  * Handles both Google Places API v1 and legacy formats.
@@ -237,7 +229,7 @@ async function processPhotos(rows, updateFn) {
   for (let i = 0; i < rows.length; i += concurrency) {
     const batch = rows.slice(i, i + concurrency);
 
-    const results = await Promise.allSettled(
+    await Promise.allSettled(
       batch.map(async (row) => {
         const url = row.url ?? row.cover_url;
         const rowId = row.id;

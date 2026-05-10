@@ -27,8 +27,6 @@ type SearchBarProps = {
 export default function SearchBar({
   selectedCity,
   onCityChange,
-  searchValue,
-  onSearchChange: _onSearchChange,
   onFiltersClick,
   activeFiltersCount,
   isMobile = false,

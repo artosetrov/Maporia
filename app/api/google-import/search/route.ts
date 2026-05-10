@@ -3,9 +3,17 @@ import { createClient } from "@supabase/supabase-js";
 import { logger } from "@/app/lib/logger";
 import type { Place } from "@/app/types";
 
-type GoogleImportSearchPlace = Pick<Place, "id" | "title" | "address" | "city" | "lat" | "lng" | "google_place_id">;
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
+type GoogleImportSearchResponse = {
+  _placeType?: Place;
+  title: string | null;
+  address: string | null;
+  description: string | null;
+  lat: number | null;
+  lng: number | null;
+  google_place_id: string | null;
+  photos: Array<{ id: string; url: string; reference: string }>;
+  google_maps_url: string | null;
+};
 
 // Ensure this is a server-side route
 export const dynamic = "force-dynamic";
@@ -85,7 +93,7 @@ function extractPlaceIdFromUrl(url: string): string | null {
     }
 
     return null;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -470,7 +478,12 @@ type PlaceDetailsData = {
   geometry?: { location?: { lat: number; lng: number } };
 };
 
-function normalizePlaceData(placeData: PlaceDetailsData, originalQuery: string, isUrl: boolean, apiKey: string) {
+function normalizePlaceData(
+  placeData: PlaceDetailsData,
+  originalQuery: string,
+  isUrl: boolean,
+  apiKey: string
+): GoogleImportSearchResponse {
   const displayName = placeData.name || null;
   const formattedAddress = placeData.formatted_address || null;
 

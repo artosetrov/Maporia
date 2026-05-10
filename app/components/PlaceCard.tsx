@@ -67,7 +67,7 @@ function isValidUUID(str: string): boolean {
   return uuidRegex.test(str);
 }
 
-function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isFavorite = false, hauntedGemIndex, showPhotoSlider = true, onClick, onTagClick, onPhotoClick, onRemoveFavorite, priority = false, batchPhotos, batchProfile }: PlaceCardProps) {
+function PlaceCard({ place, userAccess, userId, favoriteButton, hauntedGemIndex, showPhotoSlider = true, onClick, onPhotoClick, onRemoveFavorite, priority = false, batchPhotos, batchProfile }: PlaceCardProps) {
   const isDesktop = useIsDesktop();
   // Use batch-loaded profile if available; otherwise fall back to per-card loading
   const [creatorProfile, setCreatorProfile] = useState<{ display_name: string | null; username: string | null; avatar_url: string | null } | null>(batchProfile ?? null);
@@ -117,7 +117,7 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
   }, []);
   
   // Premium gate hook (guest → Auth Modal, free → Premium Modal, premium → open place)
-  const { canAccessPlace, openPremiumLocation, closePremiumModal, closeAuthModal, modalOpen, authModalOpen, authRedirectPath, authModalVariant } = usePremiumGate();
+  const { canAccessPlace, openPremiumLocation } = usePremiumGate();
 
   // Sync batch-loaded data when props change
   useEffect(() => {
@@ -223,7 +223,7 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
       // Only mark as unmounting on actual unmount, not on dependency change
       isUnmounting = true;
     };
-  }, [place.created_by, isInView]);
+  }, [place.created_by, isInView, batchProfile]);
 
   // Загружаем все фото места только когда карточка в viewport
   // Skip if batch data was provided
@@ -529,14 +529,6 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
     }
   };
 
-  const handleTagClick = (e: React.MouseEvent, tag: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (onTagClick) {
-      onTagClick(tag);
-    }
-  };
-
   // Check if card is very small (to hide "Premium" text when it overlaps with favorite icon)
   useEffect(() => {
     const checkCardSize = () => {
@@ -552,15 +544,16 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, isFavorite: _isF
     
     // Use ResizeObserver for more accurate detection
     let resizeObserver: ResizeObserver | null = null;
-    if (cardRef.current && typeof ResizeObserver !== 'undefined') {
+    const observedCard = cardRef.current;
+    if (observedCard && typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(checkCardSize);
-      resizeObserver.observe(cardRef.current);
+      resizeObserver.observe(observedCard);
     }
 
     return () => {
       window.removeEventListener('resize', checkCardSize);
-      if (resizeObserver && cardRef.current) {
-        resizeObserver.unobserve(cardRef.current);
+      if (resizeObserver && observedCard) {
+        resizeObserver.unobserve(observedCard);
       }
     };
   }, []);

@@ -23,6 +23,7 @@ import FavoriteIcon from "../../../components/FavoriteIcon";
 import Icon from "../../../components/Icon";
 import PremiumBadge from "../../../components/PremiumBadge";
 import ReviewsSection from "../../../components/ReviewsSection";
+import ParentLocationCard from "./ParentLocationCard";
 import StarRating from "../../../components/StarRating";
 import PlaceContacts from "../../../components/PlaceContacts";
 import { isPlacePremium } from "../../../lib/access";
@@ -449,6 +450,9 @@ export default function OfferPlaceView({
             )}
           </div>
         </div>
+
+        {/* Parent location backlink (host pattern) */}
+        <ParentLocationCard childId={place.id} />
 
         {/* Description */}
         {place.description && (

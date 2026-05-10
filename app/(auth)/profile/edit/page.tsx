@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "../../../lib/supabase";
 import { useUserAccessContext } from "../../../contexts/UserAccessContext";
 import Icon from "../../../components/Icon";
@@ -12,13 +13,9 @@ import type { Profile } from "../../../types";
 import { getTagEmoji, stripTagEmoji } from "../../../constants";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
-function cx(...a: Array<string | false | undefined | null>) {
-  return a.filter(Boolean).join(" ");
-}
-
 export default function ProfileEditorHub() {
   const router = useRouter();
-  const { loading: accessLoading, user, access } = useUserAccessContext();
+  const { loading: accessLoading, user } = useUserAccessContext();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -117,7 +114,8 @@ export default function ProfileEditorHub() {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7] pb-24">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-[#FAFAF7] pb-24">
       {/* Desktop Top App Bar */}
       <div className="hidden lg:block sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -162,10 +160,13 @@ export default function ProfileEditorHub() {
               <div className="flex items-center gap-4 flex-1">
                 <div className="w-16 h-16 rounded-full bg-[#FAFAF7] border-2 border-[#ECEEE4] overflow-hidden flex-shrink-0">
                   {profile.avatar_url ? (
-                    <img
+                    <Image
                       src={profile.avatar_url}
                       alt=""
-                      className="w-full h-full object-cover"
+                      width={64}
+                      height={64}
+                      sizes="64px"
+                      className="h-full w-full object-cover"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-lg font-semibold text-[#8F9E4F]">
@@ -297,6 +298,7 @@ export default function ProfileEditorHub() {
           </div>
         </div>
       </div>
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

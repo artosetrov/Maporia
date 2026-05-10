@@ -53,7 +53,7 @@ export default function AdvancedPinMarker({
 
     const marker = new window.google.maps.marker.AdvancedMarkerElement({
       map,
-      position,
+      position: { lat: position.lat, lng: position.lng },
       title,
       content,
       gmpDraggable: draggable,

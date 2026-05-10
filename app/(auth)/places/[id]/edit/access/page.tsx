@@ -157,7 +157,8 @@ export default function AccessEditorPage(props: PageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-white flex flex-col">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-white flex flex-col">
       {/* Header */}
       <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-2xl mx-auto px-4 sm:px-6">
@@ -320,6 +321,7 @@ export default function AccessEditorPage(props: PageProps) {
           </div>
         </div>
       </div>
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 
 type WordmarkProps = {
   /**
@@ -80,9 +81,11 @@ export default function Wordmark({
   );
 
   const iconContent = withIcon ? (
-    <img
+    <Image
       src="/Logo_maporia1.svg"
       alt="Maporia Pin"
+      width={size === "small" ? 16 : size === "large" ? 24 : 20}
+      height={size === "small" ? 16 : size === "large" ? 24 : 20}
       className={`${size === "small" ? "h-4 w-4" : size === "large" ? "h-6 w-6" : "h-5 w-5"}`}
       style={{
         filter: inverted ? 'brightness(0) invert(1)' : undefined,

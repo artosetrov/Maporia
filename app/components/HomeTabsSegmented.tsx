@@ -37,10 +37,11 @@ const ICON_BY_KIND: Record<HomeKind, IconKey> = {
 function TabIcon({ kind }: { kind: IconKey }) {
   // Inline SVG so we don't pay an Icon-facade lookup for three tabs that
   // are always present. `currentColor` lets the active style colour the
-  // stroke automatically.
+  // stroke automatically. Size controlled via Tailwind (compact on mobile).
+  const iconClass = "shrink-0 w-[14px] h-[14px] sm:w-[18px] sm:h-[18px]";
   if (kind === "pin") {
     return (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <svg className={iconClass} viewBox="0 0 24 24" fill="none" aria-hidden>
         <path
           d="M12 2c4 0 7 3 7 7 0 5.2-7 13-7 13S5 14.2 5 9c0-4 3-7 7-7Z"
           stroke="currentColor"
@@ -52,7 +53,7 @@ function TabIcon({ kind }: { kind: IconKey }) {
   }
   if (kind === "spark") {
     return (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <svg className={iconClass} viewBox="0 0 24 24" fill="none" aria-hidden>
         <path
           d="M12 3l2 6h6l-5 4 2 7-5-4-5 4 2-7-5-4h6z"
           stroke="currentColor"
@@ -63,7 +64,7 @@ function TabIcon({ kind }: { kind: IconKey }) {
     );
   }
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg className={iconClass} viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
         d="M14 7l3-3 3 3-4 4M9 10l-5 5v5h5l5-5"
         stroke="currentColor"
@@ -83,6 +84,13 @@ function countFor(kind: HomeKind, counts?: HomeKindCounts): number | null {
 }
 
 const fmt = (n: number) => new Intl.NumberFormat("en-US").format(n);
+
+/** Короткие подписи <sm — три таба помещаются в ~320px вместе со счётчиками. */
+const MOBILE_TAB_LABEL: Record<HomeKind, string> = {
+  location: "Places",
+  experience: "Exper.",
+  service: "Serv.",
+};
 
 export default function HomeTabsSegmented({
   active,
@@ -118,6 +126,9 @@ export default function HomeTabsSegmented({
   // горизонтальный скролл *внутри* блока табов (со скрытой полосой)
   // вместо того чтобы расширять родителя. Поведение клавиатуры,
   // фокус и счётчики не меняются.
+  //
+  // 2026-05-10: на <sm дополнительно ужимаем типографику + короткие
+  // подписи (полные имена в aria-label), чтобы чаще помещаться без скролла.
   return (
     <div
       // 2026-05-09: min-w-0 критичен. Без него flex item по умолчанию
@@ -134,23 +145,28 @@ export default function HomeTabsSegmented({
         role="tablist"
         aria-label="Home content type"
         onKeyDown={handleKeyDown}
-        className="inline-flex items-center gap-1.5"
+        className="flex w-full max-sm:justify-between max-sm:gap-1 items-center gap-1.5 sm:inline-flex sm:w-auto sm:justify-start sm:gap-1.5"
       >
         {HOME_TABS.map((tab) => {
           const isActive = active === tab.id;
           const n = countFor(tab.id, counts);
+          const ariaName =
+            n !== null ? `${tab.label}, ${fmt(n)}` : tab.label;
           return (
             <button
               key={tab.id}
               type="button"
               role="tab"
               aria-selected={isActive}
+              aria-label={ariaName}
               tabIndex={isActive ? 0 : -1}
               data-tab-id={tab.id}
               onClick={() => onChange(tab.id)}
               className={[
-                "h-11 px-4 rounded-full text-[14px] font-semibold whitespace-nowrap",
-                "inline-flex items-center gap-2",
+                "rounded-full font-semibold whitespace-nowrap shrink-0",
+                "inline-flex items-center justify-center",
+                "max-sm:flex-1 max-sm:min-w-0 max-sm:h-9 max-sm:px-1.5 max-sm:text-[11px] max-sm:gap-1",
+                "sm:h-11 sm:px-4 sm:text-[14px] sm:gap-2",
                 "transition-colors focus:outline-none",
                 "focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-1",
                 isActive
@@ -159,12 +175,15 @@ export default function HomeTabsSegmented({
               ].join(" ")}
             >
               <TabIcon kind={ICON_BY_KIND[tab.id]} />
-              <span>{tab.label}</span>
+              <span className="max-sm:hidden">{tab.label}</span>
+              <span className="sm:hidden truncate">{MOBILE_TAB_LABEL[tab.id]}</span>
               {n !== null && (
                 <span
                   aria-hidden
                   className={[
-                    "text-[11px] font-bold px-2 py-0.5 rounded-full",
+                    "font-bold rounded-full",
+                    "max-sm:text-[10px] max-sm:px-1 max-sm:py-px max-sm:min-w-[1.25rem] max-sm:text-center",
+                    "sm:text-[11px] sm:px-2 sm:py-0.5",
                     isActive
                       ? "bg-white/15 text-white/90"
                       : "bg-[#16190f]/8 text-[#4A4F3D]",

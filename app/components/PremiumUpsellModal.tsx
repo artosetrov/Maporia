@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { usePremiumModalSettings } from "../hooks/usePremiumModalSettings";
 import Icon from "./Icon";
 import Link from "next/link";
-import PremiumBadge from "./PremiumBadge";
+import Image from "next/image";
 import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
 import { isPlacePremium } from "../lib/access";
@@ -51,10 +51,8 @@ export default function PremiumUpsellModal({
   open,
   onClose,
   customContent,
-  context: _context = "place",
-  placeTitle: _placeTitle,
 }: PremiumUpsellModalProps) {
-  const { settings, loading: _loading, reloadSettings } = usePremiumModalSettings();
+  const { settings, reloadSettings } = usePremiumModalSettings();
   const [premiumPlaces, setPremiumPlaces] = useState<{ id: string; cover_url: string | null }[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const slideIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -277,13 +275,15 @@ export default function PremiumUpsellModal({
                   }`}
                 >
                   {place.cover_url && (
-                    <img
+                    <Image
                       src={place.cover_url}
                       alt="Premium place"
-                      className="w-full h-full object-cover"
+                      fill
+                      sizes="33vw"
+                      className="object-cover"
                       onError={(e) => {
                         // Hide broken images
-                        (e.target as HTMLImageElement).style.display = 'none';
+                        (e.currentTarget as HTMLImageElement).style.display = 'none';
                       }}
                     />
                   )}

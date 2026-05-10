@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import TopBar from "../components/TopBar";
@@ -11,7 +12,6 @@ const SearchModal = nextDynamic(() => import("../components/SearchModal"), { ssr
 import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
-import { DEFAULT_CITY } from "../constants";
 import Icon from "../components/Icon";
 import { ActivityItemSkeleton } from "../components/Skeleton";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
@@ -24,13 +24,10 @@ type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
 type ReactionsRow = Database["public"]["Tables"]["reactions"]["Row"];
 type CommentsRow = Database["public"]["Tables"]["comments"]["Row"];
 
-type ProfileDisplayAvatar = Pick<ProfilesRow, "display_name" | "avatar_url">;
-type ProfileDisplayResult = { data: ProfileDisplayAvatar | null; error: PostgrestError | null };
-
 type ProfileBatch = Pick<ProfilesRow, "id" | "display_name" | "username" | "avatar_url">;
 type ProfilesBatchResult = { data: ProfileBatch[] | null; error: PostgrestError | null };
 
-type PlacesFeed = Pick<PlacesRow, "id" | "title" | "cover_url" | "address" | "created_at" | "created_by" | "access_level" | "is_premium" | "premium_only" | "visibility">;
+type PlacesFeed = Pick<PlacesRow, "id" | "title" | "cover_url" | "address" | "created_at" | "created_by" | "access_level" | "visibility">;
 type PlacesFeedResult = { data: PlacesFeed[] | null; error: PostgrestError | null };
 
 type ReactionFeed = Pick<ReactionsRow, "place_id" | "created_at" | "user_id">;
@@ -39,7 +36,7 @@ type ReactionsFeedResult = { data: ReactionFeed[] | null; error: PostgrestError 
 type CommentFeed = Pick<CommentsRow, "place_id" | "text" | "created_at" | "user_id">;
 type CommentsFeedResult = { data: CommentFeed[] | null; error: PostgrestError | null };
 
-type PlacesBatch = Pick<PlacesRow, "id" | "title" | "cover_url" | "address" | "created_by" | "access_level" | "is_premium" | "premium_only" | "visibility">;
+type PlacesBatch = Pick<PlacesRow, "id" | "title" | "cover_url" | "address" | "created_by" | "access_level" | "visibility">;
 type PlacesBatchResult = { data: PlacesBatch[] | null; error: PostgrestError | null };
 
 type ActivityItem =
@@ -96,7 +93,7 @@ function ActivityCard({ item }: { item: ActivityItem }) {
   };
 
   const getActionText = () => {
-    if (item.type === "liked") return "Added to favorites";
+    if (item.type === "liked") return "added to favorites";
     if (item.type === "commented") return "commented";
     return "added a place";
   };
@@ -106,30 +103,37 @@ function ActivityCard({ item }: { item: ActivityItem }) {
       href={`/id/${item.placeId}`}
       target={isDesktop ? "_blank" : undefined}
       rel={isDesktop ? "noopener noreferrer" : undefined}
-      className="block w-full py-5 px-6 hover:bg-[#FAFAF7] transition-colors border-b border-[#ECEEE4] last:border-b-0"
+      className="block w-full py-4 sm:py-5 px-4 sm:px-6 hover:bg-[#FAFAF7] transition-colors border-b border-[#ECEEE4] last:border-b-0"
     >
-      <div className="flex items-start gap-6">
+      <div className="flex items-start gap-3 sm:gap-6">
         {/* Иконка события слева */}
-        <div className="flex-shrink-0 mt-0.5">{getIcon()}</div>
+        <div className="[&>div]:h-9 [&>div]:w-9 sm:[&>div]:h-10 sm:[&>div]:w-10 flex-shrink-0 mt-0.5">{getIcon()}</div>
 
         {/* Контент в центре */}
         <div className="flex-1 min-w-0">
           {/* Основная строка: аватар + имя → действие */}
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-1.5 sm:mb-2 min-w-0">
             <div className="w-6 h-6 rounded-full bg-[#FAFAF7] overflow-hidden flex-shrink-0 border border-[#ECEEE4]">
               {item.userAvatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.userAvatar} alt={item.userName} className="w-full h-full object-cover" />
+                <Image
+                  src={item.userAvatar}
+                  alt={item.userName}
+                  width={24}
+                  height={24}
+                  sizes="24px"
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 <span className="text-[10px] font-semibold text-[#8F9E4F] flex items-center justify-center h-full">
                   {initialsFromName(item.userName)}
                 </span>
               )}
             </div>
-            <span className="text-sm font-medium text-[#1F2A1F]">
+            <span className="min-w-0 text-sm font-medium text-[#1F2A1F] line-clamp-2 sm:line-clamp-1">
               <span className="font-semibold">{item.userName}</span> {getActionText()}
             </span>
           </div>
+          <div className="mb-2 text-xs text-[#A8B096] sm:hidden">{formatTime(item.created_at)}</div>
 
           {/* Комментарий (если есть) */}
           {item.type === "commented" && item.commentText && (
@@ -141,16 +145,18 @@ function ActivityCard({ item }: { item: ActivityItem }) {
           {/* Блок локации: карточка-превью */}
           <div className="flex items-center gap-3 rounded-xl bg-white border border-[#ECEEE4] p-3">
             {item.coverUrl ? (
-              <div className="w-14 h-14 rounded-lg bg-[#FAFAF7] overflow-hidden flex-shrink-0">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+              <div className="h-12 w-12 rounded-lg bg-[#FAFAF7] overflow-hidden flex-shrink-0 sm:h-14 sm:w-14">
+                <Image
                   src={item.coverUrl}
                   alt={item.placeTitle ?? "Place"}
-                  className="w-full h-full object-cover"
+                  width={56}
+                  height={56}
+                  sizes="56px"
+                  className="h-full w-full object-cover"
                 />
               </div>
             ) : (
-              <div className="w-14 h-14 rounded-lg bg-[#FAFAF7] flex items-center justify-center flex-shrink-0">
+              <div className="h-12 w-12 rounded-lg bg-[#FAFAF7] flex items-center justify-center flex-shrink-0 sm:h-14 sm:w-14">
                 <Icon name="location" size={24} className="text-[#A8B096]" />
               </div>
             )}
@@ -164,7 +170,7 @@ function ActivityCard({ item }: { item: ActivityItem }) {
         </div>
 
         {/* Время справа */}
-        <div className="flex-shrink-0 text-xs text-[#A8B096] mt-0.5">{formatTime(item.created_at)}</div>
+        <div className="hidden sm:block flex-shrink-0 text-xs text-[#A8B096] mt-0.5">{formatTime(item.created_at)}</div>
       </div>
     </Link>
   );
@@ -192,15 +198,18 @@ export default function FeedPage() {
   });
   const [filterOpen, setFilterOpen] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
-  const [activeFiltersCount, setActiveFiltersCount] = useState(0);
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (selectedCity) count++;
+    if (searchValue) count++;
+    if (activeFilters.categories.length > 0) count += activeFilters.categories.length;
+    if ((activeFilters.tags ?? []).length > 0) count += activeFilters.tags?.length ?? 0;
+    if ((activeFilters.kinds ?? []).length > 0) count += activeFilters.kinds?.length ?? 0;
+    if (activeFilters.sort) count++;
+    return count;
+  }, [selectedCity, searchValue, activeFilters]);
 
-  // Load activities when session/access is ready (no pathname re-fetch)
-  useEffect(() => {
-    if (accessLoading) return;
-    loadActivities();
-  }, [accessLoading]);
-
-  async function loadActivities() {
+  const loadActivities = useCallback(async () => {
     setLoading(true);
     const effectiveAccess = access ?? guestAccess;
     const canShowPlace = (place: PlacesBatch | PlacesFeed | undefined | null) => {
@@ -213,7 +222,7 @@ export default function FeedPage() {
     const [placesResult, likesResult, commentsResult] = (await Promise.all([
       supabase
         .from("places")
-        .select("id, title, cover_url, address, created_at, created_by, access_level, is_premium, premium_only, visibility")
+        .select("id, title, cover_url, address, created_at, created_by, access_level, visibility")
         .order("created_at", { ascending: false })
         .limit(50),
       supabase
@@ -263,7 +272,7 @@ export default function FeedPage() {
       placeIds.size > 0
         ? supabase
             .from("places")
-            .select("id, title, cover_url, address, created_by, access_level, is_premium, premium_only, visibility")
+            .select("id, title, cover_url, address, created_by, access_level, visibility")
             .in("id", Array.from(placeIds))
         : Promise.resolve({ data: [], error: null }),
     ])) as [ProfilesBatchResult, PlacesBatchResult];
@@ -357,10 +366,17 @@ export default function FeedPage() {
 
     setActivities(allActivities.slice(0, 100)); // Ограничиваем 100 последними
     setLoading(false);
-  }
+  }, [access, userId]);
+
+  // Load activities when session/access is ready (no pathname re-fetch)
+  useEffect(() => {
+    if (accessLoading) return;
+    loadActivities();
+  }, [accessLoading, loadActivities]);
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
       <TopBar
         showSearchBar={true}
         searchValue={searchValue}
@@ -495,6 +511,7 @@ export default function FeedPage() {
         </div>
       </div>
 
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

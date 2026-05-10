@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "../lib/supabase";
 import TopBar from "../components/TopBar";
 import PlaceCard from "../components/PlaceCard";
@@ -26,8 +27,6 @@ type PlaceRow = {
   tags: string[] | null;
   created_by: string | null;
   access_level: string | null;
-  is_premium: boolean | null;
-  premium_only: boolean | null;
   visibility: string | null;
 };
 
@@ -134,6 +133,7 @@ function CollectionsPageContent() {
         .order("created_at", { ascending: false });
 
       if (fetchError) {
+        if (cancelled) return;
         setError(fetchError.message);
         setLoading(false);
         return;
@@ -141,6 +141,7 @@ function CollectionsPageContent() {
 
       const allCollections = (colData as Collection[]) ?? [];
       if (allCollections.length === 0) {
+        if (cancelled) return;
         setCollections([]);
         setActiveCollectionId(null);
         setLoading(false);
@@ -152,6 +153,7 @@ function CollectionsPageContent() {
         .from("place_collections")
         .select("collection_id")
         .in("collection_id", collectionIds);
+      if (cancelled) return;
 
       const rows = (pcData as { collection_id: string }[] | null) ?? [];
       const idsWithPlaces = new Set(rows.map((r) => r.collection_id));
@@ -172,7 +174,7 @@ function CollectionsPageContent() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [urlCollectionId]);
 
   useEffect(() => {
     if (!activeCollectionId || !canAccessActive) {
@@ -213,7 +215,7 @@ function CollectionsPageContent() {
       });
       const { data: placesData } = await supabase
         .from("places")
-        .select("id,title,description,city,country,cover_url,categories,tags,created_by,access_level,is_premium,premium_only,visibility,address")
+        .select("id,title,description,city,country,cover_url,categories,tags,created_by,access_level,visibility,address")
         .in("id", placeIds);
       if (cancelled) return;
       const rawList = (placesData ?? []) as Record<string, unknown>[];
@@ -229,8 +231,6 @@ function CollectionsPageContent() {
         tags: (p.tags as string[] | null) ?? null,
         created_by: (p.created_by as string | null) ?? null,
         access_level: (p.access_level as string | null) ?? null,
-        is_premium: (p.is_premium as boolean | null) ?? null,
-        premium_only: (p.premium_only as boolean | null) ?? null,
         visibility: (p.visibility as string | null) ?? null,
       })) as PlaceRow[];
       list.sort((a, b) => (orderMap[a.id] ?? 0) - (orderMap[b.id] ?? 0));
@@ -254,7 +254,8 @@ function CollectionsPageContent() {
   }
 
   return (
-    <>
+    <SectionErrorBoundary>
+      <>
       <TopBar
         showSearchBar={true}
         searchValue=""
@@ -313,9 +314,12 @@ function CollectionsPageContent() {
                       >
                         <div className="aspect-square w-full rounded-lg overflow-hidden bg-border-light">
                           {c.cover_image ? (
-                            <img
+                            <Image
                               src={c.cover_image}
                               alt=""
+                              width={160}
+                              height={160}
+                              sizes="(max-width: 1024px) 33vw, 160px"
                               className={`w-full h-full object-cover transition-[filter] duration-200 ${isActive ? "brightness-[1.02] contrast-[1.02]" : ""}`}
                             />
                           ) : (
@@ -408,8 +412,6 @@ function CollectionsPageContent() {
                               tags: place.tags,
                               created_by: place.created_by,
                               access_level: place.access_level,
-                              is_premium: place.is_premium,
-                              premium_only: place.premium_only,
                               visibility: place.visibility,
                             }}
                             userAccess={access}
@@ -427,14 +429,17 @@ function CollectionsPageContent() {
         </div>
       </main>
 
-    </>
+      </>
+    </SectionErrorBoundary>
   );
 }
 
 export default function CollectionsPage() {
   return (
-    <Suspense fallback={<CollectionsPageSkeleton />}>
-      <CollectionsPageContent />
-    </Suspense>
+    <SectionErrorBoundary>
+      <Suspense fallback={<CollectionsPageSkeleton />}>
+        <CollectionsPageContent />
+      </Suspense>
+    </SectionErrorBoundary>
   );
 }

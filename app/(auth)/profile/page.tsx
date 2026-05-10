@@ -23,10 +23,20 @@ import { getAuthUrl } from "../../lib/authRedirect";
 import { useIsDesktop } from "../../hooks/useIsDesktop";
 import { isUserAdmin, isPlacePremium, canUserViewPlace, canUserAddPlace, type UserAccess } from "../../lib/access";
 import { PLAN_CONFIG, PLAN_ORDER, EXTRA_LISTING, formatPrice } from "../../lib/plans";
+import {
+  PRICING_REGISTRY,
+  PUBLIC_PLANS,
+  ANNUAL_DISCOUNT,
+  EXTRA_LISTING as EXTRA_LISTING_V2,
+  priceDisplay,
+  formatUSD,
+  type PlanId,
+  type Cycle,
+} from "../../lib/pricing";
 import { DEFAULT_CITY, getTagEmoji, stripTagEmoji } from "../../constants";
 import PremiumBadge from "../../components/PremiumBadge";
 import { getRecentlyViewedPlaceIds } from "../../utils";
-import { ProfileSkeleton, PlaceCardGridSkeleton, SkeletonBase } from "../../components/Skeleton";
+import { ProfileSkeleton, SkeletonBase } from "../../components/Skeleton";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 import ImpersonationDisclaimer from "../../components/ImpersonationDisclaimer";
 import { useImpersonationStatus } from "../../hooks/useImpersonationStatus";
@@ -101,15 +111,6 @@ type ReviewerProfileRow = Pick<Profile, "id" | "display_name" | "username" | "av
 type ReviewPlaceRow = Pick<Place, "id" | "title" | "address">;
 type ActivityPlaceRow = Pick<Place, "id" | "title" | "cover_url" | "address">;
 
-function initialsFromEmail(email?: string | null) {
-  if (!email) return "U";
-  const name = email.split("@")[0] || "U";
-  const parts = name.split(/[.\-_]/).filter(Boolean);
-  const a = (parts[0]?.[0] ?? name[0] ?? "U").toUpperCase();
-  const b = (parts[1]?.[0] ?? name[1] ?? "").toUpperCase();
-  return (a + b).slice(0, 2);
-}
-
 function initialsFromName(name?: string | null) {
   if (!name) return "U";
   const parts = name.split(/\s+/).filter(Boolean);
@@ -121,13 +122,6 @@ function initialsFromName(name?: string | null) {
 function formatDate(date: Date): string {
   const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   return `${months[date.getMonth()]} ${date.getFullYear()}`;
-}
-
-function getYearsSince(date: Date): number {
-  const now = new Date();
-  const diffTime = Math.abs(now.getTime() - date.getTime());
-  const diffYears = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 365));
-  return diffYears;
 }
 
 function timeAgo(iso: string) {
@@ -162,8 +156,7 @@ function cx(...a: Array<string | false | undefined | null>) {
 function ProfileInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const pathname = usePathname();
-  const { redirectToAuth, replaceToAuth } = useAuthRedirect();
+  const { replaceToAuth } = useAuthRedirect();
 
   const [section, setSection] = useState<"about" | "trips" | "added" | "activity" | "users" | "elements" | "history" | "premium">("about");
   const [profileLoading, setProfileLoading] = useState(true);
@@ -172,7 +165,6 @@ function ProfileInner() {
 
   const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [userCreatedAt, setUserCreatedAt] = useState<string | null>(null);
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -183,7 +175,6 @@ function ProfileInner() {
   const [recentlyViewed, setRecentlyViewed] = useState<Place[]>([]);
   const [commentsCount, setCommentsCount] = useState<number>(0);
   const [reviewsReceived, setReviewsReceived] = useState<Review[]>([]);
-  const [reviewsWritten, setReviewsWritten] = useState<Review[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
 
   // Search and filter state
@@ -450,12 +441,6 @@ function ProfileInner() {
     }
   }, [searchParams]);
 
-  const [displayNameDraft, setDisplayNameDraft] = useState("");
-  const [bioDraft, setBioDraft] = useState("");
-  const [avatarDraft, setAvatarDraft] = useState<string | null>(null);
-  const [avatarUploading, setAvatarUploading] = useState(false);
-  const [saving, setSaving] = useState(false);
-
   // Load profile and extras when user/session is ready from UserAccessContext (no pathname re-fetch)
   useEffect(() => {
     if (accessLoading) return;
@@ -469,7 +454,6 @@ function ProfileInner() {
     setExtrasLoading(true);
     setUserId(user.id);
     setUserEmail(user.email ?? null);
-    setUserCreatedAt((user as { created_at?: string }).created_at ?? null);
 
     (async () => {
       try {
@@ -491,9 +475,6 @@ function ProfileInner() {
         if (mounted) {
           const profileData = (prof as unknown as Profile | null) ?? null;
           setProfile(profileData);
-          setDisplayNameDraft(profileData?.display_name ?? (user.email ?? ""));
-          setBioDraft(profileData?.bio ?? "");
-          setAvatarDraft(profileData?.avatar_url ?? null);
           const profileRole = profileData?.role;
           const profileIsAdmin = profileData?.is_admin === true;
           setUserRole(profileRole ?? null);
@@ -510,7 +491,6 @@ function ProfileInner() {
           addedPlacesResult,
           reactionsResult,
           commentsCountResult,
-          commentsWrittenResult,
           commentsForActivityResult,
           recentlyViewedResult,
         ] = await Promise.all([
@@ -528,12 +508,6 @@ function ProfileInner() {
             .from("comments")
             .select("*", { count: "exact", head: true })
             .eq("user_id", user.id),
-          supabase
-            .from("comments")
-            .select("id, text, created_at, place_id")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false })
-            .limit(20),
           supabase
             .from("comments")
             .select("place_id, created_at, text")
@@ -554,7 +528,6 @@ function ProfileInner() {
         const addedPlaces = (addedPlacesResult.data ?? []) as Place[];
         const reactions = (reactionsResult.data ?? []) as ReactionActivityRow[];
         const commentsCountData = commentsCountResult.count ?? 0;
-        const commentsWritten = (commentsWrittenResult.data ?? []) as CommentActivityRow[];
         const comments = (commentsForActivityResult.data ?? []) as CommentActivityRow[];
 
         if (mounted) setAdded(addedPlaces as Place[]);
@@ -644,43 +617,6 @@ function ProfileInner() {
           });
         }
 
-        let reviewsWrittenData: Review[] = [];
-        if (commentsWritten.length > 0) {
-          const placeIdsForWritten = Array.from(new Set(commentsWritten.map((c) => c.place_id)));
-          const { data: placesData } = await supabase
-            .from("places")
-            .select("id, title, address, created_by")
-            .in("id", placeIdsForWritten);
-
-          const placesMap = new Map<string, { title: string | null; address: string | null }>();
-          ((placesData ?? []) as ReviewPlaceRow[]).forEach((p) => {
-            placesMap.set(p.id, {
-              title: p.title,
-              address: p.address,
-            });
-          });
-
-          const profileData = (prof as unknown as Profile | null) ?? null;
-          const currentDisplayName = profileData?.display_name || profileData?.username || user.email || "User";
-          const currentAvatar = profileData?.avatar_url ?? null;
-
-          reviewsWrittenData = commentsWritten.map((c) => {
-            const place = placesMap.get(c.place_id);
-            return {
-              id: c.id,
-              text: c.text,
-              created_at: c.created_at,
-              place_id: c.place_id,
-              place_title: place?.title ?? null,
-              place_address: place?.address ?? null,
-              reviewer_id: user.id,
-              reviewer_name: currentDisplayName,
-              reviewer_avatar: currentAvatar,
-              reviewer_location: null,
-            };
-          });
-        }
-
         const likesAct: ActivityItem[] = reactions.map((r) => ({
           type: "liked",
           created_at: r.created_at,
@@ -723,7 +659,6 @@ function ProfileInner() {
 
         if (mounted) {
           setReviewsReceived(reviewsReceivedData);
-          setReviewsWritten(reviewsWrittenData);
           setActivity(actWithTitles);
           setExtrasLoading(false);
         }
@@ -746,131 +681,7 @@ function ProfileInner() {
     return () => {
       mounted = false;
     };
-  }, [router, accessLoading, user?.id]);
-
-  async function uploadAvatar(file: File): Promise<{ url: string | null; error: string | null }> {
-    try {
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-
-      const { error } = await supabase.storage.from("avatars").upload(path, file, {
-        cacheControl: "3600",
-        upsert: false,
-      });
-
-      if (error) {
-        console.error("Upload error:", error);
-        return { url: null, error: error.message || "Upload failed" };
-      }
-
-      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-      return { url: data.publicUrl ?? null, error: null };
-    } catch (err) {
-      console.error("Upload exception:", err);
-      const errorMessage = err instanceof Error ? err.message : "Upload failed";
-      return { url: null, error: errorMessage };
-    }
-  }
-
-  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !userId) return;
-
-    if (!file.type.startsWith("image/")) {
-      alert("Please select an image file");
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Image size should be less than 5MB");
-      return;
-    }
-
-    setAvatarUploading(true);
-
-    if (avatarDraft && avatarDraft.includes("avatars/")) {
-      const pathMatch = avatarDraft.match(/avatars\/(.+)$/);
-      if (pathMatch && pathMatch[1]) {
-        const path = pathMatch[1].split('?')[0];
-        await supabase.storage.from("avatars").remove([path]);
-      }
-    }
-
-    const result = await uploadAvatar(file);
-    setAvatarUploading(false);
-
-    if (result.url) {
-      setAvatarDraft(result.url);
-      const { error } = await supabase
-        .from("profiles")
-        // @ts-expect-error Supabase generated types infer upsert payload as never
-        .upsert({ id: userId, avatar_url: result.url }, { onConflict: "id" });
-
-      if (!error) {
-        setProfile((p) => (p ? { ...p, avatar_url: result.url } : p));
-      }
-    } else {
-      alert(result.error || "Failed to upload avatar");
-    }
-
-    e.target.value = "";
-  }
-
-  async function deleteAvatar() {
-    if (!userId || !avatarDraft) return;
-
-    if (avatarDraft.includes("avatars/")) {
-      const pathMatch = avatarDraft.match(/avatars\/(.+)$/);
-      if (pathMatch && pathMatch[1]) {
-        const path = pathMatch[1].split('?')[0];
-        await supabase.storage.from("avatars").remove([path]);
-      }
-    }
-
-    const { error } = await supabase
-      .from("profiles")
-      // @ts-expect-error Supabase generated types infer upsert payload as never
-      .upsert({ id: userId, avatar_url: null }, { onConflict: "id" });
-
-    if (!error) {
-      setAvatarDraft(null);
-      setProfile((p) => (p ? { ...p, avatar_url: null } : p));
-    }
-  }
-
-  async function saveProfile() {
-    if (!userId) return;
-    setSaving(true);
-
-    const { error } = await supabase
-      .from("profiles")
-      // @ts-expect-error Supabase generated types infer upsert payload as never
-      .upsert(
-        {
-          id: userId,
-          display_name: displayNameDraft,
-          bio: bioDraft,
-          avatar_url: avatarDraft,
-        },
-        { onConflict: "id" }
-      );
-
-    setSaving(false);
-
-    if (!error) {
-      setProfile((p) =>
-        p
-          ? { ...p, display_name: displayNameDraft, bio: bioDraft, avatar_url: avatarDraft }
-          : ({
-              id: userId,
-              username: null,
-              display_name: displayNameDraft,
-              bio: bioDraft,
-              avatar_url: avatarDraft,
-            } as Profile)
-      );
-    }
-  }
+  }, [accessLoading, replaceToAuth, user]);
 
   const displayName = profile?.display_name || profile?.username || userEmail || "User";
 
@@ -885,6 +696,7 @@ function ProfileInner() {
   }
 
   return (
+    <SectionErrorBoundary>
     <main className="min-h-screen bg-white">
       {/* Payment result banner */}
       {paymentBanner === "success" && (
@@ -1221,7 +1033,6 @@ function ProfileInner() {
                     myWork={myWork}
                     bio={bioWithoutWork}
                     reviewsReceived={reviewsReceived}
-                    reviewsWritten={reviewsWritten}
                     onEditClick={() => router.push("/profile/edit")}
                     onLogout={handleLogout}
                     loading={loading}
@@ -1265,7 +1076,7 @@ function ProfileInner() {
                 <HistorySection places={recentlyViewed} loading={loading} userId={userId} />
               )}
               {section === "activity" && (
-                <ActivitySection activity={activity} loading={loading} profile={profile} displayName={displayName} />
+                <ActivitySection activity={activity} loading={loading} />
               )}
               {section === "premium" && (
                 <PremiumSection />
@@ -1320,7 +1131,7 @@ function ProfileInner() {
                 <HistorySection places={recentlyViewed} loading={loading} userId={userId} />
               )}
               {section === "activity" && (
-                <ActivitySection activity={activity} loading={loading} profile={profile} displayName={displayName} />
+                <ActivitySection activity={activity} loading={loading} />
               )}
               {section === "premium" && (
                 <PremiumSection />
@@ -1685,6 +1496,7 @@ function ProfileInner() {
       </div>
 
     </main>
+    </SectionErrorBoundary>
   );
 }
 
@@ -1695,7 +1507,6 @@ function AboutSection({
   myWork,
   bio,
   reviewsReceived,
-  reviewsWritten,
   onEditClick,
   onLogout,
   loading,
@@ -1714,7 +1525,6 @@ function AboutSection({
   myWork: string | null;
   bio: string | null;
   reviewsReceived: Review[];
-  reviewsWritten: Review[];
   onEditClick: () => void;
   onLogout?: () => void;
   loading: boolean;
@@ -2120,14 +1930,13 @@ function TripsSection({
   activeFilters?: ActiveFilters;
 }) {
   const { access } = useUserAccessContext();
-  const isDesktop = useIsDesktop();
 
   // Calculate locked premium places for Haunted Gem indexing (hooks must not be conditional)
-  const defaultUserAccess: UserAccess = access ?? {
+  const defaultUserAccess: UserAccess = useMemo(() => access ?? {
     role: "guest",
     hasPremium: false,
     isAdmin: false,
-  };
+  }, [access]);
 
   const lockedPlacesMap = useMemo(() => {
     const lockedPlaces = places
@@ -2668,13 +2477,9 @@ function AddedPlacesSection({
 function ActivitySection({
   activity,
   loading,
-  profile,
-  displayName,
 }: {
   activity: ActivityItem[];
   loading: boolean;
-  profile: Profile | null;
-  displayName: string;
 }) {
   if (loading) {
     return (
@@ -2710,8 +2515,6 @@ function ActivitySection({
           <ActivityCard
             key={`${a.type}-${a.placeId}-${idx}`}
             item={a}
-            userAvatar={profile?.avatar_url ?? null}
-            userName={displayName}
           />
         ))}
       </div>
@@ -2731,11 +2534,11 @@ function HistorySection({
   const { access } = useUserAccessContext();
 
   // Calculate locked premium places for Haunted Gem indexing (hooks must not be conditional)
-  const defaultUserAccess: UserAccess = access ?? {
+  const defaultUserAccess: UserAccess = useMemo(() => access ?? {
     role: "guest",
     hasPremium: false,
     isAdmin: false,
-  };
+  }, [access]);
 
   const lockedPlacesMap = useMemo(() => {
     const lockedPlaces = places
@@ -2872,11 +2675,11 @@ function currentAdminAssignable(u: User): AdminAssignable {
 function ElementsSection() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [, setIsLoading] = useState(true);
   const [saveSuccess, setSaveSuccess] = useState(false);
   
   // Default values
-  const defaultContent = {
+  const defaultContent = useMemo(() => ({
     title: "Unlock Maporia Premium",
     titleHighlight: "Maporia",
     subtitle: "Get full access to our hidden local gems — no crowds, no tourist traps. Just authentic experiences.",
@@ -2898,7 +2701,7 @@ function ElementsSection() {
     footerText: "One-time payment. Premium features unlock instantly.",
     footerLinkText: "Terms of Service apply.",
     footerLinkUrl: "#",
-  };
+  }), []);
 
   const [modalContent, setModalContent] = useState(defaultContent);
   const { openPremiumModal } = usePremiumModalContext();
@@ -2948,7 +2751,7 @@ function ElementsSection() {
               } else {
                 console.error("Error loading premium modal settings:", msg);
               }
-            } catch (parseError) {
+            } catch {
               console.error("Error loading premium modal settings:", response.status, response.statusText);
             }
           } else {
@@ -2981,7 +2784,7 @@ function ElementsSection() {
     }
 
     loadSettings();
-  }, []);
+  }, [defaultContent]);
 
   // Save settings to API
   async function handleSave() {
@@ -4288,10 +4091,9 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
   );
 }
 
-function ActivityCard({ item, userAvatar, userName }: { item: ActivityItem; userAvatar: string | null; userName: string }) {
+function ActivityCard({ item }: { item: ActivityItem }) {
   const isDesktop = useIsDesktop();
   const getIcon = () => {
-    const iconClass = "w-5 h-5";
     if (item.type === "liked") {
       return (
         <div className="w-10 h-10 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] flex items-center justify-center flex-shrink-0">
@@ -4405,22 +4207,79 @@ export default function ProfilePage() {
 // Источник правды по тарифам — app/lib/plans.ts.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PremiumSection v2 — renderит billing страницу через `app/lib/pricing/registry`.
+// Показывает текущий plan + cycle + renews_at, и сетку для switch с умными CTA.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PROFILE_BILLING_PLANS: PlanId[] = [
+  "premium_viewer",
+  "creator_location",
+  "creator_service",
+  "creator_experience",
+  "creator_all",
+];
+
+function planTier(plan: PlanId): number {
+  if (plan === "free") return 0;
+  if (plan === "premium_viewer" || plan === "premium_grandfathered") return 1;
+  if (plan === "creator_location") return 2;
+  if (plan === "creator_service" || plan === "creator_experience") return 3;
+  if (plan === "creator_all") return 4;
+  return 0;
+}
+
+function decideProfileCta(args: {
+  current: PlanId;
+  target: PlanId;
+  isCurrent: boolean;
+  isLoading: boolean;
+  isImpersonating: boolean;
+  isOneTime: boolean;
+}): string {
+  if (args.isCurrent) return "Current";
+  if (args.isImpersonating) return "Locked";
+  if (args.isLoading) return "Loading…";
+  if (args.current === "free") return args.isOneTime ? "Buy" : "Subscribe";
+  const ct = planTier(args.current);
+  const tt = planTier(args.target);
+  if (tt > ct) return "Upgrade";
+  if (tt < ct) return "Downgrade";
+  return "Switch";
+}
+
+function profileEffectiveCycle(plan: PlanId, toggle: "month" | "year"): Cycle {
+  const usd = PRICING_REGISTRY[plan].prices.USD;
+  if (usd?.lifetime && !usd.month) return "lifetime";
+  return toggle;
+}
+
 function PremiumSection() {
   const router = useRouter();
   const { user, profile, access } = useUserAccessContext();
   const impersonation = useImpersonationStatus();
   const isImpersonating = !!impersonation?.active;
   const [opening, setOpening] = useState(false);
-  const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
+  const [checkoutPlan, setCheckoutPlan] = useState<PlanId | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cycleToggle, setCycleToggle] = useState<"month" | "year">("year");
 
-  const currentPlan = access?.plan ?? "free";
+  const currentPlan = (access?.plan ?? "free") as PlanId;
   const isPaid = currentPlan !== "free";
+  const currentSpec = PRICING_REGISTRY[currentPlan];
+  const currentDisplay = currentSpec?.display ?? null;
+  const currentPeriod = profile?.plan_period as "month" | "year" | "lifetime" | null | undefined;
+  const isLifetime = currentPeriod === "lifetime";
 
-  async function startCheckout(planId: string) {
+  const orderedPlans = useMemo(
+    () => PROFILE_BILLING_PLANS.filter((p) => PUBLIC_PLANS.includes(p)),
+    [],
+  );
+
+  async function startCheckout(planId: PlanId) {
     setError(null);
     if (isImpersonating) {
-      setError("Stripe-операции отключены в режиме impersonation.");
+      setError("Stripe operations are disabled in impersonation mode.");
       return;
     }
     if (!user) {
@@ -4439,9 +4298,8 @@ function PremiumSection() {
         router.push(getAuthUrl("/profile?section=premium"));
         return;
       }
-      const cfg = PLAN_CONFIG[planId as keyof typeof PLAN_CONFIG];
-      const body: Record<string, string> = { access_token: token, plan: planId };
-      if (cfg.billing.kind === "subscription") body.period = cfg.billing.period;
+      const cycle = profileEffectiveCycle(planId, cycleToggle);
+      const body: Record<string, string> = { access_token: token, plan: planId, cycle };
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -4463,7 +4321,7 @@ function PremiumSection() {
   async function openPortal() {
     setError(null);
     if (isImpersonating) {
-      setError("Stripe-операции отключены в режиме impersonation.");
+      setError("Stripe operations are disabled in impersonation mode.");
       return;
     }
     setOpening(true);
@@ -4492,8 +4350,20 @@ function PremiumSection() {
     }
   }
 
-  const currentCfg = isPaid ? PLAN_CONFIG[currentPlan as keyof typeof PLAN_CONFIG] : null;
-  const isLifetime = profile?.plan_period === "lifetime";
+  // Готовое представление текущего плана: «$11.99/mo · billed yearly · renews 2027-05-09»
+  const currentSummary = (() => {
+    if (!currentDisplay) return null;
+    const cycle: Cycle = isLifetime ? "lifetime" : (currentPeriod ?? "month");
+    const display = priceDisplay(currentPlan, cycle);
+    const renews = profile?.plan_renews_at
+      ? new Date(profile.plan_renews_at).toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        })
+      : null;
+    return { display, renews };
+  })();
 
   return (
     <div className="space-y-6">
@@ -4501,46 +4371,65 @@ function PremiumSection() {
 
       <ImpersonationDisclaimer />
 
-      {/* Current plan */}
+      {/* Current plan card */}
       <section className="rounded-2xl border border-[#ECEEE4] bg-white p-5 sm:p-6">
         <div className="text-xs uppercase tracking-wide text-[#6F7A5A] mb-2">Current plan</div>
-        {currentCfg ? (
+        {currentDisplay ? (
           <>
-            <div className="flex items-center gap-3 mb-3">
-              <div className="text-2xl" aria-hidden>{currentCfg.display.emoji}</div>
-              <div>
-                <div className="font-fraunces text-xl font-semibold text-[#1F2A1F]">{currentCfg.display.name}</div>
-                <div className="text-sm text-[#6F7A5A]">{currentCfg.display.tagline}</div>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="text-2xl" aria-hidden>{currentDisplay.emoji}</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-fraunces text-xl font-semibold text-[#1F2A1F]">{currentDisplay.name}</div>
+                <div className="text-sm text-[#6F7A5A]">{currentDisplay.tagline}</div>
               </div>
-              <span className="ml-auto rounded-full bg-[#8F9E4F]/15 text-[#556036] text-[11px] font-semibold uppercase tracking-wide px-2 py-1">
+              <span className="rounded-full bg-[#8F9E4F]/15 text-[#556036] text-[11px] font-semibold uppercase tracking-wide px-2 py-1 shrink-0">
                 Active
               </span>
             </div>
+
+            {currentSummary?.display && (
+              <div className="mb-4">
+                <div className="flex items-baseline gap-1">
+                  <span className="font-fraunces text-2xl font-semibold text-[#1F2A1F]">
+                    {currentSummary.display.primary}
+                  </span>
+                  <span className="text-sm text-[#6F7A5A]">{currentSummary.display.suffix}</span>
+                </div>
+                {currentSummary.display.secondary && (
+                  <div className="text-xs text-[#6F7A5A] mt-1">{currentSummary.display.secondary}</div>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4 text-sm mb-4">
               <div>
                 <div className="text-xs text-[#A8B096] mb-1">Billing</div>
                 <div className="text-[#1F2A1F]">
-                  {profile?.plan_period === "year" ? "Annual"
-                   : profile?.plan_period === "month" ? "Monthly"
-                   : profile?.plan_period === "lifetime" ? "Lifetime (one-time)"
-                   : "—"}
+                  {currentPeriod === "year"
+                    ? "Annual"
+                    : currentPeriod === "month"
+                      ? "Monthly"
+                      : currentPeriod === "lifetime"
+                        ? "Lifetime (one-time)"
+                        : "—"}
                 </div>
               </div>
               <div>
-                <div className="text-xs text-[#A8B096] mb-1">Next charge</div>
+                <div className="text-xs text-[#A8B096] mb-1">{isLifetime ? "Status" : "Renews"}</div>
                 <div className="text-[#1F2A1F]">
-                  {isLifetime ? "Never (one-time)"
-                   : profile?.plan_renews_at ? new Date(profile.plan_renews_at).toLocaleDateString("en-US")
-                   : "—"}
+                  {isLifetime
+                    ? "Never expires"
+                    : currentSummary?.renews ?? "—"}
                 </div>
               </div>
             </div>
+
             {!isLifetime && (
               <button
                 type="button"
                 onClick={openPortal}
                 disabled={opening || isImpersonating}
-                title={isImpersonating ? "Stripe-операции отключены в режиме impersonation" : undefined}
+                title={isImpersonating ? "Stripe operations disabled in impersonation mode" : undefined}
                 className={cx(
                   "h-11 px-5 rounded-xl text-sm font-medium transition",
                   isImpersonating
@@ -4563,59 +4452,118 @@ function PremiumSection() {
         )}
       </section>
 
-      {/* Available plans */}
+      {/* Switch plan section */}
       <section>
-        <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-3">
-          {isPaid ? "Switch plan" : "Plans"}
-        </h2>
+        <div className="flex items-baseline justify-between mb-3 gap-3">
+          <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F]">
+            {isPaid ? "Switch plan" : "Plans"}
+          </h2>
+
+          {/* Monthly | Yearly toggle */}
+          <div
+            role="tablist"
+            aria-label="Billing cycle"
+            className="inline-flex items-center gap-1 rounded-full border border-[#ECEEE4] bg-white p-0.5 shadow-sm"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={cycleToggle === "month"}
+              onClick={() => setCycleToggle("month")}
+              className={cx(
+                "h-7 px-3 rounded-full text-xs font-medium transition",
+                cycleToggle === "month"
+                  ? "bg-[#1F2A1F] text-white"
+                  : "text-[#6F7A5A]",
+              )}
+            >
+              Monthly
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={cycleToggle === "year"}
+              onClick={() => setCycleToggle("year")}
+              className={cx(
+                "h-7 px-3 rounded-full text-xs font-medium transition flex items-center gap-1.5",
+                cycleToggle === "year"
+                  ? "bg-[#1F2A1F] text-white"
+                  : "text-[#6F7A5A]",
+              )}
+            >
+              Yearly
+              <span className="inline-flex items-center rounded-full px-1.5 py-0 text-[9px] font-semibold bg-[#A4B968]/30 text-[#3F4A35]">
+                −{Math.round(ANNUAL_DISCOUNT * 100)}%
+              </span>
+            </button>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {PLAN_ORDER.map((id) => {
-            const cfg = PLAN_CONFIG[id];
+          {orderedPlans.map((id) => {
+            const spec = PRICING_REGISTRY[id];
+            const display = spec.display;
+            if (!display) return null;
+            const cycle = profileEffectiveCycle(id, cycleToggle);
+            const price = priceDisplay(id, cycle);
             const isCurrent = currentPlan === id;
             const isLoading = checkoutPlan === id;
+            const isOneTime = cycle === "lifetime";
+
+            const ctaLabel = decideProfileCta({
+              current: currentPlan,
+              target: id,
+              isCurrent,
+              isLoading,
+              isImpersonating,
+              isOneTime,
+            });
+
             return (
               <div
                 key={id}
                 className={cx(
                   "rounded-2xl border bg-white p-4 flex flex-col",
-                  cfg.display.highlighted ? "border-[#8F9E4F]" : "border-[#ECEEE4]"
+                  display.highlighted ? "border-[#8F9E4F]" : "border-[#ECEEE4]",
+                  isCurrent && "ring-2 ring-[#8F9E4F]/40",
                 )}
               >
                 <div className="flex items-start gap-3 mb-3">
-                  <div className="text-2xl" aria-hidden>{cfg.display.emoji}</div>
-                  <div className="flex-1">
-                    <div className="font-fraunces text-lg font-semibold text-[#1F2A1F]">{cfg.display.name}</div>
-                    <div className="text-xs text-[#6F7A5A]">{cfg.display.tagline}</div>
+                  <div className="text-2xl" aria-hidden>{display.emoji}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-fraunces text-lg font-semibold text-[#1F2A1F]">{display.name}</div>
+                    <div className="text-xs text-[#6F7A5A]">{display.tagline}</div>
                   </div>
                 </div>
-                <div className="flex items-baseline gap-1 mb-3">
-                  <span className="font-fraunces text-2xl font-semibold text-[#1F2A1F]">{formatPrice(cfg.display.price)}</span>
-                  <span className="text-sm text-[#6F7A5A]">{cfg.display.priceSuffix}</span>
-                </div>
-                <ul className="space-y-1 text-xs text-[#3F4A35] mb-4 flex-1">
-                  {cfg.display.features.filter((f) => f.included).slice(0, 3).map((f) => (
-                    <li key={f.label} className="flex items-start gap-1.5">
-                      <span className="mt-0.5 text-[#8F9E4F]">✓</span>
-                      <span>{f.label}</span>
-                    </li>
-                  ))}
-                </ul>
+
+                {price && (
+                  <div className="mb-3">
+                    <div className="flex items-baseline gap-1">
+                      <span className="font-fraunces text-2xl font-semibold text-[#1F2A1F]">{price.primary}</span>
+                      <span className="text-xs text-[#6F7A5A]">{price.suffix}</span>
+                    </div>
+                    {price.secondary && (
+                      <div className="text-[11px] text-[#6F7A5A] mt-0.5">{price.secondary}</div>
+                    )}
+                  </div>
+                )}
+
                 <button
                   type="button"
                   onClick={() => startCheckout(id)}
                   disabled={isCurrent || isLoading || isImpersonating}
-                  title={isImpersonating ? "Покупки отключены в режиме impersonation" : undefined}
+                  title={isImpersonating ? "Purchases disabled in impersonation mode" : undefined}
                   className={cx(
-                    "w-full h-10 rounded-xl text-sm font-medium transition",
+                    "w-full h-10 rounded-xl text-sm font-medium transition mt-auto",
                     isCurrent || isImpersonating
                       ? "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
-                      : cfg.display.highlighted
-                      ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
-                      : "border border-[#8F9E4F] bg-white text-[#556036] hover:bg-[#FAFAF7]",
-                    isLoading && "opacity-70 cursor-wait"
+                      : display.highlighted
+                        ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
+                        : "border border-[#8F9E4F] bg-white text-[#556036] hover:bg-[#FAFAF7]",
+                    isLoading && "opacity-70 cursor-wait",
                   )}
                 >
-                  {isCurrent ? "Current" : isImpersonating ? "Locked" : isLoading ? "Loading…" : cfg.billing.kind === "one_time" ? "Buy" : "Subscribe"}
+                  {ctaLabel}
                 </button>
               </div>
             );
@@ -4625,7 +4573,9 @@ function PremiumSection() {
 
       {/* Add-on */}
       <section className="rounded-2xl border border-[#ECEEE4] bg-white p-5">
-        <div className="font-fraunces font-semibold text-[#1F2A1F] mb-1">+1 slot: {formatPrice(EXTRA_LISTING.price)}</div>
+        <div className="font-fraunces font-semibold text-[#1F2A1F] mb-1">
+          +1 slot: {formatUSD(EXTRA_LISTING_V2.amount)}
+        </div>
         <p className="text-sm text-[#6F7A5A]">
           One extra listing over your plan&apos;s limit. Purchased right from the editor when you hit the cap.
         </p>

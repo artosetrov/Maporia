@@ -53,6 +53,67 @@ function effectiveCycle(plan: PlanId, toggle: "month" | "year"): Cycle {
   return toggle;
 }
 
+/**
+ * Tier для сравнения планов между собой при выборе ctaLabel.
+ * 0 = free, 1 = premium_viewer (consumer), 2 = creator_location,
+ * 3 = creator_service / creator_experience (siblings), 4 = creator_all.
+ */
+function planTier(plan: PlanId): number {
+  if (plan === "free") return 0;
+  if (plan === "premium_viewer" || plan === "premium_grandfathered") return 1;
+  if (plan === "creator_location") return 2;
+  if (plan === "creator_service" || plan === "creator_experience") return 3;
+  if (plan === "creator_all") return 4;
+  return 0;
+}
+
+/**
+ * Решает что писать на CTA-кнопке исходя из текущего и целевого плана.
+ *  - target = current → "Current plan"
+ *  - current = free → "Buy" / "Subscribe"
+ *  - target tier > current tier → "Upgrade"
+ *  - target tier < current tier → "Downgrade"
+ *  - target tier == current tier (siblings) → "Switch"
+ */
+function decideCtaLabel(args: {
+  current: PlanId;
+  target: PlanId;
+  isCurrent: boolean;
+  isImpersonating: boolean;
+  isLoading: boolean;
+  isOneTime: boolean;
+}): string {
+  if (args.isCurrent) return "Current plan";
+  if (args.isImpersonating) return "Locked";
+  if (args.isLoading) return "Loading…";
+
+  if (args.current === "free") return args.isOneTime ? "Buy" : "Subscribe";
+
+  const ct = planTier(args.current);
+  const tt = planTier(args.target);
+  if (tt > ct) return "Upgrade";
+  if (tt < ct) return "Downgrade";
+  return "Switch";
+}
+
+/**
+ * Бейдж «What's included that you already have».
+ * Показываем когда current план полностью или частично покрыт target планом.
+ */
+function getIncludesBadge(current: PlanId, target: PlanId): string | null {
+  if (current === target) return null;
+
+  // Любой Pro включает Premium
+  if (current === "premium_viewer" && target.startsWith("creator_")) {
+    return "Includes Premium";
+  }
+  // Pro All включает все остальные creator плюс Premium
+  if (target === "creator_all" && current.startsWith("creator_") && current !== "creator_all") {
+    return "Includes everything you have";
+  }
+  return null;
+}
+
 export default function PricingPage() {
   const router = useRouter();
   const { user, profile, access } = useUserAccessContext();
@@ -227,15 +288,16 @@ export default function PricingPage() {
               const isLoading = checkoutPlan === planId;
               const isOneTime = cycle === "lifetime";
 
-              const ctaLabel = isCurrent
-                ? "Current plan"
-                : isImpersonating
-                  ? "Locked"
-                  : isLoading
-                    ? "Loading…"
-                    : isOneTime
-                      ? "Buy"
-                      : "Subscribe";
+              const ctaLabel = decideCtaLabel({
+                current: currentPlan,
+                target: planId,
+                isCurrent,
+                isImpersonating,
+                isLoading,
+                isOneTime,
+              });
+
+              const includesBadge = getIncludesBadge(currentPlan, planId);
 
               return (
                 <div
@@ -255,6 +317,12 @@ export default function PricingPage() {
                   {isOneTime && (
                     <div className="absolute -top-3 right-4 bg-[#1F2A1F] text-white text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full">
                       one-time
+                    </div>
+                  )}
+                  {includesBadge && !isCurrent && (
+                    <div className="mb-3 -mt-1 inline-flex items-center self-start gap-1 rounded-full bg-[#A4B968]/20 text-[#3F4A35] text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5">
+                      <Icon name="check" size={12} />
+                      {includesBadge}
                     </div>
                   )}
 

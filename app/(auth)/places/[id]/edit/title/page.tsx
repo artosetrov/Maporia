@@ -26,7 +26,6 @@ export default function TitleEditorPage(props: PageProps) {
   const { id: placeId } = use(props.params);
 
   const { loading: accessLoading, user, access } = useUserAccessContext();
-  const isAdmin = isUserAdmin(access);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
   const [originalTitle, setOriginalTitle] = useState("");
@@ -222,7 +221,8 @@ export default function TitleEditorPage(props: PageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-white flex flex-col">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-white flex flex-col">
       {/* Header */}
       <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-2xl mx-auto px-4 sm:px-6">
@@ -320,6 +320,7 @@ export default function TitleEditorPage(props: PageProps) {
           </div>
         </div>
       </div>
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

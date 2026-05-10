@@ -2,9 +2,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
-import { DEFAULT_CITY } from "../constants";
 import SearchBar from "./SearchBar";
 import SearchModal from "./SearchModal";
 import FavoriteIcon from "./FavoriteIcon";
@@ -12,9 +12,6 @@ import Icon from "./Icon";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
 import { canUserAddPlace } from "../lib/access";
 import { useAuthRedirect } from "../hooks/useAuthRedirect";
-import { useIsDesktop } from "../hooks/useIsDesktop";
-import { usePremiumGate } from "../hooks/usePremiumGate";
-import AuthCTA from "./AuthCTA";
 import BecomeProviderModal from "./BecomeProviderModal";
 
 type TopBarProps = {
@@ -108,8 +105,6 @@ export default function TopBar({
 
   // Получаем права пользователя (from context — single session/profile request)
   const { access } = useUserAccessContext();
-  const isDesktop = useIsDesktop();
-  const { openPremiumLocation } = usePremiumGate();
 
   // Проверяем авторизацию
   useEffect(() => {
@@ -129,11 +124,6 @@ export default function TopBar({
 
   // Проверяем, может ли пользователь создавать места
   const canAddPlace = canUserAddPlace(access);
-
-  const navItems = [
-    { href: "/", label: "Home" },
-    { href: "/map", label: "Map" },
-  ];
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -159,13 +149,6 @@ export default function TopBar({
     await supabase.auth.signOut();
     replaceToAuth("topbar_logout");
   }
-
-  const isActive = (href: string) => {
-    if (href === "/") {
-      return pathname === "/";
-    }
-    return pathname === href || pathname.startsWith(`${href}/`);
-  };
 
   const isHome = pathname === "/";
   const isMap = pathname === "/map";
@@ -213,9 +196,11 @@ export default function TopBar({
                   aria-label="Go to Home"
                   tabIndex={0}
                 >
-                  <img
+                  <Image
                     src="/Logo_maporia1.svg"
                     alt="Maporia"
+                    width={32}
+                    height={32}
                     className="h-8 w-auto"
                   />
                 </Link>
@@ -332,11 +317,13 @@ export default function TopBar({
                         tabIndex={0}
                       >
                         {userAvatar ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
+                          <Image
                             src={userAvatar}
                             alt="Profile"
-                            className="w-full h-full object-cover rounded-full"
+                            width={40}
+                            height={40}
+                            sizes="40px"
+                            className="h-full w-full rounded-full object-cover"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-[11px] font-semibold rounded-full bg-[#FAFAF7] text-[#6F7A5A] border border-[#ECEEE4]">
@@ -399,9 +386,11 @@ export default function TopBar({
             <div className="flex items-center gap-6">
               {/* Left: Logo - Logo_maporia1.svg */}
               <Link href="/" className="flex-shrink-0">
-                <img
+                <Image
                   src="/Logo_maporia1.svg"
                   alt="Maporia"
+                  width={40}
+                  height={40}
                   className="h-10 w-auto"
                 />
               </Link>
@@ -462,10 +451,13 @@ export default function TopBar({
                   >
                     <div className="w-8 h-8 rounded-full bg-[#FAFAF7] overflow-hidden flex-shrink-0 border border-[#ECEEE4] hover:border-[#8F9E4F] transition-colors">
                       {userAvatar ? (
-                        <img
+                        <Image
                           src={userAvatar}
                           alt={userDisplayName || userEmail || "User"}
-                          className="w-full h-full object-cover"
+                          width={32}
+                          height={32}
+                          sizes="32px"
+                          className="h-full w-full object-cover"
                         />
                       ) : (
                         <span className="text-xs font-semibold text-[#8F9E4F] flex items-center justify-center h-full">
@@ -546,11 +538,13 @@ export default function TopBar({
                 >
                   <div className="w-14 h-14 lg:w-12 lg:h-12 rounded-full bg-[#FAFAF7] group-hover:bg-[#E5E8DB] flex items-center justify-center mb-2 transition-colors overflow-hidden">
                     {userAvatar ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <Image
                         src={userAvatar}
                         alt={userDisplayName || "Profile"}
-                        className="w-full h-full object-cover"
+                        width={56}
+                        height={56}
+                        sizes="(max-width: 1024px) 56px, 48px"
+                        className="h-full w-full object-cover"
                       />
                     ) : userDisplayName || userEmail ? (
                       <span className="text-sm font-semibold text-[#6F7A5A]">

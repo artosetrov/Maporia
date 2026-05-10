@@ -35,15 +35,29 @@ const GoogleMapsContext = createContext<GoogleMapsContextValue>({
 export default function GoogleMapsProvider({ children }: { children: ReactNode }) {
   // Defensive: getGoogleMapsApiKey() throws if the env var is missing.
   // We don't want a missing key to crash the entire app shell — only the map.
-  let apiKey = "";
+  let apiKey: string;
   try {
     apiKey = getGoogleMapsApiKey();
   } catch (e) {
-    if (process.env.NODE_ENV === "development") {
-      console.warn("[GoogleMapsProvider] Maps API key missing:", e);
-    }
+    const loadError =
+      e instanceof Error ? e : new Error("Google Maps API key is missing");
+    return (
+      <GoogleMapsContext.Provider value={{ isLoaded: false, loadError }}>
+        {children}
+      </GoogleMapsContext.Provider>
+    );
   }
 
+  return <GoogleMapsLoader apiKey={apiKey}>{children}</GoogleMapsLoader>;
+}
+
+function GoogleMapsLoader({
+  apiKey,
+  children,
+}: {
+  apiKey: string;
+  children: ReactNode;
+}) {
   const { isLoaded, loadError } = useJsApiLoader({
     id: "google-maps-loader",
     googleMapsApiKey: apiKey,

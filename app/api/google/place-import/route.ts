@@ -3,9 +3,36 @@ import { createClient } from "@supabase/supabase-js";
 import { logger } from "@/app/lib/logger";
 import type { Place } from "@/app/types";
 
-type ImportedPlacePreview = Pick<Place, "title" | "address" | "city" | "lat" | "lng" | "google_place_id">;
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
+type ImportedPlacePreview = {
+  _placeType?: Place;
+  name: string | null;
+  business_name: string | null;
+  formatted_address: string | null;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+  google_place_id: string | null;
+  website: string | null;
+  phone: string | null;
+  rating: number | null;
+  reviews_count: number | null;
+  user_ratings_total: number | null;
+  opening_hours: unknown;
+  price_level: number | null;
+  category: string | null;
+  types: string[];
+  categories: string[];
+  place_id: string | null;
+  google_maps_url: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  city: string | null;
+  city_state: string | null;
+  city_country: string | null;
+  photos: Array<{ reference: string | null; url: string | null }>;
+  photo_urls: string[];
+  is_coordinate_only: boolean;
+};
 
 // Server-side Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -81,7 +108,7 @@ function extractCoordinatesFromUrl(url: string): { lat: number; lng: number } | 
     }
     
     return null;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -840,7 +867,11 @@ type PlaceDetailsData = {
   address_components?: Array<{ types: string[]; long_name?: string; short_name?: string }>;
 };
 
-function normalizePlaceData(placeData: PlaceDetailsData, originalQuery: string, isUrl: boolean = false) {
+function normalizePlaceData(
+  placeData: PlaceDetailsData,
+  originalQuery: string,
+  isUrl: boolean = false
+): ImportedPlacePreview {
   const openingHours = placeData.opening_hours
     ? {
         weekdayText: placeData.opening_hours.weekday_text || [],
@@ -920,12 +951,13 @@ function normalizePlaceData(placeData: PlaceDetailsData, originalQuery: string, 
       reference: photo.photo_reference || null,
       url: null,
     })) || [],
-    photo_urls: placeData.photos?.map((photo) => photo.photo_reference).filter(Boolean) || [],
+    photo_urls: placeData.photos
+      ?.map((photo) => photo.photo_reference)
+      .filter((reference): reference is string => Boolean(reference)) || [],
     is_coordinate_only: false,
   };
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export async function POST(request: NextRequest) {
   try {
     // Get request body

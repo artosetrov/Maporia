@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "../../../lib/supabase";
 import { useUserAccessContext } from "../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../lib/access";
@@ -71,7 +72,8 @@ export default function AdminCollectionsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-warm-white pb-24">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-warm-white pb-24">
       <div className="sticky top-0 z-30 bg-white border-b border-border-light">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16">
@@ -134,10 +136,13 @@ export default function AdminCollectionsPage() {
                   <div className="flex gap-4">
                     <div className="w-20 h-20 rounded-xl bg-border-light overflow-hidden flex-shrink-0">
                       {c.cover_image ? (
-                        <img
+                        <Image
                           src={c.cover_image}
                           alt=""
-                          className="w-full h-full object-cover"
+                          width={80}
+                          height={80}
+                          sizes="80px"
+                          className="h-full w-full object-cover"
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-content-muted">
@@ -182,6 +187,7 @@ export default function AdminCollectionsPage() {
           </ul>
         )}
       </div>
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

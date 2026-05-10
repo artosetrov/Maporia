@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "../../../lib/supabase";
 import { useUserAccessContext } from "../../../contexts/UserAccessContext";
 import { useAuthRedirect } from "../../../hooks/useAuthRedirect";
 import { canUserAddPlace } from "../../../lib/access";
@@ -33,7 +32,7 @@ export default function GoogleImportPage() {
         return;
       }
     })();
-  }, [router, user, access, accessLoading]);
+  }, [user, access, accessLoading, replaceToAuth]);
 
   if (accessLoading) {
     return <PageSkeleton />;
@@ -61,7 +60,8 @@ export default function GoogleImportPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7]">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-[#FAFAF7]">
       {/* Header */}
       <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
@@ -91,6 +91,7 @@ export default function GoogleImportPage() {
 
         <GoogleImportField userId={user.id} redirectToPreview />
       </div>
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

@@ -3,6 +3,7 @@
 import { use, useEffect, useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { GoogleMap, Marker } from "@react-google-maps/api";
 import { useGoogleMaps } from "../../providers/GoogleMapsProvider";
 import { createStaticPinSvg } from "../../lib/mapMarkers";
@@ -10,7 +11,6 @@ import { createStaticPinSvg } from "../../lib/mapMarkers";
 // env var is set on Vercel + a Map ID is provisioned in Google Cloud, we
 // stay on the deprecated <Marker>. See app/components/AdvancedPinMarker.tsx
 // for the ready-to-use replacement.
-import { CATEGORIES, DEFAULT_CITY } from "../../constants";
 import TopBar from "../../components/TopBar";
 import DesktopMosaic from "../../components/DesktopMosaic";
 import MobileCarousel from "../../components/MobileCarousel";
@@ -31,9 +31,10 @@ import LockedPlaceOverlay from "../../components/LockedPlaceOverlay";
 import PremiumBadge from "../../components/PremiumBadge";
 import Icon from "../../components/Icon";
 import { MapSkeleton } from "../../components/Skeleton";
-import { convertInstagramReelToEmbed, filterValidPhotos, isValidPhotoUrl } from "../../utils";
+import { convertInstagramReelToEmbed, filterValidPhotos } from "../../utils";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 import OfferPlaceView from "./_views/OfferPlaceView";
+import LocationChildrenSection from "./_views/LocationChildrenSection";
 import StarRating from "../../components/StarRating";
 import PlaceContacts from "../../components/PlaceContacts";
 
@@ -179,7 +180,7 @@ export default function PlacePage(props: PageProps) {
   const { id } = use(props.params);
   const { redirectToAuth } = useAuthRedirect();
 
-  const [activeSection, setActiveSection] = useState<"overview" | "photos" | "map" | "comments">("overview");
+  const [, setActiveSection] = useState<"overview" | "photos" | "map" | "comments">("overview");
   const [place, setPlace] = useState<Place | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState("");
@@ -196,7 +197,6 @@ export default function PlacePage(props: PageProps) {
   const [creatorProfile, setCreatorProfile] = useState<CreatorProfile | null>(null);
   const [commentError, setCommentError] = useState<string | null>(null);
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
-  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [photosExpanded, setPhotosExpanded] = useState(false);
   const [favoritesCount, setFavoritesCount] = useState<number>(0);
   const [commentsCount, setCommentsCount] = useState<number>(0);
@@ -219,7 +219,6 @@ export default function PlacePage(props: PageProps) {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [swipeStart, setSwipeStart] = useState<{ x: number; y: number } | null>(null);
   const [pinchStartDistance, setPinchStartDistance] = useState<number | null>(null);
-  const galleryImageRef = useRef<HTMLImageElement>(null);
   const [placeCollections, setPlaceCollections] = useState<{ id: string; title: string; description: string | null; cover_image: string | null; access_type: string }[]>([]);
 
   // User access for premium checks and render gate (from context — single session/profile request)
@@ -364,8 +363,8 @@ export default function PlacePage(props: PageProps) {
   const commentsRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
 
-  const tags = useMemo(() => place?.tags ?? [], [place]);
-  const categories = useMemo(() => place?.categories ?? [], [place]);
+  const tags = useMemo(() => place?.tags ?? [], [place?.tags]);
+  const categories = useMemo(() => place?.categories ?? [], [place?.categories]);
   const isOwner = place?.created_by === userId;
   // Owner or admin can edit - compute after place and isAdmin are available
   const canEdit = (place && (isOwner || isAdmin)) || false;
@@ -387,7 +386,7 @@ export default function PlacePage(props: PageProps) {
       photos.push(place.cover_url);
     }
     return filterValidPhotos(photos);
-  }, [loadedPhotos, place?.photo_urls, place?.cover_url]);
+  }, [loadedPhotos, place]);
 
 
   // Active section detection on scroll
@@ -599,9 +598,7 @@ export default function PlacePage(props: PageProps) {
       const { data: commentData, error: commentErr } = commentRes;
       if (commentErr) {
         console.error("Error loading comments:", commentErr);
-        if (comments.length === 0) {
-          setCommentError("Failed to load comments. Please refresh the page.");
-        }
+        setCommentError("Failed to load comments. Please refresh the page.");
       } else {
         const loadedComments = (commentData ?? []) as CommentData[];
         const userIds = Array.from(new Set(loadedComments.map((c) => c.user_id)));
@@ -1051,29 +1048,31 @@ export default function PlacePage(props: PageProps) {
 
   if (!place || accessLoading) {
     return (
-      <main className="min-h-screen bg-white">
-        {/* Header skeleton */}
-        <div className="sticky top-0 z-40 bg-white border-b border-[#ECEEE4]">
-          <div className="h-16 flex items-center justify-between px-4">
-            <div className="h-6 w-6 rounded-full bg-[#ECEEE4] animate-pulse" />
-            <div className="h-6 w-24 bg-[#ECEEE4] rounded animate-pulse" />
-            <div className="h-6 w-6 rounded-full bg-[#ECEEE4] animate-pulse" />
+      <SectionErrorBoundary>
+        <main className="min-h-screen bg-white">
+          {/* Header skeleton */}
+          <div className="sticky top-0 z-40 bg-white border-b border-[#ECEEE4]">
+            <div className="h-16 flex items-center justify-between px-4">
+              <div className="h-6 w-6 rounded-full bg-[#ECEEE4] animate-pulse" />
+              <div className="h-6 w-24 bg-[#ECEEE4] rounded animate-pulse" />
+              <div className="h-6 w-6 rounded-full bg-[#ECEEE4] animate-pulse" />
+            </div>
           </div>
-        </div>
-        
-        {/* Image skeleton */}
-        <div className="relative w-full" style={{ paddingBottom: '66.67%' }}>
-          <div className="absolute inset-0 bg-[#ECEEE4] animate-pulse" />
-        </div>
-        
-        {/* Content skeleton */}
-        <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
-          <div className="h-8 w-3/4 bg-[#ECEEE4] rounded animate-pulse" />
-          <div className="h-4 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
-          <div className="h-4 w-full bg-[#ECEEE4] rounded animate-pulse" />
-          <div className="h-4 w-5/6 bg-[#ECEEE4] rounded animate-pulse" />
-        </div>
-      </main>
+
+          {/* Image skeleton */}
+          <div className="relative w-full" style={{ paddingBottom: '66.67%' }}>
+            <div className="absolute inset-0 bg-[#ECEEE4] animate-pulse" />
+          </div>
+
+          {/* Content skeleton */}
+          <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
+            <div className="h-8 w-3/4 bg-[#ECEEE4] rounded animate-pulse" />
+            <div className="h-4 w-1/2 bg-[#ECEEE4] rounded animate-pulse" />
+            <div className="h-4 w-full bg-[#ECEEE4] rounded animate-pulse" />
+            <div className="h-4 w-5/6 bg-[#ECEEE4] rounded animate-pulse" />
+          </div>
+        </main>
+      </SectionErrorBoundary>
     );
   }
 
@@ -1086,33 +1085,35 @@ export default function PlacePage(props: PageProps) {
       place.kind === "experience"? `Locked Experience #${num}` :
                                    `Haunted Gem #${num}`;
     return (
-      <main className="min-h-screen bg-white">
-        <TopBar
-          showBackButton={true}
-          onBackClick={() => router.back()}
-          userAvatar={userAvatar}
-          userDisplayName={userDisplayName}
-          userEmail={userEmail}
-        />
-        <div className="relative min-h-[60vh] flex items-center justify-center p-6">
-          {/* Blurred cover image in background */}
-          {place.cover_url && (
-            <div
-              className="absolute inset-0 bg-cover bg-center opacity-20 blur-2xl scale-110"
-              style={{ backgroundImage: `url(${place.cover_url})` }}
-            />
-          )}
+      <SectionErrorBoundary>
+        <main className="min-h-screen bg-white">
+          <TopBar
+            showBackButton={true}
+            onBackClick={() => router.back()}
+            userAvatar={userAvatar}
+            userDisplayName={userDisplayName}
+            userEmail={userEmail}
+          />
+          <div className="relative min-h-[60vh] flex items-center justify-center p-6">
+            {/* Blurred cover image in background */}
+            {place.cover_url && (
+              <div
+                className="absolute inset-0 bg-cover bg-center opacity-20 blur-2xl scale-110"
+                style={{ backgroundImage: `url(${place.cover_url})` }}
+              />
+            )}
 
-          {/* Locked content */}
-          <div className="relative z-10 max-w-md w-full">
-            <LockedPlaceOverlay
-              placeTitle={pseudoTitle}
-              coverUrl={place.cover_url || undefined}
-              onUpgradeClick={() => router.push("/pricing")}
-            />
+            {/* Locked content */}
+            <div className="relative z-10 max-w-md w-full">
+              <LockedPlaceOverlay
+                placeTitle={pseudoTitle}
+                coverUrl={place.cover_url || undefined}
+                onUpgradeClick={() => router.push("/pricing")}
+              />
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
+      </SectionErrorBoundary>
     );
   }
 
@@ -1121,23 +1122,26 @@ export default function PlacePage(props: PageProps) {
   // Локации продолжают использовать огромный legacy-вью ниже.
   if (place.kind === "service" || place.kind === "experience") {
     return (
-      <OfferPlaceView
-        place={place}
-        kind={place.kind}
-        canEdit={canEdit}
-        userAvatar={userAvatar}
-        userDisplayName={userDisplayName}
-        userEmail={userEmail}
-        isFavorite={isFavorite}
-        favoriteLoading={favoriteLoading}
-        onToggleFavorite={toggleFavorite}
-        hostProfile={creatorProfile}
-      />
+      <SectionErrorBoundary>
+        <OfferPlaceView
+          place={place}
+          kind={place.kind}
+          canEdit={canEdit}
+          userAvatar={userAvatar}
+          userDisplayName={userDisplayName}
+          userEmail={userEmail}
+          isFavorite={isFavorite}
+          favoriteLoading={favoriteLoading}
+          onToggleFavorite={toggleFavorite}
+          hostProfile={creatorProfile}
+        />
+      </SectionErrorBoundary>
     );
   }
   // ─────────────────────────────────────────────────────────────
 
   return (
+    <SectionErrorBoundary>
     <main className="min-h-screen bg-white">
       {/* TopBar - скрыт на мобильных (< 900px), так как есть Mobile App Bar внутри карусели */}
       <div className="hidden lg:block">
@@ -1479,9 +1483,11 @@ export default function PlacePage(props: PageProps) {
         {creatorProfile && (
           <div className="flex items-center gap-4 pb-6 mb-6 border-b border-[#ECEEE4]">
             {creatorProfile.avatar_url ? (
-              <img
+              <Image
                 src={creatorProfile.avatar_url}
                 alt={creatorName}
+                width={56}
+                height={56}
                 className="w-14 h-14 rounded-full object-cover flex-shrink-0"
               />
             ) : (
@@ -1568,7 +1574,13 @@ export default function PlacePage(props: PageProps) {
                   >
                     <div className="w-32 sm:w-40 flex-shrink-0 aspect-square bg-[#ECEEE4] relative overflow-hidden">
                       {c.cover_image ? (
-                        <img src={c.cover_image} alt="" className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200" />
+                        <Image
+                          src={c.cover_image}
+                          alt=""
+                          fill
+                          sizes="(min-width: 640px) 160px, 128px"
+                          className="object-cover group-hover:scale-[1.02] transition-transform duration-200"
+                        />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-[#A8B096]">
                           <Icon name="photo" size={32} />
@@ -1615,12 +1627,14 @@ export default function PlacePage(props: PageProps) {
                       setPhotoZoom(1);
                       setPhotoPosition({ x: 0, y: 0 });
                     }}
-                    className="aspect-square rounded-xl overflow-hidden bg-[#FAFAF7] group"
+                    className="relative aspect-square rounded-xl overflow-hidden bg-[#FAFAF7] group"
                   >
-                    <img
+                    <Image
                       src={photo}
                       alt={`${place.title} - Photo ${index + 1}`}
-                      className="w-full h-full object-cover"
+                      fill
+                      sizes="(min-width: 1024px) 25vw, 50vw"
+                      className="object-cover"
                     />
                   </button>
                 ))}
@@ -1820,9 +1834,11 @@ export default function PlacePage(props: PageProps) {
                   >
                     <div className="flex items-start gap-3">
                       {userAvatar ? (
-                        <img
+                        <Image
                           src={userAvatar}
                           alt={userName}
+                          width={40}
+                          height={40}
                           className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                         />
                       ) : (
@@ -2014,9 +2030,11 @@ export default function PlacePage(props: PageProps) {
           {creatorProfile && (
             <div className="flex items-center gap-3 pb-6 mb-6 border-b border-[#ECEEE4]">
               {creatorProfile.avatar_url ? (
-                <img
+                <Image
                   src={creatorProfile.avatar_url}
                   alt={creatorName}
+                  width={48}
+                  height={48}
                   className="w-12 h-12 rounded-full object-cover flex-shrink-0"
                 />
               ) : (
@@ -2125,7 +2143,13 @@ export default function PlacePage(props: PageProps) {
                     >
                       <div className="w-28 sm:w-36 flex-shrink-0 aspect-square bg-[#ECEEE4] relative overflow-hidden">
                         {c.cover_image ? (
-                          <img src={c.cover_image} alt="" className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200" />
+                          <Image
+                            src={c.cover_image}
+                            alt=""
+                            fill
+                            sizes="(min-width: 640px) 144px, 112px"
+                            className="object-cover group-hover:scale-[1.02] transition-transform duration-200"
+                          />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-[#A8B096]">
                             <Icon name="photo" size={24} />
@@ -2245,12 +2269,14 @@ export default function PlacePage(props: PageProps) {
                       setPhotoZoom(1);
                       setPhotoPosition({ x: 0, y: 0 });
                     }}
-                    className="aspect-square rounded-xl overflow-hidden bg-[#FAFAF7] group"
+                    className="relative aspect-square rounded-xl overflow-hidden bg-[#FAFAF7] group"
                   >
-                    <img
+                    <Image
                       src={photo}
                       alt={`${place.title} - Photo ${index + 1}`}
-                      className="w-full h-full object-cover"
+                      fill
+                      sizes="(min-width: 1024px) 33vw, 50vw"
+                      className="object-cover"
                     />
                   </button>
                 ))}
@@ -2379,9 +2405,11 @@ export default function PlacePage(props: PageProps) {
                     >
                       <div className="flex items-start gap-3">
                         {userAvatar ? (
-                          <img
+                          <Image
                             src={userAvatar}
                             alt={userName}
+                            width={40}
+                            height={40}
                             className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                           />
                         ) : (
@@ -2534,11 +2562,12 @@ export default function PlacePage(props: PageProps) {
                 transition: isDragging ? 'none' : 'transform 0.3s ease-out',
               }}
             >
-              <img
-                ref={galleryImageRef}
+              <Image
                 src={allPhotos[galleryPhotoIndex]}
                 alt={`${place.title} - Photo ${galleryPhotoIndex + 1}`}
-                className="max-w-full max-h-full object-contain transition-opacity duration-300 ease-in-out"
+                fill
+                sizes="100vw"
+                className="object-contain transition-opacity duration-300 ease-in-out"
                 style={{
                   opacity: isImageTransitioning ? 0 : 1,
                 }}
@@ -2624,7 +2653,15 @@ export default function PlacePage(props: PageProps) {
           </div>
         </div>
       )}
+
+      {/* Host page: experiences/services прицеплённые к этой локации через place_links */}
+      {place.kind === "location" && (
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-10">
+          <LocationChildrenSection parentId={place.id} />
+        </div>
+      )}
     </main>
+    </SectionErrorBoundary>
   );
 }
 
@@ -2635,7 +2672,7 @@ function PlaceMapView({ place }: { place: Place }) {
   // SDK already initialized at app shell (see GoogleMapsProvider in RootLayout).
   // Reading from context means navigation here doesn't re-trigger the SDK
   // download — it's already on the wire (or done) by the time the user arrives.
-  const { isLoaded } = useGoogleMaps();
+  const { isLoaded, loadError } = useGoogleMaps();
 
   // All hooks must be called before any early returns
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -2668,6 +2705,17 @@ function PlaceMapView({ place }: { place: Place }) {
   // Don't render map content if lazy loading hasn't triggered yet
   if (!shouldLoadMap) {
     return <MapSkeleton className="w-full h-full" />;
+  }
+
+  if (loadError) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-[#ECEEE4] px-5 text-center">
+        <div>
+          <div className="mb-1 text-sm font-medium text-[#1F2A1F]">Map unavailable</div>
+          <div className="text-xs text-[#6F7A5A]">Google Maps is not configured for this environment.</div>
+        </div>
+      </div>
+    );
   }
 
   if (!isLoaded) {

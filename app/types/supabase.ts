@@ -432,6 +432,65 @@ export interface Database {
           reason?: string | null
         }
       }
+      /**
+       * place_links — junction table для host pattern (location ↔ experience/service).
+       * См. docs/PLACE_LINKS_PLAN.md и миграцию `place_links_table_with_approval_flow`.
+       */
+      place_links: {
+        Row: {
+          id: string
+          parent_place_id: string
+          child_place_id: string
+          relation: 'happens_at'
+          status: 'active' | 'pending' | 'rejected'
+          sort_order: number
+          created_at: string
+          approved_at: string | null
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          parent_place_id: string
+          child_place_id: string
+          relation?: 'happens_at'
+          status?: 'active' | 'pending' | 'rejected'
+          sort_order?: number
+          created_at?: string
+          approved_at?: string | null
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          parent_place_id?: string
+          child_place_id?: string
+          relation?: 'happens_at'
+          status?: 'active' | 'pending' | 'rejected'
+          sort_order?: number
+          created_at?: string
+          approved_at?: string | null
+          created_by?: string | null
+        }
+      }
+      stripe_webhook_events: {
+        Row: {
+          event_id: string
+          event_type: string
+          processed_at: string
+          request_id: string | null
+        }
+        Insert: {
+          event_id: string
+          event_type: string
+          processed_at?: string
+          request_id?: string | null
+        }
+        Update: {
+          event_id?: string
+          event_type?: string
+          processed_at?: string
+          request_id?: string | null
+        }
+      }
     }
     Views: {
       [_ in never]: never

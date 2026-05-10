@@ -50,7 +50,6 @@ export default function UnifiedGoogleImportField({
   userId,
   onImportSuccess,
   compact = false,
-  context = "place",
 }: UnifiedGoogleImportFieldProps) {
   const [query, setQuery] = useState("");
   const [importing, setImporting] = useState(false);

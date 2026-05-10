@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { DEFAULT_CITY, getCategoriesByKind } from "../constants";
 import { HOME_TABS, type HomeKind } from "../types/home";
 import { useIsDesktop } from "../hooks/useIsDesktop";
@@ -13,7 +14,6 @@ import { sanitizePostgrestValue, tokenizeQuery, buildTokenSearchExpr } from "../
 import {
   CITY_RADIUS_MILES,
   buildCityRadiusFilter,
-  isPlaceWithinCityRadius,
   populateCityCoordsCache,
 } from "../lib/cityRadius";
 
@@ -110,10 +110,13 @@ function SearchResultItem({
     >
       {result.type === "place" && result.coverUrl && !imageError ? (
         <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-[#ECEEE4]">
-          <img 
+          <Image
             src={result.coverUrl} 
             alt={result.title}
-            className="w-full h-full object-cover"
+            width={48}
+            height={48}
+            sizes="48px"
+            className="h-full w-full object-cover"
             onError={() => setImageError(true)}
           />
         </div>

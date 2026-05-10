@@ -2,7 +2,7 @@
 
 // Removed force-dynamic — page has no searchParams/cookies/headers and can prerender shell
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
 import type { Database } from "../../../../types/supabase";
@@ -52,7 +52,7 @@ export default function UsernameEditorPage() {
   }, [user, router, accessLoading]);
 
   // Check username availability
-  async function checkUsernameAvailability(value: string): Promise<boolean> {
+  const checkUsernameAvailability = useCallback(async (value: string): Promise<boolean> => {
     if (!value.trim() || value.trim() === originalUsername) return true;
     
     setChecking(true);
@@ -65,7 +65,7 @@ export default function UsernameEditorPage() {
     
     setChecking(false);
     return !data && !error;
-  }
+  }, [originalUsername, user?.id]);
 
   const hasChanges = username.trim() !== originalUsername.trim();
   const isValid = username.trim().length >= 3 && username.trim().length <= 30 && /^[a-zA-Z0-9_]+$/.test(username.trim());
@@ -80,11 +80,17 @@ export default function UsernameEditorPage() {
     }
 
     if (isValid) {
-      checkUsernameAvailability(username).then(setIsAvailable);
+      let active = true;
+      checkUsernameAvailability(username).then((available) => {
+        if (active) setIsAvailable(available);
+      });
+      return () => {
+        active = false;
+      };
     } else {
       setIsAvailable(true);
     }
-  }, [username, originalUsername, isValid]);
+  }, [username, originalUsername, isValid, checkUsernameAvailability]);
 
   async function handleSave() {
     if (!canSave || !user) return;
@@ -128,7 +134,8 @@ export default function UsernameEditorPage() {
   }
 
   return (
-    <main className="min-h-screen bg-white flex flex-col">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-white flex flex-col">
       {/* Desktop Header */}
       <div className="hidden lg:block sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-2xl mx-auto px-4 sm:px-6">
@@ -243,6 +250,7 @@ export default function UsernameEditorPage() {
           </div>
         </div>
       </div>
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

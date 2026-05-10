@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
@@ -28,7 +28,7 @@ export default function EditTagsPage() {
   const [saving, setSaving] = useState(false);
   const [deletingTag, setDeletingTag] = useState<string | null>(null);
 
-  const loadTags = async () => {
+  const loadTags = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -65,7 +65,7 @@ export default function EditTagsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (accessLoading) return;
@@ -74,7 +74,7 @@ export default function EditTagsPage() {
       return;
     }
     loadTags();
-  }, [accessLoading, isAdmin, router]);
+  }, [accessLoading, isAdmin, router, loadTags]);
 
   async function handleAddTag() {
     if (!newTagName.trim()) return;
@@ -231,7 +231,8 @@ export default function EditTagsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-warm-white pb-24 flex flex-col">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-warm-white pb-24 flex flex-col">
       {/* Desktop Header */}
       <div className="hidden lg:block sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-2xl mx-auto px-4 sm:px-6">
@@ -431,6 +432,7 @@ export default function EditTagsPage() {
           </div>
         )}
       </div>
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

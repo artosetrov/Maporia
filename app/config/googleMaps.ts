@@ -26,13 +26,6 @@ export const getGoogleMapsApiKey = (): string => {
   
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   
-  if (process.env.NODE_ENV === "development") {
-    console.log("Google Maps API Key:", !!apiKey);
-    if (!apiKey) {
-      console.warn("⚠️ NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not defined in environment variables");
-    }
-  }
-  
   if (!apiKey) {
     throw new Error("NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not defined. Please set it in your .env.local file.");
   }

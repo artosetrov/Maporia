@@ -3,6 +3,7 @@
 import { use, useEffect, useState, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "../../lib/supabase";
 import PlaceCard from "../../components/PlaceCard";
 import Icon from "../../components/Icon";
@@ -24,8 +25,6 @@ type PlaceRow = {
   tags: string[] | null;
   created_by: string | null;
   access_level: string | null;
-  is_premium: boolean | null;
-  premium_only: boolean | null;
   visibility: string | null;
 };
 
@@ -113,7 +112,7 @@ export default function CollectionDetailPage(props: PageProps) {
 
         if (cancelled) return;
         if (colError || !colData) {
-          if (!error) setNotFound(true);
+          setNotFound(true);
           return;
         }
 
@@ -162,7 +161,7 @@ export default function CollectionDetailPage(props: PageProps) {
 
         const { data: placesData } = await supabase
           .from("places")
-          .select("id,title,description,city,country,cover_url,categories,tags,created_by,access_level,is_premium,premium_only,visibility,address,lat,lng")
+          .select("id,title,description,city,country,cover_url,categories,tags,created_by,access_level,visibility,address,lat,lng")
           .in("id", placeIds);
 
         if (cancelled) return;
@@ -179,8 +178,6 @@ export default function CollectionDetailPage(props: PageProps) {
           tags: (p.tags as string[] | null) ?? null,
           created_by: (p.created_by as string | null) ?? null,
           access_level: (p.access_level as string | null) ?? null,
-          is_premium: (p.is_premium as boolean | null) ?? null,
-          premium_only: (p.premium_only as boolean | null) ?? null,
           visibility: (p.visibility as string | null) ?? null,
         })) as PlaceRow[];
         list.sort((a, b) => (orderMap[a.id] ?? 0) - (orderMap[b.id] ?? 0));
@@ -201,12 +198,14 @@ export default function CollectionDetailPage(props: PageProps) {
     !isPremiumCollection || isPremium || gateLoading;
   const shouldShowGate =
     isPremiumCollection && !gateLoading && !isPremium;
+  const collectionIdForGate = collection?.id ?? null;
+  const collectionTitleForGate = collection?.title ?? "";
 
   useEffect(() => {
-    if (!collection || !shouldShowGate || premiumGateOpenedRef.current) return;
+    if (!collectionIdForGate || !shouldShowGate || premiumGateOpenedRef.current) return;
     premiumGateOpenedRef.current = true;
-    openPremiumCollection(collection.id, collection.title);
-  }, [collection?.id, shouldShowGate, openPremiumCollection]);
+    openPremiumCollection(collectionIdForGate, collectionTitleForGate);
+  }, [collectionIdForGate, collectionTitleForGate, shouldShowGate, openPremiumCollection]);
 
   if (!collectionId) {
     return null;
@@ -247,7 +246,8 @@ export default function CollectionDetailPage(props: PageProps) {
   const pageTitle = collection?.title ?? "Collection";
 
   return (
-    <>
+    <SectionErrorBoundary>
+      <>
       <main className="min-h-screen bg-warm-white pb-safe-bottom">
         <div className="sticky top-0 z-30 bg-white border-b border-border-light">
           <div className="max-w-4xl mx-auto px-4 sm:px-6">
@@ -284,9 +284,11 @@ export default function CollectionDetailPage(props: PageProps) {
               <header className="rounded-2xl border border-border-light bg-white overflow-hidden shadow-sm mb-8">
                 <div className="aspect-[21/9] bg-border-light relative">
                   {collection.cover_image ? (
-                    <img
+                    <Image
                       src={collection.cover_image}
                       alt=""
+                      fill
+                      sizes="(max-width: 768px) 100vw, 896px"
                       className="w-full h-full object-cover"
                     />
                   ) : (
@@ -354,8 +356,6 @@ export default function CollectionDetailPage(props: PageProps) {
                           tags: place.tags,
                           created_by: place.created_by,
                           access_level: place.access_level,
-                          is_premium: place.is_premium,
-                          premium_only: place.premium_only,
                           visibility: place.visibility,
                         }}
                         userAccess={access}
@@ -373,6 +373,7 @@ export default function CollectionDetailPage(props: PageProps) {
         </div>
       </main>
 
-    </>
+      </>
+    </SectionErrorBoundary>
   );
 }

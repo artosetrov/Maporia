@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import Image from "next/image";
 import Icon from "./Icon";
 
 interface MobileCarouselProps {
@@ -15,7 +16,6 @@ export default function MobileCarousel({
   photos,
   title,
   height = "56vh",
-  onShowAll: _onShowAll,
   onPhotoClick,
 }: MobileCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -100,9 +100,11 @@ export default function MobileCarousel({
               onClick={() => onPhotoClick?.(index)}
               className="w-full h-full bg-gradient-to-br from-[#f5f4f2] to-[#e8e6e0]"
             >
-              <img
+              <Image
                 src={photo}
                 alt={`${title} - Photo ${index + 1}`}
+                fill
+                sizes="100vw"
                 className="w-full h-full object-cover"
                 onError={(e) => {
                   e.currentTarget.style.display = "none";

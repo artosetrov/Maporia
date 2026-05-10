@@ -2413,6 +2413,17 @@ function MapView({
     return <MapSkeleton className="h-full w-full" />;
   }
 
+  if (loadError) {
+    return (
+      <div className="h-full w-full flex items-center justify-center rounded-2xl bg-[#ECEEE4] px-6 text-center text-[#6F7A5A]">
+        <div>
+          <div className="text-sm font-medium text-[#1F2A1F] mb-1">Map unavailable</div>
+          <div className="text-xs">Google Maps is not configured for this environment.</div>
+        </div>
+      </div>
+    );
+  }
+
   if (!isLoaded) {
     return <MapSkeleton className="h-full w-full" />;
   }

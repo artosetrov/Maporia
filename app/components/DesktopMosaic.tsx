@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Icon from "./Icon";
 
 /** Hides the image on error and shows branded placeholder */
@@ -75,10 +76,12 @@ export default function DesktopMosaic({
     return (
       <div className="w-full aspect-[2/1] grid" style={{ gridTemplateColumns: '1fr 1fr', columnGap: `${gap}px` }}>
         <div className="relative overflow-hidden aspect-square bg-gradient-to-br from-[#f5f4f2] to-[#e8e6e0]" style={{ borderRadius: `${radius}px` }}>
-          <img
+          <Image
             src={photos[0]}
             alt={title}
-            className="w-full h-full object-cover"
+            fill
+            sizes="50vw"
+            className="object-cover"
             onError={handleImgError}
           />
           <div data-photo-placeholder className="hidden w-full h-full items-center justify-center absolute inset-0">
@@ -133,10 +136,12 @@ export default function DesktopMosaic({
         style={{ borderRadius: `${radius}px` }}
         onClick={() => onPhotoClick?.(0)}
       >
-        <img
+        <Image
           src={photos[0]}
           alt={title}
-          className="w-full h-full object-cover"
+          fill
+          sizes="50vw"
+          className="object-cover"
           onError={handleImgError}
         />
         <div data-photo-placeholder className="hidden w-full h-full items-center justify-center absolute inset-0">
@@ -160,13 +165,15 @@ export default function DesktopMosaic({
               style={{ borderRadius: `${radius}px` }}
             >
               <button
-                className="w-full h-full bg-gradient-to-br from-[#f5f4f2] to-[#e8e6e0]"
+                className="relative w-full h-full bg-gradient-to-br from-[#f5f4f2] to-[#e8e6e0]"
                 onClick={() => onPhotoClick?.(photoIndex)}
               >
-                <img
+                <Image
                   src={photo}
                   alt={`${title} - Photo ${index + 2}`}
-                  className="w-full h-full object-cover"
+                  fill
+                  sizes="25vw"
+                  className="object-cover"
                   onError={handleImgError}
                 />
                 <div data-photo-placeholder className="hidden w-full h-full items-center justify-center">

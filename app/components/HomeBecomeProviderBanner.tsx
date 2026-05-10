@@ -21,6 +21,9 @@ const BecomeProviderModal = nextDynamic(
  * (we know they're a provider; the banner would be visual noise). Shown
  * to guests, standard users, and premium_viewer (read-only premium).
  *
+ * Mobile (<sm): banner section hidden — CTA remains in TopBar / other
+ * surfaces; avoids a tall block under the hero on narrow viewports.
+ *
  * Click contract: opens the existing BecomeProviderModal — same modal
  * the TopBar uses. We render an independent instance here; React only
  * mounts the modal subtree when isOpen=true, so there's no duplicate DOM
@@ -45,7 +48,7 @@ export default function HomeBecomeProviderBanner() {
           (1200 px на десктопе) у всех «полос» главной, чтобы их левые/
           правые края совпадали. */}
       <section
-        className="px-4 sm:px-6 lg:px-10 mt-6 mb-2"
+        className="hidden sm:block px-4 sm:px-6 lg:px-10 mt-6 mb-2"
         role="region"
         aria-label="Become a provider"
       >

@@ -70,7 +70,7 @@ export default function HomeSearchHero({
       onClick={onSearchBarClick}
       aria-label={hasContent ? `Search: ${label}` : "Open search"}
       className={[
-        "w-full max-w-[560px]",
+        "w-full max-w-full min-w-0",
         "flex items-center gap-2 sm:gap-3",
         "bg-[#f1ece0] rounded-full",
         "h-14 sm:h-16 pl-5 sm:pl-6 pr-1.5",
@@ -80,17 +80,6 @@ export default function HomeSearchHero({
         "text-left",
       ].join(" ")}
     >
-      {/* leading pin icon */}
-      <span aria-hidden className="text-[#8a8f7d] flex-shrink-0">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <path
-            d="M12 2c4 0 7 3 7 7 0 5.2-7 13-7 13S5 14.2 5 9c0-4 3-7 7-7Z"
-            stroke="currentColor"
-            strokeWidth="1.8"
-          />
-        </svg>
-      </span>
-
       <span
         className={[
           "flex-1 min-w-0 truncate",

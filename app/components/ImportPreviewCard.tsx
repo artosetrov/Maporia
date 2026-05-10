@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Icon from "./Icon";
 import {
   getImportFieldsFoundCount,
@@ -291,13 +292,15 @@ export default function ImportPreviewCard({
                       onClick={() => handleTogglePhoto(photo.id)}
                     >
                       <div className="relative" style={{ paddingBottom: "100%" }}>
-                        <img
+                        <Image
                           src={photo.url}
                           alt="Place photo"
-                          className="absolute inset-0 w-full h-full object-cover rounded-lg"
+                          fill
+                          sizes="(max-width: 640px) 33vw, 160px"
+                          className="rounded-lg object-cover"
                           onError={(e) => {
                             // Fallback if image fails to load
-                            (e.target as HTMLImageElement).src =
+                            (e.currentTarget as HTMLImageElement).src =
                               "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%23ECEEE4' width='100' height='100'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%236F7A5A' font-size='12'%3EPhoto%3C/text%3E%3C/svg%3E";
                           }}
                         />

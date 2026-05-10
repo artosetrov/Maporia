@@ -5,10 +5,10 @@
 // dynamic data, no searchParams, no cookies. force-dynamic was disabling
 // the static-prerender of the page shell for no reason.
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import Icon, { type IconName } from "../components/Icon";
 import Wordmark from "../components/Wordmark";
 import PlaceCard from "../components/PlaceCard";
-import FavoriteIcon from "../components/FavoriteIcon";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 import { usePremiumModalContext } from "../contexts/PremiumModalContext";
 
@@ -100,7 +100,8 @@ export default function BrandGuidePage() {
   const { openPremiumModal } = usePremiumModalContext();
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7] pb-24">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-[#FAFAF7] pb-24">
       {/* Top bar */}
       <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
@@ -155,7 +156,13 @@ export default function BrandGuidePage() {
                 <li><strong className="text-[#1F2A1F">Dark/inverted:</strong> <code className="bg-[#FAFAF7] px-1 rounded text-xs">inverted={true}</code> — white on green.</li>
               </ul>
               <div className="flex flex-wrap items-center gap-6 mt-4">
-                <img src="/Logo_maporia1.svg" alt="Maporia" className="h-10 w-auto" />
+                <Image
+                  src="/Logo_maporia1.svg"
+                  alt="Maporia"
+                  width={40}
+                  height={40}
+                  className="h-10 w-auto"
+                />
                 <Wordmark href="/" withIcon size="default" />
                 <div className="rounded-xl bg-[#8F9E4F] px-4 py-2">
                   <Wordmark href="/" withIcon size="default" inverted />
@@ -476,6 +483,7 @@ export default function BrandGuidePage() {
           </div>
         </Section>
       </div>
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

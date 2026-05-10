@@ -15,15 +15,16 @@
 - Поддержать кейс «один experience в нескольких локациях»: тур по 3 точкам, фотограф работает в 5 локациях.
 - Host-page на `/id/<location_id>`: список всех связанных experience/service.
 - Backlink на `OfferPlaceView` (страница experience/service): «📍 At Vrijhof Farm» со ссылкой и пином.
-- Authority: только владелец **обоих** places может создать link (RLS вариант A — см. § 4).
+- Authority: гибрид **A + C** (см. § 4):
+  - **Same-owner** (юзер X владеет И parent И child) → link активируется сразу (`status='active'`).
+  - **Cross-owner** (юзер X владеет только child, parent чужой) → link создаётся в `status='pending'`, parent owner одобряет/отклоняет.
 
 **Не-цели:**
 
 - НЕ заменять `secondary_kinds` — он остаётся для лёгкого 1:1 кейса (фотограф со студией = одна карточка с двумя kind'ами).
 - НЕ менять `places.kind` enum — link это связь, не kind.
 - НЕ менять pricing model: каждая карточка = отдельный slot в квоте.
-- НЕ делать approval-flow / pending state в v1 (вариант C из обсуждения отклонён).
-- НЕ открывать линковку чужих карточек (вариант B отклонён).
+- НЕ открывать полностью линковку чужих карточек без approval (вариант B отклонён) — нужна явная авторизация parent owner'а.
 
 ---
 
@@ -57,8 +58,11 @@ CREATE TABLE public.place_links (
   child_place_id  uuid NOT NULL REFERENCES public.places(id) ON DELETE CASCADE,
   relation text NOT NULL DEFAULT 'happens_at'
     CHECK (relation IN ('happens_at')),
+  status text NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active', 'pending', 'rejected')),
   sort_order int NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now(),
+  approved_at timestamptz,        -- when parent owner approved (or rejected_at-style timestamp)
   created_by uuid REFERENCES auth.users(id),
   UNIQUE (parent_place_id, child_place_id, relation),
   CHECK (parent_place_id <> child_place_id)
@@ -66,7 +70,15 @@ CREATE TABLE public.place_links (
 
 CREATE INDEX place_links_parent_idx ON public.place_links (parent_place_id);
 CREATE INDEX place_links_child_idx  ON public.place_links (child_place_id);
+CREATE INDEX place_links_pending_idx
+  ON public.place_links (parent_place_id) WHERE status = 'pending';
 ```
+
+**Status semantics:**
+
+- `active` — link виден на host-page и backlink. Default для same-owner; устанавливается parent owner'ом для cross-owner.
+- `pending` — child уже создал запрос, ждёт одобрения parent owner'а. На host-page **не виден**, но parent owner видит в своём inbox'е (`/places/[id]/edit/links`).
+- `rejected` — parent owner отклонил. Не виден ни на host-page, ни в backlink. Child owner может попробовать снова (старая запись остаётся для аудита; UNIQUE сработает — нужно сначала DELETE rejected, потом INSERT).
 
 ### Constraint trigger (validate kinds)
 
@@ -103,44 +115,88 @@ CREATE TRIGGER place_links_kind_check
   FOR EACH ROW EXECUTE FUNCTION public.enforce_place_link_kinds();
 ```
 
-### RLS
+### RLS (гибрид A + C)
 
 ```sql
 ALTER TABLE public.place_links ENABLE ROW LEVEL SECURITY;
 
--- Public read: anyone (включая anon) — host-page доступна без авторизации.
-CREATE POLICY "place_links_select_public" ON public.place_links
-  FOR SELECT USING (true);
-
--- Insert: только если current user владеет И parent И child (вариант A — строгий).
-CREATE POLICY "place_links_insert_own_both" ON public.place_links
-  FOR INSERT WITH CHECK (
-    auth.uid() = (SELECT created_by FROM public.places WHERE id = parent_place_id)
-    AND
-    auth.uid() = (SELECT created_by FROM public.places WHERE id = child_place_id)
+-- ── SELECT ──
+-- Public видит только active links (host-page).
+-- Parent owner видит ВСЕ свои pending/rejected (для approval inbox).
+-- Child owner видит свои pending/rejected (узнать статус заявки).
+CREATE POLICY "place_links_select" ON public.place_links
+  FOR SELECT USING (
+    status = 'active'
+    OR auth.uid() = (SELECT created_by FROM public.places WHERE id = parent_place_id)
+    OR auth.uid() = (SELECT created_by FROM public.places WHERE id = child_place_id)
   );
 
--- Delete: то же требование (владелец обоих).
-CREATE POLICY "place_links_delete_own_both" ON public.place_links
+-- ── INSERT ──
+-- Юзер всегда должен владеть child (нельзя за чужой experience прицепить).
+-- Если он также владеет parent → разрешаем status='active'.
+-- Если он владеет только child → разрешаем status='pending', никаких других статусов.
+CREATE POLICY "place_links_insert" ON public.place_links
+  FOR INSERT WITH CHECK (
+    auth.uid() = (SELECT created_by FROM public.places WHERE id = child_place_id)
+    AND
+    (
+      -- Same-owner branch: владелец обоих → status может быть только 'active'
+      (
+        auth.uid() = (SELECT created_by FROM public.places WHERE id = parent_place_id)
+        AND status = 'active'
+      )
+      OR
+      -- Cross-owner branch: владелец только child → status должен быть 'pending'
+      (
+        auth.uid() <> (SELECT created_by FROM public.places WHERE id = parent_place_id)
+        AND status = 'pending'
+      )
+    )
+  );
+
+-- ── UPDATE ──
+-- Parent owner может менять status (approve/reject) и sort_order.
+-- Child owner — только если он же parent owner (same-owner случай).
+CREATE POLICY "place_links_update" ON public.place_links
+  FOR UPDATE USING (
+    auth.uid() = (SELECT created_by FROM public.places WHERE id = parent_place_id)
+  );
+
+-- ── DELETE ──
+-- Любая сторона может разорвать связь.
+CREATE POLICY "place_links_delete" ON public.place_links
   FOR DELETE USING (
     auth.uid() = (SELECT created_by FROM public.places WHERE id = parent_place_id)
     OR
     auth.uid() = (SELECT created_by FROM public.places WHERE id = child_place_id)
   );
 
--- Update: только sort_order — нельзя менять parent/child (создавай новый link).
--- Делаем UPDATE доступным владельцу обоих, но в UI ограничиваем поле.
-CREATE POLICY "place_links_update_own_both" ON public.place_links
-  FOR UPDATE USING (
-    auth.uid() = (SELECT created_by FROM public.places WHERE id = parent_place_id)
-    AND
-    auth.uid() = (SELECT created_by FROM public.places WHERE id = child_place_id)
-  );
-
--- Admin: bypass через сервисный роль (отдельной policy не нужно).
+-- Admin: bypass через service_role (отдельной policy не нужно).
 ```
 
-**Важно:** policy для INSERT/UPDATE требует владения обоими. DELETE — достаточно одного из двух (если фотограф продал студию ферме, любая сторона может разорвать связь). Можно ужесточить если нужно.
+**Trigger для `approved_at` timestamp:**
+
+```sql
+CREATE OR REPLACE FUNCTION public.touch_place_link_approved_at()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.status <> OLD.status AND NEW.status IN ('active', 'rejected') THEN
+    NEW.approved_at := now();
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER place_links_touch_approved_at
+  BEFORE UPDATE ON public.place_links
+  FOR EACH ROW EXECUTE FUNCTION public.touch_place_link_approved_at();
+```
+
+**Инварианты:**
+
+- Cross-owner юзер не может создать `status='active'` напрямую — RLS отрежет (CHECK clause).
+- Cross-owner юзер не может «упасть» в active через UPDATE — UPDATE доступен только parent owner'у.
+- Parent owner НЕ может INSERT за чужой child (нельзя притянуть чужой experience к своей ферме без согласия child owner'а).
 
 ---
 
@@ -150,14 +206,17 @@ CREATE POLICY "place_links_update_own_both" ON public.place_links
 
 ```ts
 export type PlaceLinkRelation = "happens_at";
+export type PlaceLinkStatus = "active" | "pending" | "rejected";
 
 export type PlaceLink = {
   id: string;
   parent_place_id: string;
   child_place_id: string;
   relation: PlaceLinkRelation;
+  status: PlaceLinkStatus;
   sort_order: number;
   created_at: string;
+  approved_at: string | null;
   created_by: string | null;
 };
 ```
@@ -165,20 +224,34 @@ export type PlaceLink = {
 ### Lib (`app/lib/placeLinks.ts`)
 
 ```ts
-// SELECT children of a location (Host page)
+// Public host-page: только status='active' (RLS обеспечивает).
 export async function getChildrenOfLocation(parentId: string): Promise<PlaceListItem[]>;
 
-// SELECT parents of an experience/service (Backlink)
+// Public backlink: только status='active'.
 export async function getParentsOfChild(childId: string): Promise<PlaceListItem[]>;
 
-// INSERT — RLS проверит ownership
-export async function createLink(args: { parentId: string; childId: string; relation?: PlaceLinkRelation }): Promise<PlaceLink>;
+// INSERT — самый важный helper, выбирает правильный status.
+// Если каллер владелец обоих places → status='active'; иначе → status='pending'.
+// RLS-policy всё равно отрежет любой невалидный INSERT, но клиентская логика
+// нужна для понятного UX («This link is pending farm owner approval»).
+export async function createLink(args: {
+  parentId: string;
+  childId: string;
+  relation?: PlaceLinkRelation;
+}): Promise<PlaceLink>;
 
-// DELETE — RLS проверит ownership
+// Approval flow — только для parent owner'а.
+export async function approveLink(linkId: string): Promise<PlaceLink>;
+export async function rejectLink(linkId: string): Promise<PlaceLink>;
+
+// Inbox для parent owner: список pending requests на его location'ы.
+export async function getPendingRequestsForOwner(): Promise<PlaceLink[]>;
+
+// DELETE — любая из сторон может разорвать.
 export async function removeLink(linkId: string): Promise<void>;
 ```
 
-Все функции — pure async wrappers вокруг supabase-js. Без cache layer (это придёт когда понадобится).
+Все функции — pure async wrappers вокруг supabase-js. Без cache layer.
 
 ---
 
@@ -220,19 +293,28 @@ export async function removeLink(linkId: string): Promise<void>;
 
 ```
 ☐ This happens at a specific location
-  └─ [Search your locations...]   (autocomplete)
+  └─ [Search locations...]   (autocomplete по ВСЕМ публичным locations)
+     ├─ My Vrijhof Farm       (own)        → INSERT status='active'
+     ├─ Some Other Farm       (cross)      → INSERT status='pending', шапка «awaiting approval»
+     └─ + Create new location              → inline mini-form
 ```
 
-- Autocomplete: только location-карточки текущего юзера (`created_by = me AND kind='location'`).
-- При сохранении формы — INSERT в `place_links`.
-- Если ферма ещё не существует — link с «+ Create new location» которая открывает inline mini-form.
+- Autocomplete: ВСЕ публичные location-карточки. Бейдж «Yours» на собственных.
+- При сохранении формы — INSERT в `place_links`. Status выбирает `createLink()` (см. § 5).
+- Если link cross-owner — UI показывает «Pending approval from <farm owner>».
 
 ### 4.4 `/places/[id]/edit` — Manage links
 
 Новая секция «Linked places» в edit-хабе:
-- Для location-карточки: список children + add/remove.
-- Для experience/service-карточки: список parents + add/remove.
-- Add: тот же autocomplete что и в /add, но фильтрует по противоположному kind.
+- Для **location-карточки**:
+  - Approval inbox: pending requests от чужих creator'ов («[Photographer X] wants to host here. [Approve] [Reject]»).
+  - Active children: список own + approved cross. С remove.
+  - Add: autocomplete по своим service/experience-карточкам — INSERT status='active'.
+- Для **experience/service-карточки**:
+  - Active parents: список локаций где этот experience hosted.
+  - Pending requests: «Awaiting approval from <farm owner>».
+  - Add: autocomplete по public locations (см. § 4.3).
+  - Remove: любая сторона.
 
 ---
 
@@ -254,17 +336,17 @@ export async function removeLink(linkId: string): Promise<void>;
 
 | Фаза | Что | Файлы | Эффорт |
 |---|---|---|---|
-| Φ1 | Migration `place_links` + constraint trigger + RLS + indexes | `supabase/migrations/...` (через MCP) | M |
-| Φ2 | Types + `app/lib/placeLinks.ts` (read-only функции) | `app/types.ts`, `app/lib/placeLinks.ts` | S |
-| Φ3 | `LocationChildrenSection` + integration в `/id/[id]` page | `app/id/[id]/_views/LocationChildrenSection.tsx`, `app/id/[id]/page.tsx` | M |
-| Φ4 | `ParentLocationCard` + integration в `OfferPlaceView` | `app/id/[id]/_views/ParentLocationCard.tsx`, `OfferPlaceView.tsx` | M |
-| Φ5 | Smoke-test через прямой SQL: создать тестовый link, проверить что host-page рендерит | manual | S |
-| Φ6 | `/add` link selector — autocomplete по своим locations + создание link | `app/(auth)/add/page.tsx`, `app/(auth)/places/[id]/edit/details/page.tsx` | L |
-| Φ7 | `/places/[id]/edit` — секция Linked places + add/remove | `app/(auth)/places/[id]/edit/links/page.tsx` (новый) | M |
-| Φ8 | RLS smoke-tests через DO-блок (создать tests user, проверить что нельзя прицепить чужой child) | mcp_supabase | S |
+| Φ1 | Migration `place_links` (table + status + RLS hybrid A+C + constraint trigger + indexes) | `supabase/migrations/...` (через MCP) | M |
+| Φ2 | RLS smoke-tests: same-owner active, cross-owner pending, RLS блокирует прямой active от cross | mcp_supabase | S |
+| Φ3 | Types + `app/lib/placeLinks.ts` (read + createLink + approve/reject + getPendingRequestsForOwner) | `app/types.ts`, `app/lib/placeLinks.ts` | M |
+| Φ4 | `LocationChildrenSection` (только status='active') | `app/id/[id]/_views/LocationChildrenSection.tsx`, `app/id/[id]/page.tsx` | M |
+| Φ5 | `ParentLocationCard` (только status='active') | `app/id/[id]/_views/ParentLocationCard.tsx`, `OfferPlaceView.tsx` | M |
+| Φ6 | `/add` link selector — autocomplete по public locations + auto-status | `app/(auth)/add/page.tsx`, `app/(auth)/places/[id]/edit/details/page.tsx` | L |
+| Φ7 | `/places/[id]/edit/links` — секция с approval inbox + add/remove | `app/(auth)/places/[id]/edit/links/page.tsx` (новый) | L |
+| Φ8 | (Опционально) Notifications для parent owner о новых pending requests | TBD: email/in-app | M |
 | Φ9 | Update memory (`maporia_place_kinds`, `maporia_supabase`) + as-built journal | memory | S |
 
-**Total:** ~3-4 рабочих дня. Φ1-Φ4 — самое важное (host-page работает). Φ6-Φ7 — UX для self-serve линковки.
+**Total:** ~4-5 рабочих дней. Φ1-Φ5 — host-page работает (даже без cross-owner UX). Φ6-Φ7 — full self-serve including approval flow.
 
 ---
 
@@ -278,14 +360,19 @@ export async function removeLink(linkId: string): Promise<void>;
 
 ## 8. Открытые вопросы
 
-1. **Multi-tenant ownership.** Что если ферма принадлежит юзеру A, а experience — юзеру B (например, фермер сдаёт пространство стороннему гиду)? RLS вариант A это запрещает. Варианты:
-   - Co-ownership table `place_owners(place_id, user_id, role)` — большая работа.
-   - Approval flow (пометить «pending» при INSERT, parent owner подтверждает).
-   - В v1 говорим: если шаринг между ownerами нужен — оба заводят аккаунт под одним юзером, или admin делает manual link.
-2. **«Pre-existing» locations.** Что если юзер хочет привязать experience к публичной локации (созданной другим юзером)? RLS A блокирует. В v1 — нет возможности. В v2 можно добавить flag `places.allows_external_offerings: bool` (owner sets it on his location), и тогда другие могут link'аться без approval.
-3. **Sort order.** Как parent owner управляет порядком children на host-page? UI drag-and-drop или просто `created_at`-based? В v1 — `created_at`, drag-and-drop потом.
-4. **Search/filter integration.** Должен ли pin на /map для location показывать count «5 experiences here» бейдж? Это требует JOIN'а в feed-query — можно сделать в Φ10+.
-5. **Storage RLS.** Если parent owner = X, child owner = X (RLS A), то фото child'a загружаются под X — текущий storage RLS должен работать. Перепроверить.
+1. **~~Multi-tenant ownership~~** — РЕШЕНО (2026-05-08): hybrid A+C. Same-owner = `active`, cross-owner = `pending` → approval. Parent owner approve/reject в `/places/[id]/edit/links`.
+2. **~~«Pre-existing» locations~~** — РЕШЕНО: в C-flow юзер может прицепиться к ЛЮБОЙ публичной локации, parent owner решает.
+3. **Approval notifications.** Как parent owner узнаёт о новом pending request? Опции:
+   - In-app badge на /profile (кол-во pending). Дёшево, работает.
+   - Email на parent's auth email через Resend / Supabase Auth. Дороже инфраструктурно.
+   - Realtime push (Supabase Realtime channel). Real-time UX, но overkill для v1.
+   - **Φ8 — рекомендую in-app badge для v1**, email/realtime отложить.
+4. **Auto-reject after timeout.** Если parent owner не ответил 30 дней — auto-reject и уведомить child? Φ8 потом.
+5. **Public listing of cross-owner approvals.** Когда parent одобрил cross-experience, child появляется на host-page parent'а. Должна ли это быть отдельная секция «Verified partners» vs «Own offerings»? UX-разделение помогает доверию (Airbnb так делает). В v1 — единый список, со временем разделим.
+6. **Sort order.** В v1 — `created_at` ASC. Drag-and-drop позже.
+7. **Search/filter integration.** Должен ли pin на /map для location показывать count «5 experiences here» бейдж? Φ10+, требует JOIN в feed-query.
+8. **Storage RLS.** Cross-owner случай: фото child'а загружено под child owner'ом. Storage RLS остаётся owner-bound, ничего не меняем.
+9. **Rate-limit на pending requests.** Чтобы spammer не зафлудил parent inbox. Идея: max 5 pending per user → parent. Защита от abuse. Φ8.
 
 ---
 
@@ -306,10 +393,47 @@ export async function removeLink(linkId: string): Promise<void>;
 
 (Заполняется по мере реализации фаз)
 
-### 2026-05-08 — Φ0 done (plan written)
+### 2026-05-08 — Φ0 done (plan written, revised to A+C hybrid)
 
 - Этот документ создан. Решения:
-  - RLS вариант A (только владелец обоих).
-  - `secondary_kinds` сохраняется для лёгкого 1:1 кейса; `place_links` — для M:N.
+  - RLS гибрид **A + C** (после refinement Артёма): same-owner → `active` сразу; cross-owner → `pending`, требует approval parent owner'ом.
+  - Status enum: `active | pending | rejected`. Public видит только `active`.
+  - INSERT-policy с двумя ветками: same-owner может INSERT только `active`; cross-owner может INSERT только `pending`. Cross-owner не может «обойти» через UPDATE — UPDATE доступен только parent owner'у.
+  - Trigger `touch_place_link_approved_at` ставит timestamp при переходе из `pending`.
+  - `secondary_kinds` сохраняется для лёгкого 1:1 кейса; `place_links` — для M:N + cross-owner.
   - Pricing не меняется; каждая карточка = отдельный slot.
-- Открытые вопросы (§ 8) — для будущих сессий.
+- Открытые вопросы (§ 8) — все 9 пунктов, главные о notifications и rate-limiting (Φ8).
+
+### 2026-05-08 — Φ1+Φ2 done (DB)
+
+- Миграция `place_links_table_with_approval_flow` применена на прод. Таблица создана; RLS policies (4 шт.: select, insert, update, delete) с двухветочной INSERT-логикой; constraint trigger `enforce_place_link_kinds`; trigger `touch_place_link_approved_at`; индексы parent_idx, child_idx, partial pending_idx.
+- Smoke-тесты (8/8 прошли через DO+rollback): location→service link OK, location→exp OK, exp→svc rejected (parent must be location), self-link rejected, status transition (pending→active sets approved_at), pending→rejected sets approved_at, UNIQUE blocks duplicates, ON DELETE CASCADE works.
+- Verification: 0 links, 294 places (без изменений). Прод чист.
+
+### 2026-05-08 — Φ3 done (TS lib)
+
+- `app/lib/placeLinks.ts` создан: типы `PlaceLink`, `PlaceLinkStatus`, `PlaceLinkRelation`. Функции `getChildrenOfLocation`, `getParentsOfChild`, `createLink` (auto-detect status), `approveLink`, `rejectLink`, `getPendingRequestsForOwner`, `getPendingRequestsCount` (для badge), `removeLink`.
+- `createLink` сначала резолвит ownership через SELECT, и затем INSERT с auto-resolved status. RLS делает финальную проверку. Cross-owner → `pending`.
+- В `app/types/supabase.ts` добавлен Database['public']['Tables']['place_links'] (Row/Insert/Update) + `stripe_webhook_events`. supabase-js видит таблицу типизированно.
+
+### 2026-05-08 — Φ4 done (LocationChildrenSection)
+
+- `app/id/[id]/_views/LocationChildrenSection.tsx` создан. Горизонтальный скролл карточек children, заголовок «Experiences & services here» + counter. Скрывается при children=0.
+- Интегрирован в `app/id/[id]/page.tsx` после legacy location-view (renders only when `place.kind === "location"`).
+
+### 2026-05-08 — Φ5 done (ParentLocationCard)
+
+- `app/id/[id]/_views/ParentLocationCard.tsx` создан. Single-parent → большая карточка «📍 At <farm>» со ссылкой. Multi-parent (тур) → горизонтальный список pill'ов «Stops on this tour».
+- Интегрирован в `app/id/[id]/_views/OfferPlaceView.tsx` над описанием.
+
+### 2026-05-08 — Φ7 done (manage links UI)
+
+- `app/(auth)/places/[id]/edit/links/page.tsx` создан. Группирует links по статусу:
+  - **Approval inbox** (только для location owner) — pending requests с кнопками [Approve] / [Reject] (амбер-фон).
+  - **Pending outgoing** (только для child owner) — «Awaiting approval from <farm owner>» + Cancel.
+  - **Active** — own/approved cross с Remove.
+  - **Rejected** — opacity-70 архив с Delete-кнопкой.
+- 403-page если юзер не владелец/не админ.
+- TODO: add-from-here UI (autocomplete) — отдельная задача (Φ6 / Task #20). Сейчас юзер видит хинт «add via offering's edit page or create new one».
+
+**TS + ESLint зелёные.**

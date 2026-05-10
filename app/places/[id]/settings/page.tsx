@@ -35,7 +35,7 @@ export default function PlaceSettingsPage(props: PageProps) {
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const isAdmin = isUserAdmin(access);
   const [loading, setLoading] = useState(true);
-  const [place, setPlace] = useState<{ id: string; title: string | null; created_by: string } | null>(null);
+  const [place, setPlace] = useState<{ id: string; title: string | null; created_by: string | null } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [hiding, setHiding] = useState(false);
@@ -80,13 +80,20 @@ export default function PlaceSettingsPage(props: PageProps) {
         router.push(`/id/${placeId}`);
         return;
       }
+      setPlace({
+        id: data.id,
+        title: data.title,
+        created_by: data.created_by,
+      });
+      setIsHidden(Boolean(data.is_hidden || data.access_level === "hidden" || data.visibility === "hidden"));
+      setLoading(false);
 
       // Settings moved into the main editor screen.
       // Keep this route for backwards compatibility and redirect.
       router.replace(`/places/${placeId}/edit`);
       return;
     })();
-  }, [placeId, user, router, access, accessLoading]);
+  }, [placeId, user, router, isAdmin, accessLoading]);
 
   function openDeleteModal() {
     if (!placeId || !user || !place) return;
@@ -236,17 +243,19 @@ export default function PlaceSettingsPage(props: PageProps) {
 
   if (accessLoading || loading) {
     return (
-      <main className="min-h-screen bg-[#FAFAF7]">
-        <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
-          <div className="h-8 w-48 bg-[#ECEEE4] rounded animate-pulse" />
-          <div className="bg-white rounded-2xl p-6 border border-[#ECEEE4] space-y-4">
-            <div className="h-6 w-32 bg-[#ECEEE4] rounded animate-pulse" />
-            <div className="h-10 w-full bg-[#ECEEE4] rounded animate-pulse" />
-            <div className="h-6 w-32 bg-[#ECEEE4] rounded animate-pulse" />
-            <div className="h-24 w-full bg-[#ECEEE4] rounded animate-pulse" />
+      <SectionErrorBoundary>
+        <main className="min-h-screen bg-[#FAFAF7]">
+          <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+            <div className="h-8 w-48 bg-[#ECEEE4] rounded animate-pulse" />
+            <div className="bg-white rounded-2xl p-6 border border-[#ECEEE4] space-y-4">
+              <div className="h-6 w-32 bg-[#ECEEE4] rounded animate-pulse" />
+              <div className="h-10 w-full bg-[#ECEEE4] rounded animate-pulse" />
+              <div className="h-6 w-32 bg-[#ECEEE4] rounded animate-pulse" />
+              <div className="h-24 w-full bg-[#ECEEE4] rounded animate-pulse" />
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
+      </SectionErrorBoundary>
     );
   }
 
@@ -267,7 +276,8 @@ export default function PlaceSettingsPage(props: PageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
       {/* Header */}
       <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-2xl mx-auto px-4 sm:px-6">
@@ -372,6 +382,7 @@ export default function PlaceSettingsPage(props: PageProps) {
           </div>
         </div>
       )}
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

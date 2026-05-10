@@ -16,7 +16,7 @@ npm run health:json
 - Passed: 25.
 - Warnings: 0.
 - Failures: 0.
-- Navigation check: all 53 `page.tsx` files export default; internal links валидны.
+- Navigation check: all 54 `page.tsx` files export default; internal links валидны.
 - Security criticals: не найдено real keys в `.env.example`, anon key не найден в admin routes, server-only keys не найдены в client files, raw `.or()` filters sanitized.
 - Performance/UI/error/API/type hygiene: batch loading, skeleton loading, ErrorBoundary coverage, logger usage, API response typing and explicit-`any` checks are clear.
 - Docs freshness: `npm run docs:check` проходит и проверяет agent/wiki entrypoints, source-of-truth файлы и markdown-ссылки.

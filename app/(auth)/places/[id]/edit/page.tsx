@@ -48,14 +48,13 @@ export const dynamic = "force-dynamic";
 import { use, useEffect, useState, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useIsDesktop } from "../../../../hooks/useIsDesktop";
+import Image from "next/image";
 import { supabase } from "../../../../lib/supabase";
 import type { Database } from "../../../../types/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
 import { isUserAdmin, canUserCreatePremiumPlace, type AccessLevel } from "../../../../lib/access";
 
 type PlacePhotoUrlRow = Pick<Database["public"]["Tables"]["place_photos"]["Row"], "url">;
-import { CATEGORIES } from "../../../../constants";
 import Icon from "../../../../components/Icon";
 import PremiumBadge from "../../../../components/PremiumBadge";
 import GoogleImportField from "../../../../components/GoogleImportField";
@@ -212,12 +211,12 @@ export default function PlaceEditorHub(props: PageProps) {
 
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const isAdmin = isUserAdmin(access);
-  const isDesktop = useIsDesktop();
   const [loading, setLoading] = useState(true);
   const [place, setPlace] = useState<Place | null>(null);
   const [photos, setPhotos] = useState<PlacePhoto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isHidden, setIsHidden] = useState(false);
+  const isHiddenRef = useRef(false);
   const [hiding, setHiding] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -226,6 +225,10 @@ export default function PlaceEditorHub(props: PageProps) {
   const [togglingAccess, setTogglingAccess] = useState(false);
   const autoVisibilityEnabledRef = useRef(false); // Track if auto-visibility was already enabled
   const isUpdatingRef = useRef(false); // Track if we're currently updating to prevent reload
+
+  useEffect(() => {
+    isHiddenRef.current = isHidden;
+  }, [isHidden]);
 
   // Load place data
   useEffect(() => {
@@ -282,21 +285,22 @@ export default function PlaceEditorHub(props: PageProps) {
         const loadedHiddenState = placeItem.is_hidden === true ||
                                   placeItem.visibility === "hidden" ||
                                   placeItem.visibility === "private";
+        const currentHiddenState = isHiddenRef.current;
         console.warn("WARNING: Data reloaded during update!", {
           isUpdating: isUpdatingRef.current,
           loadedIsHidden: placeItem.is_hidden,
           loadedVisibility: placeItem.visibility,
           loadedHiddenState,
-          currentIsHidden: isHidden,
-          expectedHiddenState: isHidden // Keep current state
+          currentIsHidden: currentHiddenState,
+          expectedHiddenState: currentHiddenState // Keep current state
         });
         
         // If data doesn't match our current state, it means update didn't persist
         // In this case, we should keep the current state and log an error
-        if (loadedHiddenState !== isHidden) {
+        if (loadedHiddenState !== currentHiddenState) {
           console.error("CRITICAL: Server data doesn't match current state! Update may have failed.", {
             serverIsHidden: loadedHiddenState,
-            currentIsHidden: isHidden,
+            currentIsHidden: currentHiddenState,
             serverData: { is_hidden: placeItem.is_hidden, visibility: placeItem.visibility }
           });
           // Don't update state - keep the current state that user set
@@ -313,13 +317,6 @@ export default function PlaceEditorHub(props: PageProps) {
       setIsHidden(hiddenState);
       // Load comments enabled state (default to true if not set)
       setCommentsEnabled(placeItem.comments_enabled !== false);
-      console.log("Loaded place data:", { 
-        isHidden: hiddenState, 
-        is_hidden: placeItem.is_hidden, 
-        visibility: placeItem.visibility,
-        isUpdating: isUpdatingRef.current
-      });
-
       // Photos came back from the parallel fetch above.
       const { data: rawPhotos, error: photosError } = photosRes;
       const photosData = rawPhotos as PlacePhotoUrlRow[] | null;
@@ -354,15 +351,6 @@ export default function PlaceEditorHub(props: PageProps) {
           setPhotos([]);
         }
       }
-
-      console.log("Loaded place data:", {
-        placeId,
-        title: placeItem.title,
-        description: placeItem.description,
-        address: placeItem.address,
-        photosCount: photos?.length || 0,
-        photosDataCount: photosData?.length || 0,
-      });
 
       setLoading(false);
     })();
@@ -998,7 +986,8 @@ export default function PlaceEditorHub(props: PageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7] pb-24">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-[#FAFAF7] pb-24">
       {/* Top App Bar */}
       <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -1091,10 +1080,13 @@ export default function PlaceEditorHub(props: PageProps) {
                               key={idx}
                               className="w-12 h-12 rounded-lg border-2 border-white overflow-hidden bg-[#FAFAF7]"
                             >
-                              <img
+                              <Image
                                 src={photo.url}
                                 alt=""
-                                className="w-full h-full object-cover"
+                                width={48}
+                                height={48}
+                                sizes="48px"
+                                className="h-full w-full object-cover"
                               />
                             </div>
                           ))}
@@ -1655,6 +1647,7 @@ export default function PlaceEditorHub(props: PageProps) {
         </div>
       </div>
 
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

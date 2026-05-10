@@ -373,7 +373,9 @@ export default function SettingsEmailPage() {
         </main>
       }
     >
-      <SettingsEmailContent />
+      <SectionErrorBoundary>
+        <SettingsEmailContent />
+      </SectionErrorBoundary>
     </Suspense>
   );
 }

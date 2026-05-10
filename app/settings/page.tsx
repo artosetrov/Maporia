@@ -18,7 +18,6 @@ import { PageSkeleton } from "../components/Skeleton";
 export default function SettingsPage() {
   const router = useRouter();
   const { replaceToAuth } = useAuthRedirect();
-  const [userId, setUserId] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
@@ -53,7 +52,6 @@ export default function SettingsPage() {
         replaceToAuth();
         return;
       }
-      setUserId(data.user.id);
       setUserEmail(data.user.email ?? null);
 
       // Load profile
@@ -87,7 +85,8 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
       <TopBar
         showSearchBar={true}
         searchValue={searchValue}
@@ -207,6 +206,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

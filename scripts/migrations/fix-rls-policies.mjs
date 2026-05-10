@@ -75,6 +75,9 @@ async function fixRLSPolicies() {
       // Если RPC не доступен, используем прямой SQL через REST API
       return { data: null, error: null };
     });
+    if (checkError) {
+      console.warn('   Не удалось проверить текущие политики:', checkError.message);
+    }
 
     if (currentPolicies && currentPolicies.length > 0) {
       console.log('   Найдены существующие политики DELETE:');

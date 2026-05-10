@@ -3,6 +3,7 @@
 import { use, useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "../../../../../lib/supabase";
 import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
@@ -274,7 +275,8 @@ export default function EditCollectionPage(props: PageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7] pb-24">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-[#FAFAF7] pb-24">
       {/* Top App Bar — same as Place editor */}
       <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -355,7 +357,14 @@ export default function EditCollectionPage(props: PageProps) {
             <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-4">Cover</h3>
             {coverImage && (
               <div className="mb-4 rounded-xl border border-[#ECEEE4] overflow-hidden bg-[#ECEEE4] aspect-[21/9] max-h-44">
-                <img src={coverImage} alt="" className="w-full h-full object-cover" />
+                <Image
+                  src={coverImage}
+                  alt=""
+                  width={840}
+                  height={360}
+                  sizes="(max-width: 768px) 100vw, 672px"
+                  className="h-full w-full object-cover"
+                />
               </div>
             )}
             <div className="flex flex-wrap gap-3 mb-3">
@@ -512,7 +521,14 @@ export default function EditCollectionPage(props: PageProps) {
                       </div>
                       <div className="w-12 h-12 rounded-lg bg-[#ECEEE4] overflow-hidden flex-shrink-0">
                         {place?.cover_url ? (
-                          <img src={place.cover_url} alt="" className="w-full h-full object-cover" />
+                          <Image
+                            src={place.cover_url}
+                            alt=""
+                            width={48}
+                            height={48}
+                            sizes="48px"
+                            className="h-full w-full object-cover"
+                          />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-[#A8B096]">
                             <Icon name="photo" size={20} />
@@ -545,6 +561,7 @@ export default function EditCollectionPage(props: PageProps) {
           </div>
         </div>
       </div>
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

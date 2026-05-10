@@ -24,5 +24,9 @@ export default function EditPlacePage(props: PageProps) {
   }, [placeId, router]);
 
   // Show loading while redirecting
-  return <PageSkeleton />;
+  return (
+    <SectionErrorBoundary>
+      <PageSkeleton />
+    </SectionErrorBoundary>
+  );
 }

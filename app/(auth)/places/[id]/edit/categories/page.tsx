@@ -290,7 +290,8 @@ export default function CategoriesEditorPage(props: PageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
       {/* Header */}
       <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-2xl mx-auto px-4 sm:px-6">
@@ -498,6 +499,7 @@ export default function CategoriesEditorPage(props: PageProps) {
           </div>
         </div>
       </div>
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

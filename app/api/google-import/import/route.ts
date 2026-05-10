@@ -6,12 +6,31 @@ import {
   callOpenAiForDescription,
   fetchGooglePlaceAiContext,
 } from "../../../lib/ai/placeDescription";
-import type { Place, Profile } from "@/app/types";
+import type { Profile } from "@/app/types";
 
 type ImportProfileRow = Pick<Profile, "role" | "subscription_status" | "is_admin">;
-type ImportedPlaceRow = Pick<Place, "id" | "title" | "created_by" | "google_place_id">;
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
+type CityResolverClient = {
+  rpc: (
+    fn: "get_or_create_city",
+    args: {
+      p_name: string;
+      p_state: string | null;
+      p_country: string | null;
+      p_lat: number | null;
+      p_lng: number | null;
+    }
+  ) => Promise<{ data: string | null; error: { message?: string } | null }>;
+  from: (table: "cities") => {
+    select: (columns: string) => {
+      eq: (
+        column: "id",
+        value: string
+      ) => {
+        single: () => Promise<{ data: { id?: string; name?: string } | null }>;
+      };
+    };
+  };
+};
 
 // Server-side Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -26,9 +45,8 @@ function hasPremiumAccessFromProfile(profile: ImportProfileRow | null): boolean 
   return false;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function resolveCityId(
-  supabase: ReturnType<typeof createClient<any>>,
+  supabase: CityResolverClient,
   args: {
     name: string;
     state?: string | null;
@@ -217,7 +235,7 @@ export async function POST(request: NextRequest) {
 
       // City auto-fill for Location page (if available from Google response)
       if (selectedFields?.city && typeof selectedFields.city === "string" && selectedFields.city.trim().length > 0) {
-        const resolved = await resolveCityId(supabase, {
+        const resolved = await resolveCityId(supabase as unknown as CityResolverClient, {
           name: selectedFields.city,
           state: selectedFields.city_state || null,
           country: selectedFields.city_country || null,
@@ -405,7 +423,7 @@ export async function POST(request: NextRequest) {
 
     // City auto-fill for Location page (if provided)
     if (selectedFields.city && typeof selectedFields.city === "string" && selectedFields.city.trim().length > 0) {
-      const resolved = await resolveCityId(supabase, {
+      const resolved = await resolveCityId(supabase as unknown as CityResolverClient, {
         name: selectedFields.city,
         state: selectedFields.city_state || null,
         country: selectedFields.city_country || null,

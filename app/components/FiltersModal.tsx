@@ -121,12 +121,9 @@ export default function FiltersModal({
   onClose,
   onApply,
   appliedFilters,
-  appliedCity: _appliedCity,
-  appliedCities: _appliedCities,
-  onCityChange: _onCityChange,
+  appliedCities,
   onCitiesChange: _onCitiesChange,
   getFilteredCount,
-  getCityCount: _getCityCount,
   getCategoryCount,
   getKindCount,
   getAvailableTags,
@@ -138,18 +135,22 @@ export default function FiltersModal({
   singleKindMode,
 }: FiltersModalProps) {
   // Ensure appliedFilters is always defined
-  const safeAppliedFilters: ActiveFilters = appliedFilters || {
-    categories: [],
-    sort: null,
-    tags: [],
-    premium: false,
-  };
+  const safeAppliedFilters: ActiveFilters = useMemo(
+    () =>
+      appliedFilters || {
+        categories: [],
+        sort: null,
+        tags: [],
+        premium: false,
+      },
+    [appliedFilters],
+  );
   
   // Draft state (changes while modal is open)
   const [draftFilters, setDraftFilters] = useState<ActiveFilters>(safeAppliedFilters);
   
   // Draft cities state (changes while modal is open)
-  const safeAppliedCities = _appliedCities || [];
+  const safeAppliedCities = useMemo(() => appliedCities || [], [appliedCities]);
   const [draftCities, setDraftCities] = useState<string[]>(safeAppliedCities);
   
   // State for filtered count (can be async)
@@ -388,7 +389,6 @@ export default function FiltersModal({
     };
     load();
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, draftCategories]);
 
   // Load tag counts in one batch when availableTags or premium changes
@@ -414,8 +414,7 @@ export default function FiltersModal({
     };
     load();
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, availableTags, draftPremium]);
+  }, [isOpen, availableTags, draftCategories, draftPremium, useClientReduce]);
   
   // Уважаем системную настройку «уменьшить анимацию».
   // Inline-style не имеет media-query — детектим через matchMedia в JS.

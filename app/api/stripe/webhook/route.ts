@@ -162,6 +162,39 @@ function mapStripeStatusToOurs(
   return "incomplete";
 }
 
+/**
+ * Резолвит supabase user ID из webhook event'а с двумя фолбэками:
+ *   1. metadata.supabase_user_id (его кладёт checkout-роут).
+ *   2. lookup profile by stripe_customer_id (его пишут при checkout creation).
+ *
+ * Второй фолбэк нужен если subscription создана вручную в Dashboard,
+ * либо если Stripe API version (старая 2018) не передаёт metadata в нужном виде.
+ *
+ * Возвращает null если ни одна стратегия не сработала.
+ */
+async function resolveUserId(args: {
+  supabaseAdmin: SupabaseAdminClient;
+  metadataUserId: string | undefined;
+  stripeCustomerId: string | null;
+}): Promise<string | null> {
+  if (args.metadataUserId) return args.metadataUserId;
+
+  if (!args.stripeCustomerId) return null;
+
+  const { data, error } = await args.supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .eq("stripe_customer_id", args.stripeCustomerId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[stripe/webhook] resolveUserId failed:", error.message);
+    return null;
+  }
+  return data?.id ?? null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Handlers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -174,24 +207,44 @@ async function handleCheckoutCompleted(
   session: Stripe.Checkout.Session,
   supabaseAdmin: SupabaseAdminClient
 ) {
-  const userId = session.metadata?.supabase_user_id;
+  const customerIdEarly =
+    typeof session.customer === "string" ? session.customer : session.customer?.id ?? null;
+
+  const userId = await resolveUserId({
+    supabaseAdmin,
+    metadataUserId: session.metadata?.supabase_user_id,
+    stripeCustomerId: customerIdEarly,
+  });
+
   if (!userId) {
-    console.error("[stripe/webhook] checkout.session.completed без supabase_user_id", {
+    console.error("[stripe/webhook] checkout.session.completed: cannot resolve user", {
       sessionId: session.id,
+      customerId: customerIdEarly,
+      metadata: session.metadata,
     });
     return;
   }
 
+  logger.info("[stripe/webhook] handleCheckoutCompleted:", {
+    sessionId: session.id,
+    mode: session.mode,
+    payment_status: session.payment_status,
+    userId,
+    via: session.metadata?.supabase_user_id ? "metadata" : "customer_id_lookup",
+  });
+
   // Subscription mode — подхватит handleSubscriptionUpsert; тут только one-time payment.
-  if (session.mode !== "payment") return;
+  if (session.mode !== "payment") {
+    logger.debug("[stripe/webhook] skipping: mode != payment, will be picked up by subscription handler");
+    return;
+  }
 
   if (session.payment_status !== "paid") {
     logger.warn("[stripe/webhook] checkout payment_status !== 'paid':", session.payment_status);
     return;
   }
 
-  const customerId =
-    typeof session.customer === "string" ? session.customer : session.customer?.id ?? null;
+  const customerId = customerIdEarly;
 
   // ────── Add-on: +1 слот ──────
   if (session.metadata?.kind === "extra_listing") {
@@ -250,13 +303,31 @@ async function handleSubscriptionUpsert(
   sub: Stripe.Subscription,
   supabaseAdmin: SupabaseAdminClient
 ) {
-  const userId = sub.metadata?.supabase_user_id;
+  // DEBUG: видим полную структуру subscription event'а
+  const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+
+  const userId = await resolveUserId({
+    supabaseAdmin,
+    metadataUserId: sub.metadata?.supabase_user_id,
+    stripeCustomerId: customerId,
+  });
+
   if (!userId) {
-    console.error("[stripe/webhook] subscription без supabase_user_id в metadata", {
+    console.error("[stripe/webhook] subscription: cannot resolve user", {
       subId: sub.id,
+      customerId,
+      sub_metadata: sub.metadata,
     });
     return;
   }
+
+  logger.info("[stripe/webhook] handleSubscriptionUpsert:", {
+    subId: sub.id,
+    status: sub.status,
+    userId,
+    via: sub.metadata?.supabase_user_id ? "metadata" : "customer_id_lookup",
+    item_price_id: sub.items?.data?.[0]?.price?.id,
+  });
 
   // Plan + period: сначала из metadata (наш checkout пишет туда). Если metadata пустые —
   // например, подписку создали вручную в Stripe Dashboard — резолвим из subscription items[0].price.id
@@ -280,7 +351,7 @@ async function handleSubscriptionUpsert(
   }
 
   const status = mapStripeStatusToOurs(sub.status);
-  const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+  // customerId уже резолвлен в начале функции
 
   // 1) История подписок: upsert по stripe_subscription_id
   const periodEndUnix = (sub as unknown as { current_period_end?: number }).current_period_end;

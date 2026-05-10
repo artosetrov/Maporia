@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "../../../../lib/supabase";
 import type { Database } from "../../../../types/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
@@ -118,7 +119,8 @@ export default function NewCollectionPage() {
   }
 
   return (
-    <main className="min-h-screen bg-warm-white pb-24">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-warm-white pb-24">
       <div className="sticky top-0 z-30 bg-white border-b border-border-light">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16">
@@ -182,7 +184,14 @@ export default function NewCollectionPage() {
             </span>
             {coverImage && (
               <div className="mb-3 rounded-xl border border-border-light overflow-hidden bg-border-light aspect-[21/9] max-h-40">
-                <img src={coverImage} alt="" className="w-full h-full object-cover" />
+                <Image
+                  src={coverImage}
+                  alt=""
+                  width={840}
+                  height={360}
+                  sizes="(max-width: 768px) 100vw, 672px"
+                  className="h-full w-full object-cover"
+                />
               </div>
             )}
             <div className="flex flex-wrap gap-3 mb-2">
@@ -302,6 +311,7 @@ export default function NewCollectionPage() {
           </div>
         </form>
       </div>
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

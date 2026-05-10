@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
@@ -42,6 +43,8 @@ export default function GoogleImportPreviewPage() {
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [generatingDescription, setGeneratingDescription] = useState(false);
   const [descriptionHint, setDescriptionHint] = useState<string | null>(null);
+  const storedGooglePlaceId = stored?.result.google_place_id ?? null;
+  const storedIsCoordinateOnly = stored?.result.is_coordinate_only === true;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -67,7 +70,7 @@ export default function GoogleImportPreviewPage() {
 
   // Generate AI description when we have a place with google_place_id (same as inline flow in GoogleImportField)
   useEffect(() => {
-    if (!stored?.result?.google_place_id || stored.result.is_coordinate_only) return;
+    if (!storedGooglePlaceId || storedIsCoordinateOnly) return;
 
     let cancelled = false;
     setGeneratingDescription(true);
@@ -82,7 +85,7 @@ export default function GoogleImportPreviewPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            google_place_id: stored.result.google_place_id,
+            google_place_id: storedGooglePlaceId,
             access_token: session.access_token,
             save: false,
           }),
@@ -124,7 +127,7 @@ export default function GoogleImportPreviewPage() {
         } else {
           setDescriptionHint("AI returned an empty description. You can still import other fields.");
         }
-      } catch (e) {
+      } catch {
         if (!cancelled) {
           setDescriptionHint("Couldn't generate AI description. You can still import other fields.");
         }
@@ -136,7 +139,7 @@ export default function GoogleImportPreviewPage() {
     return () => {
       cancelled = true;
     };
-  }, [stored?.result?.google_place_id]);
+  }, [storedGooglePlaceId, storedIsCoordinateOnly]);
 
   const handleBack = useCallback(() => {
     try {
@@ -365,7 +368,8 @@ export default function GoogleImportPreviewPage() {
     );
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7] pb-24">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-[#FAFAF7] pb-24">
       {/* Top App Bar — как в Place Editor */}
       <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -521,9 +525,11 @@ export default function GoogleImportPreviewPage() {
                             className="relative rounded-lg overflow-hidden"
                             style={{ paddingBottom: "100%" }}
                           >
-                            <img
+                            <Image
                               src={photo.url}
                               alt="Place"
+                              fill
+                              sizes="(max-width: 640px) 33vw, 160px"
                               className="absolute inset-0 w-full h-full object-cover"
                               onError={(e) => {
                                 (e.target as HTMLImageElement).src =
@@ -766,6 +772,7 @@ export default function GoogleImportPreviewPage() {
           </div>
         </div>
       )}
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

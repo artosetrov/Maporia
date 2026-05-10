@@ -467,21 +467,6 @@ function HomePageInner() {
     router.push(`/map?${params.toString()}`);
   }
 
-  // Handle popular CATEGORY click — отдельный путь от свободных тегов.
-  // HomePopularTags даёт строку из LOCATION/SERVICE/EXPERIENCE_CATEGORIES,
-  // и /map ожидает её именно в ?categories=…, а не в ?q=… — иначе текстовый
-  // поиск не находит места и появляется пустой результат.
-  function handleCategoryClick(category: string) {
-    const params = new URLSearchParams();
-    if (selectedCity) params.set("city", selectedCity);
-    params.set("categories", encodeURIComponent(category));
-    // Передаём активный таб, чтобы /map сразу открылся с правильным kind.
-    if (activeKind && activeKind !== "location") {
-      params.set("kinds", activeKind);
-    }
-    router.push(`/map?${params.toString()}`);
-  }
-
   // Calculate active filters count and summary
   const activeFiltersSummary = useMemo(() => {
     const parts: string[] = [];
@@ -685,7 +670,6 @@ function HomePageInner() {
               onSearchBarClick={() => setSearchModalOpen(true)}
               onFiltersClick={handleFiltersClick}
               activeFiltersCount={activeFiltersCount}
-              onCategoryClick={handleCategoryClick}
             />
             {/* Stats-строка перенесена сюда, под hero, по запросу 2026-05-08:
                 раньше она жила внутри content-обёртки (после

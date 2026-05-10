@@ -47,6 +47,8 @@ function HomeSectionCollageImage({ src, alt, className }: { src: string; alt: st
 
 type ProfileInterests = Pick<Database["public"]["Tables"]["profiles"]["Row"], "favorite_categories" | "favorite_tags">;
 
+const EMPTY_CATEGORIES: string[] = [];
+const HOME_SECTION_STALE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 type HomeSectionProps = {
   section: HomeSectionFilter;
@@ -84,8 +86,19 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
   // so we batch creator profiles only and avoid fetching off-screen photos.
   const batchData = useBatchPlaceData(noPhotoIds, creatorIds);
 
-  const categoriesKey = section.categories ? section.categories.join(",") : "";
+  const sectionCategories = section.categories ?? EMPTY_CATEGORIES;
+  const categoriesKey = sectionCategories.join(",");
   const [refreshKey, setRefreshKey] = useState(0);
+  const defaultUserAccess = useMemo<UserAccess>(
+    () =>
+      userAccess ?? {
+        role: "guest",
+        plan: "free",
+        hasPremium: false,
+        isAdmin: false,
+      },
+    [userAccess],
+  );
 
   // Fetch places when section or refresh key changes
   useEffect(() => {
@@ -159,11 +172,11 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
           // sort below still has room to choose from.
           const orParts: string[] = [];
           if (favoriteCategories.length > 0) {
-            const cats = favoriteCategories.map((c) => `"${c}"`).join(",");
+            const cats = favoriteCategories.map((c) => `"${sanitizePostgrestValue(c)}"`).join(",");
             orParts.push(`categories.ov.{${cats}}`);
           }
           if (favoriteTags.length > 0) {
-            const tags = favoriteTags.map((t) => `"${t}"`).join(",");
+            const tags = favoriteTags.map((t) => `"${sanitizePostgrestValue(t)}"`).join(",");
             orParts.push(`tags.ov.{${tags}}`);
           }
           let recQuery = supabase
@@ -247,8 +260,8 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
           const coords = await getCityCoords(section.city);
           query = query.or(buildCityRadiusFilter(section.city, coords.lat, coords.lng));
         }
-        if (section.categories && section.categories.length > 0) {
-          query = query.overlaps("categories", section.categories);
+        if (sectionCategories.length > 0) {
+          query = query.overlaps("categories", sectionCategories);
         }
         if (section.tag) {
           query = query.contains("tags", [section.tag]);
@@ -279,7 +292,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
     })();
 
     return () => { cancelled = true; };
-  }, [section.title, section.city, section.tag, categoriesKey, section.daysAgo, section.sort, section.recentlyViewed, section.recommended, userId, userAccess, refreshKey, kindFilter]);
+  }, [section.title, section.city, section.tag, sectionCategories, categoriesKey, section.daysAgo, section.sort, section.recentlyViewed, section.recommended, userId, userAccess, defaultUserAccess, refreshKey, kindFilter]);
 
   // Helper function to calculate relevance score
   function calculateRelevanceScore(place: Place, favoriteCategories: string[], favoriteTags: string[]): number {
@@ -302,8 +315,6 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
 
   // Reload when page becomes visible, but only if data is stale (5 min TTL)
   const lastFetchTimeRef = useRef<number>(Date.now());
-  const STALE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
   // Update lastFetchTime when data is loaded
   useEffect(() => {
     if (!loading) {
@@ -314,7 +325,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        const isStale = Date.now() - lastFetchTimeRef.current > STALE_TTL_MS;
+        const isStale = Date.now() - lastFetchTimeRef.current > HOME_SECTION_STALE_TTL_MS;
         if (isStale) {
           setRefreshKey((k) => k + 1);
         }
@@ -325,12 +336,6 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
   }, []);
 
   // Calculate locked premium places for Haunted Gem indexing
-  const defaultUserAccess: UserAccess = userAccess ?? { 
-    role: "guest", plan: "free",
-    hasPremium: false, 
-    isAdmin: false 
-  };
-  
   const lockedPlacesMap = useMemo(() => {
     const lockedPlaces = places
       .filter(p => {
@@ -367,9 +372,9 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
     if (section.city) {
       params.set("city", section.city);
     }
-    if (section.categories && section.categories.length > 0) {
+    if (sectionCategories.length > 0) {
       // Используем categories (CSV) для поддержки нескольких категорий
-      params.set("categories", section.categories.map(c => encodeURIComponent(c)).join(','));
+      params.set("categories", sectionCategories.map(c => encodeURIComponent(c)).join(','));
       params.set("ref", "home");
     }
     return `/map?${params.toString()}`;

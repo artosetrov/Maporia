@@ -4,6 +4,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabase } from "../../../../lib/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
 import Icon from "../../../../components/Icon";
@@ -190,7 +191,8 @@ export default function AvatarEditorPage() {
   }
 
   return (
-    <main className="min-h-screen bg-white flex flex-col">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-white flex flex-col">
       {/* Desktop Header */}
       <div className="hidden lg:block sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-2xl mx-auto px-4 sm:px-6">
@@ -236,10 +238,13 @@ export default function AvatarEditorPage() {
           <div className="flex flex-col items-center">
             <div className="w-32 h-32 rounded-full bg-[#FAFAF7] border-4 border-[#ECEEE4] overflow-hidden flex-shrink-0 mb-4">
               {avatarUrl ? (
-                <img
+                <Image
                   src={avatarUrl}
                   alt="Profile"
-                  className="w-full h-full object-cover"
+                  width={128}
+                  height={128}
+                  sizes="128px"
+                  className="h-full w-full object-cover"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-4xl font-semibold text-[#8F9E4F]">
@@ -306,6 +311,7 @@ export default function AvatarEditorPage() {
           </div>
         </div>
       </div>
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

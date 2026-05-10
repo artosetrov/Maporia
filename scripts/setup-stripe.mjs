@@ -245,7 +245,7 @@ async function main() {
             enabled: true,
             default_allowed_updates: ["price"],
             proration_behavior: "create_prorations",
-            products: PLANS.filter((p) => p.price.type === "recurring").map((p) => ({
+            products: PLANS.filter((p) => p.price.type === "recurring").map(() => ({
               product: null, // populated below
               prices: [],
             })),

@@ -98,8 +98,9 @@ body {
   letter-spacing: -0.02em;
 }
 
-/* Heading styles */
-h1, .h1 {
+/* Heading styles (home hero title #home-hero-title — Tailwind-only) */
+h1:not(#home-hero-title),
+.h1 {
   font-family: var(--font-fraunces), Georgia, serif;
   font-size: 30px;
   line-height: 1.25;
@@ -118,7 +119,8 @@ h2, .h2 {
 }
 
 @media (min-width: 1024px) {
-  h1, .h1 {
+  h1:not(#home-hero-title),
+  .h1 {
     font-size: 32px;
   }
   h2, .h2 {

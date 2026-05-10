@@ -64,14 +64,15 @@ export async function POST(request: NextRequest) {
     if (placeError || !place) {
       return NextResponse.json({ error: "Place not found" }, { status: 404 });
     }
+    const resolvedPlace = place as ResolvePlaceRow;
 
     // Already resolved — return immediately
-    if (place.google_place_id) {
-      return NextResponse.json({ google_place_id: place.google_place_id });
+    if (resolvedPlace.google_place_id) {
+      return NextResponse.json({ google_place_id: resolvedPlace.google_place_id });
     }
 
     // Need coordinates to resolve
-    if (!place.lat || !place.lng) {
+    if (!resolvedPlace.lat || !resolvedPlace.lng) {
       return NextResponse.json({ google_place_id: null });
     }
 
@@ -86,9 +87,9 @@ export async function POST(request: NextRequest) {
     }
 
     const resolvedPlaceId = await findGooglePlaceId(
-      place.lat,
-      place.lng,
-      place.title,
+      resolvedPlace.lat,
+      resolvedPlace.lng,
+      resolvedPlace.title,
       googleApiKey,
     );
 

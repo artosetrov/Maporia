@@ -500,6 +500,9 @@ export async function DELETE(request: NextRequest) {
       .from("tags")
       .delete()
       .eq("name", tagToDelete);
+    if (deleteTagError) {
+      logger.warn("Failed to delete tag row:", deleteTagError.message);
+    }
 
     // Get all places that have this tag
     const { data: places, error: placesError } = await access.supabase

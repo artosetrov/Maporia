@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import TopBar from "../../components/TopBar";
 import PlaceCard from "../../components/PlaceCard";
@@ -107,7 +106,7 @@ export default function SavedPage() {
       const placeIds = reactions.map((r) => r.place_id);
       const { data, error } = await supabase
         .from("places")
-        .select("id,title,city,country,address,cover_url,categories,created_at,created_by,access_level,is_premium,premium_only,visibility")
+        .select("id,title,city,country,address,cover_url,categories,created_at,created_by,access_level,visibility")
         .in("id", placeIds)
         .order("created_at", { ascending: false });
 
@@ -147,7 +146,8 @@ export default function SavedPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
+    <SectionErrorBoundary>
+      <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
       <TopBar
         showSearchBar={true}
         searchValue={searchValue}
@@ -356,6 +356,7 @@ export default function SavedPage() {
         </div>
       </div>
 
-    </main>
+      </main>
+    </SectionErrorBoundary>
   );
 }

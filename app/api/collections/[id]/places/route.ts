@@ -125,7 +125,7 @@ export async function GET(
 
     const { data: placesData, error: placesError } = await supabaseAdmin
       .from("places")
-      .select("id,title,description,address,city,country,cover_url,categories,tags,created_by,access_level,is_premium,premium_only,visibility")
+      .select("id,title,description,address,city,country,cover_url,categories,tags,created_by,access_level,visibility")
       .in("id", placeIds);
 
     if (placesError) {
@@ -145,8 +145,6 @@ export async function GET(
       tags: p.tags ?? null,
       created_by: p.created_by ?? null,
       access_level: p.access_level ?? null,
-      is_premium: p.is_premium ?? null,
-      premium_only: p.premium_only ?? null,
       visibility: p.visibility ?? null,
     }));
     placesList.sort((a, b) => (orderMap[(a.id as string)] ?? 0) - (orderMap[(b.id as string)] ?? 0));
