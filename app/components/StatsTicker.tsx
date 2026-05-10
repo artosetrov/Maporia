@@ -12,8 +12,8 @@ import Icon, { type IconName } from "./Icon";
  * редизайна главной (Phase 4). Тот же источник данных, та же логика
  * «manual override побеждает live count», та же видимость через
  * `app_settings(id='stats_banner')`. Меняется ТОЛЬКО визуальная подача:
- *  • desktop — горизонтальная строка с разделителями `·`;
- *  • mobile — горизонтально-скроллящиеся чипы.
+ *  • desktop (sm+) — горизонтальная строка с разделителями `·`;
+ *  • <sm — блок не показываем (место на главной не занимает).
  *
  * v2 update: live-числа берутся из общего хука `useHomeKindCounts`
  * (тот же, что использует HomeTabsSegmented для бейджей и
@@ -64,11 +64,10 @@ export default function StatsTicker() {
     <div
       role="status"
       aria-label="Live Maporia stats"
-      className="mt-4 mb-6 sm:mt-6 sm:mb-8"
+      className="hidden sm:block mt-4 mb-6 sm:mt-6 sm:mb-8"
     >
-      {/* Desktop: одна строка с разделителями */}
       <div
-        className="hidden sm:flex flex-wrap items-center justify-center gap-x-6 gap-y-2
+        className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2
                       py-3 border-t border-b border-[#ECEEE4]
                       text-[13px] text-[#5A5F4D]"
       >
@@ -87,32 +86,6 @@ export default function StatsTicker() {
                   ·
                 </span>
               )}
-            </span>
-          );
-        })}
-      </div>
-
-      {/* Mobile: горизонтальные чипы. flex-wrap игнорим, разрешаем
-          горизонтальный скролл, чтобы 4 ровные плитки помещались на 320px. */}
-      <div
-        className="sm:hidden flex items-center gap-2 overflow-x-auto py-2 -mx-4 px-4
-                      [&::-webkit-scrollbar]:hidden"
-      >
-        {visibleKeys.map((key) => {
-          const cfg = settings.metrics[key];
-          const value = cfg.manual !== null ? cfg.manual : live[key];
-          return (
-            <span
-              key={key}
-              className="flex-none inline-flex items-center gap-1.5
-                         bg-white border border-[#ECEEE4] rounded-full
-                         px-3 py-1.5 text-[12px] text-[#5A5F4D] whitespace-nowrap"
-            >
-              <Icon name={ICONS[key]} size={14} className="text-[#6F7A5A]" />
-              <b className="text-[#1F2A1F] font-semibold">
-                {value == null ? "—" : fmt(value)}
-              </b>
-              <span>{cfg.label}</span>
             </span>
           );
         })}

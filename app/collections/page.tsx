@@ -261,7 +261,7 @@ function CollectionsPageContent() {
         searchValue=""
         onSearchChange={(value) => {
           const params = new URLSearchParams();
-          if (value.trim()) params.set("q", encodeURIComponent(value.trim()));
+          if (value.trim()) params.set("q", value.trim());
           router.push(`/map?${params.toString()}`);
         }}
         selectedCity={null}

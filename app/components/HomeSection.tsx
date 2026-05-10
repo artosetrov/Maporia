@@ -374,7 +374,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
     }
     if (sectionCategories.length > 0) {
       // Используем categories (CSV) для поддержки нескольких категорий
-      params.set("categories", sectionCategories.map(c => encodeURIComponent(c)).join(','));
+      params.set("categories", sectionCategories.join(','));
       params.set("ref", "home");
     }
     return `/map?${params.toString()}`;

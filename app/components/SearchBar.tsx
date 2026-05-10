@@ -59,7 +59,7 @@ export default function SearchBar({
   const displayCity = selectedCity || DEFAULT_CITY;
   const isAnywhere = !selectedCity; // Только когда selectedCity === null
 
-  // Mobile: pill-style bar matching desktop layout ("Where?" | "Filters")
+  // Mobile: pill "Where?" | иконка фильтров (подпись не дублируем — aria-label).
   if (isMobile) {
     return (
       <div className="flex items-center gap-0 bg-white rounded-full border border-[#E5E8DB] hover:border-[#8F9E4F] transition-colors w-full">
@@ -82,12 +82,15 @@ export default function SearchBar({
         {/* Filters Button */}
         <button
           onClick={onFiltersClick}
-          className="h-11 px-4 rounded-r-full hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 border-l border-[#E5E8DB] flex-shrink-0 relative"
-          aria-label="Filters"
+          className="relative flex h-11 w-12 shrink-0 items-center justify-center rounded-r-full border-l border-[#E5E8DB] transition-colors hover:bg-[#FAFAF7]"
+          aria-label={
+            activeFiltersCount > 0
+              ? `Filters (${activeFiltersCount} applied)`
+              : "Filters"
+          }
           tabIndex={0}
         >
           <Icon name="filter" size={18} className="text-[#1F2A1F]" />
-          <span className="text-sm font-medium text-[#1F2A1F]">Filters</span>
           {activeFiltersCount > 0 && (
             <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-[#8F9E4F] text-white text-[10px] font-medium flex items-center justify-center">
               {activeFiltersCount > 9 ? "9+" : activeFiltersCount}

@@ -793,15 +793,21 @@ export default function PlacePage(props: PageProps) {
    */
   const [resolvingPlaceId, setResolvingPlaceId] = useState(false);
 
+  const getGoogleMapsFallbackUrl = (targetPlace: Place) => {
+    if (targetPlace.lat && targetPlace.lng) {
+      return `https://www.google.com/maps/search/?api=1&query=${targetPlace.lat},${targetPlace.lng}`;
+    }
+    if (targetPlace.address) {
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(targetPlace.address)}`;
+    }
+    return null;
+  };
+
   const handleOpenGoogleMaps = async (e: React.MouseEvent) => {
     e.preventDefault();
     if (!place) return;
 
-    const fallbackUrl = place.lat && place.lng
-      ? `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`
-      : place.address
-        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.address)}`
-        : null;
+    const fallbackUrl = getGoogleMapsFallbackUrl(place);
 
     // Already have google_place_id — open immediately
     if (place.google_place_id) {
@@ -1019,10 +1025,10 @@ export default function PlacePage(props: PageProps) {
     // Redirect to map page with filters
     const params = new URLSearchParams();
     if (filters.categories.length > 0) {
-      params.set("categories", filters.categories.map(c => encodeURIComponent(c)).join(','));
+      params.set("categories", filters.categories.join(','));
     }
     if ((filters.tags ?? []).length > 0) {
-      params.set("tags", (filters.tags ?? []).map(t => encodeURIComponent(t)).join(','));
+      params.set("tags", (filters.tags ?? []).join(','));
     }
     // С 2026-05-08: kinds прокидываются в /map. См. docs/FILTERS_UNIFICATION_PLAN.md
     if (filters.kinds && filters.kinds.length > 0) {
@@ -1151,10 +1157,10 @@ export default function PlacePage(props: PageProps) {
           onSearchChange={(value) => {
             setSearchValue(value);
             const params = new URLSearchParams();
-            if (selectedCity) params.set("city", encodeURIComponent(selectedCity));
-            if (value.trim()) params.set("q", encodeURIComponent(value.trim()));
+            if (selectedCity) params.set("city", selectedCity);
+            if (value.trim()) params.set("q", value.trim());
             if (activeFilters.categories.length > 0) {
-              params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+              params.set("categories", activeFilters.categories.join(','));
             }
             router.push(`/map?${params.toString()}`);
           }}
@@ -1163,13 +1169,13 @@ export default function PlacePage(props: PageProps) {
             setSelectedCity(city);
             const params = new URLSearchParams();
             if (city && city.trim()) {
-              params.set("city", encodeURIComponent(city.trim()));
+              params.set("city", city.trim());
             }
             if (searchValue && searchValue.trim()) {
-              params.set("q", encodeURIComponent(searchValue.trim()));
+              params.set("q", searchValue.trim());
             }
             if (activeFilters.categories.length > 0) {
-              params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+              params.set("categories", activeFilters.categories.join(','));
             }
             router.push(`/map?${params.toString()}`);
           }}
@@ -1196,13 +1202,13 @@ export default function PlacePage(props: PageProps) {
           setSelectedCity(city);
           const params = new URLSearchParams();
           if (city && city.trim()) {
-            params.set("city", encodeURIComponent(city.trim()));
+            params.set("city", city.trim());
           }
           if (searchValue && searchValue.trim()) {
-            params.set("q", encodeURIComponent(searchValue.trim()));
+            params.set("q", searchValue.trim());
           }
           if (activeFilters.categories.length > 0) {
-            params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+            params.set("categories", activeFilters.categories.join(','));
           }
           router.push(`/map?${params.toString()}`);
         }}
@@ -1218,14 +1224,14 @@ export default function PlacePage(props: PageProps) {
           }
           const params = new URLSearchParams();
           if (city && city.trim()) {
-            params.set("city", encodeURIComponent(city.trim()));
+            params.set("city", city.trim());
           }
           if (query.trim()) {
-            params.set("q", encodeURIComponent(query.trim()));
+            params.set("q", query.trim());
           }
           const categoriesToUse = tags || activeFilters.categories;
           if (categoriesToUse.length > 0) {
-            params.set("categories", categoriesToUse.map(c => encodeURIComponent(c)).join(','));
+            params.set("categories", categoriesToUse.join(','));
           }
           if (kind) {
             params.set("kinds", kind);
@@ -1439,8 +1445,10 @@ export default function PlacePage(props: PageProps) {
           {place.address && (
             <div className="mb-4">
               <a
-                href="#"
+                href={getGoogleMapsFallbackUrl(place) ?? "#"}
                 onClick={handleOpenGoogleMaps}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-base text-[#8F9E4F]/70 hover:text-[#8F9E4F] hover:underline transition cursor-pointer"
                 aria-label="Open address in Google Maps"
                 tabIndex={0}
@@ -1988,8 +1996,10 @@ export default function PlacePage(props: PageProps) {
             {place.address && (
               <div className="mb-4">
                 <a
-                  href="#"
+                  href={getGoogleMapsFallbackUrl(place) ?? "#"}
                   onClick={handleOpenGoogleMaps}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="text-base text-[#8F9E4F]/70 hover:text-[#8F9E4F] hover:underline transition cursor-pointer"
                   aria-label="Open address in Google Maps"
                   tabIndex={0}

@@ -22,7 +22,6 @@ import { useAuthRedirect } from "../../hooks/useAuthRedirect";
 import { getAuthUrl } from "../../lib/authRedirect";
 import { useIsDesktop } from "../../hooks/useIsDesktop";
 import { isUserAdmin, isPlacePremium, canUserViewPlace, canUserAddPlace, type UserAccess } from "../../lib/access";
-import { PLAN_CONFIG, PLAN_ORDER, EXTRA_LISTING, formatPrice } from "../../lib/plans";
 import {
   PRICING_REGISTRY,
   PUBLIC_PLANS,
@@ -304,7 +303,7 @@ function ProfileInner() {
     if (selectedCity) params.set("city", selectedCity);
     if (value.trim()) params.set("q", value);
     if (activeFilters.categories.length > 0) {
-      params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+      params.set("categories", activeFilters.categories.join(','));
     }
     router.push(`/map?${params.toString()}`);
   }
@@ -314,13 +313,13 @@ function ProfileInner() {
     setSelectedCity(city);
     const params = new URLSearchParams();
     if (city && city.trim()) {
-      params.set("city", encodeURIComponent(city.trim()));
+      params.set("city", city.trim());
     }
     if (searchValue && searchValue.trim()) {
-      params.set("q", encodeURIComponent(searchValue.trim()));
+      params.set("q", searchValue.trim());
     }
     if (activeFilters.categories.length > 0) {
-      params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+      params.set("categories", activeFilters.categories.join(','));
     }
     const url = `/map?${params.toString()}`;
     router.push(url);
@@ -342,10 +341,10 @@ function ProfileInner() {
       if (selectedCity) params.set("city", selectedCity);
       if (searchValue) params.set("q", searchValue);
       if (pendingFilters.categories.length > 0) {
-        params.set("categories", pendingFilters.categories.map(c => encodeURIComponent(c)).join(','));
+        params.set("categories", pendingFilters.categories.join(','));
       }
       if ((pendingFilters.tags ?? []).length > 0) {
-        params.set("tags", (pendingFilters.tags ?? []).map(t => encodeURIComponent(t)).join(','));
+        params.set("tags", (pendingFilters.tags ?? []).join(','));
       }
       // С 2026-05-08: kinds прокидываются в /map как и categories.
       // См. docs/FILTERS_UNIFICATION_PLAN.md

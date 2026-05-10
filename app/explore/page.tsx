@@ -351,10 +351,10 @@ export default function ExplorePage() {
           const params = new URLSearchParams();
           // Use first selected city if any
           const firstCity = selectedCities.length > 0 ? selectedCities[0] : null;
-          if (firstCity) params.set("city", encodeURIComponent(firstCity));
-          if (value.trim()) params.set("q", encodeURIComponent(value.trim()));
+          if (firstCity) params.set("city", firstCity);
+          if (value.trim()) params.set("q", value.trim());
           if (selectedCategories.length > 0) {
-            params.set("categories", selectedCategories.map(c => encodeURIComponent(c)).join(','));
+            params.set("categories", selectedCategories.join(','));
           }
           router.push(`/map?${params.toString()}`);
         }}
@@ -367,13 +367,13 @@ export default function ExplorePage() {
           }
           const params = new URLSearchParams();
           if (city && city.trim()) {
-            params.set("city", encodeURIComponent(city.trim()));
+            params.set("city", city.trim());
           }
           if (q && q.trim()) {
-            params.set("q", encodeURIComponent(q.trim()));
+            params.set("q", q.trim());
           }
           if (selectedCategories.length > 0) {
-            params.set("categories", selectedCategories.map(c => encodeURIComponent(c)).join(','));
+            params.set("categories", selectedCategories.join(','));
           }
           router.push(`/map?${params.toString()}`);
         }}
@@ -396,10 +396,10 @@ export default function ExplorePage() {
             setSelectedCities([]);
           }
           const params = new URLSearchParams();
-          if (city) params.set("city", encodeURIComponent(city));
-          if (q) params.set("q", encodeURIComponent(q));
+          if (city) params.set("city", city);
+          if (q) params.set("q", q);
           if (selectedCategories.length > 0) {
-            params.set("categories", selectedCategories.map(c => encodeURIComponent(c)).join(','));
+            params.set("categories", selectedCategories.join(','));
           }
           router.push(`/map?${params.toString()}`);
         }}
@@ -415,14 +415,14 @@ export default function ExplorePage() {
           }
           const params = new URLSearchParams();
           if (city && city.trim()) {
-            params.set("city", encodeURIComponent(city.trim()));
+            params.set("city", city.trim());
           }
           if (query.trim()) {
-            params.set("q", encodeURIComponent(query.trim()));
+            params.set("q", query.trim());
           }
           const categoriesToUse = tags || selectedCategories;
           if (categoriesToUse.length > 0) {
-            params.set("categories", categoriesToUse.map(c => encodeURIComponent(c)).join(','));
+            params.set("categories", categoriesToUse.join(','));
           }
           if (kind) {
             params.set("kinds", kind);

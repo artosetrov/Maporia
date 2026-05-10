@@ -93,10 +93,10 @@ export default function SettingsPage() {
         onSearchChange={(value) => {
           setSearchValue(value);
           const params = new URLSearchParams();
-          if (selectedCity) params.set("city", encodeURIComponent(selectedCity));
-          if (value.trim()) params.set("q", encodeURIComponent(value.trim()));
+          if (selectedCity) params.set("city", selectedCity);
+          if (value.trim()) params.set("q", value.trim());
           if (activeFilters.categories.length > 0) {
-            params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+            params.set("categories", activeFilters.categories.join(','));
           }
           router.push(`/map?${params.toString()}`);
         }}
@@ -105,13 +105,13 @@ export default function SettingsPage() {
           setSelectedCity(city);
           const params = new URLSearchParams();
           if (city && city.trim()) {
-            params.set("city", encodeURIComponent(city.trim()));
+            params.set("city", city.trim());
           }
           if (searchValue && searchValue.trim()) {
-            params.set("q", encodeURIComponent(searchValue.trim()));
+            params.set("q", searchValue.trim());
           }
           if (activeFilters.categories.length > 0) {
-            params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+            params.set("categories", activeFilters.categories.join(','));
           }
           router.push(`/map?${params.toString()}`);
         }}
@@ -131,10 +131,10 @@ export default function SettingsPage() {
           setSelectedCity(city);
           const params = new URLSearchParams();
           if (city && city.trim()) {
-            params.set("city", encodeURIComponent(city.trim()));
+            params.set("city", city.trim());
           }
           if (searchValue && searchValue.trim()) {
-            params.set("q", encodeURIComponent(searchValue.trim()));
+            params.set("q", searchValue.trim());
           }
           router.push(`/map?${params.toString()}`);
         }}
@@ -150,14 +150,14 @@ export default function SettingsPage() {
           }
           const params = new URLSearchParams();
           if (city && city.trim()) {
-            params.set("city", encodeURIComponent(city.trim()));
+            params.set("city", city.trim());
           }
           if (query.trim()) {
-            params.set("q", encodeURIComponent(query.trim()));
+            params.set("q", query.trim());
           }
           const categoriesToUse = tags || activeFilters.categories;
           if (categoriesToUse.length > 0) {
-            params.set("categories", categoriesToUse.map(c => encodeURIComponent(c)).join(','));
+            params.set("categories", categoriesToUse.join(','));
           }
           if (kind) {
             params.set("kinds", kind);

@@ -375,6 +375,7 @@ function MapPageContent() {
       const currentQ = searchParams.get('q');
       const currentCategories = searchParams.get('categories');
       const currentTags = searchParams.get('tags');
+      const currentKinds = searchParams.get('kinds');
       const currentSort = searchParams.get('sort');
     
     // Сравниваем текущие значения в URL с applied filters
@@ -383,6 +384,7 @@ function MapPageContent() {
     const expectedQ = appliedQ.trim() || null;
     const expectedCategories = appliedCategories.length > 0 ? appliedCategories : null;
     const expectedTags = (activeFilters.tags ?? []).length > 0 ? (activeFilters.tags ?? []) : null;
+    const expectedKinds = (activeFilters.kinds ?? []).length > 0 ? (activeFilters.kinds ?? []) : null;
     const expectedSort = activeFilters.sort || null;
     
     const currentCityDecoded = currentCity ? (() => {
@@ -419,16 +421,21 @@ function MapPageContent() {
         }).filter(Boolean).sort()
       : null;
     const expectedTagsSorted = expectedTags ? [...expectedTags].sort() : null;
+    const currentKindsDecoded = currentKinds
+      ? currentKinds.split(',').map(k => k.trim()).filter(Boolean).sort()
+      : null;
+    const expectedKindsSorted = expectedKinds ? [...expectedKinds].sort() : null;
     
     // Проверяем, нужно ли обновлять URL
     const cityChanged = expectedCity !== currentCityDecoded;
     const qChanged = expectedQ !== currentQDecoded;
     const categoriesChanged = JSON.stringify(expectedCategoriesSorted) !== JSON.stringify(currentCategoriesDecoded);
     const tagsChanged = JSON.stringify(expectedTagsSorted) !== JSON.stringify(currentTagsDecoded);
+    const kindsChanged = JSON.stringify(expectedKindsSorted) !== JSON.stringify(currentKindsDecoded);
     const sortChanged = expectedSort !== currentSort;
     
     // Если ничего не изменилось, не обновляем URL
-    if (!cityChanged && !qChanged && !categoriesChanged && !tagsChanged && !sortChanged) {
+    if (!cityChanged && !qChanged && !categoriesChanged && !tagsChanged && !kindsChanged && !sortChanged) {
       return;
     }
     
@@ -450,6 +457,10 @@ function MapPageContent() {
     if (expectedTags) {
       params.set('tags', expectedTags.join(','));
     }
+
+    if (expectedKinds) {
+      params.set('kinds', expectedKinds.join(','));
+    }
     
     if (expectedSort) {
       params.set('sort', expectedSort);
@@ -463,7 +474,7 @@ function MapPageContent() {
     } catch (error) {
       console.error("Error updating URL:", error);
     }
-  }, [appliedCity, appliedQ, appliedCategories, activeFilters.tags, activeFilters.sort, searchParams, hasExplicitCityInUrlState]);
+  }, [appliedCity, appliedQ, appliedCategories, activeFilters.tags, activeFilters.kinds, activeFilters.sort, searchParams, hasExplicitCityInUrlState]);
 
   // Cities are now fixed from constants, no need to compute from places
 
@@ -1176,12 +1187,13 @@ function MapPageContent() {
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (appliedCategories.length > 0) count += appliedCategories.length;
+    if ((activeFilters.kinds ?? []).length > 0) count += activeFilters.kinds?.length ?? 0;
     // Учитываем город как активный фильтр, если он явно выбран (даже если это DEFAULT_CITY)
     if (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) count += 1;
     if (appliedQ.trim()) count += 1;
     // Note: selectedTag is not shown in badge as it's a separate filter
     return count;
-  }, [appliedCategories, appliedCity, appliedQ, hasExplicitCityInUrlState]);
+  }, [appliedCategories, activeFilters.kinds, appliedCity, appliedQ, hasExplicitCityInUrlState]);
 
   // Проверяем, есть ли активные фильтры (для показа кнопки "назад")
   const hasActiveFilters = useMemo(() => {
@@ -1189,10 +1201,11 @@ function MapPageContent() {
       (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) ||
       appliedCategories.length > 0 ||
       (activeFilters.tags ?? []).length > 0 ||
+      (activeFilters.kinds ?? []).length > 0 ||
       appliedQ.trim().length > 0 ||
       selectedTag.length > 0
     );
-  }, [appliedCity, hasExplicitCityInUrlState, appliedCategories, activeFilters.tags, appliedQ, selectedTag]);
+  }, [appliedCity, hasExplicitCityInUrlState, appliedCategories, activeFilters.tags, activeFilters.kinds, appliedQ, selectedTag]);
 
   // Функция для очистки всех фильтров (Reset all)
   const handleClearAllFilters = () => {
@@ -1444,9 +1457,17 @@ function MapPageContent() {
         // computeFilterCounts. Это заменяет getFilteredCount + getCategoryCount + getKindCount.
         getFilterPlaces={async () => {
           try {
-            const { data, error } = (await supabase
+            let countQuery = supabase
               .from("places")
-              .select("id,title,description,city,city_name_cached,categories,tags,access_level,country,kind,lat,lng")) as { data: PlacesSelectRow[] | null; error: PostgrestError | null };
+              .select("id,title,description,city,city_name_cached,categories,tags,access_level,country,kind,lat,lng");
+            if (appliedQ.trim()) {
+              const s = sanitizePostgrestValue(appliedQ.trim());
+              countQuery = countQuery.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
+            }
+            if (selectedTag) {
+              countQuery = countQuery.contains("tags", [selectedTag]);
+            }
+            const { data, error } = (await countQuery) as { data: PlacesSelectRow[] | null; error: PostgrestError | null };
             if (error) {
               if (process.env.NODE_ENV === 'production') {
                 console.error("Error fetching places for filter counts:", {

@@ -193,7 +193,7 @@ export default function OfferPlaceView({
   hostProfile,
 }: Props) {
   const router = useRouter();
-  const { isLoaded: mapsLoaded } = useGoogleMaps();
+  const { isLoaded: mapsLoaded, loadError: mapsLoadError } = useGoogleMaps();
 
   const isService = kind === "service";
   const kindLabel = isService ? "Service" : "Experience";
@@ -563,24 +563,37 @@ export default function OfferPlaceView({
         )}
 
         {/* Map */}
-        {center && mapsLoaded && (
+        {center && (
           <section className="mb-8">
             <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-3">Where</h2>
             <div className="h-64 sm:h-80 w-full overflow-hidden rounded-2xl border border-[#ECEEE4]">
-              <GoogleMap
-                mapContainerStyle={{ width: "100%", height: "100%" }}
-                center={center}
-                zoom={14}
-                options={getMapOptions()}
-              >
-                <Marker
-                  position={center}
-                  icon={{
-                    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(createStaticPinSvg())}`,
-                    scaledSize: new google.maps.Size(40, 50),
-                  }}
-                />
-              </GoogleMap>
+              {mapsLoadError ? (
+                <div className="flex h-full w-full items-center justify-center bg-[#ECEEE4] px-5 text-center">
+                  <div>
+                    <div className="mb-1 text-sm font-medium text-[#1F2A1F]">Map unavailable</div>
+                    <div className="text-xs text-[#6F7A5A]">Google Maps is not configured for this environment.</div>
+                  </div>
+                </div>
+              ) : mapsLoaded ? (
+                <GoogleMap
+                  mapContainerStyle={{ width: "100%", height: "100%" }}
+                  center={center}
+                  zoom={14}
+                  options={getMapOptions()}
+                >
+                  <Marker
+                    position={center}
+                    icon={{
+                      url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(createStaticPinSvg())}`,
+                      scaledSize: new google.maps.Size(40, 50),
+                    }}
+                  />
+                </GoogleMap>
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-[#ECEEE4] text-sm text-[#6F7A5A]">
+                  Loading map...
+                </div>
+              )}
             </div>
             {place.address && (
               <div className="mt-2 text-sm text-[#6F7A5A]">{place.address}</div>

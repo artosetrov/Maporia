@@ -57,7 +57,7 @@ export default function LocationEditorPage(props: PageProps) {
   const { id: placeId } = use(props.params);
 
   // SDK loaded once at app shell level (GoogleMapsProvider in RootLayout).
-  const { isLoaded } = useGoogleMaps();
+  const { isLoaded, loadError } = useGoogleMaps();
 
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const [loading, setLoading] = useState(true);
@@ -330,7 +330,14 @@ export default function LocationEditorPage(props: PageProps) {
             WebkitOverflowScrolling: 'touch',
           }}
         >
-          {isLoaded && (
+          {loadError ? (
+            <div className="flex h-full w-full items-center justify-center px-5 text-center">
+              <div>
+                <div className="mb-1 text-sm font-medium text-[#1F2A1F]">Map unavailable</div>
+                <div className="text-xs text-[#6F7A5A]">Google Maps is not configured for this environment.</div>
+              </div>
+            </div>
+          ) : isLoaded ? (
             <GoogleMap
               mapContainerStyle={{ width: "100%", height: "100%" }}
               center={mapCenter}
@@ -362,6 +369,10 @@ export default function LocationEditorPage(props: PageProps) {
                 />
               )}
             </GoogleMap>
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-sm text-[#6F7A5A]">
+              Loading map...
+            </div>
           )}
         </div>
 

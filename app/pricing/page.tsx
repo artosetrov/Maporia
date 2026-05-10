@@ -149,7 +149,7 @@ export default function PricingPage() {
     }
 
     if (!user) {
-      router.push(`/auth?next=${encodeURIComponent("/pricing")}`);
+      router.push(`/login?from=${encodeURIComponent("/pricing")}`);
       return;
     }
 
@@ -163,7 +163,7 @@ export default function PricingPage() {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) {
-        router.push(`/auth?next=${encodeURIComponent("/pricing")}`);
+        router.push(`/login?from=${encodeURIComponent("/pricing")}`);
         return;
       }
 

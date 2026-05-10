@@ -85,13 +85,6 @@ function countFor(kind: HomeKind, counts?: HomeKindCounts): number | null {
 
 const fmt = (n: number) => new Intl.NumberFormat("en-US").format(n);
 
-/** Короткие подписи <sm — три таба помещаются в ~320px вместе со счётчиками. */
-const MOBILE_TAB_LABEL: Record<HomeKind, string> = {
-  location: "Places",
-  experience: "Exper.",
-  service: "Serv.",
-};
-
 export default function HomeTabsSegmented({
   active,
   onChange,
@@ -127,8 +120,8 @@ export default function HomeTabsSegmented({
   // вместо того чтобы расширять родителя. Поведение клавиатуры,
   // фокус и счётчики не меняются.
   //
-  // 2026-05-10: на <sm дополнительно ужимаем типографику + короткие
-  // подписи (полные имена в aria-label), чтобы чаще помещаться без скролла.
+  // 2026-05-10: на <sm — полные названия табов (без сокращений), перенос до
+  // 2 строк; бейджи чисел скрыты; счёт в aria-label.
   return (
     <div
       // 2026-05-09: min-w-0 критичен. Без него flex item по умолчанию
@@ -163,10 +156,10 @@ export default function HomeTabsSegmented({
               data-tab-id={tab.id}
               onClick={() => onChange(tab.id)}
               className={[
-                "rounded-full font-semibold whitespace-nowrap shrink-0",
-                "inline-flex items-center justify-center",
-                "max-sm:flex-1 max-sm:min-w-0 max-sm:h-9 max-sm:px-1.5 max-sm:text-[11px] max-sm:gap-1",
-                "sm:h-11 sm:px-4 sm:text-[14px] sm:gap-2",
+                "rounded-full font-semibold",
+                "flex items-center justify-center",
+                "max-sm:flex-1 max-sm:min-h-[2.5rem] max-sm:h-auto max-sm:min-w-0 max-sm:px-2 max-sm:py-1.5 max-sm:whitespace-normal",
+                "sm:inline-flex sm:h-11 sm:shrink-0 sm:whitespace-nowrap sm:px-4 sm:text-[14px] sm:gap-2",
                 "transition-colors focus:outline-none",
                 "focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-1",
                 isActive
@@ -174,16 +167,24 @@ export default function HomeTabsSegmented({
                   : "text-[#4A4F3D] hover:bg-[#16190f]/5",
               ].join(" ")}
             >
-              <TabIcon kind={ICON_BY_KIND[tab.id]} />
-              <span className="max-sm:hidden">{tab.label}</span>
-              <span className="sm:hidden truncate">{MOBILE_TAB_LABEL[tab.id]}</span>
+              <span className="inline-flex min-w-0 max-w-full items-center justify-center gap-1.5 sm:gap-2">
+                <TabIcon kind={ICON_BY_KIND[tab.id]} />
+                <span
+                  className={[
+                    "min-w-0 text-center leading-tight",
+                    "max-sm:max-w-[min(7.25rem,26vw)] max-sm:line-clamp-2 max-sm:text-balance max-sm:text-[10px]",
+                    "sm:whitespace-nowrap sm:text-[14px]",
+                  ].join(" ")}
+                >
+                  {tab.label}
+                </span>
+              </span>
               {n !== null && (
                 <span
                   aria-hidden
                   className={[
-                    "font-bold rounded-full",
-                    "max-sm:text-[10px] max-sm:px-1 max-sm:py-px max-sm:min-w-[1.25rem] max-sm:text-center",
-                    "sm:text-[11px] sm:px-2 sm:py-0.5",
+                    "hidden sm:inline-flex items-center justify-center font-bold rounded-full",
+                    "text-[11px] px-2 py-0.5",
                     isActive
                       ? "bg-white/15 text-white/90"
                       : "bg-[#16190f]/8 text-[#4A4F3D]",

@@ -403,15 +403,15 @@ function HomePageInner() {
     }
     const params = new URLSearchParams();
     if (city && city.trim()) {
-      params.set("city", encodeURIComponent(city.trim()));
+      params.set("city", city.trim());
     }
     if (query.trim()) {
-      params.set("q", encodeURIComponent(query.trim()));
+      params.set("q", query.trim());
     }
     // Use tags if provided, otherwise use activeFilters.categories
     const categoriesToUse = tags || activeFilters.categories;
     if (categoriesToUse.length > 0) {
-      params.set("categories", categoriesToUse.map(c => encodeURIComponent(c)).join(','));
+      params.set("categories", categoriesToUse.join(','));
     }
     // Прокидываем тип в /map: фильтр по kind применится сразу.
     if (kind) {
@@ -439,10 +439,10 @@ function HomePageInner() {
     if (selectedCity) params.set("city", selectedCity);
     if (searchValue) params.set("q", searchValue);
     if (filters.categories.length > 0) {
-      params.set("categories", filters.categories.map(c => encodeURIComponent(c)).join(','));
+      params.set("categories", filters.categories.join(','));
     }
     if ((filters.tags ?? []).length > 0) {
-      params.set("tags", (filters.tags ?? []).map(t => encodeURIComponent(t)).join(','));
+      params.set("tags", (filters.tags ?? []).join(','));
     }
     if (filters.sort) {
       params.set("sort", filters.sort);
@@ -462,7 +462,18 @@ function HomePageInner() {
     if (selectedCity) params.set("city", selectedCity);
     params.set("q", tag);
     if (activeFilters.categories.length > 0) {
-      params.set("categories", activeFilters.categories.map(c => encodeURIComponent(c)).join(','));
+      params.set("categories", activeFilters.categories.join(','));
+    }
+    router.push(`/map?${params.toString()}`);
+  }
+
+  // Popular categories (HomePopularTags, desktop only) → /map?categories=…
+  function handleCategoryClick(category: string) {
+    const params = new URLSearchParams();
+    if (selectedCity) params.set("city", selectedCity);
+    params.set("categories", encodeURIComponent(category));
+    if (activeKind && activeKind !== "location") {
+      params.set("kinds", activeKind);
     }
     router.push(`/map?${params.toString()}`);
   }
@@ -670,6 +681,7 @@ function HomePageInner() {
               onSearchBarClick={() => setSearchModalOpen(true)}
               onFiltersClick={handleFiltersClick}
               activeFiltersCount={activeFiltersCount}
+              onCategoryClick={handleCategoryClick}
             />
             {/* Stats-строка перенесена сюда, под hero, по запросу 2026-05-08:
                 раньше она жила внутри content-обёртки (после

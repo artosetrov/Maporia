@@ -7,16 +7,17 @@ import type { HomeKind } from "../types/home";
 import { useHomeKindCounts } from "../hooks/useHomeKindCounts";
 import HomeTabsSegmented from "./HomeTabsSegmented";
 import HomeSearchHero from "./HomeSearchHero";
+import HomePopularTags from "./HomePopularTags";
 import HomeVisualPanel from "./HomeVisualPanel";
 
 /**
  * HomeHero (v2) — composite hero for the home page (Dribbble-style).
  *
  * Layout (responsive grid via Tailwind):
- *   • H1 — левая колонка грида; sm–md та же max ширина что lede (520px),
- *     с md — на всю ширину колонки + крупный display clamp (чтобы узкий
- *     «десктоп» 768–1023px не оставался с мелким lg-only стилем).
- *   • >= lg → split: left column (lede + tabs + search) and
+ *   • H1 — левая колонка грида; sm–lg та же max ширина что lede (520px),
+ *     с lg — на всю ширину колонки + display clamp (глобальные h1-стили
+ *     в globals.css не трогают #home-hero-title).
+ *   • >= lg → split: left column (lede + tabs + search + popular tags) and
  *                    right column (HomeVisualPanel)
  *   • <  lg → single column, left-aligned, no visual panel
  *
@@ -50,6 +51,9 @@ type Props = {
   // Filters
   onFiltersClick: () => void;
   activeFiltersCount: number;
+
+  /** Popular category chips — рендер только с lg в разметке. */
+  onCategoryClick: (category: string) => void;
 };
 
 export default function HomeHero({
@@ -61,6 +65,7 @@ export default function HomeHero({
   onSearchBarClick,
   onFiltersClick,
   activeFiltersCount,
+  onCategoryClick,
 }: Props) {
   // Заголовок по умолчанию говорит "Florida" (бренд Maporia = весь штат),
   // а не подставляет DEFAULT_CITY. Если юзер вручную выбрал город из
@@ -127,10 +132,10 @@ export default function HomeHero({
             <h1
               id="home-hero-title"
               className={[
-                "font-extrabold w-full min-w-0 max-w-full sm:max-w-[520px] md:max-w-none text-balance",
+                "font-extrabold w-full min-w-0 max-w-full sm:max-w-[520px] lg:max-w-none text-balance",
                 "leading-[0.98] tracking-[-0.02em] text-[#16190f]",
-                "text-[clamp(4.2rem,16.8vw+2.2rem,30rem)]",
-                "md:text-[clamp(6.5rem,22vw+2.75rem,22rem)]",
+                "text-[clamp(1.625rem,3.8vw+0.5rem,2.75rem)]",
+                "lg:text-[clamp(2.5rem,4.5vw+0.75rem,5rem)]",
                 "break-words",
               ].join(" ")}
             >
@@ -225,6 +230,12 @@ export default function HomeHero({
                 onFiltersClick={onFiltersClick}
                 activeFiltersCount={activeFiltersCount}
               />
+              <div className="hidden min-w-0 w-full lg:block">
+                <HomePopularTags
+                  activeKind={activeKind}
+                  onCategoryClick={onCategoryClick}
+                />
+              </div>
             </div>
           </div>
 
