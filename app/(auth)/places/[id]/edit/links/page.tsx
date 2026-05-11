@@ -34,6 +34,7 @@ import {
 import { ErrorBoundary } from "../../../../../components/ErrorBoundary";
 import { PageSkeleton } from "../../../../../components/Skeleton";
 import AddPlaceLinkPanel from "../../../../../components/AddPlaceLinkPanel";
+import Icon from "../../../../../components/Icon";
 
 type PlaceMini = {
   id: string;
@@ -60,6 +61,18 @@ export default function EditLinksPage({
   const { id: placeId } = use(params);
   const router = useRouter();
   const { user, access } = useUserAccessContext();
+
+  // Закрытие страницы: если есть история — назад (туда, откуда юзер пришёл,
+  // обычно /places/:id/edit). Если истории нет (прямой заход / refresh) —
+  // фолбэком пушим Edit place. Раньше тут всегда был router.push на /edit,
+  // что в комбинации с router.back() на Edit давало петлю Edit ↔ Links.
+  const handleExit = useCallback(() => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push(`/places/${placeId}/edit`);
+    }
+  }, [router, placeId]);
 
   const [place, setPlace] = useState<PlaceMini | null>(null);
   const [links, setLinks] = useState<LinkWithJoin[]>([]);
@@ -232,24 +245,35 @@ export default function EditLinksPage({
 
   return (
     <ErrorBoundary>
-      <main className="min-h-screen bg-[#FAFAF7] pb-20">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-6 sm:pt-10">
-          <header className="mb-6">
-            <Link
-              href={`/places/${placeId}/edit`}
-              className="text-sm text-[#6F7A5A] hover:text-[#1F2A1F] inline-flex items-center gap-1"
-            >
-              ← Back to edit
-            </Link>
-            <h1 className="font-fraunces text-2xl sm:text-3xl font-semibold text-[#1F2A1F] mt-3">
-              Linked places
-            </h1>
-            <p className="text-sm text-[#6F7A5A] mt-1">
-              {isLocation
-                ? "Experiences & services hosted at this location."
-                : "Locations where this offering happens."}
-            </p>
-          </header>
+      <main className="min-h-screen bg-[#FAFAF7] pb-24">
+        {/* Top App Bar — sticky, как в /places/[id]/edit */}
+        <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6">
+            <div className="flex items-center justify-between h-16 gap-2">
+              <div
+                className="font-semibold font-fraunces text-[#1F2A1F] min-w-0 flex-1 truncate"
+                style={{ fontSize: "24px" }}
+              >
+                Linked places
+              </div>
+              <button
+                type="button"
+                onClick={handleExit}
+                className="p-2 -mr-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition flex-shrink-0"
+                aria-label="Close"
+              >
+                <Icon name="close" size={20} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-6">
+          <p className="text-sm text-[#6F7A5A] mb-6">
+            {isLocation
+              ? "Experiences & services hosted at this location."
+              : "Locations where this offering happens."}
+          </p>
 
           {error && (
             <div className="mb-4 rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/5 p-3 text-sm text-[#C96A5B]">
@@ -414,6 +438,28 @@ export default function EditLinksPage({
             </SectionCard>
           )}
 
+        </div>
+
+        {/* Bottom Action Bar — fixed, как в /places/[id]/edit */}
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#ECEEE4] pb-safe-bottom">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4">
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleExit}
+                className="flex-1 h-11 rounded-xl border border-[#ECEEE4] bg-white px-5 text-sm font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExit}
+                className="flex-1 h-11 rounded-xl bg-[#8F9E4F] px-5 text-sm font-medium text-white hover:bg-[#556036] transition"
+              >
+                Done
+              </button>
+            </div>
+          </div>
         </div>
       </main>
     </ErrorBoundary>
