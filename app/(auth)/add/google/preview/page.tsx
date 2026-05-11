@@ -531,6 +531,12 @@ export default function GoogleImportPreviewPage() {
                               fill
                               sizes="(max-width: 640px) 33vw, 160px"
                               className="absolute inset-0 w-full h-full object-cover"
+                              // Skip Vercel /_next/image optimization: our source URL
+                              // is a same-origin proxy that 302-redirects to
+                              // lh3.googleusercontent.com, and the optimizer rejects
+                              // redirects with INVALID_IMAGE_OPTIMIZE_REQUEST (400).
+                              // Browser follows the 302 itself with no optimizer in between.
+                              unoptimized
                               onError={(e) => {
                                 (e.target as HTMLImageElement).src =
                                   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%23ECEEE4' width='100' height='100'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%236F7A5A' font-size='12'%3EPhoto%3C/text%3E%3C/svg%3E";
