@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CITIES, DEFAULT_CITY } from "../constants";
 import { fetchTopCities, topCityNames } from "../lib/topCities";
 import type { HomeKind } from "../types/home";
@@ -71,8 +72,47 @@ export default function HomeHero({
   const { counts } = useHomeKindCounts();
 
   // City picker — local dropdown state. Closes on outside-click and on Esc.
+  // 2026-05-11: listbox рендерится через portal в document.body, чтобы
+  // вывести его из контекста <h1>. Внутри h1 наследуются font-size 80px,
+  // leading-[0.98] и tracking-[-0.02em] — даже text-[14px]+leading-tight
+  // на кнопках не пересиливали line-height-inherit от preflight (Tailwind
+  // v4 ordering). Portal в body даёт чистый body-typography (15px/1.5).
   const [cityOpen, setCityOpen] = useState(false);
   const cityRef = useRef<HTMLDivElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const [popoverPos, setPopoverPos] = useState<{
+    top: number;
+    left: number;
+    minWidth: number;
+  } | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Replan popover position whenever it opens, on resize, or on scroll.
+  useLayoutEffect(() => {
+    if (!cityOpen) return;
+    function reposition() {
+      const trigger = cityRef.current;
+      if (!trigger) return;
+      const r = trigger.getBoundingClientRect();
+      // 8px gap under the trigger, anchored to its left edge.
+      setPopoverPos({
+        top: r.bottom + 8,
+        left: r.left,
+        minWidth: Math.max(r.width, 220),
+      });
+    }
+    reposition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [cityOpen]);
 
   // Cities shown in the dropdown. Init = static `CITIES` snapshot from
   // constants (so SSR/first-paint renders a sane list with no flash).
@@ -95,9 +135,10 @@ export default function HomeHero({
   useEffect(() => {
     if (!cityOpen) return;
     function onClick(e: MouseEvent) {
-      if (cityRef.current && !cityRef.current.contains(e.target as Node)) {
-        setCityOpen(false);
-      }
+      const target = e.target as Node;
+      const inTrigger = cityRef.current?.contains(target);
+      const inPopover = popoverRef.current?.contains(target);
+      if (!inTrigger && !inPopover) setCityOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setCityOpen(false);
@@ -151,56 +192,74 @@ export default function HomeHero({
                 >
                   {cityLabel}.
                 </button>
-                {cityOpen && (
-                  <div
-                    role="listbox"
-                    aria-label="Choose a city"
-                    className="absolute left-1/2 lg:left-0 -translate-x-1/2 lg:translate-x-0 top-[calc(100%+8px)] z-30 min-w-[220px] bg-white border border-[#ebe7d8] rounded-2xl py-1 shadow-[0_8px_24px_rgba(31,36,23,0.10)] font-sans tracking-normal leading-tight"
-                  >
-                    {cities.map((c) => {
-                      const isSelected = (selectedCity ?? DEFAULT_CITY) === c;
-                      return (
+                {mounted && cityOpen && popoverPos &&
+                  createPortal(
+                    <div
+                      ref={popoverRef}
+                      role="listbox"
+                      aria-label="Choose a city"
+                      style={{
+                        position: "fixed",
+                        top: popoverPos.top,
+                        left: popoverPos.left,
+                        minWidth: popoverPos.minWidth,
+                        fontFamily:
+                          "var(--font-inter), -apple-system, BlinkMacSystemFont, 'SF Pro Text', Roboto, Arial, sans-serif",
+                        fontSize: 14,
+                        lineHeight: 1.25,
+                        letterSpacing: "normal",
+                        fontWeight: 500,
+                      }}
+                      className="z-[60] bg-white border border-[#ebe7d8] rounded-2xl py-1 shadow-[0_8px_24px_rgba(31,36,23,0.10)]"
+                    >
+                      {cities.map((c) => {
+                        const isSelected =
+                          (selectedCity ?? DEFAULT_CITY) === c;
+                        return (
+                          <button
+                            key={c}
+                            type="button"
+                            role="option"
+                            aria-selected={isSelected}
+                            onClick={() => {
+                              onCityChange(c);
+                              setCityOpen(false);
+                            }}
+                            style={{ fontSize: 14, lineHeight: 1.25 }}
+                            className={[
+                              "w-full text-left px-4 py-2 font-semibold",
+                              isSelected
+                                ? "text-[#4d5b27] bg-[#eef0e0]"
+                                : "text-[#16190f] hover:bg-[#faf8f1]",
+                            ].join(" ")}
+                          >
+                            {c}
+                          </button>
+                        );
+                      })}
+                      <div className="border-t border-[#ebe7d8] mt-0.5 pt-0.5">
                         <button
-                          key={c}
                           type="button"
                           role="option"
-                          aria-selected={isSelected}
+                          aria-selected={selectedCity === null}
                           onClick={() => {
-                            onCityChange(c);
+                            onCityChange(null);
                             setCityOpen(false);
                           }}
+                          style={{ fontSize: 14, lineHeight: 1.25 }}
                           className={[
-                            "w-full text-left px-4 py-2 text-[14px] font-semibold leading-tight",
-                            isSelected
+                            "w-full text-left px-4 py-2 font-semibold",
+                            selectedCity === null
                               ? "text-[#4d5b27] bg-[#eef0e0]"
                               : "text-[#16190f] hover:bg-[#faf8f1]",
                           ].join(" ")}
                         >
-                          {c}
+                          Anywhere
                         </button>
-                      );
-                    })}
-                    <div className="border-t border-[#ebe7d8] mt-0.5 pt-0.5">
-                      <button
-                        type="button"
-                        role="option"
-                        aria-selected={selectedCity === null}
-                        onClick={() => {
-                          onCityChange(null);
-                          setCityOpen(false);
-                        }}
-                        className={[
-                          "w-full text-left px-4 py-2 text-[14px] font-semibold leading-tight",
-                          selectedCity === null
-                            ? "text-[#4d5b27] bg-[#eef0e0]"
-                            : "text-[#16190f] hover:bg-[#faf8f1]",
-                        ].join(" ")}
-                      >
-                        Anywhere
-                      </button>
-                    </div>
-                  </div>
-                )}
+                      </div>
+                    </div>,
+                    document.body,
+                  )}
               </span>
             </h1>
 
