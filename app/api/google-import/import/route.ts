@@ -115,6 +115,116 @@ function sanitizeImportedPhotos(value: unknown): ImportPhotoInput[] {
   return out;
 }
 
+type StorageClient = {
+  storage: {
+    from: (bucket: string) => {
+      upload: (
+        path: string,
+        body: ArrayBuffer | Uint8Array | Blob,
+        opts?: { contentType?: string; cacheControl?: string; upsert?: boolean }
+      ) => Promise<{ error: { message?: string } | null }>;
+      getPublicUrl: (path: string) => { data: { publicUrl: string } };
+    };
+  };
+};
+
+/**
+ * If a Google Places proxy URL (/api/google/photo?reference=...) is detected,
+ * download the bytes from Google and re-host them in our Supabase Storage
+ * bucket ("place-photos/places/<placeId>/..."). Returns the supabase public
+ * URL. On any failure or for non-Google URLs, returns the original URL.
+ *
+ * Why: the proxy 302-redirects to lh3.googleusercontent.com, which Vercel's
+ * /_next/image optimizer rejects with INVALID_IMAGE_OPTIMIZE_REQUEST (400).
+ * Storing supabase URLs in `place_photos.url` lets every <Image> render
+ * cleanly without `unoptimized` workarounds.
+ */
+async function rehostGooglePhoto(
+  supabase: StorageClient,
+  placeId: string,
+  rawUrl: string,
+  googleApiKey: string | null
+): Promise<string> {
+  if (!rawUrl.startsWith("/api/google/photo")) return rawUrl;
+  if (!googleApiKey) return rawUrl;
+
+  try {
+    const parsed = new URL(rawUrl, "https://placeholder.local");
+    const reference = parsed.searchParams.get("reference");
+    if (!reference) return rawUrl;
+
+    const googleParams = new URLSearchParams({
+      maxwidth: "1600",
+      photo_reference: reference,
+      key: googleApiKey,
+    });
+    const res = await fetch(
+      `https://maps.googleapis.com/maps/api/place/photo?${googleParams.toString()}`,
+      { redirect: "follow" }
+    );
+    if (!res.ok) {
+      logger.warn("rehostGooglePhoto: Google fetch failed", res.status);
+      return rawUrl;
+    }
+
+    const contentType = res.headers.get("content-type") || "image/jpeg";
+    const ext = contentType.includes("png")
+      ? "png"
+      : contentType.includes("webp")
+      ? "webp"
+      : contentType.includes("gif")
+      ? "gif"
+      : "jpg";
+
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.byteLength === 0) {
+      logger.warn("rehostGooglePhoto: empty body from Google");
+      return rawUrl;
+    }
+
+    const uuid =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const path = `places/${placeId}/google-${uuid}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("place-photos")
+      .upload(path, bytes, {
+        contentType,
+        cacheControl: "86400",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      logger.warn("rehostGooglePhoto: upload failed", uploadError.message);
+      return rawUrl;
+    }
+
+    const { data } = supabase.storage.from("place-photos").getPublicUrl(path);
+    return data?.publicUrl || rawUrl;
+  } catch (err) {
+    logger.warn(
+      "rehostGooglePhoto: exception",
+      err instanceof Error ? err.message : String(err)
+    );
+    return rawUrl;
+  }
+}
+
+async function rehostGooglePhotos(
+  supabase: StorageClient,
+  placeId: string,
+  photos: ImportPhotoInput[],
+  googleApiKey: string | null
+): Promise<ImportPhotoInput[]> {
+  // Parallelize uploads — each is independent (different paths via uuid).
+  const urls = await Promise.all(
+    photos.map((p) => rehostGooglePhoto(supabase, placeId, p.url, googleApiKey))
+  );
+  return urls.map((url) => ({ url }));
+}
+
 function sanitizeSelectedFields(input: unknown): SelectedFieldsInput | null {
   if (!input || typeof input !== "object") return null;
   const raw = input as SelectedFieldsInput;
@@ -373,7 +483,20 @@ export async function POST(request: NextRequest) {
 
       // Replace photos if provided
       if (Array.isArray(selectedFields.photos)) {
-        const photos = selectedFields.photos.map((p) => p.url);
+        // Re-host any /api/google/photo URLs in Supabase Storage so that
+        // <Image> / next/image works on the resulting place pages without
+        // hitting Vercel's INVALID_IMAGE_OPTIMIZE_REQUEST on 302 sources.
+        const googleApiKeyForRehost =
+          process.env.GOOGLE_MAPS_API_KEY ||
+          process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
+          null;
+        const rehosted = await rehostGooglePhotos(
+          supabase as unknown as StorageClient,
+          targetPlaceId,
+          selectedFields.photos,
+          googleApiKeyForRehost
+        );
+        const photos = rehosted.map((p) => p.url);
 
         // If user selected photos, replace Photo tour
         if (photos.length > 0) {
@@ -655,8 +778,22 @@ export async function POST(request: NextRequest) {
         placeId: newPlace.id,
       });
 
+      // Re-host any /api/google/photo URLs in Supabase Storage so that
+      // <Image> / next/image works on the resulting place pages without
+      // hitting Vercel's INVALID_IMAGE_OPTIMIZE_REQUEST on 302 sources.
+      const googleApiKeyForRehost =
+        process.env.GOOGLE_MAPS_API_KEY ||
+        process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
+        null;
+      const rehostedPhotos = await rehostGooglePhotos(
+        supabase as unknown as StorageClient,
+        newPlace.id,
+        selectedFields.photos,
+        googleApiKeyForRehost
+      );
+
       // Filter out invalid photos and map to insert format
-      const photoInserts = selectedFields.photos
+      const photoInserts = rehostedPhotos
         .map((photo, index: number) => ({
           place_id: newPlace.id,
           user_id: user.id,
