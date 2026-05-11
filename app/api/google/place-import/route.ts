@@ -42,6 +42,8 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 10; // 10 requests per minute per user
+const MAX_QUERY_LENGTH = 2048;
+const MAX_TOKEN_LENGTH = 20_000;
 
 // Response cache: simple in-memory cache (in production, use Redis or similar)
 const responseCache = new Map<string, { data: unknown; cachedAt: number }>();
@@ -961,21 +963,44 @@ function normalizePlaceData(
 export async function POST(request: NextRequest) {
   try {
     // Get request body
-    const body = await request.json();
-    const { query, access_token } = body;
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        { error: "Invalid JSON body", code: "INVALID_JSON" },
+        { status: 400 }
+      );
+    }
+    const { query, access_token } = body as {
+      query?: unknown;
+      google_url?: unknown;
+      access_token?: unknown;
+    };
 
     // Support both 'query' and 'google_url' for backward compatibility
-    const inputQuery = query || body.google_url;
+    const inputQuery = query || (body as { google_url?: unknown }).google_url;
 
     if (!inputQuery || typeof inputQuery !== "string" || inputQuery.trim().length === 0) {
       return NextResponse.json(
-        { error: "Invalid request: query is required (can be a Google Maps URL or address text)" },
+        { error: "Invalid request: query is required (can be a Google Maps URL or address text)", code: "INVALID_QUERY" },
         { status: 400 }
       );
     }
 
     const trimmedQuery = inputQuery.trim();
+    if (trimmedQuery.length > MAX_QUERY_LENGTH) {
+      return NextResponse.json(
+        { error: "Query is too long", code: "QUERY_TOO_LONG" },
+        { status: 400 }
+      );
+    }
     const queryIsUrl = isUrl(trimmedQuery);
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return NextResponse.json(
+        { error: "Server configuration error", code: "MISSING_SUPABASE_CONFIG" },
+        { status: 500 }
+      );
+    }
 
     // Create Supabase client for server-side
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -987,7 +1012,7 @@ export async function POST(request: NextRequest) {
 
     // Authenticate user
     let user = null;
-    if (access_token) {
+    if (typeof access_token === "string" && access_token.length <= MAX_TOKEN_LENGTH) {
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(access_token);
       if (!authError && authUser) {
         user = authUser;
@@ -998,10 +1023,12 @@ export async function POST(request: NextRequest) {
     if (!user) {
       const authHeader = request.headers.get("authorization");
       if (authHeader?.startsWith("Bearer ")) {
-        const token = authHeader.replace("Bearer ", "");
-        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
-        if (!authError && authUser) {
-          user = authUser;
+        const token = authHeader.replace("Bearer ", "").trim();
+        if (token.length > 0 && token.length <= MAX_TOKEN_LENGTH) {
+          const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+          if (!authError && authUser) {
+            user = authUser;
+          }
         }
       }
     }
@@ -1023,7 +1050,7 @@ export async function POST(request: NextRequest) {
     // Fallback to NEXT_PUBLIC_GOOGLE_MAPS_API_KEY for development convenience
     const googleApiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     if (!googleApiKey) {
-      console.error("GOOGLE_MAPS_API_KEY is not set in environment variables");
+      logger.error("GOOGLE_MAPS_API_KEY is not set in environment variables");
       return NextResponse.json(
         { 
           error: "Google Maps API key is not configured. Please add GOOGLE_MAPS_API_KEY to your .env.local file.",
@@ -1099,7 +1126,7 @@ export async function POST(request: NextRequest) {
       
       // If still no place_id but we have geocode data, we'll use it
       if (!placeId && !geocodeData && !queryIsUrl) {
-        console.error("Could not find place from query:", {
+        logger.warn("Could not find place from query:", {
           query: trimmedQuery.substring(0, 100),
           isUrl: queryIsUrl,
           extractedPlaceId: null,
@@ -1189,7 +1216,7 @@ export async function POST(request: NextRequest) {
       placeData = await getPlaceDetails(googleApiKey, placeId);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error("Error getting place details:", errorMessage);
+      logger.error("Error getting place details:", errorMessage);
       
       // Check for API permission errors
       if (errorMessage.includes("permission") || errorMessage.includes("Places API") || errorMessage.includes("API key")) {
@@ -1207,7 +1234,7 @@ export async function POST(request: NextRequest) {
     }
     
     if (!placeData || !placeData.place_id) {
-      console.error("Place details API returned invalid data:", { placeId, placeData });
+      logger.error("Place details API returned invalid data:", { placeId, placeData });
       return NextResponse.json(
         { 
           error: "Invalid place data received from Google Maps API.",
@@ -1234,7 +1261,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(normalizedData);
   } catch (error: unknown) {
-    console.error("Place import error:", error);
+    logger.error("Place import error:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);
     
     // Check for API permission errors

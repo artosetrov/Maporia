@@ -153,6 +153,10 @@ Runtime guards:
 
 `/api/google-import/search` requires an authenticated Supabase user, validates JSON/query length, caches successful Place details responses in memory for 1 hour, and applies an in-memory per-user rate limit of 12 requests/minute before calling Google Places.
 
+`/api/google/place-import` powers the newer import preview flow. It rejects invalid JSON, overlong query/token input, missing Supabase config, and unauthenticated users before calling Google APIs, then applies a per-user 10 requests/minute rate limit.
+
+`/api/google-import/import` requires authenticated Premium/admin access before using the service-role client for writes. It validates JSON, place IDs, selected fields, coordinate ranges, URL fields, and imported photo count/URLs. Existing-place imports verify owner/admin access, reject duplicate Google Place IDs, and insert replacement photos before deleting old photo rows so a failed photo insert does not wipe the existing tour.
+
 Google Places photo previews must go through `/api/google/photo`. The route validates reference/width, applies a lightweight IP rate limit, streams image bytes from Google, and never returns a Google URL containing the API key.
 
 ### Resolve APIs

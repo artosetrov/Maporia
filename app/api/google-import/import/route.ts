@@ -9,6 +9,22 @@ import {
 import type { Profile } from "@/app/types";
 
 type ImportProfileRow = Pick<Profile, "role" | "subscription_status" | "is_admin">;
+type ImportPhotoInput = { url: string };
+type SelectedFieldsInput = {
+  title?: boolean;
+  titleData?: string | null;
+  address?: boolean;
+  addressData?: string | null;
+  description?: boolean;
+  descriptionData?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  google_maps_url?: string | null;
+  city?: string | null;
+  city_state?: string | null;
+  city_country?: string | null;
+  photos?: ImportPhotoInput[];
+};
 type CityResolverClient = {
   rpc: (
     fn: "get_or_create_city",
@@ -36,6 +52,14 @@ type CityResolverClient = {
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 // Service role key is required for import operations (needs to bypass RLS for place creation)
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const MAX_ID_LENGTH = 256;
+const MAX_TEXT_LENGTH = 10_000;
+const MAX_URL_LENGTH = 2048;
+const MAX_IMPORTED_PHOTOS = 12;
+
+function jsonError(error: string, status: number, code?: string, details?: string) {
+  return NextResponse.json({ error, code, details }, { status });
+}
 
 function hasPremiumAccessFromProfile(profile: ImportProfileRow | null): boolean {
   if (!profile) return false;
@@ -43,6 +67,75 @@ function hasPremiumAccessFromProfile(profile: ImportProfileRow | null): boolean 
   if (profile.role === "admin" || profile.role === "premium") return true;
   if (profile.subscription_status === "active") return true;
   return false;
+}
+
+function isNonEmptyString(value: unknown, maxLength = MAX_TEXT_LENGTH): value is string {
+  return typeof value === "string" && value.trim().length > 0 && value.length <= maxLength;
+}
+
+function optionalString(value: unknown, maxLength = MAX_TEXT_LENGTH): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, maxLength);
+}
+
+function optionalHttpUrl(value: unknown, maxLength = MAX_URL_LENGTH): string | null {
+  const url = optionalString(value, maxLength);
+  if (!url) return null;
+  if (url.startsWith("/api/google/photo?")) return url;
+
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseCoordinate(value: unknown, min: number, max: number): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) return null;
+  return parsed;
+}
+
+function sanitizeImportedPhotos(value: unknown): ImportPhotoInput[] {
+  if (!Array.isArray(value)) return [];
+  const out: ImportPhotoInput[] = [];
+
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const url = optionalHttpUrl((item as { url?: unknown }).url, MAX_URL_LENGTH);
+    if (!url) continue;
+    out.push({ url });
+    if (out.length >= MAX_IMPORTED_PHOTOS) break;
+  }
+
+  return out;
+}
+
+function sanitizeSelectedFields(input: unknown): SelectedFieldsInput | null {
+  if (!input || typeof input !== "object") return null;
+  const raw = input as SelectedFieldsInput;
+  const lat = parseCoordinate(raw.lat, -90, 90);
+  const lng = parseCoordinate(raw.lng, -180, 180);
+
+  return {
+    title: raw.title === true,
+    titleData: optionalString(raw.titleData, 200),
+    address: raw.address === true,
+    addressData: optionalString(raw.addressData, 500),
+    description: raw.description === true,
+    descriptionData: optionalString(raw.descriptionData, 5000),
+    lat,
+    lng,
+    google_maps_url: optionalHttpUrl(raw.google_maps_url, MAX_URL_LENGTH),
+    city: optionalString(raw.city, 120),
+    city_state: optionalString(raw.city_state, 120),
+    city_country: optionalString(raw.city_country, 120),
+    photos: sanitizeImportedPhotos(raw.photos),
+  };
 }
 
 async function resolveCityId(
@@ -67,7 +160,7 @@ async function resolveCityId(
   });
 
   if (rpcError || !cityId) {
-    console.error("Failed to resolve city via get_or_create_city:", rpcError);
+    logger.error("Failed to resolve city via get_or_create_city:", rpcError);
     return null;
   }
 
@@ -84,39 +177,42 @@ async function resolveCityId(
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return jsonError("Invalid JSON body", 400, "INVALID_JSON");
+    }
     const { 
       google_place_id,
       target_place_id,
-      selectedFields,
       access_token 
-    } = body;
+    } = body as {
+      google_place_id?: unknown;
+      target_place_id?: unknown;
+      selectedFields?: unknown;
+      access_token?: unknown;
+    };
+    const selectedFields = sanitizeSelectedFields((body as { selectedFields?: unknown }).selectedFields);
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      return NextResponse.json(
-        { error: "Server misconfiguration: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required", code: "MISSING_SUPABASE_CONFIG" },
-        { status: 500 }
+      return jsonError(
+        "Server misconfiguration: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required",
+        500,
+        "MISSING_SUPABASE_CONFIG"
       );
     }
 
-    if (!google_place_id || typeof google_place_id !== "string") {
-      return NextResponse.json(
-        { error: "Invalid request: google_place_id is required" },
-        { status: 400 }
-      );
+    if (!isNonEmptyString(google_place_id, MAX_ID_LENGTH)) {
+      return jsonError("Invalid request: google_place_id is required", 400, "INVALID_GOOGLE_PLACE_ID");
     }
 
-    if (!selectedFields || typeof selectedFields !== "object") {
-      return NextResponse.json(
-        { error: "Invalid request: selectedFields is required" },
-        { status: 400 }
-      );
+    if (!selectedFields) {
+      return jsonError("Invalid request: selectedFields is required", 400, "INVALID_SELECTED_FIELDS");
     }
 
     // Authenticate user first
     let user = null;
-    if (!access_token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!isNonEmptyString(access_token, 20_000)) {
+      return jsonError("Unauthorized", 401, "UNAUTHORIZED");
     }
 
     // Create Supabase client with service role key for all operations
@@ -131,8 +227,8 @@ export async function POST(request: NextRequest) {
     // Verify user authentication
     const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(access_token);
     if (authError || !authUser) {
-      console.error("Authentication error:", authError);
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      logger.warn("Authentication error:", authError);
+      return jsonError("Unauthorized", 401, "UNAUTHORIZED");
     }
     user = authUser;
 
@@ -146,25 +242,25 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (profileError) {
-        console.error("Failed to load profile for access check:", profileError);
+        logger.error("Failed to load profile for access check:", profileError);
+        return jsonError("Could not verify access.", 500, "ACCESS_CHECK_FAILED");
       } else {
         isAdmin = !!profile?.is_admin || profile?.role === "admin";
         const ok = hasPremiumAccessFromProfile(profile as ImportProfileRow | null);
         if (!ok) {
-          return NextResponse.json(
-            {
-              error: "Premium required to create places.",
-              code: "PREMIUM_REQUIRED",
-            },
-            { status: 403 }
-          );
+          return jsonError("Premium required to create places.", 403, "PREMIUM_REQUIRED");
         }
       }
     } catch (e) {
-      console.error("Access check exception:", e);
+      logger.error("Access check exception:", e);
+      return jsonError("Could not verify access.", 500, "ACCESS_CHECK_FAILED");
     }
 
     // If we're importing into an existing place, update it instead of creating a new one
+    if (target_place_id !== undefined && target_place_id !== null && !isNonEmptyString(target_place_id, MAX_ID_LENGTH)) {
+      return jsonError("Invalid target_place_id", 400, "INVALID_TARGET_PLACE_ID");
+    }
+
     if (target_place_id && typeof target_place_id === "string") {
       const targetPlaceId = target_place_id;
 
@@ -199,7 +295,7 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (existingByGoogleIdError && existingByGoogleIdError.code !== "PGRST116") {
-        console.error("Error checking google_place_id duplicate:", existingByGoogleIdError);
+        logger.error("Error checking google_place_id duplicate:", existingByGoogleIdError);
         return NextResponse.json(
           { error: "Failed to check for duplicate place", code: "DUPLICATE_CHECK_ERROR" },
           { status: 500 }
@@ -235,12 +331,14 @@ export async function POST(request: NextRequest) {
 
       // City auto-fill for Location page (if available from Google response)
       if (selectedFields?.city && typeof selectedFields.city === "string" && selectedFields.city.trim().length > 0) {
+        const updateLat = typeof updates.lat === "number" ? updates.lat : selectedFields.lat ?? null;
+        const updateLng = typeof updates.lng === "number" ? updates.lng : selectedFields.lng ?? null;
         const resolved = await resolveCityId(supabase as unknown as CityResolverClient, {
           name: selectedFields.city,
           state: selectedFields.city_state || null,
           country: selectedFields.city_country || null,
-          lat: updates.lat ?? selectedFields.lat ?? null,
-          lng: updates.lng ?? selectedFields.lng ?? null,
+          lat: updateLat,
+          lng: updateLng,
         });
         if (resolved) {
           updates.city = resolved.name; // legacy
@@ -266,7 +364,7 @@ export async function POST(request: NextRequest) {
         .select("id");
 
       if (updateError || !updatedRows?.length) {
-        console.error("Error updating place from import:", updateError);
+        logger.error("Error updating place from import:", updateError);
         return NextResponse.json(
           { error: "Failed to update place", details: updateError?.message || "No rows updated (check RLS).", code: "UPDATE_ERROR" },
           { status: 500 }
@@ -274,28 +372,24 @@ export async function POST(request: NextRequest) {
       }
 
       // Replace photos if provided
-      if (Array.isArray(selectedFields?.photos)) {
-        const selectedPhotos = selectedFields.photos as unknown[];
-        const photos = selectedPhotos
-          .filter((p: unknown): p is { url: string } => {
-            return Boolean(
-              p &&
-                typeof p === "object" &&
-                typeof (p as { url?: unknown }).url === "string" &&
-                (p as { url: string }).url.length > 0,
-            );
-          })
-          .map((p) => p.url);
+      if (Array.isArray(selectedFields.photos)) {
+        const photos = selectedFields.photos.map((p) => p.url);
 
         // If user selected photos, replace Photo tour
         if (photos.length > 0) {
-          const { error: deletePhotosError } = await supabase
+          const { data: existingPhotos, error: existingPhotosError } = await supabase
             .from("place_photos")
-            .delete()
+            .select("id")
             .eq("place_id", targetPlaceId);
 
-          if (deletePhotosError) {
-            console.error("Failed to clear existing place photos:", deletePhotosError);
+          if (existingPhotosError) {
+            logger.error("Failed to load existing place photos:", existingPhotosError);
+            return jsonError(
+              "Failed to replace imported photos",
+              500,
+              "PHOTO_REPLACE_ERROR",
+              existingPhotosError.message
+            );
           }
 
           const photoInserts = photos.map((url: string, index: number) => ({
@@ -308,16 +402,46 @@ export async function POST(request: NextRequest) {
 
           const { error: insertPhotosError } = await supabase
             .from("place_photos")
-            .insert(photoInserts);
+            .insert(photoInserts)
+            .select("id");
 
           if (insertPhotosError) {
-            console.error("Failed to insert imported photos:", insertPhotosError);
-          } else {
-            // Keep legacy cover_url in sync for older parts of the app
-            await supabase
-              .from("places")
-              .update({ cover_url: photos[0] })
-              .eq("id", targetPlaceId);
+            logger.error("Failed to insert imported photos:", insertPhotosError);
+            return jsonError(
+              "Failed to insert imported photos",
+              500,
+              "PHOTO_INSERT_ERROR",
+              insertPhotosError.message
+            );
+          }
+
+          const oldPhotoIds = (existingPhotos ?? [])
+            .map((photo) => (photo as { id?: unknown }).id)
+            .filter((id): id is string => typeof id === "string" && id.length > 0);
+          if (oldPhotoIds.length > 0) {
+            const { error: deletePhotosError } = await supabase
+              .from("place_photos")
+              .delete()
+              .in("id", oldPhotoIds);
+
+            if (deletePhotosError) {
+              logger.error("Failed to clear existing place photos:", deletePhotosError);
+              return jsonError(
+                "Failed to replace imported photos",
+                500,
+                "PHOTO_REPLACE_ERROR",
+                deletePhotosError.message
+              );
+            }
+          }
+
+          // Keep legacy cover_url in sync for older parts of the app
+          const { error: coverUpdateError } = await supabase
+            .from("places")
+            .update({ cover_url: photos[0] })
+            .eq("id", targetPlaceId);
+          if (coverUpdateError) {
+            logger.warn("Failed to sync imported cover_url:", coverUpdateError.message);
           }
         }
       }
@@ -357,7 +481,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
-      console.error("Error checking for duplicate:", checkError);
+      logger.error("Error checking for duplicate:", checkError);
       return NextResponse.json(
         { error: "Failed to check for duplicate place" },
         { status: 500 }
@@ -462,7 +586,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError) {
-      console.error("Error inserting place:", {
+      logger.error("Error inserting place:", {
         error: insertError,
         code: insertError.code,
         message: insertError.message,
@@ -525,7 +649,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle photos if selected
-    if (selectedFields.photos && Array.isArray(selectedFields.photos) && selectedFields.photos.length > 0) {
+    if (selectedFields.photos && selectedFields.photos.length > 0) {
       logger.debug("Inserting photos:", {
         photoCount: selectedFields.photos.length,
         placeId: newPlace.id,
@@ -533,8 +657,7 @@ export async function POST(request: NextRequest) {
 
       // Filter out invalid photos and map to insert format
       const photoInserts = selectedFields.photos
-        .filter((photo: { url?: string }) => photo && photo.url && typeof photo.url === 'string')
-        .map((photo: { url: string }, index: number) => ({
+        .map((photo, index: number) => ({
           place_id: newPlace.id,
           user_id: user.id,
           url: photo.url,
@@ -554,8 +677,14 @@ export async function POST(request: NextRequest) {
           .select("id, url");
 
         if (photosError) {
-          console.error("Error inserting photos:", photosError);
-          // Don't fail the request if photos fail, just log it
+          logger.error("Error inserting photos:", photosError);
+          await supabase.from("places").delete().eq("id", newPlace.id);
+          return jsonError(
+            "Failed to insert imported photos",
+            500,
+            "PHOTO_INSERT_ERROR",
+            photosError.message
+          );
         } else {
           logger.debug("Successfully inserted photos:", {
             count: insertedPhotos?.length || 0,
@@ -603,7 +732,7 @@ export async function POST(request: NextRequest) {
       success: true,
     });
   } catch (error: unknown) {
-    console.error("Import error:", error);
+    logger.error("Import error:", error);
     const message = error instanceof Error ? error.message : "Failed to import place";
     return NextResponse.json(
       { error: message, code: "IMPORT_ERROR" },
