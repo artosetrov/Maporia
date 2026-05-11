@@ -9,7 +9,7 @@ import { HOME_TABS, type HomeKind } from "../types/home";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { getCitiesWithPlaces, type City } from "../lib/cities";
 import { supabase } from "../lib/supabase";
-import { fetchTopCities, topCityNames } from "../lib/topCities";
+import { fetchTopCities, topCityNames, type TopCity } from "../lib/topCities";
 import Icon, { type IconName } from "./Icon";
 import { sanitizePostgrestValueForLike, tokenizeQuery, buildTokenSearchExpr } from "../utils";
 import {
@@ -214,11 +214,13 @@ export default function SearchModal({
   const [tempSelectedTags, setTempSelectedTags] = useState<string[]>(initialSelectedTags);
   const [tempSelectedKind, setTempSelectedKind] = useState<HomeKind | null>(initialKind);
   const [cities, setCities] = useState<City[]>([]);
+  const [topCities, setTopCities] = useState<TopCity[]>([]);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [placesCount, setPlacesCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [recentSearches, setRecentSearches] = useState<Array<{ city: string | null; query: string; tags?: string[] }>>([]);
   const [tagCounts, setTagCounts] = useState<Record<string, number>>({});
+  const [suggestedCityCounts, setSuggestedCityCounts] = useState<Record<string, number>>({});
   // Счётчики на шаге Type. null = ещё не загружено.
   const [kindCounts, setKindCounts] = useState<Record<HomeKind, number | null>>({
     location: null,
@@ -277,6 +279,7 @@ export default function SearchModal({
           citiesData,
           topCityNames(topCities),
         );
+        setTopCities(topCities);
         setCities(orderedCities);
         populateCityCoordsCache(orderedCities);
       } catch (err: unknown) {
@@ -904,6 +907,67 @@ export default function SearchModal({
     [cities, currentCity],
   );
 
+  const topCityCountByName = useMemo(
+    () =>
+      Object.fromEntries(
+        topCities.map(({ city, total }) => [city.toLowerCase(), total]),
+      ) as Record<string, number>,
+    [topCities],
+  );
+
+  const suggestedCityNames = useMemo(
+    () => [currentCity, ...popularCities.map((city) => city.name)],
+    [currentCity, popularCities],
+  );
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const baseCounts = Object.fromEntries(
+      suggestedCityNames.flatMap((cityName) => {
+        const count = topCityCountByName[cityName.toLowerCase()];
+        return count === undefined ? [] : [[cityName.toLowerCase(), count] as const];
+      }),
+    );
+
+    setSuggestedCityCounts(baseCounts);
+
+    const missingCityNames = suggestedCityNames.filter(
+      (cityName) => topCityCountByName[cityName.toLowerCase()] === undefined,
+    );
+
+    if (missingCityNames.length === 0) {
+      return () => {
+        isCancelled = true;
+      };
+    }
+
+    (async () => {
+      const resolvedCounts = await Promise.all(
+        missingCityNames.map(async (cityName) => [
+          cityName.toLowerCase(),
+          await getFilteredPlacesCount(cityName, [], "", null),
+        ] as const),
+      );
+
+      if (isCancelled) return;
+
+      setSuggestedCityCounts({
+        ...baseCounts,
+        ...Object.fromEntries(resolvedCounts),
+      });
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [getFilteredPlacesCount, suggestedCityNames, topCityCountByName]);
+
+  const formatLocationsCount = useCallback((count?: number) => {
+    if (count === undefined) return null;
+    return `${count.toLocaleString()} ${count === 1 ? "location" : "locations"}`;
+  }, []);
+
   if (!isOpen) return null;
 
   const modalEl = (
@@ -1006,7 +1070,16 @@ export default function SearchModal({
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-[#1F2A1F] font-medium text-base mb-0.5">{currentCity}</div>
-                    <div className="text-sm text-[#6F7A5A]">Current location</div>
+                    <div className="text-sm text-[#6F7A5A]">
+                      {(() => {
+                        const countLabel = formatLocationsCount(
+                          suggestedCityCounts[currentCity.toLowerCase()],
+                        );
+                        return countLabel
+                          ? `Current location · ${countLabel}`
+                          : "Current location";
+                      })()}
+                    </div>
                   </div>
                 </button>
 
@@ -1033,7 +1106,16 @@ export default function SearchModal({
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-[#1F2A1F] font-medium text-base mb-0.5">{city.name}</div>
-                        <div className="text-sm text-[#6F7A5A]">Popular destination</div>
+                        <div className="text-sm text-[#6F7A5A]">
+                          {(() => {
+                            const countLabel = formatLocationsCount(
+                              suggestedCityCounts[city.name.toLowerCase()],
+                            );
+                            return countLabel
+                              ? `Popular destination · ${countLabel}`
+                              : "Popular destination";
+                          })()}
+                        </div>
                       </div>
                     </button>
                   );

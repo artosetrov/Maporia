@@ -188,6 +188,9 @@ export default function BecomeProviderModal({ isOpen, onClose }: Props) {
   if (typeof window === "undefined") return null;
 
   const selectedCount = selected.size;
+  const selectedTitles = KIND_OPTIONS.filter((opt) => selected.has(opt.kind)).map(
+    (opt) => opt.title
+  );
   const nextLabel =
     selectedCount === 0
       ? "Continue"
@@ -206,10 +209,10 @@ export default function BecomeProviderModal({ isOpen, onClose }: Props) {
       <div
         ref={dialogRef}
         onClick={(e) => e.stopPropagation()}
-        className="w-full sm:max-w-[640px] bg-white rounded-t-3xl sm:rounded-3xl border border-[#ECEEE4] shadow-lg flex flex-col max-h-[calc(100vh-1rem)] sm:max-h-[calc(100vh-2rem)] animate-slide-up"
+        className="w-full sm:max-w-[920px] bg-white rounded-t-3xl sm:rounded-3xl border border-[#ECEEE4] shadow-lg flex flex-col max-h-[calc(100vh-1rem)] sm:max-h-[calc(100vh-2rem)] animate-slide-up"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECEEE4] flex-shrink-0">
+        <div className="flex items-center justify-between border-b border-[#ECEEE4] px-5 py-3.5 flex-shrink-0">
           <div className="font-fraunces font-semibold text-[17px] text-[#1F2A1F]">
             What would you like to host?
           </div>
@@ -236,20 +239,68 @@ export default function BecomeProviderModal({ isOpen, onClose }: Props) {
         </div>
 
         {/* Body */}
-        <div className="px-5 py-6 overflow-y-auto flex-1">
-          <div className="mb-5">
-            <h2
-              id="become-provider-title"
-              className="font-fraunces text-xl sm:text-2xl font-semibold text-[#1F2A1F] mb-1"
-            >
-              Pick one or more types
-            </h2>
-            <p className="text-sm text-[#6F7A5A]">
-              You can mix types — for example, a location with a service. We&apos;ll suggest the right plan after you fill the details.
-            </p>
+        <div className="relative flex-1 overflow-y-auto bg-[#FFFEFB] px-4 py-4 sm:overflow-visible sm:px-5 sm:py-5">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top,rgba(164,185,104,0.18),transparent_64%)]" />
+          <div className="pointer-events-none absolute right-0 top-16 h-32 w-32 rounded-full bg-[#EEF2DE] blur-3xl opacity-70" />
+
+          <div className="relative mb-4 overflow-hidden rounded-[24px] border border-[#E6EAD9] bg-[linear-gradient(135deg,rgba(250,250,247,0.98)_0%,rgba(245,248,235,0.98)_55%,rgba(255,255,255,0.98)_100%)] p-4 shadow-[0_18px_38px_rgba(31,42,31,0.07)] sm:p-5">
+            <div className="pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full bg-[#A4B968]/20 blur-3xl" />
+            <div className="pointer-events-none absolute bottom-0 left-0 h-12 w-full bg-[linear-gradient(180deg,transparent_0%,rgba(164,185,104,0.06)_100%)]" />
+
+            <div className="relative flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-[30rem]">
+                <span className="inline-flex items-center gap-2 rounded-full border border-[#DDE5C2] bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#556036] shadow-[0_8px_18px_rgba(31,42,31,0.05)]">
+                  <span aria-hidden className="text-[13px] leading-none">
+                    ✦
+                  </span>
+                  Creator setup
+                </span>
+                <h2
+                  id="become-provider-title"
+                  className="mt-2.5 font-fraunces text-[24px] leading-[1.05] font-semibold text-[#1F2A1F] sm:text-[28px]"
+                >
+                  Pick one or more types
+                </h2>
+                <p className="mt-1.5 max-w-[36rem] text-[13px] leading-relaxed text-[#5E694B] sm:text-[14px]">
+                  You can mix formats, like a location with a service. Pick what you
+                  want to publish and Maporia will suggest the best plan after the
+                  details step.
+                </p>
+              </div>
+
+              <div className="min-w-[112px] rounded-2xl border border-[#E1E7CB] bg-white/90 px-3.5 py-2.5 text-left shadow-[0_14px_30px_rgba(31,42,31,0.06)]">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8B9770]">
+                  Selected
+                </div>
+                <div className="mt-1 text-base font-semibold text-[#1F2A1F]">
+                  {selectedCount === 0 ? "0 types" : `${selectedCount} type${selectedCount > 1 ? "s" : ""}`}
+                </div>
+              </div>
+            </div>
+
+            {selectedTitles.length > 0 ? (
+              <div className="relative mt-3 flex flex-wrap gap-2">
+                {selectedTitles.map((title) => (
+                  <span
+                    key={title}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[#DCE4C6] bg-white/95 px-3 py-1 text-[11px] font-medium text-[#44512F] shadow-[0_8px_18px_rgba(31,42,31,0.04)]"
+                  >
+                    <span aria-hidden className="text-[11px]">
+                      ✦
+                    </span>
+                    {title}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="relative mt-3 rounded-2xl border border-dashed border-[#DCE4C6] bg-white/65 px-4 py-2.5 text-[12px] leading-relaxed text-[#7A8660]">
+                Start with the format you know best. You can combine types now and
+                refine everything on the next step.
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3 sm:gap-3">
             {KIND_OPTIONS.map((opt) => {
               const isSelected = selected.has(opt.kind);
               const isCovered = planCoversKind(currentPlan, opt.kind);
@@ -259,15 +310,28 @@ export default function BecomeProviderModal({ isOpen, onClose }: Props) {
                   type="button"
                   onClick={() => toggle(opt.kind)}
                   aria-pressed={isSelected}
-                  className={`relative text-left rounded-2xl border-[1.5px] p-4 sm:p-5 flex flex-col gap-2.5 min-h-[180px] transition focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] focus:ring-offset-2 ${
+                  className={[
+                    "group relative overflow-hidden text-left rounded-[22px] border-[1.5px] p-3.5 sm:p-4",
+                    "flex min-h-[176px] sm:min-h-[168px] flex-col gap-2.5 transition duration-200",
+                    "focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] focus:ring-offset-2",
                     isSelected
-                      ? "border-[#8F9E4F] bg-[#8F9E4F]/[0.06]"
-                      : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F]"
-                  }`}
+                      ? "border-[#8F9E4F] bg-[linear-gradient(180deg,rgba(164,185,104,0.16)_0%,rgba(255,255,255,0.98)_100%)] shadow-[0_18px_42px_rgba(143,158,79,0.18)]"
+                      : "border-[#ECEEE4] bg-white/95 hover:-translate-y-0.5 hover:border-[#C9D6A0] hover:shadow-[0_18px_36px_rgba(31,42,31,0.08)]",
+                  ].join(" ")}
                 >
+                  <span
+                    aria-hidden
+                    className={[
+                      "pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full blur-2xl transition-opacity duration-200",
+                      isSelected
+                        ? "bg-[#A4B968]/35 opacity-100"
+                        : "bg-[#EEF2DE] opacity-80 group-hover:opacity-100",
+                    ].join(" ")}
+                  />
+
                   {/* Covered-бейдж: текущий план юзера уже покрывает этот kind */}
                   {isCovered && (
-                    <span className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-[#A4B968]/20 text-[#556036] text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5">
+                    <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full border border-[#D5DFB3] bg-white/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#556036] shadow-[0_8px_18px_rgba(31,42,31,0.05)]">
                       <svg
                         width="10"
                         height="10"
@@ -286,11 +350,12 @@ export default function BecomeProviderModal({ isOpen, onClose }: Props) {
                   )}
                   {/* Чекбокс — visual only; реальный state в кнопке через aria-pressed */}
                   <span
-                    className={`absolute top-3 right-3 w-[22px] h-[22px] rounded-md flex items-center justify-center transition border-2 ${
+                    className={[
+                      "absolute right-3 top-3 flex h-[24px] w-[24px] items-center justify-center rounded-lg border-2 transition",
                       isSelected
-                        ? "bg-[#8F9E4F] border-[#8F9E4F]"
-                        : "bg-white border-[#ECEEE4]"
-                    }`}
+                        ? "border-[#8F9E4F] bg-[#8F9E4F] shadow-[0_10px_18px_rgba(143,158,79,0.28)]"
+                        : "border-[#E1E6D3] bg-white",
+                    ].join(" ")}
                     aria-hidden
                   >
                     {isSelected && (
@@ -309,21 +374,49 @@ export default function BecomeProviderModal({ isOpen, onClose }: Props) {
                     )}
                   </span>
 
-                  <div
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center text-[26px] leading-none ${
-                      isSelected ? "bg-[#8F9E4F]/[0.12]" : "bg-[#FAFAF7]"
-                    }`}
-                  >
-                    {opt.emoji}
+                  <div className="relative pt-3">
+                    <span
+                      aria-hidden
+                      className={[
+                        "absolute left-1 top-4 h-9 w-9 rounded-full blur-xl",
+                        isSelected ? "bg-[#A4B968]/35" : "bg-[#EEF2DE]",
+                      ].join(" ")}
+                    />
+                    <div
+                      className={[
+                        "relative flex h-12 w-12 items-center justify-center rounded-2xl border text-[24px] leading-none shadow-[0_12px_25px_rgba(31,42,31,0.06)]",
+                        isSelected
+                          ? "border-[#D7E0B8] bg-white/90"
+                          : "border-[#F0F2E8] bg-[#FAFAF7]",
+                      ].join(" ")}
+                    >
+                      {opt.emoji}
+                    </div>
                   </div>
-                  <div className="font-fraunces font-semibold text-base text-[#1F2A1F]">
-                    {opt.title}
+
+                  <div className="relative">
+                    <div className="font-fraunces text-[18px] font-semibold text-[#1F2A1F]">
+                      {opt.title}
+                    </div>
+                    <div className="mt-1 line-clamp-2 text-[12px] leading-snug text-[#5F6A4D]">
+                      {opt.subtitle}
+                    </div>
                   </div>
-                  <div className="text-[13px] text-[#6F7A5A] leading-snug">
-                    {opt.subtitle}
-                  </div>
-                  <div className="text-[12px] text-[#A8B096] mt-auto">
-                    e.g. {opt.examples}
+
+                  <div className="mt-auto flex flex-wrap gap-1 pt-0.5">
+                    {opt.examples.split(", ").slice(0, 2).map((example) => (
+                      <span
+                        key={`${opt.kind}-${example}`}
+                        className={[
+                          "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium",
+                          isSelected
+                            ? "bg-white/90 text-[#556036]"
+                            : "bg-[#F6F8F0] text-[#869171]",
+                        ].join(" ")}
+                      >
+                        {example}
+                      </span>
+                    ))}
                   </div>
                 </button>
               );
@@ -331,25 +424,39 @@ export default function BecomeProviderModal({ isOpen, onClose }: Props) {
           </div>
 
           {suggested ? (
-            <div className="mt-4 text-[12px] bg-[#A4B968]/15 text-[#3F4A35] rounded-xl px-3 py-2.5 leading-relaxed flex items-start gap-2">
-              <span aria-hidden>💡</span>
-              <span>
-                Suggested plan:{" "}
-                <strong className="text-[#1F2A1F]">{suggested.name}</strong>
-                {" "}from {suggested.primary}{suggested.suffix}. You&apos;ll see
-                Monthly/Yearly options after you fill the form.
-              </span>
+            <div className="mt-3 overflow-hidden rounded-[22px] border border-[#DBE3C2] bg-[linear-gradient(135deg,rgba(164,185,104,0.2)_0%,rgba(255,255,255,0.98)_58%,rgba(248,250,241,0.98)_100%)] p-3.5 shadow-[0_18px_38px_rgba(31,42,31,0.07)]">
+              <div className="flex items-start gap-3">
+                <span
+                  aria-hidden
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/90 text-[16px] shadow-[0_10px_24px_rgba(31,42,31,0.08)]"
+                >
+                  ✨
+                </span>
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6D794E]">
+                    Best match
+                  </div>
+                  <p className="mt-1 text-[12px] leading-relaxed text-[#475438] sm:text-[13px]">
+                    Suggested plan:{" "}
+                    <strong className="text-[#1F2A1F]">{suggested.name}</strong>{" "}
+                    from {suggested.primary}
+                    {suggested.suffix}. You&apos;ll choose Monthly or Yearly after
+                    filling the details.
+                  </p>
+                </div>
+              </div>
             </div>
           ) : (
-            <div className="mt-4 text-[12px] text-[#A8B096] bg-[#FAFAF7] rounded-xl px-3 py-2.5 leading-relaxed">
-              💡 Pricing depends on the types you pick and is shown on the final
-              step. Filling out the form is free.
+            <div className="mt-3 rounded-[20px] border border-[#ECEEE4] bg-white/80 px-4 py-2.5 text-[12px] leading-relaxed text-[#7E8870] shadow-[0_10px_24px_rgba(31,42,31,0.04)]">
+              <span className="font-medium text-[#556036]">Heads up:</span> pricing
+              depends on the formats you pick and is shown on the final step.
+              Filling out the form is free.
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-3 px-5 py-4 border-t border-[#ECEEE4] bg-white flex-shrink-0">
+        <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-t border-[#ECEEE4] bg-white flex-shrink-0">
           <button
             type="button"
             onClick={onClose}

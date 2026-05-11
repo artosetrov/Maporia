@@ -1586,6 +1586,11 @@ export default function PlacePage(props: PageProps) {
           </div>
         )}
 
+        {/* Host page: experiences/services прицеплённые к этой локации через place_links */}
+        {place.kind === "location" && (
+          <LocationChildrenSection parentId={place.id} canEdit={canEdit} />
+        )}
+
         {/* Categories */}
         {categories.length > 0 && (
           <div className="pb-6 mb-6 border-b border-[#ECEEE4]">
@@ -2129,6 +2134,11 @@ export default function PlacePage(props: PageProps) {
                 <div className="text-xs text-[#8F9E4F]/60">{timeAgo(place.created_at)}</div>
               </div>
             </div>
+          )}
+
+          {/* Host page: experiences/services прицеплённые к этой локации через place_links */}
+          {place.kind === "location" && (
+            <LocationChildrenSection parentId={place.id} canEdit={canEdit} />
           )}
 
           {/* Categories */}
@@ -2730,12 +2740,6 @@ export default function PlacePage(props: PageProps) {
         </div>
       )}
 
-      {/* Host page: experiences/services прицеплённые к этой локации через place_links */}
-      {place.kind === "location" && (
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-10">
-          <LocationChildrenSection parentId={place.id} canEdit={canEdit} />
-        </div>
-      )}
     </main>
     </SectionErrorBoundary>
   );
