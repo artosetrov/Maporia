@@ -87,6 +87,29 @@ export const supabase = createClient<Database>(safeUrl, safeKey, {
   },
 });
 
+// Отдельный клиент для passwordless 6-digit OTP флоу.
+// Главный клиент использует flowType: 'pkce' (необходим для Google OAuth, security).
+// Но в PKCE-режиме `signInWithOtp` шлёт OTP с code_challenge, и сырой 6-значный
+// код через `verifyOtp` без `code_verifier` сервер отклоняет ("Invalid or expired").
+// Поэтому для AuthModal заводим отдельный implicit-flow клиент: он генерирует OTP
+// без PKCE-обёртки, и `verifyOtp({ token, email, type: 'email' })` работает напрямую.
+// Сессия после verifyOtp создаётся в storage этого клиента, но onAuthStateChange
+// в основном `supabase` тоже её увидит — оба клиента используют один localStorage
+// (по умолчанию key='sb-<project-ref>-auth-token').
+export const supabaseOtp = createClient<Database>(safeUrl, safeKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+    flowType: 'implicit',
+  },
+  global: {
+    headers: {
+      'x-client-info': 'maporia-web-otp',
+    },
+  },
+});
+
 /**
  * Checks if an error is related to refresh token issues
  */

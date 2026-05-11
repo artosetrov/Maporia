@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, KeyboardEvent, ClipboardEvent, FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { supabase, getAuthRedirectUrl } from "../lib/supabase";
+import { supabase, supabaseOtp, getAuthRedirectUrl } from "../lib/supabase";
 import Icon from "./Icon";
 
 export type AuthModalVariant = "default" | "profile" | "saved" | "premium";
@@ -129,7 +129,11 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
     setError(null);
     setLoading(true);
 
-    const { error: otpError } = await supabase.auth.signInWithOtp({
+    // Используем supabaseOtp (flowType: 'implicit') а не основной supabase (PKCE),
+    // потому что в PKCE-режиме 6-значный код через verifyOtp без code_verifier
+    // сервер отклоняет как "Invalid or expired". signInWithOtp + verifyOtp ДОЛЖНЫ
+    // идти через один и тот же клиент, иначе flow_state не совпадёт.
+    const { error: otpError } = await supabaseOtp.auth.signInWithOtp({
       email,
       options: {
         shouldCreateUser: true,
@@ -153,23 +157,35 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
     setError(null);
     setVerifying(true);
 
-    // Сначала пробуем как magiclink-OTP (для существующих юзеров signInWithOtp
-    // отправляет именно такой тип). Если юзер новый — fallback на 'email' (signup OTP).
-    // В PKCE-flow тип "email" без code_verifier фейлится с "Invalid or expired",
-    // поэтому пробуем 'magiclink' первым — он работает без verifier'а.
-    let { error: verifyError } = await supabase.auth.verifyOtp({
+    // verifyOtp на supabaseOtp (тот же клиент, что слал код).
+    // Тип "email" — стандартный для signInWithOtp в implicit-режиме.
+    // Magiclink-fallback на случай если сервер пометил OTP именно так.
+    let { error: verifyError } = await supabaseOtp.auth.verifyOtp({
       email,
       token: joinedCode,
-      type: "magiclink",
+      type: "email",
     });
 
     if (verifyError) {
-      const fallback = await supabase.auth.verifyOtp({
+      const fallback = await supabaseOtp.auth.verifyOtp({
         email,
         token: joinedCode,
-        type: "email",
+        type: "magiclink",
       });
       verifyError = fallback.error;
+    }
+
+    // После успешного verifyOtp сессия лежит в supabaseOtp.auth — нужно
+    // прокинуть её в основной supabase-клиент, чтобы onAuthStateChange
+    // и весь остальной app-код увидели логин.
+    if (!verifyError) {
+      const { data: sessionData } = await supabaseOtp.auth.getSession();
+      if (sessionData?.session) {
+        await supabase.auth.setSession({
+          access_token: sessionData.session.access_token,
+          refresh_token: sessionData.session.refresh_token,
+        });
+      }
     }
 
     setVerifying(false);
