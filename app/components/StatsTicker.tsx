@@ -12,8 +12,8 @@ import Icon, { type IconName } from "./Icon";
  * редизайна главной (Phase 4). Тот же источник данных, та же логика
  * «manual override побеждает live count», та же видимость через
  * `app_settings(id='stats_banner')`. Меняется ТОЛЬКО визуальная подача:
- *  • desktop (sm+) — горизонтальная строка с разделителями `·`;
- *  • <sm — блок не показываем (место на главной не занимает).
+ *  • desktop (sm+) — ряд мягких чипов (иконка + число + подпись);
+ *  • Видимость <sm — задаётся родителем (на главной: секция в page.tsx).
  *
  * v2 update: live-числа берутся из общего хука `useHomeKindCounts`
  * (тот же, что использует HomeTabsSegmented для бейджей и
@@ -64,28 +64,35 @@ export default function StatsTicker() {
     <div
       role="status"
       aria-label="Live Maporia stats"
-      className="hidden sm:block mt-4 mb-6 sm:mt-6 sm:mb-8"
+      className="mt-0 w-full mb-3 sm:mb-4"
     >
-      <div
-        className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2
-                      py-3 border-t border-b border-[#ECEEE4]
-                      text-[13px] text-[#5A5F4D]"
-      >
-        {visibleKeys.map((key, i) => {
+      <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 py-1">
+        {visibleKeys.map((key) => {
           const cfg = settings.metrics[key];
           const value = cfg.manual !== null ? cfg.manual : live[key];
           return (
-            <span key={key} className="inline-flex items-center gap-1.5">
-              <Icon name={ICONS[key]} size={16} className="text-[#6F7A5A]" />
-              <b className="text-[#1F2A1F] font-semibold">
-                {value == null ? "—" : fmt(value)}
-              </b>
-              <span className="text-[#6F7A5A]">{cfg.label}</span>
-              {i < visibleKeys.length - 1 && (
-                <span aria-hidden className="opacity-50 ml-2">
-                  ·
+            <span
+              key={key}
+              className={[
+                "inline-flex max-w-full min-w-0 items-center gap-2.5 rounded-2xl border border-[#e4e8da]",
+                "bg-white/95 px-3 py-2 shadow-[0_1px_3px_rgba(31,42,31,0.06)]",
+                "transition-[box-shadow,transform] duration-200 hover:shadow-[0_2px_8px_rgba(31,42,31,0.08)]",
+              ].join(" ")}
+            >
+              <span
+                aria-hidden
+                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#eef0e0] text-[#5d6b3f]"
+              >
+                <Icon name={ICONS[key]} size={16} />
+              </span>
+              <span className="min-w-0 text-left leading-tight">
+                <span className="block font-extrabold tabular-nums tracking-[-0.02em] text-[#16190f] text-[15px]">
+                  {value == null ? "—" : fmt(value)}
                 </span>
-              )}
+                <span className="mt-0.5 block text-[11px] font-medium text-[#6F7A5A]">
+                  {cfg.label}
+                </span>
+              </span>
             </span>
           );
         })}

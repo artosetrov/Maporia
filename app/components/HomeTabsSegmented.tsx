@@ -172,7 +172,7 @@ export default function HomeTabsSegmented({
                 <span
                   className={[
                     "min-w-0 text-center leading-tight",
-                    "max-sm:max-w-[min(7.25rem,26vw)] max-sm:line-clamp-2 max-sm:text-balance max-sm:text-[10px]",
+                    "max-sm:max-w-[min(7.25rem,26vw)] max-sm:line-clamp-2 max-sm:text-balance max-sm:text-[13px] max-sm:leading-snug",
                     "sm:whitespace-nowrap sm:text-[14px]",
                   ].join(" ")}
                 >

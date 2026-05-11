@@ -34,6 +34,25 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 // Response cache: simple in-memory cache (in production, use Redis or similar)
 const responseCache = new Map<string, { data: unknown; cachedAt: number }>();
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = 12;
+const MAX_QUERY_LENGTH = 2048;
+
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const limit = rateLimitMap.get(userId);
+
+  if (!limit || now > limit.resetAt) {
+    rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+
+  if (limit.count >= RATE_LIMIT_MAX_REQUESTS) return false;
+
+  limit.count++;
+  return true;
+}
 
 /**
  * Extract place_id from Google Maps URL
@@ -526,7 +545,13 @@ export async function POST(request: NextRequest) {
   try {
     logger.debug("📥 Received search request");
     
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        { error: "Invalid JSON body", code: "INVALID_JSON" },
+        { status: 400 }
+      );
+    }
     const { query, access_token } = body;
 
     logger.debug("📋 Request body:", {
@@ -545,6 +570,12 @@ export async function POST(request: NextRequest) {
     }
 
     const trimmedQuery = query.trim();
+    if (trimmedQuery.length > MAX_QUERY_LENGTH) {
+      return NextResponse.json(
+        { error: "Query is too long", code: "QUERY_TOO_LONG" },
+        { status: 400 }
+      );
+    }
     const queryIsUrl = isUrl(trimmedQuery);
 
     // Create Supabase client for server-side
@@ -566,6 +597,13 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!checkRateLimit(user.id)) {
+      return NextResponse.json(
+        { error: "Too many search requests. Please wait a minute and try again.", code: "RATE_LIMITED" },
+        { status: 429, headers: { "Retry-After": "60" } }
+      );
     }
 
     // Get Google API key

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
+import { logger } from "../lib/logger";
 import Icon from "./Icon";
 import { SkeletonBase } from "./Skeleton";
 import ImportPreviewCard from "./ImportPreviewCard";
@@ -83,7 +84,7 @@ function getPhotoUrl(photoReference: string, maxWidth: number = 800): string {
     const apiKey = getGoogleMapsApiKey();
     return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photo_reference=${photoReference}&key=${apiKey}`;
   } catch (error) {
-    console.error("Failed to get API key for photo URL:", error);
+    logger.warn("Failed to get API key for photo URL:", error);
     return `/api/google/photo?reference=${encodeURIComponent(photoReference)}&maxwidth=${maxWidth}`;
   }
 }
@@ -129,7 +130,7 @@ export default function GoogleImportField({
       }
 
       const trimmedQuery = query.trim();
-      console.log("🔍 Starting search:", {
+      logger.debug("Starting Google import search:", {
         query: trimmedQuery.substring(0, 100),
         isUrl: trimmedQuery.startsWith("http"),
         userId,
@@ -147,7 +148,7 @@ export default function GoogleImportField({
         }),
       });
 
-      console.log("📡 API response:", {
+      logger.debug("Google import API response:", {
         status: response.status,
         statusText: response.statusText,
         ok: response.ok,
@@ -157,12 +158,12 @@ export default function GoogleImportField({
       let data: GoogleImportApiResponse;
       try {
         const responseText = await response.text();
-        console.log("📄 Response text length:", responseText.length);
+        logger.debug("Google import response text length:", responseText.length);
         if (!responseText) {
           throw new Error("Empty response from server");
         }
         data = JSON.parse(responseText) as GoogleImportApiResponse;
-        console.log("✅ Parsed data:", {
+        logger.debug("Parsed Google import data:", {
           hasName: !!data?.name,
           hasAddress: !!data?.formatted_address,
           hasPhotos: !!(data?.photos && data.photos.length > 0),
@@ -172,12 +173,12 @@ export default function GoogleImportField({
           keys: data ? Object.keys(data).slice(0, 20) : [],
         });
       } catch (parseError) {
-        console.error("❌ Failed to parse API response:", parseError);
+        logger.error("Failed to parse API response:", parseError);
         throw new Error("Invalid response from server. Please try again.");
       }
 
       if (!response.ok) {
-        console.error("❌ API error:", {
+        logger.error("Google import API error:", {
           status: response.status,
           code: data?.code,
           error: data?.error,
@@ -198,7 +199,7 @@ export default function GoogleImportField({
 
       // Transform data from /api/google/place-import format to SearchResult format
       const photosArray = data.photos || data.photo_urls || [];
-      console.log("🖼️ Processing photos:", {
+      logger.debug("Processing imported photos:", {
         photosArrayLength: photosArray.length,
         firstPhoto: photosArray[0],
         photoType: typeof photosArray[0],
@@ -211,7 +212,7 @@ export default function GoogleImportField({
           : (photo.reference || photo.photo_reference || "");
         
         if (!photoRef || typeof photoRef !== 'string') {
-          console.warn("⚠️ Empty photo reference at index", index);
+          logger.warn("Empty photo reference at index", index);
           return null;
         }
         
@@ -241,7 +242,7 @@ export default function GoogleImportField({
         is_coordinate_only: data.is_coordinate_only === true,
       };
 
-      console.log("✅ Search result:", {
+      logger.debug("Google import search result:", {
         title: searchResult.title,
         address: searchResult.address?.substring(0, 50),
         photosCount: searchResult.photos.length,
@@ -263,7 +264,7 @@ export default function GoogleImportField({
           );
           router.push("/add/google/preview");
         } catch (e) {
-          console.error("Failed to save preview to sessionStorage", e);
+          logger.error("Failed to save preview to sessionStorage", e);
         }
         setSearching(false);
         return;
@@ -317,14 +318,14 @@ export default function GoogleImportField({
             }
           }
         } catch (aiErr) {
-          console.warn("AI preview generation failed:", aiErr);
+          logger.warn("AI preview generation failed:", aiErr);
           setDescriptionHint("Couldn't generate AI description. You can still import other fields.");
         } finally {
           setGeneratingDescription(false);
         }
       }
     } catch (error: unknown) {
-      console.error("Search error:", error);
+      logger.error("Search error:", error);
       setError(toErrorLike(error).message || "Failed to search place");
     } finally {
       setSearching(false);
@@ -395,7 +396,7 @@ export default function GoogleImportField({
       );
       selectedFieldsData.photos = selectedPhotos;
 
-      console.log("Preparing import data:", {
+      logger.debug("Preparing import data:", {
         hasTitle: selectedFieldsData.title && selectedFieldsData.titleData,
         hasAddress: selectedFieldsData.address && selectedFieldsData.addressData,
         hasDescription: selectedFieldsData.description && selectedFieldsData.descriptionData,
@@ -426,8 +427,8 @@ export default function GoogleImportField({
         }
         data = JSON.parse(responseText) as GoogleImportApiResponse;
       } catch (parseError) {
-        console.error("Failed to parse import response:", parseError);
-        console.error("Raw import response:", {
+        logger.error("Failed to parse import response:", parseError);
+        logger.debug("Raw import response:", {
           status: response.status,
           statusText: response.statusText,
           bodyPreview: responseText ? responseText.slice(0, 500) : "",
@@ -447,7 +448,7 @@ export default function GoogleImportField({
           return;
         }
 
-        console.error("Import API error:", {
+        logger.error("Import API error:", {
           status: response.status,
           statusText: response.statusText,
           code: data?.code,
@@ -486,7 +487,7 @@ export default function GoogleImportField({
       // Otherwise we created a new place — go to its editor
       window.location.href = `/places/${data.place_id}/edit`;
     } catch (error: unknown) {
-      console.error("Import error:", error);
+      logger.error("Import error:", error);
       setError(toErrorLike(error).message || "Failed to import place");
       setImporting(false);
     }

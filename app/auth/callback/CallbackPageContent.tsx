@@ -8,6 +8,24 @@ import { getSafeRedirectFrom } from "@/app/lib/authRedirect";
 
 const CALLBACK_TIMEOUT_MS = 8000;
 
+function getRecoveryRedirectTarget(rawNext: string | null): string {
+  if (!rawNext || !rawNext.startsWith("/auth/update-password")) {
+    return "/auth/update-password";
+  }
+  try {
+    const url = new URL(rawNext, "http://maporia.local");
+    if (url.pathname !== "/auth/update-password") {
+      return "/auth/update-password";
+    }
+    const safeFrom = getSafeRedirectFrom(url.searchParams.get("from"));
+    return safeFrom
+      ? `/auth/update-password?from=${encodeURIComponent(safeFrom)}`
+      : "/auth/update-password";
+  } catch {
+    return "/auth/update-password";
+  }
+}
+
 /**
  * Точка приземления после клика по ссылкам из писем (signup confirm, magic link,
  * password reset) и после OAuth-редиректа Google.
@@ -25,6 +43,7 @@ export default function CallbackPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = getSafeRedirectFrom(searchParams.get("next")) ?? "/";
+  const recoveryNext = getRecoveryRedirectTarget(searchParams.get("next"));
   const urlError = searchParams.get("error_description") || searchParams.get("error");
 
   const [errorMsg, setErrorMsg] = useState<string | null>(urlError);
@@ -66,9 +85,9 @@ export default function CallbackPageContent() {
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return;
       if (event === "PASSWORD_RECOVERY") {
-        // Reset-flow: отправляем юзера на форму смены пароля.
-        // ?next= игнорируем, потому что recovery-сессия пригодна только для updateUser.
-        redirect("/auth/update-password");
+        // Reset-flow can only land on the password update form. Preserve a safe
+        // return path in ?from= so commerce flows resume after password update.
+        redirect(recoveryNext);
         return;
       }
       if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED")) {
@@ -86,7 +105,7 @@ export default function CallbackPageContent() {
       sub.subscription.unsubscribe();
       clearTimeout(timer);
     };
-  }, [next, router, urlError]);
+  }, [next, recoveryNext, router, urlError]);
 
   if (errorMsg) {
     return (

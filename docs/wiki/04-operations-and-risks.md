@@ -1,6 +1,6 @@
 # Operations And Risks
 
-Последнее обновление: 2026-05-09.
+Последнее обновление: 2026-05-10.
 
 ## Audit Snapshot
 
@@ -51,7 +51,8 @@ npm run build
 - Creator All может создать both, лимит 10 combined.
 - Extra listing checkout увеличивает `bonus_listing_credits`.
 - Admin видит admin routes и может impersonate/exit.
-- Google import: search, preview, import, photos.
+- Google import: search, preview, import, photos, including 429 behavior after repeated requests.
+- AI description generation: premium/admin access, invalid JSON, missing key, 429 behavior after repeated requests.
 - Stripe webhook: one-time Premium, subscription created/updated/deleted, payment failed.
 
 ## Env Checklist

@@ -18,18 +18,15 @@ import HomeVisualPanel from "./HomeVisualPanel";
  *     с lg — на всю ширину колонки + display clamp (глобальные h1-стили
  *     в globals.css не трогают #home-hero-title).
  *   • >= lg → split: left column (lede + tabs + search + popular tags) and
- *                    right column (HomeVisualPanel)
+ *                    right column (HomeVisualPanel).
  *   • <  lg → single column, left-aligned, no visual panel
  *
  * The hero is a COMPOSER: it owns layout, the city picker dropdown, and
  * passes callbacks through to the building blocks. Page.tsx wires it
  * once, doesn't need to know about the inner grid.
  *
- * Counts: this component owns the `useHomeKindCounts` call. The
- * StatsTicker further down the page uses the same hook independently —
- * React caches identical fetches and we accept the duplicate to keep the
- * components independently rerouteable. (If perf shows duplicate counts,
- * we lift to a Context. For now: keep it simple.)
+ * Counts: this component owns the `useHomeKindCounts` call. StatsTicker
+ * рендерится в page.tsx под TopBar; тот же хук там — React кеширует fetch.
  *
  * Cross-link: docs/HOME_REDESIGN_V2_INTEGRATION.md (Phase C).
  */

@@ -21,6 +21,7 @@ import PremiumBadge from "./PremiumBadge";
 import Icon from "./Icon";
 import { usePremiumGate } from "../hooks/usePremiumGate";
 import { useIsDesktop } from "../hooks/useIsDesktop";
+import { getAuthUrl } from "../lib/authRedirect";
 // AuthModal and PremiumUpsellModal are now rendered globally via GlobalModals
 
 type PlaceCardProps = {
@@ -475,6 +476,10 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, hauntedGemIndex,
   // Use premium gate hook to check access
   const canAccess = canAccessPlace(place, userId);
   const isLocked = isPremium && !canAccess && !isOwner; // Owner always sees full content
+  const lockedFallbackHref =
+    !userId || userAccess?.role === "guest"
+      ? getAuthUrl(`/id/${place.id}`)
+      : "/pricing";
 
   // Generate pseudo title for locked places (e.g., "Haunted Gem #1")
   const getPseudoPlaceNumber = (placeId: string): number => {
@@ -562,7 +567,7 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, hauntedGemIndex,
     <>
       <Link
         ref={cardRef}
-        href={isLocked ? "#" : `/id/${place.id}`}
+        href={isLocked ? lockedFallbackHref : `/id/${place.id}`}
         onClick={handleCardClick}
         target={!isLocked && isDesktop ? "_blank" : undefined}
         rel={!isLocked && isDesktop ? "noopener noreferrer" : undefined}

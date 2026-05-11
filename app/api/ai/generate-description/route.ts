@@ -15,6 +15,10 @@ export const runtime = "nodejs";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = 8;
+const MAX_ID_LENGTH = 256;
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.error("[ai/generate-description] Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
@@ -35,6 +39,21 @@ function jsonResponse(body: { error: string; code?: string; details?: string }, 
   });
 }
 
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const limit = rateLimitMap.get(userId);
+
+  if (!limit || now > limit.resetAt) {
+    rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+
+  if (limit.count >= RATE_LIMIT_MAX_REQUESTS) return false;
+
+  limit.count++;
+  return true;
+}
+
 export async function POST(request: NextRequest) {
   // Check OPENAI_API_KEY first so we always return JSON 503 when missing (no other code runs)
   const openAiApiKey = process.env.OPENAI_API_KEY;
@@ -46,7 +65,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return jsonResponse({ error: "Invalid JSON body", code: "INVALID_JSON" }, 400);
+    }
     const { place_id, google_place_id, access_token, save } = body as {
       place_id?: string;
       google_place_id?: string;
@@ -62,6 +84,13 @@ export async function POST(request: NextRequest) {
         { error: "place_id or google_place_id is required", code: "INVALID_REQUEST" },
         { status: 400 }
       );
+    }
+
+    if (
+      (hasPlaceId && place_id!.length > MAX_ID_LENGTH) ||
+      (hasGooglePlaceId && google_place_id!.length > MAX_ID_LENGTH)
+    ) {
+      return jsonResponse({ error: "Invalid place identifier", code: "INVALID_REQUEST" }, 400);
     }
 
     if (!access_token) {
@@ -85,6 +114,16 @@ export async function POST(request: NextRequest) {
     const user = authData?.user;
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 });
+    }
+
+    if (!checkRateLimit(user.id)) {
+      return NextResponse.json(
+        {
+          error: "Too many AI description requests. Please wait a minute and try again.",
+          code: "RATE_LIMITED",
+        },
+        { status: 429, headers: { "Retry-After": "60" } }
+      );
     }
 
     const supabaseForProfile = supabase;

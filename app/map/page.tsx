@@ -35,7 +35,7 @@ import { usePremiumGate } from "../hooks/usePremiumGate";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import Icon from "../components/Icon";
 import { PlaceCardGridSkeleton, MapSkeleton, Empty } from "../components/Skeleton";
-import { sanitizePostgrestValue, isValidPhotoUrl } from "../utils";
+import { sanitizePostgrestValueForLike, isValidPhotoUrl } from "../utils";
 import type { PlaceListItem as Place } from "../types";
 import { buildCityRadiusFilter, getCityCoords } from "../lib/cityRadius";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
@@ -519,7 +519,7 @@ function MapPageContent() {
 
       // Фильтрация по поисковому запросу
       if (appliedQ.trim()) {
-        const s = sanitizePostgrestValue(appliedQ.trim());
+        const s = sanitizePostgrestValueForLike(appliedQ.trim());
         query = query.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
       }
 
@@ -581,7 +581,7 @@ function MapPageContent() {
           // Применяем только поисковый запрос и теги на сервере
           // Города и категории фильтруются на клиенте для скорости
           if (appliedQ.trim()) {
-            const s = sanitizePostgrestValue(appliedQ.trim());
+            const s = sanitizePostgrestValueForLike(appliedQ.trim());
             fallbackQuery = fallbackQuery.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
           }
           
@@ -1461,7 +1461,7 @@ function MapPageContent() {
               .from("places")
               .select("id,title,description,city,city_name_cached,categories,tags,access_level,country,kind,lat,lng");
             if (appliedQ.trim()) {
-              const s = sanitizePostgrestValue(appliedQ.trim());
+              const s = sanitizePostgrestValueForLike(appliedQ.trim());
               countQuery = countQuery.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
             }
             if (selectedTag) {
@@ -1483,7 +1483,7 @@ function MapPageContent() {
         }}
         getCityCount={async (city: string) => {
           try {
-            let query = supabase.from("places").select("*", { count: 'exact', head: true });
+            let query = supabase.from("places").select("id", { count: 'exact', head: true });
             const coords = await getCityCoords(city);
             query = query.or(buildCityRadiusFilter(city, coords.lat, coords.lng));
             const { count, error } = await query;
@@ -2146,7 +2146,9 @@ function MapView({
   const { isLoaded, loadError } = useGoogleMaps();
 
   useEffect(() => {
-    if (loadError) {
+    const isExpectedMissingKey =
+      loadError?.message.includes("NEXT_PUBLIC_GOOGLE_MAPS_API_KEY") === true;
+    if (loadError && !isExpectedMissingKey) {
       console.error("Google Maps load error:", loadError);
     }
   }, [loadError]);

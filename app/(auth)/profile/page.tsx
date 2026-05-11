@@ -158,16 +158,18 @@ function ProfileInner() {
   const { replaceToAuth } = useAuthRedirect();
 
   const [section, setSection] = useState<"about" | "trips" | "added" | "activity" | "users" | "elements" | "history" | "premium">("about");
-  const [profileLoading, setProfileLoading] = useState(true);
-  const [extrasLoading, setExtrasLoading] = useState(true);
-  const loading = profileLoading || extrasLoading;
 
-  const [userId, setUserId] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const [userIsAdmin, setUserIsAdmin] = useState<boolean>(false);
+  // 2026-05-10 perf (docs/PROFILE_PERF_PLAN.md, A1+A2):
+  // — A2: profile/userId/userEmail/userRole/userIsAdmin берутся из UserAccessContext
+  //   ниже (см. useUserAccessContext). Дубль fetch профилей убран.
+  // — A1: единый `loading` расцеплён на per-section флаги. Каждая секция
+  //   показывается сразу как пришёл её раунд запросов, не ждёт весь chain.
+  const [addedLoading, setAddedLoading] = useState(true);
+  const [savedLoading, setSavedLoading] = useState(true);
+  const [recentlyViewedLoading, setRecentlyViewedLoading] = useState(true);
+  const [activityLoading, setActivityLoading] = useState(true);
+  // reviewsReceived рендерится по `reviewsReceived.length > 0` — отдельный
+  // флаг не нужен, секция пустая пока не пришли данные.
 
   const [added, setAdded] = useState<Place[]>([]);
   const [saved, setSaved] = useState<Place[]>([]);
@@ -175,6 +177,14 @@ function ProfileInner() {
   const [commentsCount, setCommentsCount] = useState<number>(0);
   const [reviewsReceived, setReviewsReceived] = useState<Review[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
+
+  // A4 (2026-05-10, docs/PROFILE_PERF_PLAN.md): reactions нужны для:
+  // 1) saved (R2 — мейн-effect), 2) activity timeline (lazy load).
+  // Раньше reactions считались локально в main effect и забывались.
+  // Теперь храним в state, чтобы lazy activity-effect имел к ним доступ
+  // без повторного fetch'а.
+  const [userLikes, setUserLikes] = useState<ReactionActivityRow[]>([]);
+  const activityRequestedRef = useRef(false);
 
   // Search and filter state
   const [searchValue, setSearchValue] = useState("");
@@ -360,9 +370,16 @@ function ProfileInner() {
   }, [pendingFilters, selectedCity, searchValue, router]);
   
   // Get user access for permission checks (and effect deps: run when session is ready)
-  const { access, loading: accessLoading, user } = useUserAccessContext();
-  
-  // Admin access check - use profile data from useEffect
+  // A2 (2026-05-10, docs/PROFILE_PERF_PLAN.md): profile берём из контекста,
+  // не делаем повторный select из profiles в этой странице. userId/email/role/isAdmin
+  // тоже выводятся из контекста — локальный state удалён выше.
+  const { access, loading: accessLoading, user, profile } = useUserAccessContext();
+  const userId = user?.id ?? null;
+  const userEmail = user?.email ?? null;
+  const userRole = profile?.role ?? null;
+  const userIsAdmin = profile?.is_admin === true;
+
+  // Admin access check - use profile data from context
   const isAdmin = userIsAdmin || userRole === 'admin';
   
   // Check if user can add places
@@ -440,7 +457,11 @@ function ProfileInner() {
     }
   }, [searchParams]);
 
-  // Load profile and extras when user/session is ready from UserAccessContext (no pathname re-fetch)
+  // 2026-05-10 (docs/PROFILE_PERF_PLAN.md, A1+A2): загружаем только extras.
+  // Profile уже пришёл через UserAccessContext — здесь не запрашиваем его
+  // повторно. Каждая секция флипает свой loading флаг, как только её раунд
+  // запросов завершился — Added/Saved/History появляются раньше, не ждут
+  // reviews/activity.
   useEffect(() => {
     if (accessLoading) return;
     if (!user) {
@@ -449,70 +470,40 @@ function ProfileInner() {
     }
 
     let mounted = true;
-    setProfileLoading(true);
-    setExtrasLoading(true);
-    setUserId(user.id);
-    setUserEmail(user.email ?? null);
+    setAddedLoading(true);
+    setSavedLoading(true);
+    setRecentlyViewedLoading(true);
+    setActivityLoading(true);
+
+    const userIdLocal = user.id;
 
     (async () => {
       try {
-        // Critical: profile only — unblocks initial render (avatar, name, bio)
-        const { data: prof, error: profError } = await supabase
-          .from("profiles")
-          .select("id, username, display_name, bio, avatar_url, role, is_admin, subscription_status, favorite_categories, favorite_tags")
-          .eq("id", user.id)
-          .maybeSingle();
+        const recentlyViewedIds = getRecentlyViewedPlaceIds();
 
-        if (profError) {
-          const msg = profError.message ?? "";
-          const code = profError.code ?? "";
-          if (msg || code) {
-            console.error("Error loading profile:", { message: msg, code });
-          }
-        }
-
-        if (mounted) {
-          const profileData = (prof as unknown as Profile | null) ?? null;
-          setProfile(profileData);
-          const profileRole = profileData?.role;
-          const profileIsAdmin = profileData?.is_admin === true;
-          setUserRole(profileRole ?? null);
-          setUserIsAdmin(profileIsAdmin);
-          setProfileLoading(false);
-        }
-
-        // Non-critical: load extras in background (do not block UI)
-        (async () => {
-          try {
-            const recentlyViewedIds = getRecentlyViewedPlaceIds();
-
+        // R1 (параллельно): added, reactions, commentsCount, recently-viewed
+        // A4 (2026-05-10): `comments LIMIT 50` (для activity timeline) убран
+        // отсюда — грузится лениво, только когда юзер открывает Activity.
         const [
           addedPlacesResult,
           reactionsResult,
           commentsCountResult,
-          commentsForActivityResult,
           recentlyViewedResult,
         ] = await Promise.all([
           supabase
             .from("places")
             .select("id,title,city,country,address,cover_url,created_at,categories,kind")
-            .eq("created_by", user.id)
+            .eq("created_by", userIdLocal)
             .order("created_at", { ascending: false }),
           supabase
             .from("reactions")
             .select("place_id, reaction, created_at")
-            .eq("user_id", user.id)
+            .eq("user_id", userIdLocal)
             .eq("reaction", "like"),
           supabase
             .from("comments")
-            .select("*", { count: "exact", head: true })
-            .eq("user_id", user.id),
-          supabase
-            .from("comments")
-            .select("place_id, created_at, text")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false })
-            .limit(50),
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", userIdLocal),
           recentlyViewedIds.length > 0
             ? supabase
                 .from("places")
@@ -527,9 +518,13 @@ function ProfileInner() {
         const addedPlaces = (addedPlacesResult.data ?? []) as Place[];
         const reactions = (reactionsResult.data ?? []) as ReactionActivityRow[];
         const commentsCountData = commentsCountResult.count ?? 0;
-        const comments = (commentsForActivityResult.data ?? []) as CommentActivityRow[];
 
-        if (mounted) setAdded(addedPlaces as Place[]);
+        // Added готов — флипаем флаг СРАЗУ (раньше ждал весь chain).
+        setAdded(addedPlaces as Place[]);
+        setAddedLoading(false);
+
+        // userLikes — для lazy activity-effect (см. A4 ниже).
+        setUserLikes(reactions);
 
         let recentlyViewedPlaces: Place[] = [];
         if (recentlyViewedResult.data && recentlyViewedIds.length > 0) {
@@ -538,12 +533,15 @@ function ProfileInner() {
             .map((id) => placesMap.get(id))
             .filter((p): p is Place => p !== undefined);
         }
-        if (mounted) setRecentlyViewed(recentlyViewedPlaces);
-        if (mounted) setCommentsCount(commentsCountData || 0);
+        setRecentlyViewed(recentlyViewedPlaces);
+        setRecentlyViewedLoading(false);
+
+        setCommentsCount(commentsCountData || 0);
 
         const placeIds = reactions.map((r) => r.place_id);
         const addedPlaceIds = addedPlaces.map((p) => p.id);
 
+        // R2 (параллельно): saved (depends on reactions), commentsReceived (depends on added)
         const [savedPlacesResult, commentsReceivedResult] = await Promise.all([
           placeIds.length > 0
             ? supabase
@@ -557,7 +555,7 @@ function ProfileInner() {
                 .from("comments")
                 .select("id, text, created_at, place_id, user_id")
                 .in("place_id", addedPlaceIds)
-                .neq("user_id", user.id)
+                .neq("user_id", userIdLocal)
                 .order("created_at", { ascending: false })
                 .limit(20)
             : Promise.resolve({ data: [] }),
@@ -566,7 +564,8 @@ function ProfileInner() {
         if (!mounted) return;
 
         const savedPlaces = (savedPlacesResult.data ?? []) as Place[];
-        if (mounted) setSaved(savedPlaces);
+        setSaved(savedPlaces);
+        setSavedLoading(false);
 
         const commentsReceived = (commentsReceivedResult.data ?? []) as CommentActivityRow[];
         let reviewsReceivedData: Review[] = [];
@@ -577,6 +576,7 @@ function ProfileInner() {
           );
           const placeIdsForReviews = Array.from(new Set(commentsReceived.map((c) => c.place_id)));
 
+          // R3 (параллельно): reviewer profiles + review-place titles
           const [profilesData, placesData] = await Promise.all([
             supabase.from("profiles").select("id, display_name, username, avatar_url").in("id", reviewerIds),
             supabase.from("places").select("id, title, address").in("id", placeIdsForReviews),
@@ -616,64 +616,23 @@ function ProfileInner() {
           });
         }
 
-        const likesAct: ActivityItem[] = reactions.map((r) => ({
-          type: "liked",
-          created_at: r.created_at,
-          placeId: r.place_id,
-        }));
+        if (!mounted) return;
+        setReviewsReceived(reviewsReceivedData);
 
-        const commentsAct: ActivityItem[] = comments.map((c) => ({
-          type: "commented",
-          created_at: c.created_at,
-          placeId: c.place_id,
-          commentText: c.text,
-        }));
-
-        const addedAct: ActivityItem[] = addedPlaces.map((p) => ({
-          type: "added",
-          created_at: p.created_at,
-          placeId: p.id,
-        }));
-
-        const act = [...likesAct, ...commentsAct, ...addedAct].sort(
-          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-
-        const actPlaceIds = Array.from(new Set(act.map((a) => a.placeId)));
-        const actPlacesMap = new Map<string, { title: string; cover_url: string | null; address: string | null }>();
-
-        if (actPlaceIds.length) {
-          const { data: ps } = await supabase.from("places").select("id,title,cover_url,address").in("id", actPlaceIds);
-          ((ps ?? []) as ActivityPlaceRow[]).forEach((p) => actPlacesMap.set(p.id, { title: p.title, cover_url: p.cover_url, address: p.address }));
-        }
-
-        const actWithTitles = act.map((a) => {
-          const place = actPlacesMap.get(a.placeId);
-          return {
-            ...a,
-            placeTitle: place?.title ?? "Place",
-            ...(a.type === "added" || a.type === "liked" || a.type === "commented" ? { coverUrl: place?.cover_url ?? null, address: place?.address ?? null } : {}),
-          };
-        });
-
+        // A4 (2026-05-10): activity timeline (R4) удалён из main effect.
+        // Грузится лениво в отдельном useEffect ниже — только когда юзер
+        // открывает раздел Activity. Это экономит 1 round-trip к Supabase
+        // на дефолтном открытии /profile.
+      } catch (extrasErr) {
         if (mounted) {
-          setReviewsReceived(reviewsReceivedData);
-          setActivity(actWithTitles);
-          setExtrasLoading(false);
+          setAddedLoading(false);
+          setSavedLoading(false);
+          setRecentlyViewedLoading(false);
+          // activityLoading не трогаем — он управляется lazy-эффектом
         }
-          } catch (extrasErr) {
-            if (mounted) setExtrasLoading(false);
-            if (process.env.NODE_ENV === "development") {
-              console.error("Profile extras load error:", extrasErr);
-            }
-          }
-        })();
-      } catch (err) {
-        if (mounted) {
-          setProfileLoading(false);
-          setExtrasLoading(false);
+        if (process.env.NODE_ENV === "development") {
+          console.error("Profile extras load error:", extrasErr);
         }
-        console.error("Profile load error:", err);
       }
     })();
 
@@ -681,6 +640,93 @@ function ProfileInner() {
       mounted = false;
     };
   }, [accessLoading, replaceToAuth, user]);
+
+  // A4 (2026-05-10, docs/PROFILE_PERF_PLAN.md): lazy activity timeline.
+  // Грузится один раз — при первом открытии раздела Activity.
+  // Зависимости: userLikes (state, из R1) + added (state, из R1).
+  // Поэтому ждём, пока addedLoading=false (≈ R1 пришёл).
+  useEffect(() => {
+    if (section !== 'activity') return;
+    if (activityRequestedRef.current) return;
+    if (addedLoading) return;
+    if (!user) return;
+    activityRequestedRef.current = true;
+
+    let mounted = true;
+    const userIdLocal = user.id;
+
+    (async () => {
+      try {
+        // Тащим только то, что не было в R1: comments LIMIT 50.
+        const commentsResult = await supabase
+          .from("comments")
+          .select("place_id, created_at, text")
+          .eq("user_id", userIdLocal)
+          .order("created_at", { ascending: false })
+          .limit(50);
+        if (!mounted) return;
+        const comments = (commentsResult.data ?? []) as CommentActivityRow[];
+
+        const likesAct: ActivityItem[] = userLikes.map((r) => ({
+          type: "liked",
+          created_at: r.created_at,
+          placeId: r.place_id,
+        }));
+        const commentsAct: ActivityItem[] = comments.map((c) => ({
+          type: "commented",
+          created_at: c.created_at,
+          placeId: c.place_id,
+          commentText: c.text,
+        }));
+        const addedAct: ActivityItem[] = added.map((p) => ({
+          type: "added",
+          created_at: p.created_at,
+          placeId: p.id,
+        }));
+        const act = [...likesAct, ...commentsAct, ...addedAct].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+
+        const actPlaceIds = Array.from(new Set(act.map((a) => a.placeId)));
+        const actPlacesMap = new Map<string, { title: string; cover_url: string | null; address: string | null }>();
+        if (actPlaceIds.length) {
+          const { data: ps } = await supabase
+            .from("places")
+            .select("id,title,cover_url,address")
+            .in("id", actPlaceIds);
+          ((ps ?? []) as ActivityPlaceRow[]).forEach((p) =>
+            actPlacesMap.set(p.id, { title: p.title, cover_url: p.cover_url, address: p.address })
+          );
+        }
+        const actWithTitles = act.map((a) => {
+          const place = actPlacesMap.get(a.placeId);
+          return {
+            ...a,
+            placeTitle: place?.title ?? "Place",
+            ...(a.type === "added" || a.type === "liked" || a.type === "commented"
+              ? { coverUrl: place?.cover_url ?? null, address: place?.address ?? null }
+              : {}),
+          };
+        });
+
+        if (!mounted) return;
+        setActivity(actWithTitles);
+        setActivityLoading(false);
+      } catch (err) {
+        if (mounted) setActivityLoading(false);
+        // Если упало — сбрасываем флаг, чтобы при следующем заходе на
+        // вкладку lazy-effect попробовал снова.
+        activityRequestedRef.current = false;
+        if (process.env.NODE_ENV === "development") {
+          console.error("Profile activity lazy-load error:", err);
+        }
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [section, addedLoading, user, userLikes, added]);
 
   const displayName = profile?.display_name || profile?.username || userEmail || "User";
 
@@ -1034,7 +1080,9 @@ function ProfileInner() {
                     reviewsReceived={reviewsReceived}
                     onEditClick={() => router.push("/profile/edit")}
                     onLogout={handleLogout}
-                    loading={loading}
+                    /* A1 (2026-05-10): AboutSection ждёт только added+saved
+                       (нужно для статистики). Activity/reviews/recently — лениво. */
+                    loading={addedLoading || savedLoading}
                     userRole={userRole}
                     subscriptionStatus={profile?.subscription_status}
                     isAdmin={userIsAdmin}
@@ -1046,10 +1094,10 @@ function ProfileInner() {
                 </>
               )}
               {section === "trips" && (
-                <TripsSection 
-                  places={filteredSaved} 
-                  loading={loading} 
-                  userId={userId} 
+                <TripsSection
+                  places={filteredSaved}
+                  loading={savedLoading}
+                  userId={userId}
                   onRemoveFavorite={(placeId) => {
                     setSaved((prev) => prev.filter((p) => p.id !== placeId));
                   }}
@@ -1059,9 +1107,9 @@ function ProfileInner() {
                 />
               )}
               {section === "added" && (
-                <AddedPlacesSection 
-                  places={filteredAdded} 
-                  loading={loading}
+                <AddedPlacesSection
+                  places={filteredAdded}
+                  loading={addedLoading}
                   searchValue={searchValue}
                   selectedCity={selectedCity}
                   activeFilters={activeFilters}
@@ -1072,16 +1120,16 @@ function ProfileInner() {
                 />
               )}
               {section === "history" && (
-                <HistorySection places={recentlyViewed} loading={loading} userId={userId} />
+                <HistorySection places={recentlyViewed} loading={recentlyViewedLoading} userId={userId} />
               )}
               {section === "activity" && (
-                <ActivitySection activity={activity} loading={loading} />
+                <ActivitySection activity={activity} loading={activityLoading} />
               )}
               {section === "premium" && (
                 <PremiumSection />
               )}
               {section === "users" && isAdmin && (
-                <UsersSection loading={loading} currentUserId={userId} />
+                <UsersSection loading={false} currentUserId={userId} />
               )}
               {section === "elements" && isAdmin && (
                 <ElementsSection />
@@ -1094,17 +1142,17 @@ function ProfileInner() {
         <div className="lg:hidden">
           {section === "trips" || section === "added" || section === "history" || section === "activity" || section === "premium" || (section === "users" && isAdmin) || (section === "elements" && isAdmin) ? (
             // Show section content on mobile
-            <div 
+            <div
               className={`px-6 py-6 ${section === "activity" || section === "added" || (section === "users" && isAdmin) || (section === "elements" && isAdmin) ? "pt-[48px]" : "pt-[80px]"}`}
               style={{
                 paddingBottom: 'calc(144px + env(safe-area-inset-bottom, 0px))',
               }}
             >
               {section === "trips" && (
-                <TripsSection 
-                  places={filteredSaved} 
-                  loading={loading} 
-                  userId={userId} 
+                <TripsSection
+                  places={filteredSaved}
+                  loading={savedLoading}
+                  userId={userId}
                   onRemoveFavorite={(placeId) => {
                     setSaved((prev) => prev.filter((p) => p.id !== placeId));
                   }}
@@ -1114,9 +1162,9 @@ function ProfileInner() {
                 />
               )}
               {section === "added" && (
-                <AddedPlacesSection 
-                  places={filteredAdded} 
-                  loading={loading}
+                <AddedPlacesSection
+                  places={filteredAdded}
+                  loading={addedLoading}
                   searchValue={searchValue}
                   selectedCity={selectedCity}
                   activeFilters={activeFilters}
@@ -1127,16 +1175,16 @@ function ProfileInner() {
                 />
               )}
               {section === "history" && (
-                <HistorySection places={recentlyViewed} loading={loading} userId={userId} />
+                <HistorySection places={recentlyViewed} loading={recentlyViewedLoading} userId={userId} />
               )}
               {section === "activity" && (
-                <ActivitySection activity={activity} loading={loading} />
+                <ActivitySection activity={activity} loading={activityLoading} />
               )}
               {section === "premium" && (
                 <PremiumSection />
               )}
               {section === "users" && isAdmin && (
-                <UsersSection loading={loading} currentUserId={userId} />
+                <UsersSection loading={false} currentUserId={userId} />
               )}
               {section === "elements" && isAdmin && (
                 <ElementsSection />
@@ -1144,13 +1192,17 @@ function ProfileInner() {
             </div>
           ) : (
             // Show main mobile dashboard
-            <div 
+            <div
               className="px-6 py-6 space-y-4"
               style={{
                 paddingBottom: 'calc(144px + env(safe-area-inset-bottom, 0px))',
               }}
             >
-              {loading ? (
+              {/* A1 (2026-05-10): dashboard ждёт только added+saved (для статистики).
+                  Profile shell (имя, аватар, био) пришёл из контекста — мог бы
+                  рендериться раньше, но cards со статистикой улетят на 0 → flash.
+                  Поэтому держим skeleton пока не пришли счётчики. */}
+              {(addedLoading || savedLoading) ? (
                 <ProfileSkeleton />
               ) : (
                 <>

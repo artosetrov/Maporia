@@ -526,12 +526,12 @@ export default function PlacePage(props: PageProps) {
           .order("created_at", { ascending: false }),
         supabase
           .from("reactions")
-          .select("*", { count: 'exact', head: true })
+          .select("id", { count: 'exact', head: true })
           .eq("place_id", id)
           .eq("reaction", "like"),
         supabase
           .from("comments")
-          .select("*", { count: 'exact', head: true })
+          .select("id", { count: 'exact', head: true })
           .eq("place_id", id),
         // Photos for the gallery were previously fetched in a separate useEffect
         // that waited for `place` to be set first — adding ~150ms before the
@@ -2484,7 +2484,7 @@ export default function PlacePage(props: PageProps) {
         getFilteredCount={async (draftFilters: ActiveFilters) => {
           // Подсчитываем количество мест с учетом фильтров
           try {
-            let countQuery = supabase.from("places").select("*", { count: 'exact', head: true });
+            let countQuery = supabase.from("places").select("id", { count: 'exact', head: true });
 
             // Фильтрация по категориям
             if (draftFilters.categories.length > 0) {

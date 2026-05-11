@@ -51,6 +51,10 @@ const RESEND_COOLDOWN_SEC = 60;
 export default function AuthForm({ mode, redirectAfter = "/" }: AuthFormProps) {
   const router = useRouter();
   const safeRedirect = getSafeRedirectFrom(redirectAfter) ?? "/";
+  const resetHref =
+    safeRedirect === "/"
+      ? "/auth/reset"
+      : `/auth/reset?from=${encodeURIComponent(safeRedirect)}`;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -156,7 +160,7 @@ export default function AuthForm({ mode, redirectAfter = "/" }: AuthFormProps) {
     }
 
     if (mode === "reset") {
-      const result = await requestPasswordReset({ email });
+      const result = await requestPasswordReset({ email, redirectAfterUpdate: safeRedirect });
       setLoading(false);
       if (!result.ok) {
         setError(result.error);
@@ -297,7 +301,7 @@ export default function AuthForm({ mode, redirectAfter = "/" }: AuthFormProps) {
           This link has expired or is invalid. Request a new password reset email.
         </p>
         <Link
-          href="/auth/reset"
+          href={resetHref}
           className="block w-full h-11 rounded-xl bg-[#8F9E4F] text-white font-medium text-sm flex items-center justify-center hover:brightness-110 active:brightness-90 transition-all"
         >
           Send a new reset link
@@ -411,7 +415,7 @@ export default function AuthForm({ mode, redirectAfter = "/" }: AuthFormProps) {
         {mode === "login" && (
           <div className="flex justify-end">
             <Link
-              href="/auth/reset"
+              href={resetHref}
               className="text-xs text-[#6F7A5A] hover:text-[#1F2A1F] transition-colors"
             >
               Forgot password?

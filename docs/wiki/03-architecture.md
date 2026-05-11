@@ -1,6 +1,6 @@
 # Architecture
 
-Последнее обновление: 2026-05-07.
+Последнее обновление: 2026-05-10.
 
 ## Stack
 
@@ -134,6 +134,17 @@ NEXT_PUBLIC_GOOGLE_MAP_ID=
 OPENAI_API_KEY=
 OPENAI_MODEL=
 ```
+
+Runtime guards:
+
+- requires an authenticated Supabase user;
+- requires Premium/admin access before external AI work;
+- validates JSON and place identifiers before lookup;
+- applies an in-memory per-user rate limit of 8 requests/minute as a local cost-abuse guard.
+
+### Google Import
+
+`/api/google-import/search` requires an authenticated Supabase user, validates JSON/query length, caches successful Place details responses in memory for 1 hour, and applies an in-memory per-user rate limit of 12 requests/minute before calling Google Places.
 
 ## Scripts And Operations
 

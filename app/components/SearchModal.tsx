@@ -10,7 +10,7 @@ import { useIsDesktop } from "../hooks/useIsDesktop";
 import { getCitiesWithPlaces, type City } from "../lib/cities";
 import { supabase } from "../lib/supabase";
 import Icon, { type IconName } from "./Icon";
-import { sanitizePostgrestValue, tokenizeQuery, buildTokenSearchExpr } from "../utils";
+import { sanitizePostgrestValueForLike, tokenizeQuery, buildTokenSearchExpr } from "../utils";
 import {
   CITY_RADIUS_MILES,
   buildCityRadiusFilter,
@@ -303,7 +303,7 @@ export default function SearchModal({
     kind: HomeKind | null,
   ) => {
     try {
-      let countQuery = supabase.from("places").select("*", { count: 'exact', head: true });
+      let countQuery = supabase.from("places").select("id", { count: 'exact', head: true });
 
       // Filter by city (with radius)
       if (city) {
@@ -395,7 +395,7 @@ export default function SearchModal({
           tabs.map(async (tab) => {
             const { count, error } = await supabase
               .from("places")
-              .select("*", { count: "exact", head: true })
+              .select("id", { count: "exact", head: true })
               .eq("kind", tab)
               .or(radiusFilter);
             if (error) {
@@ -433,7 +433,7 @@ export default function SearchModal({
     kind: HomeKind | null,
   ) => {
     try {
-      let countQuery = supabase.from("places").select("*", { count: 'exact', head: true });
+      let countQuery = supabase.from("places").select("id", { count: 'exact', head: true });
 
       // Filter by city (with radius)
       if (city) {
@@ -462,7 +462,7 @@ export default function SearchModal({
           if (expr) countQuery = countQuery.or(expr);
         } else {
           // Fallback: query consisted only of punctuation / 1-char tokens.
-          const s = sanitizePostgrestValue(searchQuery.trim());
+          const s = sanitizePostgrestValueForLike(searchQuery.trim());
           countQuery = countQuery.or(
             `title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`
           );
@@ -558,7 +558,7 @@ export default function SearchModal({
           const expr = buildTokenSearchExpr(tokens, [...PLACE_SEARCH_FIELDS]);
           if (expr) placesQuery = placesQuery.or(expr);
         } else {
-          const s = sanitizePostgrestValue(searchQuery.trim());
+          const s = sanitizePostgrestValueForLike(searchQuery.trim());
           placesQuery = placesQuery.or(
             `title.ilike.%${s}%,description.ilike.%${s}%`,
           );

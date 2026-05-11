@@ -53,7 +53,7 @@ const isAbortLikeError = (error: unknown): boolean => {
 };
 import { useUserAccessContext } from "./contexts/UserAccessContext";
 import { SectionErrorBoundary } from "./components/SectionErrorBoundary";
-import { sanitizePostgrestValue } from "./utils";
+import { sanitizePostgrestValueForLike } from "./utils";
 import { buildCityRadiusFilter, getCityCoords } from "./lib/cityRadius";
 import { canUserCreate } from "./lib/access";
 import Icon from "./components/Icon";
@@ -555,7 +555,7 @@ function HomePageInner() {
           try {
             let query = supabase
               .from("places")
-              .select("*", { count: 'exact', head: true })
+              .select("id", { count: 'exact', head: true })
               .overlaps("categories", [category]);
             if (premiumOnly) {
               query = query.eq("access_level", "premium");
@@ -597,7 +597,7 @@ function HomePageInner() {
         getFilteredCount={async (draftFilters: ActiveFilters) => {
           // Подсчитываем количество мест с учетом фильтров
           try {
-            let countQuery = supabase.from("places").select("*", { count: 'exact', head: true });
+            let countQuery = supabase.from("places").select("id", { count: 'exact', head: true });
 
             // Фильтрация по городу с радиусом 10 миль
             if (selectedCity && selectedCity !== DEFAULT_CITY) {
@@ -617,7 +617,7 @@ function HomePageInner() {
 
             // Фильтрация по поисковому запросу
             if (searchValue && searchValue.trim()) {
-              const s = sanitizePostgrestValue(searchValue.trim());
+              const s = sanitizePostgrestValueForLike(searchValue.trim());
               countQuery = countQuery.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
             }
 
@@ -661,8 +661,7 @@ function HomePageInner() {
           live counts via useHomeKindCounts), real input search hero,
           popular tag chips, and the right-column visual panel (≥ lg).
           Below it: HomeBecomeProviderBanner (hidden for existing
-          providers). The StatsTicker further down lives in the shared
-          content wrapper.
+          providers). StatsTicker — первой полосой под TopBar (page.tsx).
 
           Legacy branch keeps the byte-for-byte original sticky zone
           with Pill tabs + mobile/desktop SearchBar. The two branches
@@ -672,6 +671,14 @@ function HomePageInner() {
         */}
         {HOME_REDESIGN_ENABLED ? (
           <>
+            <section
+              aria-label="Live stats"
+              className="hidden sm:block bg-[#FAFAF7] px-4 sm:px-6 lg:px-10 pt-2 pb-0"
+            >
+              <div className="mx-auto max-w-[1200px]">
+                <StatsTicker />
+              </div>
+            </section>
             <HomeHero
               selectedCity={selectedCity}
               onCityChange={handleCityChange}
@@ -683,22 +690,6 @@ function HomePageInner() {
               activeFiltersCount={activeFiltersCount}
               onCategoryClick={handleCategoryClick}
             />
-            {/* Stats-строка перенесена сюда, под hero, по запросу 2026-05-08:
-                раньше она жила внутри content-обёртки (после
-                "Become a provider" + перед "Browse by category"), и
-                визуально оказывалась слишком низко. Теперь это «пульс»
-                сразу после заголовка. Для legacy-ветки StatsBanner
-                остаётся в старом месте.
-
-                Структура контейнера повторяет hero/banner/sections —
-                внешний `px-4 sm:px-6 lg:px-10` + `max-w-[1200px]` без
-                внутреннего padding, чтобы все «полосы» страницы
-                выравнивались по одинаковым левому/правому краям. */}
-            <section className="px-4 sm:px-6 lg:px-10 mt-2 lg:mt-4">
-              <div className="mx-auto max-w-[1200px]">
-                <StatsTicker />
-              </div>
-            </section>
             <HomeBecomeProviderBanner />
           </>
         ) : (
@@ -803,12 +794,7 @@ function HomePageInner() {
             Показываем всегда (не зависит от активного таба) — это «пульс» Maporia.
             Числа тянутся из Supabase через дешёвые count-запросы внутри компонента.
           */}
-          {/* Phase 4: redesign flag swaps the 4-card StatsBanner for the
-              compact StatsTicker. Legacy ветка по-прежнему показывает
-              StatsBanner здесь. В redesign-ветке StatsTicker отрисован
-              ВЫШЕ — сразу под hero (см. блок выше), чтобы быть ближе
-              к заголовку. Оба источника читают `app_settings.stats_banner`
-              + supabase counts, admin overrides работают одинаково. */}
+          {/* Phase 4: redesign — StatsTicker сразу под TopBar; legacy: StatsBanner ниже. */}
           {!HOME_REDESIGN_ENABLED && <StatsBanner />}
 
           {/* Category carousel — только для service/experience табов */}

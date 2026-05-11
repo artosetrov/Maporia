@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
+import { logger } from "../lib/logger";
 import Icon from "./Icon";
 
 type GoogleImportData = {
@@ -72,7 +73,7 @@ export default function UnifiedGoogleImportField({
       }
 
       const trimmedQuery = query.trim();
-      console.log("Importing place:", {
+      logger.debug("Importing place:", {
         query: trimmedQuery.substring(0, 100),
         isUrl: trimmedQuery.startsWith("http"),
         userId,
@@ -98,11 +99,10 @@ export default function UnifiedGoogleImportField({
         }
         data = JSON.parse(text) as GoogleImportResponse;
       } catch (parseError) {
-        console.error("Failed to parse API response:", {
+        logger.error("Failed to parse API response:", {
           status: response.status,
           statusText: response.statusText,
           parseError: parseError instanceof Error ? parseError.message : String(parseError),
-          query: trimmedQuery.substring(0, 100),
         });
         throw new Error(`Server error (${response.status}): ${response.statusText || "Unknown error"}`);
       }
@@ -114,10 +114,9 @@ export default function UnifiedGoogleImportField({
           code: data?.code || "UNKNOWN_ERROR",
           error: data?.error || "Unknown error",
           message: data?.message || data?.error || "Failed to import from Google",
-          query: trimmedQuery.substring(0, 100),
         };
         
-        console.error("Import API error:", JSON.stringify(errorDetails, null, 2));
+        logger.error("Import API error:", errorDetails);
         
         // Provide more helpful error messages
         let errorMessage = data?.error || data?.message || "Failed to import from Google";
@@ -141,11 +140,11 @@ export default function UnifiedGoogleImportField({
       }
 
       if (!data || typeof data !== 'object') {
-        console.error("Invalid import data received:", data);
+        logger.error("Invalid import data received:", data);
         throw new Error("Invalid data received from server");
       }
 
-      console.log("Import successful:", {
+      logger.debug("Import successful:", {
         placeId: data.place_id,
         name: data.name,
         address: data.formatted_address,
@@ -159,7 +158,7 @@ export default function UnifiedGoogleImportField({
       } catch (callbackError: unknown) {
         // If callback throws an error, show it to the user
         const errorMessage = callbackError instanceof Error ? callbackError.message : String(callbackError);
-        console.error("Callback error:", {
+        logger.error("Callback error:", {
           error: errorMessage,
           stack: callbackError instanceof Error ? callbackError.stack : undefined,
         });
@@ -179,29 +178,22 @@ export default function UnifiedGoogleImportField({
       
       if (error instanceof Error) {
         errorMessage = error.message || errorMessage;
-        console.error("Import error:", {
+        logger.error("Import error:", {
           name: error.name,
           message: error.message,
           stack: error.stack,
-          query: query.trim().substring(0, 100),
         });
       } else if (typeof error === 'string') {
         errorMessage = error;
-        console.error("Import error (string):", error, {
-          query: query.trim().substring(0, 100),
-        });
+        logger.error("Import error (string):", error);
       } else {
         // Try to extract message from error object
         try {
           const errorObj = error as Record<string, unknown>;
           errorMessage = String(errorObj?.message || errorObj?.error || errorMessage);
-          console.error("Import error (object):", JSON.stringify({
-            error: errorObj,
-            query: query.trim().substring(0, 100),
-          }, null, 2));
+          logger.error("Import error (object):", errorObj);
         } catch (stringifyError) {
-          console.error("Import error (unserializable):", String(error), {
-            query: query.trim().substring(0, 100),
+          logger.error("Import error (unserializable):", String(error), {
             stringifyError: stringifyError instanceof Error ? stringifyError.message : String(stringifyError),
           });
         }

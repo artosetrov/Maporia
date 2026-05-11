@@ -1,4 +1,5 @@
 import { supabase, getAuthRedirectUrl } from "../supabase";
+import { getSafeRedirectFrom } from "../authRedirect";
 import { mapAuthError, type MappedAuthError } from "./errors";
 
 export type ResetRequestResult =
@@ -14,11 +15,18 @@ export type ResetRequestResult =
  */
 export async function requestPasswordReset({
   email,
+  redirectAfterUpdate = "/",
 }: {
   email: string;
+  redirectAfterUpdate?: string;
 }): Promise<ResetRequestResult> {
+  const safeRedirect = getSafeRedirectFrom(redirectAfterUpdate) ?? "/";
+  const updatePasswordPath =
+    safeRedirect === "/"
+      ? "/auth/update-password"
+      : `/auth/update-password?from=${encodeURIComponent(safeRedirect)}`;
   const redirectTo = getAuthRedirectUrl(
-    `/auth/callback?next=${encodeURIComponent("/auth/update-password")}`
+    `/auth/callback?next=${encodeURIComponent(updatePasswordPath)}`
   );
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });

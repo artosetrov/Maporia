@@ -28,7 +28,7 @@ import { usePremiumGate } from "../hooks/usePremiumGate";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import Icon from "../components/Icon";
 import { PlaceCardGridSkeleton, MapSkeleton, Empty } from "../components/Skeleton";
-import { sanitizePostgrestValue, cx, isValidPhotoUrl } from "../utils";
+import { sanitizePostgrestValueForLike, cx, isValidPhotoUrl } from "../utils";
 import type { PlaceListItem as Place } from "../types";
 import { buildMultiCityRadiusFilter } from "../lib/cityRadius";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
@@ -187,7 +187,7 @@ export default function ExplorePage() {
           query = query.overlaps("categories", selectedCategories);
         }
         if (q.trim()) {
-          const s = sanitizePostgrestValue(q.trim());
+          const s = sanitizePostgrestValueForLike(q.trim());
           query = query.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
         }
         if (selectedTag) {
@@ -1468,7 +1468,10 @@ function MapView({
       import('../lib/diagnostics').then(({ logGoogleMapsStatus }) => {
         logGoogleMapsStatus(isLoaded, loadError);
       });
-    } else if (loadError) {
+    } else if (
+      loadError &&
+      !loadError.message.includes("NEXT_PUBLIC_GOOGLE_MAPS_API_KEY")
+    ) {
       console.error("Google Maps load error:", loadError);
     }
   }, [isLoaded, loadError]);

@@ -17,6 +17,22 @@ export const sanitizePostgrestValue = (value: string): string => {
 };
 
 /**
+ * Sanitizes a value interpolated inside an ILIKE pattern.
+ *
+ * This includes PostgREST filter delimiters plus SQL LIKE wildcards. Without
+ * this, a query such as "%" can degrade into "match everything".
+ */
+export const sanitizePostgrestValueForLike = (
+  value: string,
+  options: { allowSingleCharWildcard?: boolean } = {},
+): string => {
+  const escaped = sanitizePostgrestValue(value).replace(/%/g, "\\%");
+  return options.allowSingleCharWildcard
+    ? escaped
+    : escaped.replace(/_/g, "\\_");
+};
+
+/**
  * Splits a free-text search query into normalized tokens for fuzzy matching.
  *
  * - Lowercases the input
@@ -60,7 +76,7 @@ export const buildTokenSearchExpr = (
   if (!tokens.length || !fields.length) return "";
   const parts: string[] = [];
   for (const t of tokens) {
-    const safe = sanitizePostgrestValue(t);
+    const safe = sanitizePostgrestValueForLike(t, { allowSingleCharWildcard: true });
     for (const f of fields) {
       parts.push(`${f}.ilike.%${safe}%`);
     }
