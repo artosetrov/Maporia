@@ -60,6 +60,7 @@ import Icon from "../../../../components/Icon";
 import PremiumBadge from "../../../../components/PremiumBadge";
 import GoogleImportField from "../../../../components/GoogleImportField";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
+import LinkedPlacesEditorBlock from "../../../../components/LinkedPlacesEditorBlock";
 
 type Place = {
   id: string;
@@ -1313,6 +1314,18 @@ export default function PlaceEditorHub(props: PageProps) {
                 <Icon name="forward" size={20} className="text-[#6F7A5A]" />
               </div>
             </Link>
+
+            {/* Linked places — встроенная панель добавления + мини-список active.
+                Видна для всех kinds. Полное управление (approve/reject/rejected log) —
+                на /places/[id]/edit/links через ссылку "Manage all". */}
+            {place.kind && (
+              <SectionErrorBoundary>
+                <LinkedPlacesEditorBlock
+                  placeId={placeId}
+                  kind={place.kind}
+                />
+              </SectionErrorBoundary>
+            )}
 
             {/* Price + Schedule cards — только для service / experience */}
             {place.kind && place.kind !== "location" && (
