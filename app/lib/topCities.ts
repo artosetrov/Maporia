@@ -41,15 +41,21 @@ export function fetchTopCities(limit = 5): Promise<TopCity[]> {
   pending = (async () => {
     try {
       // supabase-js v2.93's rpc() generic inference fails when the client
-      // is typed with a Database. The same workaround is used in
-      // app/api/google-import/import/route.ts (a separately-built untyped
-      // client). Here we narrow the cast to the rpc call only and keep
-      // the rest of this file fully typed.
-      const rpc = supabase.rpc as unknown as (
-        fn: "get_top_cities",
-        args: { p_limit: number },
-      ) => Promise<{ data: TopCity[] | null; error: { message: string } | null }>;
-      const { data, error } = await rpc("get_top_cities", { p_limit: limit });
+      // is typed with a Database. Cast the CLIENT (not the method) so we
+      // keep `this` binding — иначе rpc внутри читает `this.rest` через
+      // undefined и кидает в runtime. До 2026-05-11 здесь был
+      // `const rpc = supabase.rpc as unknown as (...) => ...` — он молча
+      // падал и срабатывал CITIES-fallback. /profile/get_profile_dashboard
+      // имел тот же баг без fallback'а — отсюда 0 places у всех юзеров.
+      const supabaseUntyped = supabase as unknown as {
+        rpc: (
+          fn: "get_top_cities",
+          args: { p_limit: number },
+        ) => Promise<{ data: TopCity[] | null; error: { message: string } | null }>;
+      };
+      const { data, error } = await supabaseUntyped.rpc("get_top_cities", {
+        p_limit: limit,
+      });
       if (error) throw error;
       const rows = data ?? [];
       if (rows.length === 0) {

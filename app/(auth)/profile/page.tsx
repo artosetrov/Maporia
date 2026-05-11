@@ -12,6 +12,7 @@ const SearchModal = nextDynamic(() => import("../../components/SearchModal"), { 
 import { supabase } from "../../lib/supabase";
 import type { Database } from "../../types/supabase";
 import Icon from "../../components/Icon";
+import { getPublicStoragePath, PLACE_PHOTOS_BUCKET } from "../../lib/storagePaths";
 
 type ProfileRow = Pick<Database["public"]["Tables"]["profiles"]["Row"], "id" | "username" | "display_name" | "avatar_url" | "role" | "is_admin" | "subscription_status" | "created_at">;
 type PlacePhotoUrlRow = Pick<Database["public"]["Tables"]["place_photos"]["Row"], "url">;
@@ -491,8 +492,11 @@ function ProfileInner() {
         // ещё ленивая (отдельный useEffect ниже, A4).
         //
         // supabase-js v2.93 generic inference на rpc() ломается на
-        // typed Database — тот же workaround, что и в topCities.ts:
-        // узкий cast на конкретный вызов.
+        // typed Database — кастуем сам клиент, а не вынимаем метод
+        // в переменную. Если вынуть `const rpc = supabase.rpc`, при
+        // вызове теряется `this` (метод внутри читает `this.rest`),
+        // и rpc падает в catch → /profile молча показывал 0 / 0.
+        // (Тот же баг был в topCities.ts — там его маскировал CITIES fallback.)
         type DashboardData = {
           added: Place[];
           saved: Place[];
@@ -501,11 +505,16 @@ function ProfileInner() {
           user_likes: ReactionActivityRow[];
           reviews_received: Review[];
         };
-        const rpc = supabase.rpc as unknown as (
-          fn: "get_profile_dashboard",
-          args: { p_user_id: string; p_recently_viewed_ids: string[] },
-        ) => Promise<{ data: DashboardData | null; error: { message: string } | null }>;
-        const { data: dashboard, error: dashboardErr } = await rpc(
+        const supabaseUntyped = supabase as unknown as {
+          rpc: (
+            fn: "get_profile_dashboard",
+            args: { p_user_id: string; p_recently_viewed_ids: string[] },
+          ) => Promise<{
+            data: DashboardData | null;
+            error: { message: string } | null;
+          }>;
+        };
+        const { data: dashboard, error: dashboardErr } = await supabaseUntyped.rpc(
           "get_profile_dashboard",
           {
             p_user_id: userIdLocal,
@@ -2079,58 +2088,51 @@ function AddedPlacesSection({
     setDeleteConfirmPlace(null);
 
     try {
-      // Step 1: Get all photos to delete from storage
+      const currentIsAdmin = isUserAdmin(access);
+      const targetQuery = supabase
+        .from("places")
+        .select("id, created_by")
+        .eq("id", placeId);
+
+      if (!currentIsAdmin) {
+        targetQuery.eq("created_by", user.id);
+      }
+
+      const { data: deleteTarget, error: targetError } = await targetQuery.single();
+      if (targetError || !deleteTarget) {
+        alert(targetError?.message || "You do not have permission to delete this place.");
+        setDeletingPlaceId(null);
+        return;
+      }
+
       const { data: rawPhotos } = await supabase
         .from("place_photos")
         .select("url")
         .eq("place_id", placeId);
 
       const photosData = rawPhotos as PlacePhotoUrlRow[] | null;
-      // Step 2: Delete photos from storage (if they exist in storage bucket)
-      if (photosData && photosData.length > 0) {
-        const photoUrls = photosData.map((p) => p.url).filter(Boolean) as string[];
-        const bucketName = 'place-photos';
-        
-        for (const url of photoUrls) {
-          try {
-            if (url.includes('supabase.co/storage')) {
-              const storageMatch = url.match(/\/place-photos\/(.+)$/);
-              if (storageMatch && storageMatch[1]) {
-                const filePath = storageMatch[1];
-                const { error: storageError } = await supabase.storage
-                  .from(bucketName)
-                  .remove([filePath]);
-                
-                if (storageError) {
-                  console.warn(`Failed to delete photo from storage: ${filePath}`, storageError);
-                }
-              }
-            }
-          } catch (storageErr) {
-            console.warn("Error deleting photo from storage:", storageErr);
-          }
-        }
-      }
+      const photoStoragePaths = Array.from(
+        new Set(
+          (photosData ?? [])
+            .map((photo) => getPublicStoragePath(photo.url, PLACE_PHOTOS_BUCKET))
+            .filter((path): path is string => Boolean(path)),
+        ),
+      );
 
-      // Step 3: Delete related data from database
       const [photosResult, commentsResult, reactionsResult] = await Promise.all([
         supabase.from("place_photos").delete().eq("place_id", placeId),
         supabase.from("comments").delete().eq("place_id", placeId),
         supabase.from("reactions").delete().eq("place_id", placeId),
       ]);
 
-      if (photosResult.error) {
-        console.warn("Error deleting place_photos:", photosResult.error);
-      }
-      if (commentsResult.error) {
-        console.warn("Error deleting comments:", commentsResult.error);
-      }
-      if (reactionsResult.error) {
-        console.warn("Error deleting reactions:", reactionsResult.error);
+      const relatedDeleteError = photosResult.error || commentsResult.error || reactionsResult.error;
+      if (relatedDeleteError) {
+        console.error("Related place delete error:", relatedDeleteError);
+        alert(relatedDeleteError.message || "Failed to delete related place data");
+        setDeletingPlaceId(null);
+        return;
       }
 
-      // Step 4: Delete the place itself
-      const currentIsAdmin = isUserAdmin(access);
       const deleteQuery = supabase
         .from("places")
         .delete()
@@ -2147,6 +2149,16 @@ function AddedPlacesSection({
         alert(deleteError.message || "Failed to delete place");
         setDeletingPlaceId(null);
         return;
+      }
+
+      if (photoStoragePaths.length > 0) {
+        const { error: storageError } = await supabase.storage
+          .from(PLACE_PHOTOS_BUCKET)
+          .remove(photoStoragePaths);
+
+        if (storageError) {
+          console.warn("Failed to delete place photos from storage:", storageError);
+        }
       }
 
       // Call callback to update parent state
