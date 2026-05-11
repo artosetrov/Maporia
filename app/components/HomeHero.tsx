@@ -190,7 +190,7 @@ export default function HomeHero({
                           setCityOpen(false);
                         }}
                         className={[
-                          "w-full text-left px-4 py-2.5 text-[14px] font-semibold",
+                          "w-full text-left px-4 py-2 text-[14px] font-semibold leading-tight",
                           selectedCity === null
                             ? "text-[#4d5b27] bg-[#eef0e0]"
                             : "text-[#16190f] hover:bg-[#faf8f1]",
