@@ -19,8 +19,9 @@ export type AccessLevel = "public" | "premium";
  * Тарифы, дающие право создавать карточки соответствующих kind'ов.
  *
  *   creator_location    → создаёт locations (v2)
- *   creator_service     → создаёт services + secondary location free
- *   creator_experience  → создаёт experiences + secondary location free
+ *   creator_service     → LEGACY v2 (grandfathered): services + secondary location free
+ *   creator_experience  → LEGACY v2 (grandfathered): experiences + secondary location free
+ *   creator_pro         → v3: services ∨ experiences (combined-pool 5)
  *   creator_all         → всё (combined-pool 10)
  *
  * premium_viewer не создаёт ничего сам, но видит скрытые локации (v2 — чисто consumer).
@@ -31,6 +32,7 @@ export const CREATOR_PLANS = [
   "creator_location",
   "creator_service",
   "creator_experience",
+  "creator_pro",
   "creator_all",
 ] as const satisfies ReadonlyArray<Plan>;
 
@@ -215,14 +217,13 @@ export function canUserCreate(
  * Какой минимальный тариф нужен для публикации kind'а.
  * Полезно в пейволле, чтобы предложить апгрейд.
  *
- * v2: location → creator_location (был premium_viewer).
+ * v3 (2026-05-11): service/experience → creator_pro (merged).
  */
 export function requiredPlanFor(
   kind: "location" | "service" | "experience"
 ): Plan {
   if (kind === "location") return "creator_location";
-  if (kind === "service") return "creator_service";
-  return "creator_experience";
+  return "creator_pro";
 }
 
 /**

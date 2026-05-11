@@ -20,6 +20,11 @@
  * См. docs/PRICING_V2_PLAN.md § 11.3 (Stripe provisioning).
  */
 
+// Подгружаем .env.local / .env (как Next делает в runtime) — иначе при `npx tsx ...`
+// `process.env.STRIPE_SECRET_KEY` пустой. @next/env идёт зависимостью к next.
+import { loadEnvConfig } from "@next/env";
+loadEnvConfig(process.cwd());
+
 import Stripe from "stripe";
 import {
   PRICING_REGISTRY,

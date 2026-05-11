@@ -15,6 +15,7 @@ export {
   ANNUAL_DISCOUNT,
   planBillingCycle,
   getPriceSpec,
+  isLegacyPlan,
   type PlanId,
   type Cycle,
   type Currency,

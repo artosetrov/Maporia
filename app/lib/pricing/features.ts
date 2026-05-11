@@ -10,6 +10,7 @@
 
 import {
   PRICING_REGISTRY,
+  type Kind,
   type PlanId,
 } from "./registry";
 
@@ -27,14 +28,28 @@ const STRINGS = {
       n === null ? "Unlimited locations" : `Up to ${n} locations`,
     create_service: (n: number) => `Up to ${n} services`,
     create_experience: (n: number) => `Up to ${n} experiences`,
-    create_combined: (n: number) => `${n} listings combined (any type)`,
+    /** Используется для creator_all: combinedKinds = все 3. */
+    create_combined_all: (n: number) => `${n} listings combined (any type)`,
+    /** Используется для creator_pro: combinedKinds = service+experience. */
+    create_combined_creator: (n: number) =>
+      `Up to ${n} services or experiences (any mix)`,
+    /** Fallback для произвольного combinedKinds (на будущее). */
+    create_combined_subset: (n: number, kindsLabel: string) =>
+      `Up to ${n} ${kindsLabel} (any mix)`,
     create_secondary_location: "Add a map point to your listing",
     extra_listing: "Extra listing — $2.99",
     premium_included: "Premium access included",
     one_time_lifetime: "One payment, lifetime access",
     yearly_savings: (saved: number) => `Save $${saved.toFixed(2)}/year with annual`,
   },
-} satisfies Record<Locale, Record<string, string | ((arg: number | null) => string) | ((arg: number) => string)>>;
+} as const;
+
+/** Сортировка для стабильной string-key из combinedKinds. */
+const KIND_ORDER: Record<Kind, number> = { location: 0, service: 1, experience: 2 };
+
+function combinedLabelKey(kinds: readonly Kind[]): string {
+  return [...kinds].sort((a, b) => KIND_ORDER[a] - KIND_ORDER[b]).join(",");
+}
 
 /**
  * Сгенерировать список «зелёных галочек» для /pricing-карточки.
@@ -57,9 +72,26 @@ export function getFeatures(plan: PlanId, locale: Locale = "en"): FeatureItem[] 
     }
   }
 
-  // Combined-pool (Pro All) приоритетнее per-kind квоты
+  // Combined-pool приоритетнее per-kind квоты
   if (spec.quota.combined != null) {
-    out.push({ label: t.create_combined(spec.quota.combined), included: true });
+    const n = spec.quota.combined;
+    const kinds = spec.quota.combinedKinds;
+    let label: string;
+    if (!kinds) {
+      // Совместимость со старой семантикой (все 3 kind'а).
+      label = t.create_combined_all(n);
+    } else {
+      const key = combinedLabelKey(kinds);
+      if (key === "location,service,experience") {
+        label = t.create_combined_all(n);
+      } else if (key === "service,experience") {
+        label = t.create_combined_creator(n);
+      } else {
+        // Defensive — для будущих subset'ов (например service+location).
+        label = t.create_combined_subset(n, kinds.join(" or "));
+      }
+    }
+    out.push({ label, included: true });
   } else {
     if (spec.quota.location != null && spec.quota.location !== 0) {
       out.push({ label: t.create_location(spec.quota.location), included: true });

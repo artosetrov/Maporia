@@ -55,11 +55,16 @@ export type PlanPeriod = 'month' | 'year' | 'lifetime';
 /** Тариф, который реально продаётся (free и internal не продаются). */
 export type PaidPlan = Exclude<Plan, 'free' | 'premium_grandfathered'>;
 
-/** Любой creator-тариф — даёт право публиковать. */
+/**
+ * Любой creator-тариф — даёт право публиковать.
+ * v3 (2026-05-11): creator_pro заменил creator_service+creator_experience.
+ * Старые остаются в union — grandfathered активные подписчики.
+ */
 export type CreatorPlan =
   | 'creator_location'
-  | 'creator_service'
-  | 'creator_experience'
+  | 'creator_service'      // legacy v2 — grandfathered
+  | 'creator_experience'   // legacy v2 — grandfathered
+  | 'creator_pro'
   | 'creator_all';
 
 /**

@@ -45,8 +45,9 @@ function isPaidPlan(value: unknown): value is PaidPlan {
   return (
     value === "premium_viewer" ||
     value === "creator_location" ||
-    value === "creator_service" ||
-    value === "creator_experience" ||
+    value === "creator_service" ||      // legacy v2 — grandfathered
+    value === "creator_experience" ||   // legacy v2 — grandfathered
+    value === "creator_pro" ||
     value === "creator_all"
   );
 }

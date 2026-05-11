@@ -1,20 +1,22 @@
 "use client";
 
 /**
- * /pricing — публичная страница тарифов (v2).
+ * /pricing — публичная страница тарифов (v3, 2026-05-11).
  *
- * Сетка (5 платных тарифов):
+ * Сетка (4 платных тарифа):
  *   - Premium: $35 one-time (consumer — скрытые локации)
  *   - Pro Location: $9.99/mo, 5 locations
- *   - Pro Service: $14.99/mo, 5 services + secondary location free
- *   - Pro Experience: $14.99/mo, 5 experiences + secondary location free
- *   - Pro All: $34.99/mo, 10 combined всех 3 типов
+ *   - Pro Creator: $14.99/mo, 5 services or experiences (any mix) + secondary location free
+ *   - Pro All-in: $19.99/mo, 10 combined всех 3 типов
  *
  * Любой Pro-тариф автоматически включает Premium.
  * Yearly billing toggle — скидка 20%, default = Yearly.
  *
+ * LEGACY: creator_service и creator_experience grandfathered (см. docs/PRICING_V3_CREATOR_MERGE.md § 7).
+ * Они не показываются на /pricing, но активные подписчики продолжают платить по старой цене.
+ *
  * Источник данных — `app/lib/pricing/registry.ts` (single source of truth).
- * См. docs/PRICING_V2_PLAN.md § 1.
+ * См. docs/PRICING_V3_CREATOR_MERGE.md § 1.
  */
 
 import { useState, useMemo } from "react";
@@ -56,13 +58,21 @@ function effectiveCycle(plan: PlanId, toggle: "month" | "year"): Cycle {
 /**
  * Tier для сравнения планов между собой при выборе ctaLabel.
  * 0 = free, 1 = premium_viewer (consumer), 2 = creator_location,
- * 3 = creator_service / creator_experience (siblings), 4 = creator_all.
+ * 3 = creator_pro / creator_service / creator_experience (legacy siblings), 4 = creator_all.
+ *
+ * v3 (2026-05-11): creator_pro заменил creator_service/experience. Legacy планы
+ * сохраняют тот же tier, чтобы grandfathered-юзер видел Pro Creator как "Switch", не "Upgrade".
  */
 function planTier(plan: PlanId): number {
   if (plan === "free") return 0;
   if (plan === "premium_viewer" || plan === "premium_grandfathered") return 1;
   if (plan === "creator_location") return 2;
-  if (plan === "creator_service" || plan === "creator_experience") return 3;
+  if (
+    plan === "creator_pro" ||
+    plan === "creator_service" ||
+    plan === "creator_experience"
+  )
+    return 3;
   if (plan === "creator_all") return 4;
   return 0;
 }
@@ -130,13 +140,13 @@ export default function PricingPage() {
 
   // Список планов в порядке отображения. Premium первым (consumer entry-point),
   // дальше creator-планы по возрастанию цены.
+  // v3: 4 карточки — Premium / Pro Location / Pro Creator / Pro All-in.
   const orderedPlans = useMemo<PlanId[]>(
     () =>
       [
         "premium_viewer",
         "creator_location",
-        "creator_service",
-        "creator_experience",
+        "creator_pro",
         "creator_all",
       ].filter((p) => PUBLIC_PLANS.includes(p as PlanId)) as PlanId[],
     [],
@@ -268,7 +278,7 @@ export default function PricingPage() {
             <ImpersonationDisclaimer />
           </div>
 
-          {/* 5 platных тарифов: Premium + 4 Pro */}
+          {/* 4 платных тарифа (v3): Premium + 3 Pro */}
           {!hasPlans ? (
             <div className="rounded-2xl border border-[#ECEEE4] bg-white p-8 text-center">
               <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-2">
@@ -277,7 +287,7 @@ export default function PricingPage() {
               <p className="text-sm text-[#6F7A5A]">Please try again later.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               {orderedPlans.map((planId) => {
               const spec = PRICING_REGISTRY[planId];
               const display = spec.display;

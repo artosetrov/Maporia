@@ -7,16 +7,25 @@
  * Equivalence test (Φ12) гоняет случайные входы через обе реализации и сверяет ответы.
  *
  * См. docs/PRICING_V2_PLAN.md § 3 (инвариант квоты) и § 11.2 (DB performance).
+ * v3 (2026-05-11) — creator_pro + combinedKinds, см. docs/PRICING_V3_CREATOR_MERGE.md § 3.
  */
 
 import {
   PRICING_REGISTRY,
   type Capability,
+  type Kind,
   type PlanId,
 } from "./registry";
 
-/** Тип карточки. Точное совпадение с `places.kind` enum в БД. */
-export type Kind = "location" | "service" | "experience";
+// Re-export для обратной совместимости — Kind теперь декларируется в registry,
+// чтобы PlanQuota.combinedKinds мог его типизировать без circular dep.
+export type { Kind } from "./registry";
+
+const DEFAULT_COMBINED_KINDS: readonly Kind[] = [
+  "location",
+  "service",
+  "experience",
+] as const;
 
 /**
  * Сколько активных (не удалённых) карточек у юзера сейчас, разбиение по primary kind.
@@ -31,7 +40,7 @@ export type QuotaDecision = {
   reason: "ok" | "no_plan_for_kind" | "limit_reached";
   /** null = безлимит. */
   limit: number | null;
-  /** Сколько уже занято под этот kind (или combined-pool для Pro All). */
+  /** Сколько уже занято под этот kind (или combined-pool). */
   used: number;
   /** Активных bonus credits на момент проверки. */
   bonusCredits: number;
@@ -40,8 +49,12 @@ export type QuotaDecision = {
 /**
  * Может ли юзер создать карточку с данным primary kind.
  *
- * **Не учитывает secondary_kinds.** Secondary location у Pro Service — бесплатен
- * и не уменьшает location-квоту. Это инвариант новой модели (см. план § 3).
+ * **Не учитывает secondary_kinds.** Secondary location у Pro Service/Pro Creator —
+ * бесплатен и не уменьшает location-квоту. Это инвариант новой модели (см. план § 3).
+ *
+ * Для combined-планов (Pro Creator / Pro All) проверка:
+ *   1. `primaryKind` обязан входить в `combinedKinds` (иначе план не покрывает kind).
+ *   2. used = сумма counts по всем kind'ам из `combinedKinds`.
  *
  * @param args.plan          — текущий plan юзера (`profiles.plan`).
  * @param args.primaryKind   — kind, который юзер хочет сделать primary.
@@ -67,10 +80,23 @@ export function computeQuota(args: {
     throw new Error(`computeQuota: unknown plan "${args.plan}"`);
   }
 
-  // Pro All — combined pool через все 3 kind'а.
+  // Combined-pool (Pro Creator, Pro All) — общий лимит на kind'ы из combinedKinds.
   if (spec.quota.combined != null) {
-    const used =
-      args.counts.location + args.counts.service + args.counts.experience;
+    const kinds = spec.quota.combinedKinds ?? DEFAULT_COMBINED_KINDS;
+
+    // primary kind должен входить в combinedKinds.
+    // Pro Creator + primaryKind=location → план не покрывает.
+    if (!kinds.includes(args.primaryKind)) {
+      return {
+        allowed: false,
+        reason: "no_plan_for_kind",
+        limit: 0,
+        used: args.counts[args.primaryKind],
+        bonusCredits: bonus,
+      };
+    }
+
+    const used = kinds.reduce((acc, k) => acc + args.counts[k], 0);
     const limit = spec.quota.combined + bonus;
     if (used >= limit) {
       return { allowed: false, reason: "limit_reached", limit, used, bonusCredits: bonus };
@@ -78,7 +104,7 @@ export function computeQuota(args: {
     return { allowed: true, reason: "ok", limit, used, bonusCredits: bonus };
   }
 
-  // Per-kind квота.
+  // Per-kind квота (creator_location, creator_service legacy, creator_experience legacy, premium_grandfathered).
   const kindLimit = spec.quota[args.primaryKind];
 
   if (kindLimit === 0 || kindLimit === undefined) {
@@ -162,23 +188,27 @@ export function canCreateMultiKind(args: {
  * Какой минимально-достаточный план покрывает выбранный набор kind'ов.
  * Используется в `BecomeProviderModal` и `PaywallModal` для авто-подбора.
  *
- * Логика (см. docs/PRICING_V2_PLAN.md § 2):
- *   service & experience  → creator_all
- *   service (с/без loc)   → creator_service
- *   experience (с/без loc)→ creator_experience
- *   только location       → creator_location
- *   пустой набор          → creator_location (defensive default)
+ * Логика v3 (см. docs/PRICING_V3_CREATOR_MERGE.md § 2):
+ *   location + (service ∨ experience)  → creator_all     (location требует Pro All)
+ *   service ∨ experience               → creator_pro     (merged Pro Creator $14.99)
+ *   только location                    → creator_location
+ *   пустой набор                       → creator_location (defensive default)
  */
 export function suggestPlanForKinds(
   kinds: readonly Kind[],
-): Extract<PlanId, "creator_location" | "creator_service" | "creator_experience" | "creator_all"> {
+): Extract<PlanId, "creator_location" | "creator_pro" | "creator_all"> {
   const set = new Set(kinds);
+  const hasLocation = set.has("location");
   const hasService = set.has("service");
   const hasExperience = set.has("experience");
 
-  if (hasService && hasExperience) return "creator_all";
-  if (hasService) return "creator_service";
-  if (hasExperience) return "creator_experience";
+  // Любая комбинация с location + чем-то ещё → Pro All (только он даёт create_location вместе с service/experience).
+  if (hasLocation && (hasService || hasExperience)) return "creator_all";
+
+  // Только service / experience / их комбинация → Pro Creator.
+  if (hasService || hasExperience) return "creator_pro";
+
+  // Чистый location.
   return "creator_location";
 }
 

@@ -30,6 +30,7 @@ import {
   EXTRA_LISTING as EXTRA_LISTING_V2,
   priceDisplay,
   formatUSD,
+  isLegacyPlan,
   type PlanId,
   type Cycle,
 } from "../../lib/pricing";
@@ -4228,11 +4229,12 @@ export default function ProfilePage() {
 // Показывает текущий plan + cycle + renews_at, и сетку для switch с умными CTA.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// v3 (2026-05-11): убраны creator_service/creator_experience (legacy, grandfathered).
+// Pro Creator $14.99 — единая карточка services+experiences.
 const PROFILE_BILLING_PLANS: PlanId[] = [
   "premium_viewer",
   "creator_location",
-  "creator_service",
-  "creator_experience",
+  "creator_pro",
   "creator_all",
 ];
 
@@ -4240,7 +4242,12 @@ function planTier(plan: PlanId): number {
   if (plan === "free") return 0;
   if (plan === "premium_viewer" || plan === "premium_grandfathered") return 1;
   if (plan === "creator_location") return 2;
-  if (plan === "creator_service" || plan === "creator_experience") return 3;
+  if (
+    plan === "creator_pro" ||
+    plan === "creator_service" ||
+    plan === "creator_experience"
+  )
+    return 3;
   if (plan === "creator_all") return 4;
   return 0;
 }
@@ -4288,6 +4295,9 @@ function PremiumSection() {
   const currentDisplay = currentSpec?.display ?? null;
   const currentPeriod = profile?.plan_period as "month" | "year" | "lifetime" | null | undefined;
   const isLifetime = currentPeriod === "lifetime";
+  // v3: текущий план — legacy (creator_service / creator_experience), grandfathered.
+  // Подписчик платит по старой цене, новые юзеры этот план купить не могут.
+  const isCurrentLegacy = isPaid && isLegacyPlan(currentPlan);
 
   const orderedPlans = useMemo(
     () => PROFILE_BILLING_PLANS.filter((p) => PUBLIC_PLANS.includes(p)),
@@ -4426,13 +4436,25 @@ function PremiumSection() {
             <div className="flex items-center gap-3 mb-4">
               <div className="text-2xl" aria-hidden>{currentDisplay.emoji}</div>
               <div className="flex-1 min-w-0">
-                <div className="font-fraunces text-xl font-semibold text-[#1F2A1F]">{currentDisplay.name}</div>
+                <div className="font-fraunces text-xl font-semibold text-[#1F2A1F]">
+                  {currentDisplay.name}
+                  {isCurrentLegacy && (
+                    <span className="ml-2 align-middle inline-flex items-center rounded-full bg-[#FAFAF7] text-[#6F7A5A] text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 border border-[#ECEEE4]">
+                      Legacy
+                    </span>
+                  )}
+                </div>
                 <div className="text-sm text-[#6F7A5A]">{currentDisplay.tagline}</div>
               </div>
               <span className="rounded-full bg-[#8F9E4F]/15 text-[#556036] text-[11px] font-semibold uppercase tracking-wide px-2 py-1 shrink-0">
                 Active
               </span>
             </div>
+            {isCurrentLegacy && (
+              <div className="mb-4 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-2.5 text-xs text-[#3F4A35] leading-relaxed">
+                You&apos;re on a legacy plan we no longer offer to new subscribers — you keep this price as long as the subscription stays active. Switch to <strong>Pro Creator</strong> (same $14.99/mo, covers both services and experiences) any time.
+              </div>
+            )}
 
             {currentSummary?.display && (
               <div className="mb-4">

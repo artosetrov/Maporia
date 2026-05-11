@@ -177,6 +177,31 @@ export const PLAN_CONFIG: Record<PaidPlan, PlanConfig> = {
     priceIdEnv: "STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH",
   },
 
+  // v3 stub — реальные данные в app/lib/pricing/registry.ts (creator_pro).
+  // PaidPlan теперь включает creator_pro, поэтому Record<PaidPlan, ...> требует его наличия здесь.
+  // UI на /pricing и /profile читает из registry, не отсюда.
+  creator_pro: {
+    id: "creator_pro",
+    display: {
+      name: "Pro Creator",
+      tagline: "Services + experiences",
+      emoji: "🎨",
+      price: 14.99,
+      currency: "USD",
+      priceSuffix: "/ mo",
+      audience: "Photographers, instructors, guides, workshop hosts",
+      features: [
+        { label: "Premium included for free", included: true },
+        { label: "Up to 5 services or experiences (any mix)", included: true },
+        { label: "Extra listing over the limit — $2.99", included: true },
+        { label: "Publish locations", included: false },
+      ],
+    },
+    billing: { kind: "subscription", period: "month" },
+    quota: { service: 5, experience: 5, combined: 5 },
+    priceIdEnv: "STRIPE_PRICE_CREATOR_PRO_MONTH",
+  },
+
   creator_all: {
     id: "creator_all",
     display: {

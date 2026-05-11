@@ -155,8 +155,9 @@ const PLAN_VALUES: Plan[] = [
   "premium_viewer",
   "premium_grandfathered",
   "creator_location",
-  "creator_service",
-  "creator_experience",
+  "creator_service",      // legacy v2 — grandfathered (см. docs/PRICING_V3_CREATOR_MERGE.md)
+  "creator_experience",   // legacy v2 — grandfathered
+  "creator_pro",
   "creator_all",
 ];
 const PERIOD_VALUES: PlanPeriod[] = ["month", "year", "lifetime"];
