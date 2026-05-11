@@ -33,6 +33,7 @@ import type { PlaceListItem as Place } from "../types";
 import { buildMultiCityRadiusFilter } from "../lib/cityRadius";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 import { useBatchPlaceData } from "../hooks/useBatchPlaceData";
+import TransientNotice from "../components/TransientNotice";
 
 // Result types for Supabase (Database['public']['Tables'][table]['Row'] + Pick)
 type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
@@ -76,6 +77,8 @@ export default function ExplorePage() {
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [favoriteError, setFavoriteError] = useState<string | null>(null);
+  const favoriteErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cardPlaceIds = useMemo(() => places.map((place) => place.id), [places]);
   const cardCreatorIds = useMemo(
     () =>
@@ -295,8 +298,9 @@ export default function ExplorePage() {
 
         if (error) {
           console.error("Error removing favorite:", error);
-          alert("Failed to remove from favorites: " + error.message);
+          showFavoriteError(`Failed to remove from favorites: ${error.message}`);
         } else {
+          setFavoriteError(null);
           setFavorites((prev) => {
             const next = new Set(prev);
             next.delete(placeId);
@@ -316,14 +320,15 @@ export default function ExplorePage() {
 
         if (error) {
           console.error("Error adding favorite:", error);
-          alert("Failed to add to favorites: " + error.message);
+          showFavoriteError(`Failed to add to favorites: ${error.message}`);
         } else {
+          setFavoriteError(null);
           setFavorites((prev) => new Set(prev).add(placeId));
         }
       }
     } catch (err) {
       console.error("Toggle favorite error:", err);
-      alert("An error occurred. Check console for details.");
+      showFavoriteError("Could not update favorites. Please try again.");
     }
   }
 
@@ -340,9 +345,25 @@ export default function ExplorePage() {
   // Quick search chips
   const quickSearchChips = ["Romantic", "Quiet", "Sunset", "Coffee", "Nature"];
 
+  function showFavoriteError(message: string) {
+    setFavoriteError(message);
+    if (favoriteErrorTimerRef.current) clearTimeout(favoriteErrorTimerRef.current);
+    favoriteErrorTimerRef.current = setTimeout(() => {
+      favoriteErrorTimerRef.current = null;
+      setFavoriteError(null);
+    }, 5000);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (favoriteErrorTimerRef.current) clearTimeout(favoriteErrorTimerRef.current);
+    };
+  }, []);
+
   return (
     <SectionErrorBoundary>
       <main className="h-screen bg-[#FAFAF7] flex flex-col overflow-hidden">
+      <TransientNotice message={favoriteError} onDismiss={() => setFavoriteError(null)} />
       <TopBar
         showSearchBar={true}
         searchValue={q}
@@ -458,7 +479,7 @@ export default function ExplorePage() {
         
         Container: max-width 1920px, padding 24px (desktop) / 16-20px (mobile)
         Card image: aspect 4:3, radius 18-22px, carousel dots
-        See app/config/layout.ts for detailed configuration
+        See app/config/layoutConfig.ts for detailed configuration
       */}
       <div className="flex-1 min-h-0 pt-[64px] overflow-hidden">
         {/* Desktop XL & Desktop: Split view (≥1120px) - Airbnb-like responsive rules */}

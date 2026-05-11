@@ -9,6 +9,7 @@ import { isUserAdmin } from "../../../../lib/access";
 import Icon from "../../../../components/Icon";
 import { getTagEmoji, stripTagEmoji } from "../../../../constants";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
+import ConfirmDialog from "../../../../components/ConfirmDialog";
 
 export default function EditTagsPage() {
   const router = useRouter();
@@ -27,6 +28,7 @@ export default function EditTagsPage() {
   const [newTagEmoji, setNewTagEmoji] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingTag, setDeletingTag] = useState<string | null>(null);
+  const [tagToDelete, setTagToDelete] = useState<TagRow | null>(null);
 
   const loadTags = useCallback(async () => {
     try {
@@ -188,9 +190,6 @@ export default function EditTagsPage() {
 
   async function handleDeleteTag(tagRow: TagRow) {
     const tagName = tagRow.name;
-    if (!confirm(`Delete tag "${tagName}"? This will remove it from all places.`)) {
-      return;
-    }
 
     try {
       setDeletingTag(tagName);
@@ -212,11 +211,13 @@ export default function EditTagsPage() {
         throw new Error(errorData.error || "Failed to delete tag");
       }
 
-      setTags(tags.filter((t) => t.name !== tagName));
+      setTags((cur) => cur.filter((t) => t.name !== tagName));
+      setTagToDelete(null);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to delete tag";
       console.error("Error deleting tag:", err);
       setError(message);
+      setTagToDelete(null);
     } finally {
       setDeletingTag(null);
     }
@@ -233,6 +234,23 @@ export default function EditTagsPage() {
   return (
     <SectionErrorBoundary>
       <main className="min-h-screen bg-warm-white pb-24 flex flex-col">
+      <ConfirmDialog
+        open={tagToDelete !== null}
+        title="Delete tag?"
+        description={
+          tagToDelete
+            ? `This removes "${stripTagEmoji(tagToDelete.name)}" from all places. This action cannot be undone.`
+            : "This tag will be removed from all places."
+        }
+        confirmLabel="Delete"
+        loading={tagToDelete !== null && deletingTag === tagToDelete.name}
+        onClose={() => {
+          if (!deletingTag) setTagToDelete(null);
+        }}
+        onConfirm={() => {
+          if (tagToDelete) void handleDeleteTag(tagToDelete);
+        }}
+      />
       {/* Desktop Header */}
       <div className="hidden lg:block sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
         <div className="max-w-2xl mx-auto px-4 sm:px-6">
@@ -400,7 +418,7 @@ export default function EditTagsPage() {
                           <Icon name="close" size={14} />
                         </button>
                         <button
-                          onClick={() => handleDeleteTag(tagRow)}
+                          onClick={() => setTagToDelete(tagRow)}
                           disabled={deletingTag === tagRow.name}
                           className="p-1.5 rounded-lg border border-[#C96A5B]/30 bg-[#C96A5B]/10 hover:bg-[#C96A5B]/20 text-[#C96A5B] transition disabled:opacity-50"
                           aria-label="Delete"

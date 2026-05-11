@@ -471,14 +471,14 @@ export default function GoogleImportField({
         throw new Error("Invalid response: place_id not found");
       }
 
-      // If we imported into an existing place, just hard reload that editor so cards refresh
+      // If we imported into an existing place, return to the editor route.
       if (targetPlaceId) {
-        window.location.href = `/places/${targetPlaceId}/edit`;
+        router.push(`/places/${targetPlaceId}/edit`);
         return;
       }
 
       // Otherwise we created a new place — go to its editor
-      window.location.href = `/places/${data.place_id}/edit`;
+      router.push(`/places/${data.place_id}/edit`);
     } catch (error: unknown) {
       logger.error("Import error:", error);
       setError(toErrorLike(error).message || "Failed to import place");
@@ -528,10 +528,10 @@ export default function GoogleImportField({
               <button
                 type="button"
                 onClick={() => {
-                  const id = duplicatePlace.id;
-                  setDuplicatePlace(null);
-                  window.location.href = `/places/${id}/edit`;
-                }}
+	                  const id = duplicatePlace.id;
+	                  setDuplicatePlace(null);
+	                  router.push(`/places/${id}/edit`);
+	                }}
                 className="flex-1 rounded-xl px-4 py-3 text-sm font-medium bg-[#8F9E4F] text-white hover:bg-[#556036] transition"
               >
                 Open existing

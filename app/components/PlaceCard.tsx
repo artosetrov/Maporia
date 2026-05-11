@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { ReactNode, useCallback, useEffect, useState, useRef, memo } from "react";
 import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
@@ -53,6 +54,7 @@ type PlaceCardProps = {
   onPhotoClick?: () => void;
   onRemoveFavorite?: (placeId: string, e: React.MouseEvent) => void;
   priority?: boolean; // Set true for above-the-fold cards to fix LCP warnings
+  openInNewTab?: boolean; // Desktop default is true; map/listing pages can opt into same-tab navigation.
   // Batch-loaded data (from useBatchPlaceData) — avoids per-card N+1 queries
   batchPhotos?: string[];
   batchProfile?: { display_name: string | null; username: string | null; avatar_url: string | null };
@@ -68,8 +70,10 @@ function isValidUUID(str: string): boolean {
   return uuidRegex.test(str);
 }
 
-function PlaceCard({ place, userAccess, userId, favoriteButton, hauntedGemIndex, showPhotoSlider = true, onClick, onPhotoClick, onRemoveFavorite, priority = false, batchPhotos, batchProfile }: PlaceCardProps) {
+function PlaceCard({ place, userAccess, userId, favoriteButton, hauntedGemIndex, showPhotoSlider = true, onClick, onPhotoClick, onRemoveFavorite, priority = false, openInNewTab, batchPhotos, batchProfile }: PlaceCardProps) {
+  const router = useRouter();
   const isDesktop = useIsDesktop();
+  const shouldOpenInNewTab = openInNewTab ?? isDesktop;
   // Use batch-loaded profile if available; otherwise fall back to per-card loading
   const [creatorProfile, setCreatorProfile] = useState<{ display_name: string | null; username: string | null; avatar_url: string | null } | null>(batchProfile ?? null);
   const loadedUserIdRef = useRef<string | null>(null);
@@ -513,10 +517,10 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, hauntedGemIndex,
     if (onPhotoClick) {
       onPhotoClick();
     } else {
-      if (isDesktop) {
+      if (shouldOpenInNewTab) {
         window.open(`/id/${place.id}`, "_blank", "noopener,noreferrer");
       } else {
-        window.location.href = `/id/${place.id}`;
+        router.push(`/id/${place.id}`);
       }
     }
   };
@@ -569,8 +573,8 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, hauntedGemIndex,
         ref={cardRef}
         href={isLocked ? lockedFallbackHref : `/id/${place.id}`}
         onClick={handleCardClick}
-        target={!isLocked && isDesktop ? "_blank" : undefined}
-        rel={!isLocked && isDesktop ? "noopener noreferrer" : undefined}
+        target={!isLocked && shouldOpenInNewTab ? "_blank" : undefined}
+        rel={!isLocked && shouldOpenInNewTab ? "noopener noreferrer" : undefined}
         className={`block group relative w-full min-w-0 cursor-pointer`}
         {...(isLocked && { "aria-label": "Premium place — sign in to view" })}
       >
@@ -705,13 +709,13 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, hauntedGemIndex,
       </div>
 
       {/* Text content - directly under photo, no container */}
-      <div className="flex flex-col gap-1">
+      <div className="flex min-w-0 flex-col gap-1 overflow-hidden">
         {/* Title - Fraunces font - show "Haunted Gem #..." for locked places */}
-        <div className="font-fraunces text-base font-semibold text-[#1F2A1F] line-clamp-1">{displayTitle}</div>
+        <div className="max-w-full truncate font-fraunces text-base font-semibold text-[#1F2A1F]">{displayTitle}</div>
 
         {/* City - always show (even for locked places) */}
         {place.city && (
-          <div className="text-sm text-[#6F7A5A] line-clamp-1">{place.city}</div>
+          <div className="max-w-full truncate text-sm text-[#6F7A5A]">{place.city}</div>
         )}
       </div>
     </Link>

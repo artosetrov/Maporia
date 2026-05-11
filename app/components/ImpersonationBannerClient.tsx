@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 
 type Status = {
@@ -11,6 +12,7 @@ type Status = {
 };
 
 export default function ImpersonationBannerClient() {
+  const router = useRouter();
   const [status, setStatus] = useState<Status | null>(null);
   const [exiting, setExiting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +69,8 @@ export default function ImpersonationBannerClient() {
         return;
       }
 
-      window.location.href = "/profile?section=users";
+      router.replace("/profile?section=users");
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось выйти");
       setExiting(false);

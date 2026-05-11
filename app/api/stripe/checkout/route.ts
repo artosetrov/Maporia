@@ -33,6 +33,7 @@ import { isImpersonatingFromRequest } from "../../../lib/impersonation";
 import { getStripeRedirectOrigin } from "../../../lib/stripeRedirectOrigin";
 import { logger } from "../../../lib/logger";
 import type { PaidPlan } from "../../../types";
+import type Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -60,6 +61,61 @@ function defaultCycleForPlan(plan: PlanId): Cycle {
   if (usd?.lifetime) return "lifetime";
   if (usd?.month) return "month";
   return "month"; // defensive
+}
+
+function isOpenSubscription(status: Stripe.Subscription.Status): boolean {
+  return status === "active" || status === "trialing" || status === "past_due" || status === "unpaid";
+}
+
+function isUpdatableSubscription(status: Stripe.Subscription.Status): boolean {
+  return status === "active" || status === "trialing";
+}
+
+async function listOpenSubscriptions(stripe: Stripe, customerId: string): Promise<Stripe.Subscription[]> {
+  const subscriptions = await stripe.subscriptions.list({
+    customer: customerId,
+    status: "all",
+    limit: 100,
+  });
+  return subscriptions.data.filter((sub) => isOpenSubscription(sub.status));
+}
+
+async function createPortalSession(stripe: Stripe, customerId: string, origin: string) {
+  return stripe.billingPortal.sessions.create({
+    customer: customerId,
+    return_url: `${origin}/profile?section=premium`,
+  });
+}
+
+async function createSubscriptionUpdatePortalSession(args: {
+  stripe: Stripe;
+  customerId: string;
+  origin: string;
+  subscription: Stripe.Subscription;
+  targetPriceId: string;
+}) {
+  const item = args.subscription.items.data[0];
+  if (!item) return null;
+
+  return args.stripe.billingPortal.sessions.create({
+    customer: args.customerId,
+    return_url: `${args.origin}/profile?section=premium`,
+    flow_data: {
+      type: "subscription_update_confirm",
+      after_completion: {
+        type: "redirect",
+        redirect: { return_url: `${args.origin}/profile?section=premium&payment=success` },
+      },
+      subscription_update_confirm: {
+        subscription: args.subscription.id,
+        items: [{
+          id: item.id,
+          price: args.targetPriceId,
+          quantity: item.quantity ?? 1,
+        }],
+      },
+    },
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -96,6 +152,9 @@ export async function POST(request: NextRequest) {
     const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(body.access_token);
     const user = authData?.user;
     if (authError || !user) return jsonError("Unauthorized", 401, "UNAUTHORIZED");
+
+    const stripeCustomerId = await getOrCreateStripeCustomer(user.id, user.email || "");
+    const origin = getStripeRedirectOrigin(request);
 
     // --- Резолвим Stripe Price ID + mode через registry ---
     let priceId: string | null = null;
@@ -148,7 +207,49 @@ export async function POST(request: NextRequest) {
         throw e;
       }
 
-      mode = cycleInput === "lifetime" ? "payment" : "subscription";
+      const targetMode: "subscription" | "payment" = cycleInput === "lifetime" ? "payment" : "subscription";
+
+      if (targetMode === "subscription") {
+        const openSubscriptions = await listOpenSubscriptions(stripe, stripeCustomerId);
+        if (openSubscriptions.length > 0) {
+          const updatableSubscriptions = openSubscriptions.filter((sub) =>
+            isUpdatableSubscription(sub.status) && sub.items.data.length === 1
+          );
+
+          if (updatableSubscriptions.length === 1) {
+            try {
+              const portal = await createSubscriptionUpdatePortalSession({
+                stripe,
+                customerId: stripeCustomerId,
+                origin,
+                subscription: updatableSubscriptions[0],
+                targetPriceId: priceId,
+              });
+              if (portal) {
+                return NextResponse.json({
+                  url: portal.url,
+                  mode: "billing_portal",
+                  reason: "SUBSCRIPTION_UPDATE_CONFIRM",
+                });
+              }
+            } catch (e) {
+              const message = e instanceof Error ? e.message : String(e);
+              logger.warn("[stripe/checkout] Failed to create subscription update portal flow:", message);
+            }
+          }
+
+          const portal = await createPortalSession(stripe, stripeCustomerId, origin);
+          return NextResponse.json({
+            url: portal.url,
+            mode: "billing_portal",
+            reason: updatableSubscriptions.length > 1
+              ? "MULTIPLE_ACTIVE_SUBSCRIPTIONS"
+              : "ACTIVE_SUBSCRIPTION_EXISTS",
+          });
+        }
+      }
+
+      mode = targetMode;
       sessionMetadata.plan = body.plan;
       sessionMetadata.period = cycleInput;
       sessionMetadata.cycle = cycleInput;
@@ -169,10 +270,6 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-
-    const stripeCustomerId = await getOrCreateStripeCustomer(user.id, user.email || "");
-
-    const origin = getStripeRedirectOrigin(request);
 
     const session = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,

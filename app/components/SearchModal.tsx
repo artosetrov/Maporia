@@ -9,6 +9,7 @@ import { HOME_TABS, type HomeKind } from "../types/home";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { getCitiesWithPlaces, type City } from "../lib/cities";
 import { supabase } from "../lib/supabase";
+import { fetchTopCities, topCityNames } from "../lib/topCities";
 import Icon, { type IconName } from "./Icon";
 import { sanitizePostgrestValueForLike, tokenizeQuery, buildTokenSearchExpr } from "../utils";
 import {
@@ -169,6 +170,28 @@ type SearchResult = {
   coverUrl?: string | null;
 };
 
+const orderCitiesByTopNames = (
+  cities: City[],
+  topNames: readonly string[],
+): City[] => {
+  if (topNames.length === 0) return cities;
+
+  const cityByName = new Map(
+    cities.map((city) => [city.name.toLowerCase(), city]),
+  );
+  const ordered: City[] = [];
+  const seen = new Set<string>();
+
+  for (const name of topNames) {
+    const city = cityByName.get(name.toLowerCase());
+    if (!city || seen.has(city.id)) continue;
+    ordered.push(city);
+    seen.add(city.id);
+  }
+
+  return [...ordered, ...cities.filter((city) => !seen.has(city.id))];
+};
+
 export default function SearchModal({
   isOpen,
   onClose,
@@ -235,7 +258,9 @@ export default function SearchModal({
     };
   }, []);
 
-  // Load cities
+  // Load cities. Suggested destinations use the same top-by-visible-count
+  // order as the home hero dropdown, while the full city rows keep coords for
+  // radius filters and autocomplete search.
   useEffect(() => {
     let isUnmounting = false;
 
@@ -243,10 +268,17 @@ export default function SearchModal({
       if (isUnmounting) return;
       
       try {
-        const citiesData = await getCitiesWithPlaces();
+        const [citiesData, topCities] = await Promise.all([
+          getCitiesWithPlaces(),
+          fetchTopCities(5),
+        ]);
         if (isUnmounting) return;
-        setCities(citiesData);
-        populateCityCoordsCache(citiesData);
+        const orderedCities = orderCitiesByTopNames(
+          citiesData,
+          topCityNames(topCities),
+        );
+        setCities(orderedCities);
+        populateCityCoordsCache(orderedCities);
       } catch (err: unknown) {
         if (isAbortLikeError(err)) {
           return;
@@ -303,7 +335,10 @@ export default function SearchModal({
     kind: HomeKind | null,
   ) => {
     try {
-      let countQuery = supabase.from("places").select("id", { count: 'exact', head: true });
+      let countQuery = supabase
+        .from("places")
+        .select("id", { count: 'exact', head: true })
+        .eq("is_hidden", false);
 
       // Filter by city (with radius)
       if (city) {
@@ -397,6 +432,7 @@ export default function SearchModal({
               .from("places")
               .select("id", { count: "exact", head: true })
               .eq("kind", tab)
+              .eq("is_hidden", false)
               .or(radiusFilter);
             if (error) {
               if (process.env.NODE_ENV !== "production") {
@@ -433,7 +469,10 @@ export default function SearchModal({
     kind: HomeKind | null,
   ) => {
     try {
-      let countQuery = supabase.from("places").select("id", { count: 'exact', head: true });
+      let countQuery = supabase
+        .from("places")
+        .select("id", { count: 'exact', head: true })
+        .eq("is_hidden", false);
 
       // Filter by city (with radius)
       if (city) {
@@ -552,7 +591,8 @@ export default function SearchModal({
           .from("places")
           .select(
             "id,title,description,city,city_name_cached,country,address,kind,categories,cover_url,lat,lng",
-          );
+          )
+          .eq("is_hidden", false);
 
         if (tokens.length > 0) {
           const expr = buildTokenSearchExpr(tokens, [...PLACE_SEARCH_FIELDS]);
@@ -851,11 +891,18 @@ export default function SearchModal({
           tempSelectedTags.length > 0 ||
           tempSelectedKind !== null;
 
-  // Get popular cities (first 6 from cities list)
-  const popularCities = useMemo(() => cities.slice(0, 6), [cities]);
-
   // Get current city (from profile or last selected)
   const currentCity = selectedCity || DEFAULT_CITY;
+
+  // Get popular cities in home-hero order, excluding the current city row that
+  // is already rendered above as "Current location".
+  const popularCities = useMemo(
+    () =>
+      cities
+        .filter((city) => city.name.toLowerCase() !== currentCity.toLowerCase())
+        .slice(0, 5),
+    [cities, currentCity],
+  );
 
   if (!isOpen) return null;
 

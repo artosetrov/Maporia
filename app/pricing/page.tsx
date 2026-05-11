@@ -79,11 +79,13 @@ function decideCtaLabel(args: {
   current: PlanId;
   target: PlanId;
   isCurrent: boolean;
+  isIncludedPremium: boolean;
   isImpersonating: boolean;
   isLoading: boolean;
   isOneTime: boolean;
 }): string {
   if (args.isCurrent) return "Current plan";
+  if (args.isIncludedPremium) return "Included";
   if (args.isImpersonating) return "Locked";
   if (args.isLoading) return "Loading…";
 
@@ -124,6 +126,7 @@ export default function PricingPage() {
   const [cycleToggle, setCycleToggle] = useState<"month" | "year">("year");
 
   const currentPlan: PlanId = (access?.plan as PlanId | undefined) ?? "free";
+  const currentPeriod = profile?.plan_period as Cycle | null | undefined;
 
   // Список планов в порядке отображения. Premium первым (consumer entry-point),
   // дальше creator-планы по возрастанию цены.
@@ -285,13 +288,18 @@ export default function PricingPage() {
               const features = getFeatures(planId);
 
               const isCurrent = currentPlan === planId;
+              const isCurrentCycle =
+                isCurrent &&
+                (cycle === "lifetime" || currentPeriod === cycle || !currentPeriod);
+              const isIncludedPremium = planId === "premium_viewer" && currentPlan.startsWith("creator_");
               const isLoading = checkoutPlan === planId;
               const isOneTime = cycle === "lifetime";
 
               const ctaLabel = decideCtaLabel({
                 current: currentPlan,
                 target: planId,
-                isCurrent,
+                isCurrent: isCurrentCycle,
+                isIncludedPremium,
                 isImpersonating,
                 isLoading,
                 isOneTime,
@@ -372,7 +380,7 @@ export default function PricingPage() {
                   <button
                     type="button"
                     onClick={() => startCheckout(planId)}
-                    disabled={isCurrent || isLoading || isImpersonating}
+                    disabled={isCurrentCycle || isIncludedPremium || isLoading || isImpersonating}
                     title={
                       isImpersonating
                         ? "Purchases are disabled in impersonation mode"
@@ -380,7 +388,7 @@ export default function PricingPage() {
                     }
                     className={cx(
                       "w-full h-11 rounded-xl text-sm font-medium transition",
-                      isCurrent || isImpersonating
+                      isCurrentCycle || isIncludedPremium || isImpersonating
                         ? "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
                         : display.highlighted
                           ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"

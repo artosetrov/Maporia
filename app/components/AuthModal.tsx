@@ -153,11 +153,24 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
     setError(null);
     setVerifying(true);
 
-    const { error: verifyError } = await supabase.auth.verifyOtp({
+    // Сначала пробуем как magiclink-OTP (для существующих юзеров signInWithOtp
+    // отправляет именно такой тип). Если юзер новый — fallback на 'email' (signup OTP).
+    // В PKCE-flow тип "email" без code_verifier фейлится с "Invalid or expired",
+    // поэтому пробуем 'magiclink' первым — он работает без verifier'а.
+    let { error: verifyError } = await supabase.auth.verifyOtp({
       email,
       token: joinedCode,
-      type: "email",
+      type: "magiclink",
     });
+
+    if (verifyError) {
+      const fallback = await supabase.auth.verifyOtp({
+        email,
+        token: joinedCode,
+        type: "email",
+      });
+      verifyError = fallback.error;
+    }
 
     setVerifying(false);
     if (verifyError) {

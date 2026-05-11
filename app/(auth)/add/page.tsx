@@ -14,7 +14,7 @@
  *  - `returnTo` пробрасывается в редактор, чтобы Cancel вернул туда же.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import type { Database, PlaceKind } from "../../types/supabase";
@@ -26,6 +26,13 @@ import { canUserAddPlace, canUserCreate, canUserCreateMulti, checkQuota } from "
 import type { QuotaCheck } from "../../lib/access";
 import { EXTRA_LISTING, PLAN_CONFIG, formatPrice, suggestPlanForKind } from "../../lib/plans";
 import { createLink } from "../../lib/placeLinks";
+import {
+  isOrphanAddDraftCandidate,
+  orphanAddDraftCutoff,
+  ORPHAN_ADD_DRAFT_CLEANUP_LIMIT,
+  ORPHAN_ADD_DRAFT_SELECT,
+  type OrphanAddDraftCandidate,
+} from "../../lib/placeDrafts";
 import Icon from "../../components/Icon";
 import ImpersonationDisclaimer from "../../components/ImpersonationDisclaimer";
 import { useImpersonationStatus } from "../../hooks/useImpersonationStatus";
@@ -135,6 +142,7 @@ export default function AddPlacePage() {
     quota: QuotaCheck;
   } | null>(null);
   const [buyingAddon, setBuyingAddon] = useState(false);
+  const cleanupStartedRef = useRef(false);
 
   /**
    * `?linkTo=<placeId>` — после создания авто-создаём place_link к этому place.
@@ -168,6 +176,60 @@ export default function AddPlacePage() {
 
   const canAdd = canUserAddPlace(access);
 
+  async function cleanupOwnOrphanDrafts(): Promise<number> {
+    if (!user) return 0;
+
+    const { data, error: loadError } = await supabase
+      .from("places")
+      .select(ORPHAN_ADD_DRAFT_SELECT)
+      .eq("created_by", user.id)
+      .eq("title", "")
+      .eq("is_hidden", true)
+      .lt("created_at", orphanAddDraftCutoff())
+      .limit(ORPHAN_ADD_DRAFT_CLEANUP_LIMIT);
+
+    if (loadError) {
+      console.warn("[add] orphan draft cleanup load failed:", loadError.message);
+      return 0;
+    }
+
+    const draftIds = ((data ?? []) as OrphanAddDraftCandidate[])
+      .filter(isOrphanAddDraftCandidate)
+      .map((place) => place.id);
+    if (draftIds.length === 0) return 0;
+
+    const [
+      linksAsParent,
+      linksAsChild,
+      photosResult,
+      commentsResult,
+      reactionsResult,
+      placesResult,
+    ] = await Promise.all([
+      supabase.from("place_links").delete().in("parent_place_id", draftIds),
+      supabase.from("place_links").delete().in("child_place_id", draftIds),
+      supabase.from("place_photos").delete().in("place_id", draftIds),
+      supabase.from("comments").delete().in("place_id", draftIds),
+      supabase.from("reactions").delete().in("place_id", draftIds),
+      supabase.from("places").delete().eq("created_by", user.id).in("id", draftIds),
+    ]);
+
+    const cleanupError =
+      linksAsParent.error ||
+      linksAsChild.error ||
+      photosResult.error ||
+      commentsResult.error ||
+      reactionsResult.error ||
+      placesResult.error;
+
+    if (cleanupError) {
+      console.warn("[add] orphan draft cleanup failed:", cleanupError.message);
+      return 0;
+    }
+
+    return draftIds.length;
+  }
+
   // Гейт по авторизации.
   // 2026-05-10: убрали replaceToAuth() вызов + replaceToAuth из deps —
   // (auth)/layout.tsx → RequireAuth уже рендерит null до user, эта ветка
@@ -176,6 +238,13 @@ export default function AddPlacePage() {
   useEffect(() => {
     if (accessLoading) return;
     if (!user) return;
+  }, [accessLoading, user]);
+
+  useEffect(() => {
+    if (accessLoading || !user || cleanupStartedRef.current) return;
+    cleanupStartedRef.current = true;
+    void cleanupOwnOrphanDrafts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessLoading, user]);
 
   // Если пользователь пришёл с ?kind= или ?kinds=… — создаём сразу.
@@ -190,6 +259,8 @@ export default function AddPlacePage() {
     if (kinds.length === 0) return;
 
     const { primary, secondary } = splitPrimaryAndSecondary(kinds);
+
+    await cleanupOwnOrphanDrafts();
 
     // 1) Базовое право публиковать ВСЕ выбранные kind'ы одновременно.
     if (!canUserCreateMulti(access, kinds)) {
@@ -409,8 +480,7 @@ export default function AddPlacePage() {
       }
 
       const editUrl = `/places/${placeData.id}/edit?returnTo=${encodeURIComponent(returnTo)}`;
-      // window.location.href сохранил из старой версии — гарантирует чистый mount редактора.
-      window.location.href = editUrl;
+      router.push(editUrl);
     } catch (err) {
       console.error("Exception creating place:", err);
       setError(err instanceof Error ? err.message : "Failed to create place");

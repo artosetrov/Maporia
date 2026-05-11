@@ -42,6 +42,8 @@ import ImpersonationDisclaimer from "../../components/ImpersonationDisclaimer";
 import { useImpersonationStatus } from "../../hooks/useImpersonationStatus";
 import { usePremiumModalContext } from "../../contexts/PremiumModalContext";
 import { useBatchPlaceData } from "../../hooks/useBatchPlaceData";
+import TransientNotice from "../../components/TransientNotice";
+import ConfirmDialog from "../../components/ConfirmDialog";
 
 type Place = {
   id: string;
@@ -426,7 +428,8 @@ function ProfileInner() {
       url.searchParams.delete("payment");
       window.history.replaceState({}, "", url.toString());
 
-      // If payment=success, verify and activate premium via server
+      // If payment=success, reconcile Stripe state via server. This covers
+      // one-time Premium and subscription webhooks that are delayed/unreachable.
       if (paymentParam === "success") {
         (async () => {
           try {
@@ -439,11 +442,11 @@ function ProfileInner() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ access_token: token }),
             });
-            const json = await res.json();
+            const json = (await res.json()) as { activated?: boolean; synced?: boolean };
 
-            if (json.activated) {
-              // Reload page to reflect new premium status
-              window.location.replace("/profile");
+            if (json.activated || json.synced) {
+              // Reload page to reflect the synced plan.
+              window.location.replace("/profile?section=premium");
               return;
             }
           } catch (err) {
@@ -678,11 +681,11 @@ function ProfileInner() {
       {/* Payment result banner */}
       {paymentBanner === "success" && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] w-[90%] max-w-md px-4 py-3 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium text-center shadow-lg animate-slide-down">
-          Premium активирован! Спасибо за покупку.
+          Payment successful. We&apos;re syncing your plan.
           <button
             onClick={() => setPaymentBanner(null)}
             className="ml-3 text-white/80 hover:text-white transition-colors"
-            aria-label="Закрыть"
+            aria-label="Close"
           >
             ✕
           </button>
@@ -690,11 +693,11 @@ function ProfileInner() {
       )}
       {paymentBanner === "cancelled" && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] w-[90%] max-w-md px-4 py-3 rounded-xl bg-[#FAFAF7] border border-[#ECEEE4] text-[#6F7A5A] text-sm font-medium text-center shadow-lg animate-slide-down">
-          Оплата отменена. Вы можете попробовать снова.
+          Payment cancelled. You can try again.
           <button
             onClick={() => setPaymentBanner(null)}
             className="ml-3 text-[#6F7A5A]/80 hover:text-[#1F2A1F] transition-colors"
-            aria-label="Закрыть"
+            aria-label="Close"
           >
             ✕
           </button>
@@ -2073,6 +2076,7 @@ function AddedPlacesSection({
   const [deletingPlaceId, setDeletingPlaceId] = useState<string | null>(null);
   const [menuOpenPlaceId, setMenuOpenPlaceId] = useState<string | null>(null);
   const [deleteConfirmPlace, setDeleteConfirmPlace] = useState<{ id: string; title: string } | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   function openDeletePlaceConfirm(placeId: string, placeTitle: string) {
     setDeleteConfirmPlace({ id: placeId, title: placeTitle || "this place" });
@@ -2086,6 +2090,7 @@ function AddedPlacesSection({
     if (!user) return;
     setDeletingPlaceId(placeId);
     setDeleteConfirmPlace(null);
+    setDeleteError(null);
 
     try {
       const currentIsAdmin = isUserAdmin(access);
@@ -2100,7 +2105,7 @@ function AddedPlacesSection({
 
       const { data: deleteTarget, error: targetError } = await targetQuery.single();
       if (targetError || !deleteTarget) {
-        alert(targetError?.message || "You do not have permission to delete this place.");
+        setDeleteError(targetError?.message || "You do not have permission to delete this place.");
         setDeletingPlaceId(null);
         return;
       }
@@ -2128,7 +2133,7 @@ function AddedPlacesSection({
       const relatedDeleteError = photosResult.error || commentsResult.error || reactionsResult.error;
       if (relatedDeleteError) {
         console.error("Related place delete error:", relatedDeleteError);
-        alert(relatedDeleteError.message || "Failed to delete related place data");
+        setDeleteError(relatedDeleteError.message || "Failed to delete related place data");
         setDeletingPlaceId(null);
         return;
       }
@@ -2146,7 +2151,7 @@ function AddedPlacesSection({
 
       if (deleteError) {
         console.error("Delete error:", deleteError);
-        alert(deleteError.message || "Failed to delete place");
+        setDeleteError(deleteError.message || "Failed to delete place");
         setDeletingPlaceId(null);
         return;
       }
@@ -2165,9 +2170,10 @@ function AddedPlacesSection({
       if (onPlaceDeleted) {
         onPlaceDeleted(placeId);
       }
+      setDeleteError(null);
     } catch (err) {
       console.error("Exception deleting place:", err);
-      alert(err instanceof Error ? err.message : "Failed to delete place");
+      setDeleteError(err instanceof Error ? err.message : "Failed to delete place");
     } finally {
       setDeletingPlaceId(null);
     }
@@ -2246,6 +2252,7 @@ function AddedPlacesSection({
 
   return (
     <div>
+      <TransientNotice message={deleteError} onDismiss={() => setDeleteError(null)} />
       {/* Header with title and Add place button */}
       <div className="hidden lg:flex items-center justify-between mb-8">
         <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F]">Added</h1>
@@ -2663,6 +2670,7 @@ function ElementsSection() {
   const [isSaving, setIsSaving] = useState(false);
   const [, setIsLoading] = useState(true);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   
   // Default values
   const defaultContent = useMemo(() => ({
@@ -2777,10 +2785,11 @@ function ElementsSection() {
     try {
       setIsSaving(true);
       setSaveSuccess(false);
+      setSaveError(null);
       
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        alert("You must be logged in to save settings");
+        setSaveError("You must be logged in to save settings");
         return;
       }
 
@@ -2805,6 +2814,7 @@ function ElementsSection() {
           const data = await response.json();
           if (data.success) {
             setSaveSuccess(true);
+            setSaveError(null);
             setIsEditing(false);
             setTimeout(() => setSaveSuccess(false), 3000);
           } else {
@@ -2836,7 +2846,7 @@ function ElementsSection() {
           console.error("Non-JSON error response:", text.substring(0, 200));
         }
         
-        alert(errorMessage);
+        setSaveError(errorMessage);
       }
     } catch (error) {
       // Silently ignore AbortError
@@ -2850,7 +2860,7 @@ function ElementsSection() {
       } else {
         console.error("Error saving premium modal settings:", error);
       }
-      alert(errorMessage);
+      setSaveError(errorMessage);
     } finally {
       setIsSaving(false);
     }
@@ -2858,6 +2868,7 @@ function ElementsSection() {
 
   return (
     <div>
+      <TransientNotice message={saveError} onDismiss={() => setSaveError(null)} />
       {/* Header */}
       <div className="hidden lg:flex items-center justify-between mb-8">
         <h1 className="text-3xl font-semibold font-fraunces text-[#1F2A1F]">Elements</h1>
@@ -3248,6 +3259,7 @@ function ElementsSection() {
 }
 
 function UsersSection({ loading, currentUserId }: { loading: boolean; currentUserId: string | null }) {
+  const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [usersLoading, setUsersLoading] = useState(true);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
@@ -3255,6 +3267,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
   const [impersonatingUserId, setImpersonatingUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirmUserId, setDeleteConfirmUserId] = useState<string | null>(null);
+  const [impersonationConfirmUser, setImpersonationConfirmUser] = useState<User | null>(null);
   const [pendingRoleChanges, setPendingRoleChanges] = useState<Map<string, AdminAssignable>>(new Map());
 
   // Admin manage modal state (edit email / password / send reset / send magic link).
@@ -3557,7 +3570,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
     setDeleteConfirmUserId(userId);
   }
 
-  async function handleImpersonate(user: User) {
+  function openImpersonationConfirm(user: User) {
     if (user.id === currentUserId) {
       setError("Нельзя зайти под собой");
       return;
@@ -3567,16 +3580,14 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
       return;
     }
 
-    const targetLabel = user.display_name || user.username || user.email || "этим пользователем";
-    if (typeof window !== "undefined") {
-      const ok = window.confirm(
-        `Войти как ${targetLabel}?\n\nВсе ваши действия будут залогированы. Stripe-операции под чужим аккаунтом заблокированы. Вернуться обратно можно через баннер в шапке.`
-      );
-      if (!ok) return;
-    }
+    setError(null);
+    setImpersonationConfirmUser(user);
+  }
 
+  async function handleImpersonate(user: User) {
     setImpersonatingUserId(user.id);
     setError(null);
+    setImpersonationConfirmUser(null);
 
     try {
       const {
@@ -3622,8 +3633,8 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
         return;
       }
 
-      // Полная перезагрузка — чтобы все провайдеры (UserAccessContext и др.) подхватили нового юзера.
-      window.location.href = "/";
+      router.replace("/");
+      router.refresh();
     } catch (err) {
       console.error("Error impersonating user:", err);
       setError(err instanceof Error ? err.message : "Не удалось войти");
@@ -3812,11 +3823,11 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
                   )}
 
                   {/* Impersonate Button */}
-                  {user.id !== currentUserId && !user.is_admin && !pendingRoleChanges.has(user.id) && (
-                    <button
-                      onClick={() => handleImpersonate(user)}
-                      disabled={impersonatingUserId === user.id}
-                      className="p-2 rounded-lg border border-[#ECEEE4] text-[#6F7A5A] hover:bg-[#FAFAF7] hover:text-[#8F9E4F] transition disabled:opacity-50 disabled:cursor-not-allowed"
+	                  {user.id !== currentUserId && !user.is_admin && !pendingRoleChanges.has(user.id) && (
+	                    <button
+	                      onClick={() => openImpersonationConfirm(user)}
+	                      disabled={impersonatingUserId === user.id}
+	                      className="p-2 rounded-lg border border-[#ECEEE4] text-[#6F7A5A] hover:bg-[#FAFAF7] hover:text-[#8F9E4F] transition disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Войти как этот пользователь"
                       aria-label="Войти как этот пользователь"
                     >
@@ -3848,7 +3859,26 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
             </div>
           ))
         )}
-      </div>
+	      </div>
+
+      <ConfirmDialog
+        open={impersonationConfirmUser !== null}
+        tone="default"
+        title="Войти как пользователь?"
+        description={
+          impersonationConfirmUser
+            ? `Вы войдёте как ${impersonationConfirmUser.display_name || impersonationConfirmUser.username || impersonationConfirmUser.email || "этот пользователь"}. Все действия будут залогированы, Stripe-операции заблокированы, вернуться можно через баннер в шапке.`
+            : "Все действия будут залогированы."
+        }
+        confirmLabel="Войти"
+        loading={impersonationConfirmUser !== null && impersonatingUserId === impersonationConfirmUser.id}
+        onClose={() => {
+          if (!impersonatingUserId) setImpersonationConfirmUser(null);
+        }}
+        onConfirm={() => {
+          if (impersonationConfirmUser) void handleImpersonate(impersonationConfirmUser);
+        }}
+      />
 
       {/* Delete user confirmation modal */}
       {deleteConfirmUserId != null && (() => {
@@ -4219,11 +4249,13 @@ function decideProfileCta(args: {
   current: PlanId;
   target: PlanId;
   isCurrent: boolean;
+  isIncludedPremium: boolean;
   isLoading: boolean;
   isImpersonating: boolean;
   isOneTime: boolean;
 }): string {
   if (args.isCurrent) return "Current";
+  if (args.isIncludedPremium) return "Included";
   if (args.isImpersonating) return "Locked";
   if (args.isLoading) return "Loading…";
   if (args.current === "free") return args.isOneTime ? "Buy" : "Subscribe";
@@ -4335,6 +4367,35 @@ function PremiumSection() {
       setOpening(false);
     }
   }
+
+  useEffect(() => {
+    if (!user || !profile?.stripe_customer_id) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess.session?.access_token;
+        if (!token) return;
+
+        const res = await fetch("/api/stripe/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ access_token: token }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { synced?: boolean; activated?: boolean };
+        if (!cancelled && res.ok && (data.synced || data.activated)) {
+          window.location.replace("/profile?section=premium");
+        }
+      } catch {
+        // Keep billing UI usable even if a background sync fails.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, profile?.stripe_customer_id]);
 
   // Готовое представление текущего плана: «$11.99/mo · billed yearly · renews 2027-05-09»
   const currentSummary = (() => {
@@ -4493,13 +4554,18 @@ function PremiumSection() {
             const cycle = profileEffectiveCycle(id, cycleToggle);
             const price = priceDisplay(id, cycle);
             const isCurrent = currentPlan === id;
+            const isCurrentCycle =
+              isCurrent &&
+              (cycle === "lifetime" || currentPeriod === cycle || !currentPeriod);
+            const isIncludedPremium = id === "premium_viewer" && currentPlan.startsWith("creator_");
             const isLoading = checkoutPlan === id;
             const isOneTime = cycle === "lifetime";
 
             const ctaLabel = decideProfileCta({
               current: currentPlan,
               target: id,
-              isCurrent,
+              isCurrent: isCurrentCycle,
+              isIncludedPremium,
               isLoading,
               isImpersonating,
               isOneTime,
@@ -4537,11 +4603,11 @@ function PremiumSection() {
                 <button
                   type="button"
                   onClick={() => startCheckout(id)}
-                  disabled={isCurrent || isLoading || isImpersonating}
+                  disabled={isCurrentCycle || isIncludedPremium || isLoading || isImpersonating}
                   title={isImpersonating ? "Purchases disabled in impersonation mode" : undefined}
                   className={cx(
                     "w-full h-10 rounded-xl text-sm font-medium transition mt-auto",
-                    isCurrent || isImpersonating
+                    isCurrentCycle || isIncludedPremium || isImpersonating
                       ? "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
                       : display.highlighted
                         ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"

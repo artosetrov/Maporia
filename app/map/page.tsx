@@ -30,7 +30,6 @@ import { DEFAULT_CITY, CITIES, getTagEmoji, stripTagEmoji } from "../constants";
 import type { HomeKind } from "../types/home";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
 import { useAuthRedirect } from "../hooks/useAuthRedirect";
-import { useIsDesktop } from "../hooks/useIsDesktop";
 import { usePremiumGate } from "../hooks/usePremiumGate";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import Icon from "../components/Icon";
@@ -41,6 +40,7 @@ import { buildCityRadiusFilter, getCityCoords } from "../lib/cityRadius";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 import { filterPlaces } from "../lib/filterPlaces";
 import { useBatchPlaceData } from "../hooks/useBatchPlaceData";
+import TransientNotice from "../components/TransientNotice";
 
 // Result types for Supabase queries (Database['public']['Tables'][table]['Row'] + Pick)
 type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
@@ -48,7 +48,7 @@ type ReactionsRow = Database["public"]["Tables"]["reactions"]["Row"];
 type CommentsRow = Database["public"]["Tables"]["comments"]["Row"];
 type PlacePhotosRow = Database["public"]["Tables"]["place_photos"]["Row"];
 
-type PlacesSelectRow = Pick<PlacesRow, "id" | "title" | "description" | "city" | "city_name_cached" | "lat" | "lng" | "cover_url" | "categories" | "tags" | "created_at" | "created_by" | "access_level" | "country" | "kind">;
+type PlacesSelectRow = Pick<PlacesRow, "id" | "title" | "description" | "address" | "city" | "city_name_cached" | "lat" | "lng" | "cover_url" | "categories" | "tags" | "created_at" | "created_by" | "access_level" | "country" | "kind" | "is_hidden" | "visibility">;
 type PlacesResult = { data: PlacesSelectRow[] | null; error: PostgrestError | null; count?: number | null };
 
 type ReactionPlaceId = Pick<ReactionsRow, "place_id">;
@@ -83,12 +83,19 @@ const isAbortLikeError = (error: unknown): boolean => {
   );
 };
 
+function getUsableMapPosition(place: Pick<Place, "lat" | "lng">): { lat: number; lng: number } | null {
+  const lat = Number(place.lat);
+  const lng = Number(place.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  if (Math.abs(lat) < 0.000001 && Math.abs(lng) < 0.000001) return null;
+  return { lat, lng };
+}
+
 function MapPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { redirectToAuth } = useAuthRedirect();
-  const isDesktop = useIsDesktop();
-
   // На странице /map по умолчанию показываем list view (включая мобильные)
   // Всегда начинаем с "list", независимо от устройства
   // Это гарантирует, что на мобильных устройствах по умолчанию открывается список, а не карта
@@ -108,6 +115,8 @@ function MapPageContent() {
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true); // Start with true to show skeleton initially
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [favoriteError, setFavoriteError] = useState<string | null>(null);
+  const favoriteErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [filteredPlacesState, setFilteredPlacesState] = useState<Place[]>([]);
   const cardPlaceIds = useMemo(() => places.map((place) => place.id), [places]);
   const cardCreatorIds = useMemo(
@@ -509,9 +518,9 @@ function MapPageContent() {
       // Фильтры Premium/Hidden/Vibe применяются на клиенте через filterPlaces
       // Используем только существующие поля: access_level для premium, категории для hidden/vibe
       let query = supabase.from("places").select(
-        "id,title,description,city,city_name_cached,lat,lng,cover_url,categories,tags,created_at,created_by,access_level,country,kind",
+        "id,title,description,address,city,city_name_cached,lat,lng,cover_url,categories,tags,created_at,created_by,access_level,country,kind,is_hidden,visibility",
         { count: 'exact' }
-      );
+      ).eq("is_hidden", false);
 
       // Фильтрация по городам и категориям применяется на клиенте для скорости
       // (как и Premium/Hidden/Vibe фильтры)
@@ -576,7 +585,7 @@ function MapPageContent() {
           
           // Пересоздаем запрос с select("*")
           // Фильтры по городам и категориям применяются на клиенте, не на сервере
-          let fallbackQuery = supabase.from("places").select("*", { count: 'exact' });
+          let fallbackQuery = supabase.from("places").select("*", { count: 'exact' }).eq("is_hidden", false);
           
           // Применяем только поисковый запрос и теги на сервере
           // Города и категории фильтруются на клиенте для скорости
@@ -600,6 +609,7 @@ function MapPageContent() {
               id: p.id,
               title: p.title || '',
               description: p.description || null,
+              address: p.address || null,
               city: p.city || null,
               city_name_cached: p.city_name_cached || null,
               lat: p.lat ?? null,
@@ -611,6 +621,8 @@ function MapPageContent() {
               created_by: p.created_by || null,
               access_level: p.access_level || null,
               country: p.country || null,
+              is_hidden: p.is_hidden ?? null,
+              visibility: p.visibility ?? null,
             })) || []) as Place[];
           }
         }
@@ -1151,8 +1163,9 @@ function MapPageContent() {
 
         if (error) {
           console.error("Error removing favorite:", error);
-          alert("Failed to remove from favorites: " + error.message);
+          showFavoriteError(`Failed to remove from favorites: ${error.message}`);
         } else {
+          setFavoriteError(null);
           setFavorites((prev) => {
             const next = new Set(prev);
             next.delete(placeId);
@@ -1172,16 +1185,32 @@ function MapPageContent() {
 
         if (error) {
           console.error("Error adding favorite:", error);
-          alert("Failed to add to favorites: " + error.message);
+          showFavoriteError(`Failed to add to favorites: ${error.message}`);
         } else {
+          setFavoriteError(null);
           setFavorites((prev) => new Set(prev).add(placeId));
         }
       }
     } catch (err) {
       console.error("Toggle favorite error:", err);
-      alert("An error occurred. Check console for details.");
+      showFavoriteError("Could not update favorites. Please try again.");
     }
   }
+
+  function showFavoriteError(message: string) {
+    setFavoriteError(message);
+    if (favoriteErrorTimerRef.current) clearTimeout(favoriteErrorTimerRef.current);
+    favoriteErrorTimerRef.current = setTimeout(() => {
+      favoriteErrorTimerRef.current = null;
+      setFavoriteError(null);
+    }, 5000);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (favoriteErrorTimerRef.current) clearTimeout(favoriteErrorTimerRef.current);
+    };
+  }, []);
 
   // Count active filters for badge (only applied filters)
   const activeFiltersCount = useMemo(() => {
@@ -1308,6 +1337,7 @@ function MapPageContent() {
 
   return (
     <main className="h-screen bg-[#FAFAF7] flex flex-col overflow-hidden">
+      <TransientNotice message={favoriteError} onDismiss={() => setFavoriteError(null)} />
       <TopBar
         showSearchBar={true}
         searchValue={searchDraft}
@@ -1459,7 +1489,8 @@ function MapPageContent() {
           try {
             let countQuery = supabase
               .from("places")
-              .select("id,title,description,city,city_name_cached,categories,tags,access_level,country,kind,lat,lng");
+              .select("id,title,description,address,city,city_name_cached,categories,tags,access_level,country,kind,lat,lng,is_hidden,visibility")
+              .eq("is_hidden", false);
             if (appliedQ.trim()) {
               const s = sanitizePostgrestValueForLike(appliedQ.trim());
               countQuery = countQuery.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
@@ -1483,7 +1514,7 @@ function MapPageContent() {
         }}
         getCityCount={async (city: string) => {
           try {
-            let query = supabase.from("places").select("id", { count: 'exact', head: true });
+            let query = supabase.from("places").select("id", { count: 'exact', head: true }).eq("is_hidden", false);
             const coords = await getCityCoords(city);
             query = query.or(buildCityRadiusFilter(city, coords.lat, coords.lng));
             const { count, error } = await query;
@@ -1536,16 +1567,14 @@ function MapPageContent() {
         
         Container: max-width 1920px, padding 24px (desktop) / 16-20px (mobile)
         Card image: aspect 4:3, radius 18-22px, carousel dots
-        See app/config/layout.ts for detailed configuration
+        See app/config/layoutConfig.ts for detailed configuration
       */}
       {/* Контент: Responsive layout согласно правилам */}
-      {/* Mobile (≤768px): только список, карта по кнопке */}
-      {/* Tablet (769-1024px): 2 колонки список/карта (55-60% / 40-45%) */}
-      {/* Desktop (≥1024px): список/карта (60/40 до 1280px, 65/35 после 1440px) */}
-      <div className="flex-1 min-h-0 overflow-hidden md:pt-[80px]">
-        {/* Desktop & Tablet: Split view - список слева, карта справа (≥769px) */}
+      {/* < xl: list-only, карта по кнопке. xl+: split view список/карта. */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {/* Wide desktop: Split view - список слева, карта справа (>=1280px) */}
         {/* Максимальная ширина: от края до края с центровкой через padding */}
-        <div className="hidden md:flex h-full w-full px-4 md:px-6 lg:px-8">
+        <div className="hidden xl:flex h-full w-full px-6 pt-[80px] lg:px-8">
           {/* Left: Scrollable list - фиксированная max-width, grid центрирован */}
           {/* Колонка списка имеет фиксированную max-width (960-1100px) */}
           {/* Grid внутри центрирован, промежутки постоянные (16-24px) */}
@@ -1666,7 +1695,7 @@ function MapPageContent() {
                 {/* Grid центрирован внутри колонки списка */}
                 {/* Промежутки постоянные (16-24px), не увеличиваются с viewport */}
                 {/* Карточки: min 260px, max 320px (жесткий предел), никогда не растягиваются */}
-                <div key={`places-grid-${filtersVersion}-${categoriesKey}-${citiesKey}`} className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 place-card-grid min-w-0">
+                <div key={`places-grid-${filtersVersion}-${categoriesKey}-${citiesKey}`} className="grid grid-cols-2 2xl:grid-cols-3 gap-4 md:gap-6 place-card-grid min-w-0">
                   {/* Жесткие ограничения на размер карточек для Desktop */}
                   {/* Максимальная ширина: 320px (жесткий предел), минимум: 260px */}
                   {/* Оптимум: 280-300px для идеального баланса */}
@@ -1693,7 +1722,7 @@ function MapPageContent() {
                         max-width: 100%;
                       }
                     }
-                    @media (min-width: 1024px) {
+                    @media (min-width: 1280px) {
                       /* Grid центрирован, промежутки постоянные (не увеличиваются) */
                       .place-card-grid {
                         justify-content: center;
@@ -1757,12 +1786,9 @@ function MapPageContent() {
                         }
                         onTagClick={handleTagClick}
                         onPhotoClick={() => {
-                          if (isDesktop) {
-                            window.open(`/id/${p.id}`, "_blank", "noopener,noreferrer");
-                          } else {
-                            router.push(`/id/${p.id}`);
-                          }
+                          router.push(`/id/${p.id}`);
                         }}
+                        openInNewTab={false}
                       />
                     </div>
                   );
@@ -1797,9 +1823,9 @@ function MapPageContent() {
           </div>
         </div>
 
-        {/* Mobile: только список, карта по кнопке (≤768px) */}
-        {/* Карта НЕ грузится по умолчанию на mobile - только после нажатия кнопки */}
-        <div className="md:hidden h-full">
+        {/* Compact/tablet: только список, карта по кнопке (<1280px) */}
+        {/* Карта НЕ грузится по умолчанию - только после нажатия кнопки */}
+        <div className="xl:hidden h-full">
           {view === "list" ? (
             <div className="h-full overflow-y-auto">
               <div 
@@ -1908,14 +1934,14 @@ function MapPageContent() {
                     </div>
                   )}
                 </div>
-                {/* Places grid - Mobile: 1 колонка, 100% ширина */}
+                {/* Places grid - mobile: 1 колонка; tablet: 2 колонки; без split-карты */}
                 {loading ? (
                   <PlaceCardGridSkeleton count={3} columns={1} />
                 ) : filteredPlaces.length === 0 ? (
                   <Empty text="No places match your filters." />
                 ) : (
                   <>
-                    <div key={`places-grid-mobile-${filtersVersion}-${categoriesKey}-${citiesKey}`} className="grid grid-cols-1 gap-4">
+                    <div key={`places-grid-mobile-${filtersVersion}-${categoriesKey}-${citiesKey}`} className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                       {filteredPlaces.map((p) => {
                         const isFavorite = favorites.has(p.id);
                         const hauntedGemIndex = lockedPlacesMap.get(p.id);
@@ -1952,12 +1978,9 @@ function MapPageContent() {
                               }
                               onTagClick={handleTagClick}
                               onPhotoClick={() => {
-                                if (isDesktop) {
-                                  window.open(`/id/${p.id}`, "_blank", "noopener,noreferrer");
-                                } else {
-                                  router.push(`/id/${p.id}`);
-                                }
+                                router.push(`/id/${p.id}`);
                               }}
+                              openInNewTab={false}
                           />
                         </div>
                       );
@@ -1998,28 +2021,28 @@ function MapPageContent() {
         </div>
       </div>
 
-      {/* Floating View Toggle Button (mobile only, ≤768px) */}
+      {/* Floating View Toggle Button (<1280px) */}
       {view === "list" && (
         <button
           onClick={() => setView("map")}
           style={{ 
             bottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
           }}
-          className="fixed left-1/2 transform -translate-x-1/2 z-[60] md:hidden flex items-center gap-2 bg-[#8F9E4F] text-white px-6 py-3 rounded-full shadow-lg hover:bg-[#7A8A3F] transition-all"
+          className="fixed left-1/2 transform -translate-x-1/2 z-[60] xl:hidden flex items-center gap-2 bg-[#8F9E4F] text-white px-6 py-3 rounded-full shadow-lg hover:bg-[#7A8A3F] transition-all"
         >
           <Icon name="map" size={20} className="text-white" />
           <span className="text-sm font-medium">Show map</span>
         </button>
       )}
       
-      {/* Back to List Button (mobile only, когда карта открыта) */}
+      {/* Back to List Button (<1280px, когда карта открыта) */}
       {view === "map" && (
         <button
           onClick={() => setView("list")}
           style={{ 
             bottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
           }}
-          className="fixed left-1/2 transform -translate-x-1/2 z-[60] md:hidden flex items-center gap-2 bg-[#8F9E4F] text-white px-6 py-3 rounded-full shadow-lg hover:bg-[#7A8A3F] transition-all"
+          className="fixed left-1/2 transform -translate-x-1/2 z-[60] xl:hidden flex items-center gap-2 bg-[#8F9E4F] text-white px-6 py-3 rounded-full shadow-lg hover:bg-[#7A8A3F] transition-all"
         >
           <Icon name="list" size={20} className="text-white" />
           <span className="text-sm font-medium">List</span>
@@ -2076,7 +2099,6 @@ function MapView({
   userAccess?: UserAccess;
   isMapView?: boolean; // Whether map view is currently active
 }) {
-  const isDesktop = useIsDesktop();
   const { openPremiumLocation } = usePremiumGate();
   const defaultAccess: UserAccess = userAccess ?? { role: "guest", hasPremium: false, isAdmin: false, plan: "free" };
   const [internalSelectedPlaceId, setInternalSelectedPlaceId] = useState<string | null>(null);
@@ -2186,7 +2208,7 @@ function MapView({
 
   const placesWithCoords = useMemo(
     () => {
-      const withCoords = places.filter((p) => p.lat != null && p.lng != null);
+      const withCoords = places.filter((p) => getUsableMapPosition(p) !== null);
       
       // Filter out premium places for non-premium users on the map
       // They will still appear in the list view with locked content
@@ -2262,10 +2284,14 @@ function MapView({
     if (placesWithCoords.length === 0) {
       return { lat: 0, lng: 0 };
     }
+    const positions = placesWithCoords
+      .map(getUsableMapPosition)
+      .filter((position): position is { lat: number; lng: number } => position !== null);
+    if (positions.length === 0) return { lat: 0, lng: 0 };
     const avgLat =
-      placesWithCoords.reduce((sum, p) => sum + (p.lat ?? 0), 0) / placesWithCoords.length;
+      positions.reduce((sum, position) => sum + position.lat, 0) / positions.length;
     const avgLng =
-      placesWithCoords.reduce((sum, p) => sum + (p.lng ?? 0), 0) / placesWithCoords.length;
+      positions.reduce((sum, position) => sum + position.lng, 0) / positions.length;
     return { lat: avgLat, lng: avgLng };
   }, [placesWithCoords, externalMapCenter]);
 
@@ -2305,13 +2331,18 @@ function MapView({
     if (placesWithCoords.length === 0) return;
 
     if (placesWithCoords.length === 1) {
-      mapInstance.panTo({ lat: placesWithCoords[0].lat!, lng: placesWithCoords[0].lng! });
+      const position = getUsableMapPosition(placesWithCoords[0]);
+      if (!position) return;
+      mapInstance.panTo(position);
       mapInstance.setZoom(15);
       return;
     }
 
     const bounds = new google.maps.LatLngBounds();
-    placesWithCoords.forEach(p => bounds.extend({ lat: p.lat!, lng: p.lng! }));
+    placesWithCoords.forEach((p) => {
+      const position = getUsableMapPosition(p);
+      if (position) bounds.extend(position);
+    });
     mapInstance.fitBounds(bounds, { top: 80, bottom: 80, left: 40, right: 40 });
   }, [mapInstance, isLoaded, placesWithCoords]);
 
@@ -2334,11 +2365,13 @@ function MapView({
 
     // Создаём новые маркеры для каждого места
     const newMarkers = placesWithCoords.map((place) => {
+      const position = getUsableMapPosition(place);
+      if (!position) return null;
       const emoji = getMarkerEmoji(place.kind ?? null, place.categories);
       const isPremium = isPlacePremium(place);
 
       const marker = new google.maps.Marker({
-        position: { lat: place.lat!, lng: place.lng! },
+        position,
         title: place.title,
         icon: createMarkerIcon(emoji, "default", isPremium),
       }) as PlaceMarker;
@@ -2356,7 +2389,7 @@ function MapView({
       });
 
       return marker;
-    });
+    }).filter((marker): marker is PlaceMarker => marker !== null);
 
     markersRef.current = newMarkers;
 
@@ -2614,7 +2647,8 @@ function MapView({
           {/* InfoWindow для выбранного места (standalone, маркеры управляются императивно через MarkerClusterer) */}
           {selectedPlaceId && (() => {
             const place = placesWithCoords.find((p) => p.id === selectedPlaceId);
-            if (!place || !place.lat || !place.lng) return null;
+            const position = place ? getUsableMapPosition(place) : null;
+            if (!place || !position) return null;
             if (typeof google === "undefined" || !google.maps) return null;
 
             const photos = placePhotos.get(place.id) || (isValidPhotoUrl(place.cover_url) ? [place.cover_url!] : []);
@@ -2652,7 +2686,7 @@ function MapView({
 
             return (
               <InfoWindow
-                position={{ lat: place.lat, lng: place.lng }}
+                position={position}
                 onCloseClick={() => {
                   if (!externalSelectedPlaceId) {
                     setInternalSelectedPlaceId(null);
@@ -2798,8 +2832,6 @@ function MapView({
                     return (
                       <Link
                         href={`/id/${place.id}`}
-                        target={isDesktop ? "_blank" : undefined}
-                        rel={isDesktop ? "noopener noreferrer" : undefined}
                         onClick={(e) => {
                           e.stopPropagation();
                           if (!externalSelectedPlaceId) {

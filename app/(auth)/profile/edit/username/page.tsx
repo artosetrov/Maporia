@@ -112,7 +112,7 @@ export default function UsernameEditorPage() {
     }
 
     if (navigator.vibrate) navigator.vibrate(10);
-    window.location.href = `/profile/edit`;
+    router.push(`/profile/edit`);
   }
 
   function handleCancel() {

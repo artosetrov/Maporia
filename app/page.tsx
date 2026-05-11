@@ -212,6 +212,7 @@ function HomePageInner() {
       const { data, error } = await supabase
         .from("places")
         .select("id,tags,categories,access_level")
+        .eq("is_hidden", false)
         .limit(2000);
       if (error) {
         placesForTagsLoadedRef.current = false; // allow retry on next open
@@ -556,7 +557,8 @@ function HomePageInner() {
             let query = supabase
               .from("places")
               .select("id", { count: 'exact', head: true })
-              .overlaps("categories", [category]);
+              .overlaps("categories", [category])
+              .eq("is_hidden", false);
             if (premiumOnly) {
               query = query.eq("access_level", "premium");
             }
@@ -597,7 +599,10 @@ function HomePageInner() {
         getFilteredCount={async (draftFilters: ActiveFilters) => {
           // Подсчитываем количество мест с учетом фильтров
           try {
-            let countQuery = supabase.from("places").select("id", { count: 'exact', head: true });
+            let countQuery = supabase
+              .from("places")
+              .select("id", { count: 'exact', head: true })
+              .eq("is_hidden", false);
 
             // Фильтрация по городу с радиусом 10 миль
             if (selectedCity && selectedCity !== DEFAULT_CITY) {

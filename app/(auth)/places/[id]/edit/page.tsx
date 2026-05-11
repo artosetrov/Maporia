@@ -856,6 +856,15 @@ export default function PlaceEditorHub(props: PageProps) {
     }
   }
 
+  function handleExitEditor() {
+    if (isNewPlace) {
+      void handleCancelAddGem();
+      return;
+    }
+
+    router.push(`/id/${placeId}`);
+  }
+
   // Calculate required steps
   const requiredSteps = useMemo<RequiredStep[]>(() => {
     if (!place) return [];
@@ -1052,15 +1061,7 @@ export default function PlaceEditorHub(props: PageProps) {
               {isNewPlace ? newPlaceTitle : (place?.title?.trim() || "")}
             </div>
             <button
-              onClick={() => {
-                if (isNewPlace) {
-                  handleCancelAddGem();
-                } else if (typeof window !== "undefined" && window.history.length > 1) {
-                  router.back();
-                } else {
-                  router.push("/profile");
-                }
-              }}
+              onClick={handleExitEditor}
               disabled={deleting}
               className={cx(
                 "p-2 -mr-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition flex-shrink-0",
@@ -1678,15 +1679,7 @@ export default function PlaceEditorHub(props: PageProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex gap-3">
             <button
-              onClick={() => {
-                if (isNewPlace) {
-                  handleCancelAddGem();
-                } else if (typeof window !== "undefined" && window.history.length > 1) {
-                  router.back();
-                } else {
-                  router.push("/profile");
-                }
-              }}
+              onClick={handleExitEditor}
               disabled={deleting}
               className={cx(
                 "flex-1 h-11 rounded-xl border border-[#ECEEE4] bg-white px-5 text-sm font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] transition",

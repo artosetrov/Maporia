@@ -1,6 +1,6 @@
 # Search Index
 
-Последнее обновление: 2026-05-08.
+Последнее обновление: 2026-05-11.
 
 ## По Доменам
 
@@ -10,9 +10,11 @@
 | Profile | `profiles`, `display_name`, `username`, `avatar_url` | `app/(auth)/profile/**`, `app/types.ts` |
 | Access | `getUserAccess`, `canUserViewPlace`, `isPlacePremium` | `app/lib/access.ts` |
 | Premium | `premium_viewer`, `PremiumUpsellModal`, `LockedPlaceOverlay` | `app/lib/plans.ts`, `app/components/` |
+| Pricing entitlements | `chooseBestEntitlement`, `planTier`, `BillingEntitlement` | `app/lib/pricing/entitlements.ts`, `app/api/stripe/**` |
 | Creator plans | `creator_service`, `creator_experience`, `creator_all` | `app/lib/plans.ts`, `app/lib/access.ts` |
 | Quota | `checkQuota`, `bonus_listing_credits`, `EXTRA_LISTING` | `app/lib/access.ts`, `app/lib/plans.ts` |
 | Places | `places`, `Place`, `PlaceListItem`, `kind` | `app/types.ts`, `app/types/supabase.ts`, `app/(auth)/places/**` |
+| Draft cleanup | `orphan`, `cleanup-drafts`, `ORPHAN_ADD_DRAFT` | `app/lib/placeDrafts.ts`, `app/api/maintenance/cleanup-drafts/route.ts`, `app/(auth)/add/page.tsx` |
 | Service/Experience | `OfferPlaceView`, `price_amount`, `schedule`, `host_qualification` | `app/id/[id]/_views/`, edit pages |
 | Collections | `collections`, `place_collections` | `app/collections/**`, `app/(auth)/admin/collections/**` |
 | Tags | `tags`, `category_ids`, `emoji` | `app/api/tags`, `app/api/admin/tags`, `scripts/sql/*tags*` |
@@ -20,6 +22,7 @@
 | Map | `GoogleMap`, `MarkerClusterer`, `MaporiaClusterRenderer` | `app/map/page.tsx`, `app/explore/page.tsx`, `app/lib/clusterRenderer.ts` |
 | Google import | `google_place_id`, `place-import`, `google-import` | `app/api/google*`, `app/(auth)/add/google/**` |
 | Stripe | `checkout`, `webhook`, `subscription`, `stripe_customer_id` | `app/api/stripe/**`, `app/lib/stripe.ts` |
+| Stripe plan switching | `subscription_update_confirm`, `create_prorations`, `listOpenSubscriptions` | `app/api/stripe/checkout/route.ts`, `scripts/setup-stripe.mjs`, `STRIPE_SETUP.md` |
 | AI description | `generate-description`, `placeDescription` | `app/api/ai/generate-description`, `app/lib/ai/` |
 | Impersonation | `impersonate`, `admin_impersonation_log` | `app/api/admin/impersonate/**`, `app/lib/impersonation.ts` |
 | Health | `health`, `CheckResult`, `health:json` | `scripts/health/**`, `app/api/health/route.ts` |
@@ -65,7 +68,7 @@ npm run docs:check
 
 | Решение | Источник |
 | --- | --- |
-| Тарифы и цены | `app/lib/plans.ts` |
+| Тарифы и цены | `app/lib/pricing/registry.ts` |
 | Роли, доступ, квоты | `app/lib/access.ts` |
 | Shared domain types | `app/types.ts` |
 | Generated Supabase schema | `app/types/supabase.ts` |

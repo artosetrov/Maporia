@@ -119,7 +119,8 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
           let recentlyViewedQuery = supabase
             .from("places")
             .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility")
-            .in("id", recentlyViewedIds);
+            .in("id", recentlyViewedIds)
+            .eq("is_hidden", false);
           if (kindFilter) recentlyViewedQuery = recentlyViewedQuery.eq("kind", kindFilter);
           const { data, error } = await recentlyViewedQuery.limit(10);
           if (error) throw error;
@@ -181,7 +182,8 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
           }
           let recQuery = supabase
             .from("places")
-            .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility");
+            .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility")
+            .eq("is_hidden", false);
           if (orParts.length > 0) {
             recQuery = recQuery.or(orParts.join(","));
           }
@@ -255,7 +257,10 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
           return;
         }
 
-        let query = supabase.from("places").select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility");
+        let query = supabase
+          .from("places")
+          .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility")
+          .eq("is_hidden", false);
         if (section.city) {
           const coords = await getCityCoords(section.city);
           query = query.or(buildCityRadiusFilter(section.city, coords.lat, coords.lng));

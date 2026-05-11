@@ -165,7 +165,7 @@ function PriceEditorPageContent(props: PageProps) {
     }
 
     if (navigator.vibrate) navigator.vibrate(10);
-    window.location.href = `/places/${placeId}/edit`;
+    router.push(`/places/${placeId}/edit`);
   }
 
   function handleCancel() {

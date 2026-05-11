@@ -14,10 +14,11 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
+import { useAuthRedirect } from "../hooks/useAuthRedirect";
 import StarRating from "./StarRating";
+import ConfirmDialog from "./ConfirmDialog";
 
 type Review = {
   id: string;
@@ -63,7 +64,7 @@ function initials(name?: string | null, username?: string | null): string {
 }
 
 export default function ReviewsSection({ placeId, commentsEnabled }: ReviewsSectionProps) {
-  const router = useRouter();
+  const { redirectToAuth } = useAuthRedirect();
   const { user } = useUserAccessContext();
   const userId = user?.id ?? null;
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -74,6 +75,7 @@ export default function ReviewsSection({ placeId, commentsEnabled }: ReviewsSect
   const [draftText, setDraftText] = useState("");
   const [draftRating, setDraftRating] = useState(0);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [reviewToDeleteId, setReviewToDeleteId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -133,7 +135,7 @@ export default function ReviewsSection({ placeId, commentsEnabled }: ReviewsSect
   async function submit() {
     setError(null);
     if (!userId) {
-      router.push(`/auth?next=/id/${placeId}`);
+      redirectToAuth("reviews_submit_auth_required");
       return;
     }
     if (!draftText.trim() || draftRating === 0) {
@@ -180,13 +182,32 @@ export default function ReviewsSection({ placeId, commentsEnabled }: ReviewsSect
     setDeletingId(id);
     const { error: dErr } = await supabase.from("comments").delete().eq("id", id).eq("user_id", userId);
     setDeletingId(null);
-    if (!dErr) setReviews((prev) => prev.filter((r) => r.id !== id));
+    if (dErr) {
+      setError(dErr.message || "Failed to delete review.");
+      return;
+    }
+
+    setReviewToDeleteId(null);
+    setReviews((prev) => prev.filter((r) => r.id !== id));
   }
 
   // ── Render ────────────────────────────────────────────────────
 
   return (
     <section className="mb-8">
+      <ConfirmDialog
+        open={reviewToDeleteId !== null}
+        title="Delete review?"
+        description="This removes your review from this place. This action cannot be undone."
+        confirmLabel="Delete"
+        loading={reviewToDeleteId !== null && deletingId === reviewToDeleteId}
+        onClose={() => {
+          if (!deletingId) setReviewToDeleteId(null);
+        }}
+        onConfirm={() => {
+          if (reviewToDeleteId) void remove(reviewToDeleteId);
+        }}
+      />
       <div className="flex items-baseline gap-3 mb-3">
         <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F]">Reviews</h2>
         {aggregate.count > 0 && (
@@ -242,7 +263,7 @@ export default function ReviewsSection({ placeId, commentsEnabled }: ReviewsSect
               <p className="text-sm text-[#3F4A35] mb-2">Sign in to leave a review</p>
               <button
                 type="button"
-                onClick={() => router.push(`/auth?next=/id/${placeId}`)}
+                onClick={() => redirectToAuth("reviews_sign_in")}
                 className="h-10 px-5 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] transition"
               >
                 Sign in
@@ -279,9 +300,7 @@ export default function ReviewsSection({ placeId, commentsEnabled }: ReviewsSect
                         {r.user_id === userId && (
                           <button
                             type="button"
-                            onClick={() => {
-                              if (confirm("Delete this review?")) void remove(r.id);
-                            }}
+                            onClick={() => setReviewToDeleteId(r.id)}
                             disabled={deletingId === r.id}
                             className="text-xs text-[#C96A5B] hover:text-[#B85A4B] disabled:opacity-50"
                           >

@@ -277,7 +277,7 @@ export default function GoogleImportPreviewPage() {
         try {
           sessionStorage.removeItem(GOOGLE_IMPORT_PREVIEW_STORAGE_KEY);
         } catch {}
-        window.location.href = `/places/${data.place_id}/edit`;
+        router.push(`/places/${data.place_id}/edit`);
       } catch (err: unknown) {
         setError(
           err instanceof Error ? err.message : "Failed to import place"
@@ -293,6 +293,7 @@ export default function GoogleImportPreviewPage() {
       descriptionSelected,
       selectedPhotos,
       coverPhotoId,
+      router,
     ]
   );
 
@@ -756,13 +757,13 @@ export default function GoogleImportPreviewPage() {
                 onClick={() => {
                   const id = duplicatePlace.id;
                   setDuplicatePlace(null);
-                  try {
-                    sessionStorage.removeItem(
-                      GOOGLE_IMPORT_PREVIEW_STORAGE_KEY
-                    );
-                  } catch {}
-                  window.location.href = `/places/${id}/edit`;
-                }}
+	                  try {
+	                    sessionStorage.removeItem(
+	                      GOOGLE_IMPORT_PREVIEW_STORAGE_KEY
+	                    );
+	                  } catch {}
+	                  router.push(`/places/${id}/edit`);
+	                }}
                 className="flex-1 rounded-xl px-4 py-3 text-sm font-medium bg-[#8F9E4F] text-white hover:bg-[#556036] transition"
               >
                 Open existing

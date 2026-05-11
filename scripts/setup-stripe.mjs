@@ -3,8 +3,8 @@
  * scripts/setup-stripe.mjs — one-shot Stripe setup for Maporia.
  *
  * Что делает:
- *  1. Создаёт 5 Stripe products: Premium / Pro Service / Pro Experience / Pro All / Extra Listing.
- *  2. Создаёт 5 Prices с lookup_key для идемпотентности (повторный запуск не дублирует).
+ *  1. Создаёт Stripe products для всех публичных планов + Extra Listing.
+ *  2. Создаёт monthly/yearly Prices с lookup_key для идемпотентности.
  *  3. Опционально создаёт Webhook endpoint, если передан --webhook-url=https://….
  *  4. Печатает env-переменные готовые к копированию в Vercel.
  *  5. Опционально — заливает env в Vercel через Vercel CLI (--push-vercel).
@@ -24,7 +24,7 @@ import Stripe from "stripe";
 import { execSync } from "node:child_process";
 
 // ──────────────────────────────────────────────────────────────
-// Plans config — должен совпадать с app/lib/plans.ts
+// Plans config — должен совпадать с app/lib/pricing/registry.ts
 // ──────────────────────────────────────────────────────────────
 
 const PLANS = [
@@ -37,12 +37,36 @@ const PLANS = [
     envVar: "STRIPE_PRICE_PREMIUM_ONETIME",
   },
   {
+    maporiaId: "creator_location",
+    name: "Maporia Pro Location",
+    description: "Publish up to 5 locations on Maporia. Premium included.",
+    price: { amount: 999, currency: "usd", type: "recurring", interval: "month" },
+    lookupKey: "maporia_pro_location_month",
+    envVar: "STRIPE_PRICE_CREATOR_LOCATION_MONTH",
+  },
+  {
+    maporiaId: "creator_location",
+    name: "Maporia Pro Location",
+    description: "Publish up to 5 locations on Maporia. Premium included.",
+    price: { amount: 9588, currency: "usd", type: "recurring", interval: "year" },
+    lookupKey: "maporia_pro_location_year",
+    envVar: "STRIPE_PRICE_CREATOR_LOCATION_YEAR",
+  },
+  {
     maporiaId: "creator_service",
     name: "Maporia Pro Service",
     description: "Publish up to 5 services on Maporia. Premium included.",
     price: { amount: 1499, currency: "usd", type: "recurring", interval: "month" },
     lookupKey: "maporia_pro_service_month",
     envVar: "STRIPE_PRICE_CREATOR_SERVICE_MONTH",
+  },
+  {
+    maporiaId: "creator_service",
+    name: "Maporia Pro Service",
+    description: "Publish up to 5 services on Maporia. Premium included.",
+    price: { amount: 14388, currency: "usd", type: "recurring", interval: "year" },
+    lookupKey: "maporia_pro_service_year",
+    envVar: "STRIPE_PRICE_CREATOR_SERVICE_YEAR",
   },
   {
     maporiaId: "creator_experience",
@@ -53,12 +77,28 @@ const PLANS = [
     envVar: "STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH",
   },
   {
+    maporiaId: "creator_experience",
+    name: "Maporia Pro Experience",
+    description: "Launch up to 5 experiences on Maporia. Premium included.",
+    price: { amount: 14388, currency: "usd", type: "recurring", interval: "year" },
+    lookupKey: "maporia_pro_experience_year",
+    envVar: "STRIPE_PRICE_CREATOR_EXPERIENCE_YEAR",
+  },
+  {
     maporiaId: "creator_all",
     name: "Maporia Pro All-in",
     description: "Up to 10 listings combined (services + experiences) + unlimited locations + Premium.",
     price: { amount: 3499, currency: "usd", type: "recurring", interval: "month" },
     lookupKey: "maporia_pro_all_month",
     envVar: "STRIPE_PRICE_CREATOR_ALL_MONTH",
+  },
+  {
+    maporiaId: "creator_all",
+    name: "Maporia Pro All-in",
+    description: "Up to 10 listings combined (services + experiences + locations) + Premium.",
+    price: { amount: 33588, currency: "usd", type: "recurring", interval: "year" },
+    lookupKey: "maporia_pro_all_year",
+    envVar: "STRIPE_PRICE_CREATOR_ALL_YEAR",
   },
   {
     maporiaId: "extra_listing",
@@ -215,10 +255,15 @@ async function main() {
 
   console.log("📦 Products + prices…");
   const envMap = {};
+  const recurringPortalProducts = new Map();
   for (const plan of PLANS) {
     const product = await ensureProduct(plan);
     const price = await ensurePrice(plan, product);
     envMap[plan.envVar] = price.id;
+    if (plan.price.type === "recurring") {
+      const existing = recurringPortalProducts.get(product.id) ?? [];
+      recurringPortalProducts.set(product.id, [...existing, price.id]);
+    }
   }
 
   // Webhook
@@ -232,31 +277,36 @@ async function main() {
   // Configure Customer Portal
   console.log("\n🪪 Customer Portal…");
   try {
+    const portalProducts = Array.from(recurringPortalProducts.entries()).map(([product, prices]) => ({
+      product,
+      prices,
+    }));
+    const portalFeatures = {
+      customer_update: { enabled: true, allowed_updates: ["email", "address"] },
+      invoice_history: { enabled: true },
+      payment_method_update: { enabled: true },
+      subscription_cancel: { enabled: true, mode: "at_period_end" },
+      subscription_update: {
+        enabled: true,
+        default_allowed_updates: ["price"],
+        proration_behavior: "create_prorations",
+        products: portalProducts,
+      },
+    };
     const list = await stripe.billingPortal.configurations.list({ is_default: true, limit: 1 });
     if (list.data.length === 0) {
       const cfg = await stripe.billingPortal.configurations.create({
         business_profile: { headline: "Maporia subscription management" },
-        features: {
-          customer_update: { enabled: true, allowed_updates: ["email", "address"] },
-          invoice_history: { enabled: true },
-          payment_method_update: { enabled: true },
-          subscription_cancel: { enabled: true, mode: "at_period_end" },
-          subscription_update: {
-            enabled: true,
-            default_allowed_updates: ["price"],
-            proration_behavior: "create_prorations",
-            products: PLANS.filter((p) => p.price.type === "recurring").map(() => ({
-              product: null, // populated below
-              prices: [],
-            })),
-          },
-        },
+        features: portalFeatures,
         default_return_url: undefined,
       });
       console.log(`   + created Customer Portal config (${cfg.id})`);
     } else {
-      console.log(`   ✓ Customer Portal config already exists (${list.data[0].id})`);
-      console.log("     (skipping update — adjust manually in Dashboard if needed)");
+      const cfg = await stripe.billingPortal.configurations.update(list.data[0].id, {
+        business_profile: { headline: "Maporia subscription management" },
+        features: portalFeatures,
+      });
+      console.log(`   ↑ updated Customer Portal config (${cfg.id})`);
     }
   } catch (e) {
     console.log(`   ⚠ skipped Portal config: ${e.message}`);

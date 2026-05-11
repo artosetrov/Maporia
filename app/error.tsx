@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import ErrorIllustration from "./components/ErrorIllustration";
 
 /**
@@ -14,6 +15,8 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const router = useRouter();
+
   useEffect(() => {
     // Log error to console in development
     if (process.env.NODE_ENV === "development") {
@@ -45,7 +48,7 @@ export default function Error({
             Try again
           </button>
           <button
-            onClick={() => (window.location.href = "/")}
+            onClick={() => router.push("/")}
             className="px-6 py-3 bg-white border-2 border-[var(--border-light)] text-[var(--text-primary)] rounded-full hover:border-[var(--olive-primary)] transition-all duration-200 font-medium"
           >
             Go home

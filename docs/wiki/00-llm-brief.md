@@ -1,6 +1,6 @@
 # LLM Brief
 
-Последнее обновление: 2026-05-08.
+Последнее обновление: 2026-05-11.
 
 Это краткая ориентация для любой LLM/agent, которая впервые открывает Maporia. Цель: за 3 минуты понять продукт, архитектуру, текущие решения и где искать правду.
 
@@ -52,15 +52,15 @@ Publishing rights and pricing:
 
 - `free`: public browsing.
 - `premium_viewer`: one-time Premium, sees premium places; v2 treats it as consumer-only for new buyers.
-- `creator_location`: monthly, Premium included, location quota.
-- `creator_service`: monthly, Premium included, service quota.
-- `creator_experience`: monthly, Premium included, experience quota.
-- `creator_all`: monthly, combined service/experience quota.
+- `creator_location`: monthly/yearly, Premium included, location quota.
+- `creator_service`: monthly/yearly, Premium included, service quota.
+- `creator_experience`: monthly/yearly, Premium included, experience quota.
+- `creator_all`: monthly/yearly, combined service/experience quota.
 - `extra_listing`: one-time add-on credit.
 
 Source of truth:
 
-- Plans/prices: `app/lib/plans.ts` for current UI; v2 registry lives in `app/lib/pricing/`.
+- Plans/prices: `app/lib/pricing/registry.ts`; `app/lib/plans.ts` is legacy compatibility.
 - Roles/access/quota: `app/lib/access.ts`.
 - Shared domain types: `app/types.ts`.
 - DB generated types: `app/types/supabase.ts`.
@@ -74,6 +74,10 @@ Source of truth:
 - Auth and Premium modals are centralized through `GlobalModals`.
 - Home redesign exists behind `NEXT_PUBLIC_HOME_REDESIGN`.
 - Filters have been refactored toward shared count/filter helpers and type-aware behavior.
+- Stripe recurring checkout now routes existing subscribers through Billing Portal update confirmation, so upgrade/downgrade/monthly-yearly switches show Stripe proration before confirmation instead of creating duplicate subscriptions.
+- Subscription verify/webhook reconciliation chooses the strongest active entitlement across all active/trialing Stripe subscriptions.
+- `/add` empty hidden drafts older than 24h are cleaned conservatively through current-user cleanup and `/api/maintenance/cleanup-drafts`.
+- `/map` ignores invalid/null-island coordinates for markers/bounds/center and opens place cards in the same tab.
 
 ## What Not To Assume
 
@@ -96,7 +100,7 @@ npm run docs:check
 Expected current shape:
 
 - Typecheck should pass.
-- Health should be `YELLOW`, no failures.
+- Health should be `GREEN`, no warnings/failures.
 - Wiki freshness should pass.
 - Green areas should include security, access filtering, modal centralization, navigation.
 

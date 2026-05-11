@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { LAYOUT_BREAKPOINTS } from "../config/layout";
+import { LAYOUT_BREAKPOINTS } from "../config/layoutConfig";
 
 const query = `(min-width: ${LAYOUT_BREAKPOINTS.desktop}px)`;
 

@@ -349,7 +349,7 @@ export default function TopBar({
                     
                     {/* View Toggle - только для страницы Map (скрыт на мобильной версии) */}
                     {view !== undefined && onViewChange && pathname === "/map" && (
-                      <div className="hidden lg:flex items-center gap-1 bg-white border border-[#ECEEE4] rounded-full p-1">
+                      <div className="hidden xl:flex items-center gap-1 bg-white border border-[#ECEEE4] rounded-full p-1">
                         <button
                           onClick={() => onViewChange("list")}
                           className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${

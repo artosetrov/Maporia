@@ -2,12 +2,12 @@
 
 Один скрипт, один запуск — Stripe настроен.
 
-Источник правды по тарифам в коде: `app/lib/plans.ts`.
+Источник правды по тарифам в коде: `app/lib/pricing/registry.ts`.
 
 ## Что он делает
 
-1. Создаёт 5 продуктов в Stripe: Premium, Pro Service, Pro Experience, Pro All, Extra Listing.
-2. Создаёт 5 цен (`$35 one-time`, `$14.99/mo` × 2, `$34.99/mo`, `$2.99 one-time`).
+1. Создаёт продукты в Stripe: Premium, Pro Location, Pro Service, Pro Experience, Pro All, Extra Listing.
+2. Создаёт цены для всех public plan variants: one-time Premium, monthly/yearly Pro plans, one-time Extra Listing.
 3. Создаёт webhook endpoint с пятью нужными событиями (если передан URL).
 4. Создаёт Customer Portal конфиг (если ещё нет).
 5. Печатает env-переменные готовые к копированию в Vercel.
@@ -20,10 +20,10 @@
 | Plan ID | Stripe product | Price | Billing | Env |
 | --- | --- | ---: | --- | --- |
 | `premium_viewer` | Maporia Premium | $35 | one-time | `STRIPE_PRICE_PREMIUM_ONETIME` |
-| `creator_location` | Maporia Pro Location | $9.99 | monthly subscription | `STRIPE_PRICE_CREATOR_LOCATION_MONTH` |
-| `creator_service` | Maporia Pro Service | $14.99 | monthly subscription | `STRIPE_PRICE_CREATOR_SERVICE_MONTH` |
-| `creator_experience` | Maporia Pro Experience | $14.99 | monthly subscription | `STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH` |
-| `creator_all` | Maporia Pro All-in | $34.99 | monthly subscription | `STRIPE_PRICE_CREATOR_ALL_MONTH` |
+| `creator_location` | Maporia Pro Location | $9.99 / $95.88 | monthly/yearly subscription | `STRIPE_PRICE_CREATOR_LOCATION_MONTH`, `STRIPE_PRICE_CREATOR_LOCATION_YEAR` |
+| `creator_service` | Maporia Pro Service | $14.99 / $143.88 | monthly/yearly subscription | `STRIPE_PRICE_CREATOR_SERVICE_MONTH`, `STRIPE_PRICE_CREATOR_SERVICE_YEAR` |
+| `creator_experience` | Maporia Pro Experience | $14.99 / $143.88 | monthly/yearly subscription | `STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH`, `STRIPE_PRICE_CREATOR_EXPERIENCE_YEAR` |
+| `creator_all` | Maporia Pro All-in | $34.99 / $335.88 | monthly/yearly subscription | `STRIPE_PRICE_CREATOR_ALL_MONTH`, `STRIPE_PRICE_CREATOR_ALL_YEAR` |
 | `extra_listing` | Maporia Extra Listing | $2.99 | one-time add-on | `STRIPE_PRICE_EXTRA_LISTING` |
 
 `STRIPE_PRICE_ID` остаётся legacy fallback для старого one-time Premium checkout. Для новых флоу используй plan/addon env выше.
@@ -41,9 +41,13 @@ STRIPE_SECRET_KEY=sk_test_XXXXX npm run setup:stripe -- \
 📋 Env vars:
 STRIPE_PRICE_PREMIUM_ONETIME=price_1AbCd…
 STRIPE_PRICE_CREATOR_LOCATION_MONTH=price_1AbCd…
+STRIPE_PRICE_CREATOR_LOCATION_YEAR=price_1AbCd…
 STRIPE_PRICE_CREATOR_SERVICE_MONTH=price_1AbCd…
+STRIPE_PRICE_CREATOR_SERVICE_YEAR=price_1AbCd…
 STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH=price_1AbCd…
+STRIPE_PRICE_CREATOR_EXPERIENCE_YEAR=price_1AbCd…
 STRIPE_PRICE_CREATOR_ALL_MONTH=price_1AbCd…
+STRIPE_PRICE_CREATOR_ALL_YEAR=price_1AbCd…
 STRIPE_PRICE_EXTRA_LISTING=price_1AbCd…
 
 📋 SAVE THIS — webhook signing secret:
@@ -81,9 +85,13 @@ STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 STRIPE_PRICE_PREMIUM_ONETIME=
 STRIPE_PRICE_CREATOR_LOCATION_MONTH=
+STRIPE_PRICE_CREATOR_LOCATION_YEAR=
 STRIPE_PRICE_CREATOR_SERVICE_MONTH=
+STRIPE_PRICE_CREATOR_SERVICE_YEAR=
 STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH=
+STRIPE_PRICE_CREATOR_EXPERIENCE_YEAR=
 STRIPE_PRICE_CREATOR_ALL_MONTH=
+STRIPE_PRICE_CREATOR_ALL_YEAR=
 STRIPE_PRICE_EXTRA_LISTING=
 ```
 
@@ -130,6 +138,20 @@ invoice.payment_failed
 
 Важно: Stripe операции запрещены во время admin impersonation.
 
+Если у пользователя уже есть активная recurring subscription, `POST /api/stripe/checkout`
+не создаёт новый Checkout. Для switch/upgrade/downgrade он создаёт Stripe Billing
+Portal `subscription_update_confirm` deep link на конкретный target price. Stripe
+показывает confirmation screen с upcoming invoice/proration credit, поэтому downgrade
+пересчитывается по оставшемуся времени периода. Если у customer несколько активных
+подписок, API открывает обычный Billing Portal, чтобы пользователь не поменял не ту
+subscription.
+
+Customer Portal должен разрешать subscription update для всех creator prices и иметь:
+
+```text
+subscription_update.proration_behavior = create_prorations
+```
+
 ## Database expectations
 
 Перед smoke-тестом убедись, что применены SQL-изменения для billing:
@@ -145,7 +167,7 @@ invoice.payment_failed
 
 ## Smoke-тест
 
-После настройки запусти `npm run dev`, открой `/pricing`, нажми «Subscribe» на Pro Service, в Stripe Checkout вбей тестовую карту `4242 4242 4242 4242` (любая дата, любой CVC). Должен пройти редирект на `/profile?section=premium?payment=success` и через ~5–10 секунд (webhook догоняет) увидишь активный план.
+После настройки запусти `npm run dev`, открой `/pricing`, нажми «Subscribe» на Pro Service, в Stripe Checkout вбей тестовую карту `4242 4242 4242 4242` (любая дата, любой CVC). Должен пройти редирект на `/profile?section=premium&payment=success` и через ~5–10 секунд (webhook/verify догоняет) увидишь активный план.
 
 Карты для разных сценариев — https://docs.stripe.com/testing.
 

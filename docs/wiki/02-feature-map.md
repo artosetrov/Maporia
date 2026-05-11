@@ -78,6 +78,7 @@
 | `/api/stripe/portal` | Stripe customer portal |
 | `/api/stripe/verify` | Verify checkout result |
 | `/api/stripe/webhook` | Stripe webhook and plan updates |
+| `/api/maintenance/cleanup-drafts` | Cron/admin cleanup for abandoned empty `/add` drafts |
 
 ## Компонентные Узлы
 

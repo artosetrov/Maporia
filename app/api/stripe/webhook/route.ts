@@ -18,6 +18,7 @@ import Stripe from "stripe";
 import { getStripe, getSupabaseAdmin } from "../../../lib/stripe";
 import { logger } from "../../../lib/logger";
 import { resolvePlanByPriceId } from "../../../lib/pricing";
+import { chooseBestEntitlement } from "../../../lib/pricing/entitlements";
 import type { Plan, PlanPeriod } from "../../../types";
 
 export const dynamic = "force-dynamic";
@@ -174,6 +175,59 @@ function mapStripeStatusToOurs(
   if (status === "past_due" || status === "unpaid") return "past_due";
   if (status === "canceled" || status === "incomplete_expired") return "cancelled";
   return "incomplete";
+}
+
+async function syncProfileToBestActiveSubscription(
+  supabaseAdmin: SupabaseAdminClient,
+  userId: string,
+  stripeCustomerId: string,
+): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from("subscriptions")
+    .select("plan, period, current_period_end, stripe_subscription_id, created_at")
+    .eq("user_id", userId)
+    .eq("status", "active");
+
+  if (error) {
+    logger.error("[stripe/webhook] active subscription lookup failed:", error.message);
+    throw new Error(error.message);
+  }
+
+  const best = chooseBestEntitlement(
+    (data ?? []).map((row) => ({
+      plan: asPlan(row.plan),
+      period: asPeriod(row.period),
+      renewsAt: row.current_period_end ?? null,
+      stripeSubscriptionId: row.stripe_subscription_id ?? null,
+      createdAt: row.created_at ?? null,
+    })),
+  );
+
+  if (!best) return false;
+
+  const { error: profErr } = await supabaseAdmin
+    .from("profiles")
+    .update({
+      plan: best.plan,
+      plan_period: best.period,
+      plan_renews_at: best.renewsAt ?? null,
+      subscription_status: "active",
+      role: "premium",
+      stripe_customer_id: stripeCustomerId,
+    })
+    .eq("id", userId);
+
+  if (profErr) {
+    logger.error("[stripe/webhook] profile entitlement sync failed:", profErr.message);
+    throw new Error(profErr.message);
+  }
+
+  logger.info("[stripe/webhook] profile synced to best active subscription:", {
+    userId,
+    plan: best.plan,
+    period: best.period,
+  });
+  return true;
 }
 
 /**
@@ -397,24 +451,10 @@ async function handleSubscriptionUpsert(
   }
 
   // 2) Денормализованный план на profile — только если подписка активна.
+  // Если у customer уже несколько active subscriptions, profile получает самый сильный
+  // entitlement, чтобы более старое событие низкого тарифа не перезаписало Pro All/Service.
   if (status === "active") {
-    const { error: profErr } = await supabaseAdmin
-      .from("profiles")
-      .update({
-        plan,
-        plan_period: period,
-        plan_renews_at: subRow.current_period_end,
-        // Legacy-флаги — чтобы старый код продолжал работать:
-        subscription_status: "active",
-        role: "premium",
-        stripe_customer_id: customerId,
-      })
-      .eq("id", userId);
-    if (profErr) {
-      logger.error("[stripe/webhook] profile update failed:", profErr.message);
-      throw new Error(profErr.message);
-    }
-    logger.info("[stripe/webhook] subscription active:", { userId, plan, period });
+    await syncProfileToBestActiveSubscription(supabaseAdmin, userId, customerId);
   } else if (status === "past_due") {
     // Не сбрасываем план сразу — даём Stripe пройти retry-цикл.
     logger.warn("[stripe/webhook] subscription past_due:", { userId, subId: sub.id });
@@ -456,17 +496,13 @@ async function handleSubscriptionDeleted(
     throw new Error(subUpdateError.message);
   }
 
-  // Проверяем, есть ли у юзера ещё какая-то активная подписка (на случай переключения тарифов)
-  const { data: stillActive } = await supabaseAdmin
-    .from("subscriptions")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .limit(1);
-
-  if (stillActive && stillActive.length > 0) {
-    return; // Есть другая активная — план не меняем.
-  }
+  // Если у юзера осталась другая активная подписка, синхронизируем профиль на неё.
+  const hasActiveEntitlement = await syncProfileToBestActiveSubscription(
+    supabaseAdmin,
+    userId,
+    customerId,
+  );
+  if (hasActiveEntitlement) return;
 
   const { error: profileError } = await supabaseAdmin
     .from("profiles")

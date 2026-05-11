@@ -1,6 +1,28 @@
 # Operations And Risks
 
-Последнее обновление: 2026-05-10.
+Последнее обновление: 2026-05-11.
+
+## 2026-05-11 QA Fix Sweep
+
+Что было исправлено после ручного QA продовых флоу:
+
+- Stripe recurring plans: recurring checkout больше не создаёт дубли подписок, если у customer уже есть активная/trialing subscription. Для upgrade, downgrade и смены monthly/yearly открывается Stripe Billing Portal `subscription_update_confirm`, где Stripe показывает пересчитанный upcoming invoice/proration credit до подтверждения.
+- Stripe verify/webhook: `/api/stripe/verify` и webhook синхронизируют все активные/trialing subscriptions и выбирают самый сильный entitlement, чтобы профиль не откатывался из-за порядка событий или старой подписки.
+- Pricing/profile UI: creator plans показывают, что Premium включён; current plan блокируется только для точного совпадения plan+period, а смена периода остаётся доступной.
+- Map discovery: `/map` больше не использует невалидные координаты и `[0,0]` для center/bounds/markers, поэтому фильтры не должны уводить карту в world/null-island zoom.
+- Discovery counts: публичные счетчики на home/search/map дополнительно исключают hidden places через `is_hidden = false`, чтобы списки и цифры не расходились из-за пустых draft.
+- Place navigation: карточки на `/map` открывают details в той же вкладке, а удалённый/nonexistent `/id/[id]` показывает not-found state вместо redirect на `/`.
+- Reviews/auth: Sign In entry для комментариев использует centralized auth redirect/modal, без disabled dead-end.
+- Empty `/add` drafts: добавлен conservative orphan detector, cleanup текущего пользователя перед quota checks и cron/admin endpoint `/api/maintenance/cleanup-drafts` для старых пустых hidden drafts старше 24 часов.
+
+Проверки перед попыткой deploy:
+
+- `npm run typecheck` - pass.
+- `npm run docs:check` - pass.
+- `npm run health:json` - `GREEN`, 25/25, 0 warnings.
+- `npm run build` - pass.
+
+Production deploy note: запуск `npx vercel@latest deploy . --prod -y` был начат, но остановлен после пользовательского переключения на обновление wiki. Перед повторным деплоем можно rerun той же командой из корня проекта.
 
 ## Audit Snapshot
 
@@ -10,7 +32,7 @@
 npm run health:json
 ```
 
-Результат на 2026-05-09:
+Результат на 2026-05-11:
 
 - Status: `GREEN`.
 - Passed: 25.
@@ -56,6 +78,7 @@ npm run build
 - Resolve APIs: city resolve and Google place-id resolve reject bad JSON, enforce auth, and return 429 after repeated requests.
 - Stripe checkout/portal: return URLs use the configured app origin, not arbitrary request origins.
 - Stripe verify/webhook: one-time Premium, extra listing does not activate Premium, subscription created/updated/deleted, payment failed, webhook handler failures return 500 for retry.
+- Maintenance cron: `/api/maintenance/cleanup-drafts` deletes only abandoned empty `/add` drafts older than 24h; confirm it returns 200 and does not delete filled hidden drafts.
 
 ## Env Checklist
 
@@ -79,9 +102,13 @@ STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 STRIPE_PRICE_PREMIUM_ONETIME=
 STRIPE_PRICE_CREATOR_LOCATION_MONTH=
+STRIPE_PRICE_CREATOR_LOCATION_YEAR=
 STRIPE_PRICE_CREATOR_SERVICE_MONTH=
+STRIPE_PRICE_CREATOR_SERVICE_YEAR=
 STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH=
+STRIPE_PRICE_CREATOR_EXPERIENCE_YEAR=
 STRIPE_PRICE_CREATOR_ALL_MONTH=
+STRIPE_PRICE_CREATOR_ALL_YEAR=
 STRIPE_PRICE_EXTRA_LISTING=
 IMPERSONATION_COOKIE_SECRET=
 CRON_SECRET=

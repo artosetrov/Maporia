@@ -80,10 +80,11 @@ Premium place определяется через несколько полей 
   - `experience`: `creator_experience` или `creator_all`.
 - `canUserCreateMulti` требует права на каждый выбранный kind.
 - `/add` checks creator capabilities through the registry-backed multi-kind rules: creator service/experience plans may attach a secondary location without requiring a location plan. `checkQuota` counts primary locations, service/experience primary-or-secondary usage, and `bonus_listing_credits` before insert; the database trigger remains the final enforcement layer.
+- Empty `/add` drafts are considered abandoned when they are hidden, manually_hidden is not true, title/content/photos/location/pricing/contact fields are empty, and they are older than 24h. `/add` cleans the current user's stale drafts before quota checks, and `/api/maintenance/cleanup-drafts` runs by cron/admin with service role for global cleanup.
 
 ## Billing Architecture
 
-Источник тарифов: `app/lib/plans.ts`.
+Источник тарифов: `app/lib/pricing/registry.ts`. `app/lib/plans.ts` остаётся legacy compatibility shim.
 
 Stripe entry points:
 
@@ -104,13 +105,17 @@ STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 STRIPE_PRICE_PREMIUM_ONETIME=
 STRIPE_PRICE_CREATOR_LOCATION_MONTH=
+STRIPE_PRICE_CREATOR_LOCATION_YEAR=
 STRIPE_PRICE_CREATOR_SERVICE_MONTH=
+STRIPE_PRICE_CREATOR_SERVICE_YEAR=
 STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH=
+STRIPE_PRICE_CREATOR_EXPERIENCE_YEAR=
 STRIPE_PRICE_CREATOR_ALL_MONTH=
+STRIPE_PRICE_CREATOR_ALL_YEAR=
 STRIPE_PRICE_EXTRA_LISTING=
 ```
 
-Legacy env `STRIPE_PRICE_ID` остаётся только как fallback для старого one-time Premium checkout. Новые флоу должны использовать актуальные plan/add-on env выше.
+Legacy env `STRIPE_PRICE_ID` остаётся только как fallback для старого one-time Premium checkout. Новые флоу должны использовать актуальные plan/add-on env выше. Если у пользователя уже есть открытая recurring subscription, новый recurring checkout не создаётся: API открывает Stripe Billing Portal. Для single-subscription switch/upgrade/downgrade используется `subscription_update_confirm` deep link на target price, чтобы Stripe показал пересчитанный upcoming invoice/proration credit до подтверждения. Customer Portal должен иметь `subscription_update.proration_behavior = create_prorations`. Если у customer несколько активных подписок, API открывает обычный Portal, чтобы не изменить не ту subscription. `/api/stripe/verify` reconciles active Stripe subscriptions and updates `profiles.plan` to the strongest active entitlement.
 
 ## Integrations
 

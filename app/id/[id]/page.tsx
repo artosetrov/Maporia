@@ -38,6 +38,9 @@ import OfferPlaceView from "./_views/OfferPlaceView";
 import LocationChildrenSection from "./_views/LocationChildrenSection";
 import StarRating from "../../components/StarRating";
 import PlaceContacts from "../../components/PlaceContacts";
+import TransientNotice from "../../components/TransientNotice";
+import ConfirmDialog from "../../components/ConfirmDialog";
+import ErrorPage from "../../components/ErrorPage";
 
 type Place = {
   id: string;
@@ -183,6 +186,7 @@ export default function PlacePage(props: PageProps) {
 
   const [, setActiveSection] = useState<"overview" | "photos" | "map" | "comments">("overview");
   const [place, setPlace] = useState<Place | null>(null);
+  const [placeNotFound, setPlaceNotFound] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState("");
   const [commentRating, setCommentRating] = useState<number>(0); // 0 = не выбрано
@@ -198,6 +202,7 @@ export default function PlacePage(props: PageProps) {
   const [creatorProfile, setCreatorProfile] = useState<CreatorProfile | null>(null);
   const [commentError, setCommentError] = useState<string | null>(null);
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+  const [commentToDeleteId, setCommentToDeleteId] = useState<string | null>(null);
   const [photosExpanded, setPhotosExpanded] = useState(false);
   const [favoritesCount, setFavoritesCount] = useState<number>(0);
   const [commentsCount, setCommentsCount] = useState<number>(0);
@@ -221,6 +226,8 @@ export default function PlacePage(props: PageProps) {
   const [swipeStart, setSwipeStart] = useState<{ x: number; y: number } | null>(null);
   const [pinchStartDistance, setPinchStartDistance] = useState<number | null>(null);
   const [placeCollections, setPlaceCollections] = useState<{ id: string; title: string; description: string | null; cover_image: string | null; access_type: string }[]>([]);
+  const [notice, setNotice] = useState<{ message: string; variant: "success" | "error" } | null>(null);
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // User access for premium checks and render gate (from context — single session/profile request)
   const { loading: accessLoading, access, user: ctxUser, profile: ctxProfile } = useUserAccessContext();
@@ -255,6 +262,21 @@ export default function PlacePage(props: PageProps) {
       document.body.style.overflow = '';
     };
   }, [photoGalleryOpen, showDescriptionModal]);
+
+  useEffect(() => {
+    return () => {
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    };
+  }, []);
+
+  function showNotice(message: string, variant: "success" | "error" = "success") {
+    setNotice({ message, variant });
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    noticeTimerRef.current = setTimeout(() => {
+      noticeTimerRef.current = null;
+      setNotice(null);
+    }, 4000);
+  }
 
   // Photo gallery handlers
   const handleNextPhoto = () => {
@@ -479,8 +501,9 @@ export default function PlacePage(props: PageProps) {
     if (!id) return;
 
     (async () => {
+      setPlaceNotFound(false);
       // Step 1: load the place itself. Everything else depends on `placeData`
-      // existing (if it doesn't, we redirect anyway).
+      // existing; missing/deleted places render a real 404-like state.
       const { data: placeData, error: pErr } = await supabase
         .from("places")
         .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
@@ -489,7 +512,8 @@ export default function PlacePage(props: PageProps) {
 
       if (pErr || !placeData) {
         console.error("Failed to load place:", pErr?.message || "Place not found", { id });
-        router.push("/");
+        setPlace(null);
+        setPlaceNotFound(true);
         return;
       }
       const placeItem = placeData as Place;
@@ -771,7 +795,7 @@ export default function PlacePage(props: PageProps) {
       } else {
         // Fallback: копируем в буфер обмена
         await navigator.clipboard.writeText(shareUrl);
-        alert("Link copied to clipboard!");
+        showNotice("Link copied to clipboard");
       }
     } catch (err) {
       // Пользователь отменил или произошла ошибка
@@ -779,9 +803,10 @@ export default function PlacePage(props: PageProps) {
         // Fallback: копируем в буфер обмена
         try {
           await navigator.clipboard.writeText(shareUrl);
-          alert("Link copied to clipboard!");
+          showNotice("Link copied to clipboard");
         } catch (clipboardErr) {
           console.error("Failed to copy:", clipboardErr);
+          showNotice("Could not copy the link. Please try again.", "error");
         }
       }
     }
@@ -994,6 +1019,7 @@ export default function PlacePage(props: PageProps) {
       } else {
         setComments((prev) => prev.filter((c) => c.id !== commentId));
         setCommentsCount((prev) => Math.max(0, prev - 1));
+        setCommentToDeleteId(null);
       }
     } catch (err) {
       console.error("Unexpected error deleting comment:", err);
@@ -1069,6 +1095,18 @@ export default function PlacePage(props: PageProps) {
                                     `Haunted Gem #${num}`;
     openPremiumModal("place", pseudoTitle, place.id);
   }, [isLocked, place, openPremiumModal]);
+
+  if (placeNotFound) {
+    return (
+      <SectionErrorBoundary>
+        <ErrorPage
+          statusCode={404}
+          title="Place not found"
+          message="This place may have been deleted or the link is no longer valid."
+        />
+      </SectionErrorBoundary>
+    );
+  }
 
   if (!place || accessLoading) {
     return (
@@ -1167,6 +1205,24 @@ export default function PlacePage(props: PageProps) {
   return (
     <SectionErrorBoundary>
     <main className="min-h-screen bg-white">
+      <TransientNotice
+        message={notice?.message ?? null}
+        variant={notice?.variant}
+        onDismiss={() => setNotice(null)}
+      />
+      <ConfirmDialog
+        open={commentToDeleteId !== null}
+        title="Delete comment?"
+        description="This removes your comment from this place. This action cannot be undone."
+        confirmLabel="Delete"
+        loading={commentToDeleteId !== null && deletingCommentId === commentToDeleteId}
+        onClose={() => {
+          if (!deletingCommentId) setCommentToDeleteId(null);
+        }}
+        onConfirm={() => {
+          if (commentToDeleteId) void deleteComment(commentToDeleteId);
+        }}
+      />
       {/* TopBar - скрыт на мобильных (< 900px), так как есть Mobile App Bar внутри карусели */}
       <div className="hidden lg:block">
         <TopBar
@@ -1820,7 +1876,7 @@ export default function PlacePage(props: PageProps) {
           ) : (
             <div className="mb-6 rounded-xl border border-[#ECEEE4] bg-white p-4 text-center">
               <div className="text-sm text-[#8F9E4F]/60 mb-2">Sign in to post comments</div>
-              <AuthCTA variant="sign-in" trigger="place_comments_desktop">
+              <AuthCTA variant="sign-in" trigger="place_comments_desktop" showToastBeforeRedirect={false}>
                 Sign In
               </AuthCTA>
             </div>
@@ -1887,11 +1943,7 @@ export default function PlacePage(props: PageProps) {
                           </div>
                           {isMyComment && (
                             <button
-                              onClick={() => {
-                                if (confirm("Delete this comment?")) {
-                                  deleteComment(c.id);
-                                }
-                              }}
+                              onClick={() => setCommentToDeleteId(c.id)}
                               disabled={deletingCommentId === c.id}
                               className="text-xs text-[#C96A5B] hover:text-[#B85A4B] disabled:opacity-50 transition flex-shrink-0"
                             >
@@ -2394,7 +2446,7 @@ export default function PlacePage(props: PageProps) {
             ) : (
               <div className="mb-6 rounded-xl border border-[#ECEEE4] bg-white p-4 text-center">
                 <div className="text-sm text-[#8F9E4F]/60 mb-2">Sign in to post comments</div>
-                <AuthCTA variant="sign-in" trigger="place_comments_mobile">
+                <AuthCTA variant="sign-in" trigger="place_comments_mobile" showToastBeforeRedirect={false}>
                   Sign In
                 </AuthCTA>
               </div>
@@ -2459,11 +2511,7 @@ export default function PlacePage(props: PageProps) {
                             </div>
                             {isMyComment && (
                               <button
-                                onClick={() => {
-                                  if (confirm("Delete this comment?")) {
-                                    deleteComment(c.id);
-                                  }
-                                }}
+                                onClick={() => setCommentToDeleteId(c.id)}
                                 disabled={deletingCommentId === c.id}
                                 className="text-xs text-[#C96A5B] hover:text-[#B85A4B] disabled:opacity-50 transition flex-shrink-0"
                               >

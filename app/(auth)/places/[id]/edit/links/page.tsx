@@ -35,6 +35,7 @@ import { ErrorBoundary } from "../../../../../components/ErrorBoundary";
 import { PageSkeleton } from "../../../../../components/Skeleton";
 import AddPlaceLinkPanel from "../../../../../components/AddPlaceLinkPanel";
 import Icon from "../../../../../components/Icon";
+import ConfirmDialog from "../../../../../components/ConfirmDialog";
 
 type PlaceMini = {
   id: string;
@@ -79,6 +80,7 @@ export default function EditLinksPage({
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [linkToRemoveId, setLinkToRemoveId] = useState<string | null>(null);
 
   const isAdmin = access?.isAdmin === true;
   const isOwner = !!user && place?.created_by === user.id;
@@ -183,14 +185,15 @@ export default function EditLinksPage({
   }
 
   async function handleRemove(linkId: string) {
-    if (!confirm("Remove this link?")) return;
     setActingId(linkId);
     setError(null);
     try {
       await removeLink(linkId);
       setLinks((cur) => cur.filter((l) => l.id !== linkId));
+      setLinkToRemoveId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Remove failed");
+      setLinkToRemoveId(null);
     } finally {
       setActingId(null);
     }
@@ -246,6 +249,19 @@ export default function EditLinksPage({
   return (
     <ErrorBoundary>
       <main className="min-h-screen bg-[#FAFAF7] pb-24">
+        <ConfirmDialog
+          open={linkToRemoveId !== null}
+          title="Remove link?"
+          description="This disconnects the linked place from this listing. You can request or add the link again later."
+          confirmLabel="Remove"
+          loading={linkToRemoveId !== null && actingId === linkToRemoveId}
+          onClose={() => {
+            if (!actingId) setLinkToRemoveId(null);
+          }}
+          onConfirm={() => {
+            if (linkToRemoveId) void handleRemove(linkToRemoveId);
+          }}
+        />
         {/* Top App Bar — sticky, как в /places/[id]/edit */}
         <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
           <div className="max-w-3xl mx-auto px-4 sm:px-6">
@@ -350,12 +366,12 @@ export default function EditLinksPage({
                     other={l.parent}
                     statusBadge={<Badge status="pending" />}
                     actions={
-                      <button
-                        type="button"
-                        disabled={actingId === l.id}
-                        onClick={() => handleRemove(l.id)}
-                        className="h-8 px-3 rounded-lg text-xs font-medium border border-[#ECEEE4] text-[#6F7A5A] hover:bg-white disabled:opacity-60"
-                      >
+	                      <button
+	                        type="button"
+	                        disabled={actingId === l.id}
+	                        onClick={() => setLinkToRemoveId(l.id)}
+	                        className="h-8 px-3 rounded-lg text-xs font-medium border border-[#ECEEE4] text-[#6F7A5A] hover:bg-white disabled:opacity-60"
+	                      >
                         Cancel
                       </button>
                     }
@@ -391,12 +407,12 @@ export default function EditLinksPage({
                       other={other}
                       statusBadge={<Badge status="active" />}
                       actions={
-                        <button
-                          type="button"
-                          disabled={actingId === l.id}
-                          onClick={() => handleRemove(l.id)}
-                          className="h-8 px-3 rounded-lg text-xs font-medium border border-[#ECEEE4] text-[#6F7A5A] hover:bg-white disabled:opacity-60"
-                        >
+	                        <button
+	                          type="button"
+	                          disabled={actingId === l.id}
+	                          onClick={() => setLinkToRemoveId(l.id)}
+	                          className="h-8 px-3 rounded-lg text-xs font-medium border border-[#ECEEE4] text-[#6F7A5A] hover:bg-white disabled:opacity-60"
+	                        >
                           Remove
                         </button>
                       }
@@ -423,11 +439,11 @@ export default function EditLinksPage({
                       other={other}
                       statusBadge={<Badge status="rejected" />}
                       actions={
-                        <button
-                          type="button"
-                          onClick={() => handleRemove(l.id)}
-                          className="h-8 px-3 rounded-lg text-xs font-medium text-[#A8B096] hover:text-[#6F7A5A]"
-                        >
+	                        <button
+	                          type="button"
+	                          onClick={() => setLinkToRemoveId(l.id)}
+	                          className="h-8 px-3 rounded-lg text-xs font-medium text-[#A8B096] hover:text-[#6F7A5A]"
+	                        >
                           Delete
                         </button>
                       }

@@ -194,8 +194,7 @@ export default function CategoriesEditorPage(props: PageProps) {
     setSaving(false);
 
     if (navigator.vibrate) navigator.vibrate(10);
-    // Force reload by using window.location to ensure fresh data
-    window.location.href = `/places/${placeId}/edit`;
+    router.push(`/places/${placeId}/edit`);
   }
 
   function handleCancel() {
