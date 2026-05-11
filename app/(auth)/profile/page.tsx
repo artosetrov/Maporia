@@ -464,10 +464,13 @@ function ProfileInner() {
   // reviews/activity.
   useEffect(() => {
     if (accessLoading) return;
-    if (!user) {
-      replaceToAuth();
-      return;
-    }
+    // RequireAuth (app/(auth)/layout.tsx) рендерит null пока !user,
+    // так что сюда мы попадаем только когда user уже есть.
+    // 2026-05-10 hotfix: убрали replaceToAuth() из deps — useAuthRedirect()
+    // возвращает свежую функцию на каждый render, что вызывало бесконечный
+    // re-render loop (setAddedLoading(true) → новый render → новая ссылка →
+    // dep change → effect re-runs → ...). Симптом — мигание /profile.
+    if (!user) return;
 
     let mounted = true;
     setAddedLoading(true);
@@ -639,7 +642,7 @@ function ProfileInner() {
     return () => {
       mounted = false;
     };
-  }, [accessLoading, replaceToAuth, user]);
+  }, [accessLoading, user]);
 
   // A4 (2026-05-10, docs/PROFILE_PERF_PLAN.md): lazy activity timeline.
   // Грузится один раз — при первом открытии раздела Activity.
