@@ -13,7 +13,8 @@ import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../../lib/access";
 
-type PlaceLocationRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "address" | "city" | "city_id" | "city_name_cached" | "google_place_id" | "lat" | "lng">;
+type PlaceLocationRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "address" | "city" | "city_id" | "city_name_cached" | "google_place_id" | "lat" | "lng" | "kind">;
+type PlaceKind = "location" | "service" | "experience";
 type GooglePlaceDetails = {
   name?: string | null;
   formatted_address?: string | null;
@@ -61,6 +62,10 @@ export default function LocationEditorPage(props: PageProps) {
 
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const [loading, setLoading] = useState(true);
+  // Тип карточки определяет, показывать ли Google-зависимые блоки.
+  // location → полная форма (карта + Google Places + import). service/experience → только city + address.
+  const [kind, setKind] = useState<PlaceKind>("location");
+  const isLocationKind = kind === "location";
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
@@ -97,7 +102,7 @@ export default function LocationEditorPage(props: PageProps) {
       setLoading(true);
       const { data: rawData, error: placeError } = await supabase
         .from("places")
-        .select("address, city, city_id, city_name_cached, google_place_id, lat, lng, created_by")
+        .select("address, city, city_id, city_name_cached, google_place_id, lat, lng, created_by, kind")
         .eq("id", placeId)
         .single();
 
@@ -114,11 +119,15 @@ export default function LocationEditorPage(props: PageProps) {
         return;
       }
 
+      // Default to "location" if kind is null (старые записи до миграции kinds).
+      const rowKind: PlaceKind = (data.kind === "service" || data.kind === "experience") ? data.kind : "location";
+      setKind(rowKind);
+
       setAddress(data.address || "");
       // Use city_name_cached if available, fallback to city
       const cityName = data.city_name_cached || data.city || "";
       setCity(cityName);
-      
+
       setGooglePlaceId(data.google_place_id);
       setLat(data.lat);
       setLng(data.lng);
@@ -185,7 +194,11 @@ export default function LocationEditorPage(props: PageProps) {
     lat !== originalLat ||
     lng !== originalLng;
 
-  const canSave = hasChanges && !saving && lat !== null && lng !== null;
+  // Для service/experience геокординаты не обязательны — карточка не точка на карте.
+  // Сохраняем по наличию изменений (city ИЛИ address). lat/lng требуем только для location.
+  const canSave = isLocationKind
+    ? hasChanges && !saving && lat !== null && lng !== null
+    : hasChanges && !saving && (city.trim().length > 0 || address.trim().length > 0);
 
   async function handleSave() {
     if (!canSave || !user || !placeId) return;
@@ -306,7 +319,9 @@ export default function LocationEditorPage(props: PageProps) {
             >
               <Icon name="back" size={20} />
             </button>
-            <h1 className="font-semibold font-fraunces text-[#1F2A1F] flex-1 text-center" style={{ fontSize: '24px' }}>Location</h1>
+            <h1 className="font-semibold font-fraunces text-[#1F2A1F] flex-1 text-center" style={{ fontSize: '24px' }}>
+              {isLocationKind ? "Location" : "City & address"}
+            </h1>
             <div className="w-10" /> {/* Spacer для центрирования */}
           </div>
         </div>
@@ -320,8 +335,9 @@ export default function LocationEditorPage(props: PageProps) {
           </div>
         )}
 
-        {/* Map */}
-        <div 
+        {/* Map — только для location-карточек. service/experience не точки на карте. */}
+        {isLocationKind && (
+        <div
           ref={mapContainerRef}
           className="h-[40vh] min-h-[300px] bg-[#ECEEE4] relative"
           style={{
@@ -375,12 +391,19 @@ export default function LocationEditorPage(props: PageProps) {
             </div>
           )}
         </div>
+        )}
 
         {/* Address Fields */}
         <div className="px-4 sm:px-6 py-6 space-y-4">
+          {/* Address — для service/experience просто свободный текст без геокодинга. */}
           <div>
-            <label className="block text-sm font-medium text-[#1F2A1F] mb-2">Address</label>
-            {isLoaded ? (
+            <label className="block text-sm font-medium text-[#1F2A1F] mb-2">
+              Address
+              {!isLocationKind && (
+                <span className="ml-2 text-xs font-normal text-[#6F7A5A]">(optional)</span>
+              )}
+            </label>
+            {isLocationKind && isLoaded ? (
               <AddressAutocomplete
                 value={address}
                 onChange={(value) => {
@@ -500,14 +523,14 @@ export default function LocationEditorPage(props: PageProps) {
                 type="text"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="Start typing address…"
+                placeholder={isLocationKind ? "Start typing address…" : "e.g. 21 Ocean Drive (optional)"}
                 className="w-full rounded-xl border border-[#ECEEE4] bg-white px-4 py-3 text-sm text-[#1F2A1F] placeholder:text-[#A8B096] outline-none focus:border-[#8F9E4F] transition"
               />
             )}
           </div>
 
-          {/* Import from Google */}
-          {user && (
+          {/* Import from Google — только для location. */}
+          {isLocationKind && user && (
             <div className="rounded-xl border border-[#ECEEE4] bg-white p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-[#1F2A1F]">Import from Google</h3>
@@ -640,14 +663,14 @@ export default function LocationEditorPage(props: PageProps) {
             )}
           </div>
 
-          {lat && lng && (
+          {isLocationKind && lat && lng && (
             <div className="text-xs text-[#6F7A5A]">
               Coordinates: {lat.toFixed(6)}, {lng.toFixed(6)}
             </div>
           )}
 
-          {/* Available Google Places Data */}
-          {googlePlaceId && (
+          {/* Available Google Places Data — только для location. */}
+          {isLocationKind && googlePlaceId && (
             <div className="rounded-xl border border-[#ECEEE4] bg-white p-4 space-y-3">
               <h3 className="text-sm font-semibold text-[#1F2A1F]">
                 Available data from Google Places

@@ -68,6 +68,8 @@ type Place = {
   title: string | null;
   description: string | null;
   city: string | null;
+  /** Денормализованное имя города (заполняется resolveCity при сохранении локации). */
+  city_name_cached?: string | null;
   country: string | null;
   address: string | null;
   google_place_id: string | null;
@@ -884,11 +886,19 @@ export default function PlaceEditorHub(props: PageProps) {
       route: `/places/${placeId}/edit/categories`,
     });
 
-    // Location required (lat/lng)
+    // Location required.
+    // location → нужны координаты (lat/lng). service/experience → достаточно city ИЛИ address
+    // (карточка не является геоточкой, поэтому Google Places там не используется).
+    const isOfferKind = place.kind === "service" || place.kind === "experience";
+    const offerLocationFilled = !!(
+      (place.city_name_cached && place.city_name_cached.trim().length > 0) ||
+      (place.city && place.city.trim().length > 0) ||
+      (place.address && place.address.trim().length > 0)
+    );
     steps.push({
       id: "location",
-      label: "Set location",
-      completed: !!(place.lat && place.lng),
+      label: isOfferKind ? "Set city or address" : "Set location",
+      completed: isOfferKind ? offerLocationFilled : !!(place.lat && place.lng),
       route: `/places/${placeId}/edit/location`,
     });
 
@@ -911,12 +921,22 @@ export default function PlaceEditorHub(props: PageProps) {
   // Check if all required fields are filled (excluding description which is optional)
   const allRequiredFieldsFilled = useMemo(() => {
     if (!place) return false;
-    // Required fields: cover photo, title, category, location
+    // Required fields: cover photo, title, category, location.
+    // Для service/experience «location» = city ИЛИ address (без lat/lng), потому что
+    // эти карточки не являются геоточками — они привязаны к городу (или к месту через place_links).
+    const isOfferKind = place.kind === "service" || place.kind === "experience";
+    const locationFilled = isOfferKind
+      ? !!(
+          (place.city_name_cached && place.city_name_cached.trim().length > 0) ||
+          (place.city && place.city.trim().length > 0) ||
+          (place.address && place.address.trim().length > 0)
+        )
+      : !!(place.lat && place.lng);
     return (
       photos.length > 0 &&
       !!(place.title && place.title.trim().length > 0) &&
       !!(place.categories && place.categories.length > 0) &&
-      !!(place.lat && place.lng)
+      locationFilled
     );
   }, [place, photos]);
 
@@ -1194,33 +1214,46 @@ export default function PlaceEditorHub(props: PageProps) {
               </div>
             </Link>
 
-            {/* Location Card */}
-            <Link
-              href={`/places/${placeId}/edit/location`}
-              className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 flex-1">
-                  {/* Status Icon */}
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    place.lat && place.lng ? 'bg-[#7FA35C]' : 'bg-[#ECEEE4]'
-                  }`}>
-                    <Icon 
-                      name="check" 
-                      size={16} 
-                      className={place.lat && place.lng ? 'text-white' : 'text-[#A8B096]'} 
-                    />
+            {/* Location Card.
+                Для service/experience карточка не точка на карте — поэтому считаем
+                заполненной по city/address (без lat/lng) и переименовываем заголовок. */}
+            {(() => {
+              const isOfferKindCard = place.kind === "service" || place.kind === "experience";
+              const cityFilled = !!(
+                (place.city_name_cached && place.city_name_cached.trim().length > 0) ||
+                (place.city && place.city.trim().length > 0) ||
+                (place.address && place.address.trim().length > 0)
+              );
+              const locationDone = isOfferKindCard ? cityFilled : !!(place.lat && place.lng);
+              const cardTitle = isOfferKindCard ? "City & address" : "Location";
+              const cardSubtitle = place.address || place.city_name_cached || place.city || (isOfferKindCard ? "No city set" : "No location set");
+              return (
+                <Link
+                  href={`/places/${placeId}/edit/location`}
+                  className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 flex-1">
+                      {/* Status Icon */}
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                        locationDone ? 'bg-[#7FA35C]' : 'bg-[#ECEEE4]'
+                      }`}>
+                        <Icon
+                          name="check"
+                          size={16}
+                          className={locationDone ? 'text-white' : 'text-[#A8B096]'}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">{cardTitle}</h3>
+                        <p className="text-sm text-[#6F7A5A] line-clamp-1">{cardSubtitle}</p>
+                      </div>
+                    </div>
+                    <Icon name="forward" size={20} className="text-[#6F7A5A]" />
                   </div>
-                  <div className="flex-1">
-                    <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Location</h3>
-                    <p className="text-sm text-[#6F7A5A] line-clamp-1">
-                      {place.address || place.city || "No location set"}
-                    </p>
-                  </div>
-                </div>
-                <Icon name="forward" size={20} className="text-[#6F7A5A]" />
-              </div>
-            </Link>
+                </Link>
+              );
+            })()}
 
             {/* Categories Card */}
             <Link

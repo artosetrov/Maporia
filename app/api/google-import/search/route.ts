@@ -28,8 +28,8 @@ export async function GET() {
 }
 
 // Server-side Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 // Response cache: simple in-memory cache (in production, use Redis or similar)
 const responseCache = new Map<string, { data: unknown; cachedAt: number }>();
@@ -38,6 +38,7 @@ const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 12;
 const MAX_QUERY_LENGTH = 2048;
+const MAX_TOKEN_LENGTH = 20_000;
 
 function checkRateLimit(userId: string): boolean {
   const now = Date.now();
@@ -551,19 +552,22 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    const { query, access_token } = body;
+    const { query, access_token } = body as {
+      query?: unknown;
+      access_token?: unknown;
+    };
 
     logger.debug("📋 Request body:", {
       hasQuery: !!query,
-      queryLength: query?.length || 0,
-      queryPreview: query?.substring(0, 100),
+      queryLength: typeof query === "string" ? query.length : 0,
+      queryPreview: typeof query === "string" ? query.substring(0, 100) : null,
       hasAccessToken: !!access_token,
     });
 
     if (!query || typeof query !== "string" || query.trim().length === 0) {
-      console.error("❌ Invalid request: missing or empty query");
+      logger.warn("Invalid request: missing or empty query");
       return NextResponse.json(
-        { error: "Invalid request: query is required (can be a Google Maps URL or address text)" },
+        { error: "Invalid request: query is required (can be a Google Maps URL or address text)", code: "INVALID_QUERY" },
         { status: 400 }
       );
     }
@@ -577,6 +581,13 @@ export async function POST(request: NextRequest) {
     }
     const queryIsUrl = isUrl(trimmedQuery);
 
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return NextResponse.json(
+        { error: "Server configuration error", code: "MISSING_SUPABASE_CONFIG" },
+        { status: 500 }
+      );
+    }
+
     // Create Supabase client for server-side
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
@@ -587,7 +598,7 @@ export async function POST(request: NextRequest) {
 
     // Authenticate user
     let user = null;
-    if (access_token) {
+    if (typeof access_token === "string" && access_token.length <= MAX_TOKEN_LENGTH) {
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(access_token);
       if (!authError && authUser) {
         user = authUser;
@@ -608,7 +619,7 @@ export async function POST(request: NextRequest) {
     // Get Google API key
     const googleApiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     if (!googleApiKey) {
-      console.error("❌ Google Maps API key is missing");
+      logger.error("Google Maps API key is missing");
       return NextResponse.json(
         { 
           error: "Google Maps API key is not configured.",
@@ -646,7 +657,7 @@ export async function POST(request: NextRequest) {
       logger.debug("🔍 No place_id extracted, using Find Place API for:", trimmedQuery.substring(0, 100));
       placeId = await findPlaceFromText(googleApiKey, trimmedQuery);
       if (!placeId) {
-        console.error("❌ Could not find place from query:", {
+        logger.warn("Could not find place from query:", {
           query: trimmedQuery.substring(0, 100),
           isUrl: queryIsUrl,
           queryLength: trimmedQuery.length,
@@ -684,7 +695,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(normalizedData);
   } catch (error: unknown) {
-    console.error("Place search error:", error);
+    logger.error("Place search error:", error);
     const message = error instanceof Error ? error.message : "Failed to search place";
     return NextResponse.json(
       { error: message, code: "SEARCH_ERROR" },

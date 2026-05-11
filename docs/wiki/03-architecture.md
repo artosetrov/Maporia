@@ -151,7 +151,7 @@ Runtime guards:
 
 ### Google Import
 
-`/api/google-import/search` requires an authenticated Supabase user, validates JSON/query length, caches successful Place details responses in memory for 1 hour, and applies an in-memory per-user rate limit of 12 requests/minute before calling Google Places.
+`/api/google-import/search` requires an authenticated Supabase user, validates JSON/query/token length and Supabase config, caches successful Place details responses in memory for 1 hour, and applies an in-memory per-user rate limit of 12 requests/minute before calling Google Places.
 
 `/api/google/place-import` powers the newer import preview flow. It rejects invalid JSON, overlong query/token input, missing Supabase config, and unauthenticated users before calling Google APIs, then applies a per-user 10 requests/minute rate limit.
 

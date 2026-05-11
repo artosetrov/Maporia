@@ -12,7 +12,8 @@ import { isUserAdmin } from "../../../../../lib/access";
 
 type PlaceRequiredRow = Pick<
   Database["public"]["Tables"]["places"]["Row"],
-  "created_by" | "cover_url" | "title" | "categories" | "lat" | "lng" | "description"
+  "created_by" | "cover_url" | "title" | "categories" | "lat" | "lng" | "description" |
+  "kind" | "address" | "city" | "city_name_cached"
 >;
 type PlacePhotoRow = Pick<Database["public"]["Tables"]["place_photos"]["Row"], "url">;
 import Icon from "../../../../../components/Icon";
@@ -45,7 +46,7 @@ export default function RequiredStepsPage(props: PageProps) {
 
       const { data: rawPlace, error: placeError } = await supabase
         .from("places")
-        .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled")
+        .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind")
         .eq("id", placeId)
         .single();
 
@@ -88,6 +89,14 @@ export default function RequiredStepsPage(props: PageProps) {
   const requiredSteps = useMemo<RequiredStep[]>(() => {
     if (!place) return [];
 
+    // Для service/experience «location» = city ИЛИ address без геокоординат.
+    const isOfferKind = place.kind === "service" || place.kind === "experience";
+    const offerLocationFilled = !!(
+      (place.city_name_cached && place.city_name_cached.trim().length > 0) ||
+      (place.city && place.city.trim().length > 0) ||
+      (place.address && place.address.trim().length > 0)
+    );
+
     return [
       {
         id: "cover",
@@ -109,8 +118,8 @@ export default function RequiredStepsPage(props: PageProps) {
       },
       {
         id: "location",
-        label: "Set location",
-        completed: !!(place.lat && place.lng),
+        label: isOfferKind ? "Set city or address" : "Set location",
+        completed: isOfferKind ? offerLocationFilled : !!(place.lat && place.lng),
         route: `/places/${placeId}/edit/location`,
       },
       {
