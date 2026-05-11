@@ -24,6 +24,7 @@ import { getMapOptions } from "../../config/googleMaps";
 import { supabase } from "../../lib/supabase";
 import { PLACE_LAYOUT_CONFIG } from "../../config/placeLayout";
 import { useUserAccessContext } from "../../contexts/UserAccessContext";
+import { usePremiumModalContext } from "../../contexts/PremiumModalContext";
 import { useAuthRedirect } from "../../hooks/useAuthRedirect";
 import AuthCTA from "../../components/AuthCTA";
 import { isPlacePremium, canUserViewPlace, isUserAdmin } from "../../lib/access";
@@ -223,6 +224,7 @@ export default function PlacePage(props: PageProps) {
 
   // User access for premium checks and render gate (from context — single session/profile request)
   const { loading: accessLoading, access, user: ctxUser, profile: ctxProfile } = useUserAccessContext();
+  const { openPremiumModal } = usePremiumModalContext();
   const isAdmin = isUserAdmin(access);
 
   // Close modal on ESC key and prevent body scroll when gallery is open
@@ -1052,6 +1054,22 @@ export default function PlacePage(props: PageProps) {
     return num + 1; // Ensure it's between 1-9999
   };
 
+  // Auto-open PremiumUpsellModal when landing on a locked premium place.
+  // Why: было «заблокировано без выхода». Теперь сразу показываем модалку
+  // покупки поверх blur-страницы (см. /id/[id]/page.tsx isLocked branch).
+  const autoOpenedLockedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isLocked || !place) return;
+    if (autoOpenedLockedRef.current === place.id) return;
+    autoOpenedLockedRef.current = place.id;
+    const num = getPseudoPlaceNumber(place.id);
+    const pseudoTitle =
+      place.kind === "service"    ? `Locked Service #${num}` :
+      place.kind === "experience" ? `Locked Experience #${num}` :
+                                    `Haunted Gem #${num}`;
+    openPremiumModal("place", pseudoTitle, place.id);
+  }, [isLocked, place, openPremiumModal]);
+
   if (!place || accessLoading) {
     return (
       <SectionErrorBoundary>
@@ -1114,7 +1132,7 @@ export default function PlacePage(props: PageProps) {
               <LockedPlaceOverlay
                 placeTitle={pseudoTitle}
                 coverUrl={place.cover_url || undefined}
-                onUpgradeClick={() => router.push("/pricing")}
+                onUpgradeClick={() => openPremiumModal("place", pseudoTitle, place.id)}
               />
             </div>
           </div>

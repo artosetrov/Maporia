@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useRef, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase, getAuthRedirectUrl } from "../../lib/supabase";
@@ -31,6 +31,14 @@ function normalizeEmailError(msg: string): string {
 function SettingsEmailContent() {
   const searchParams = useSearchParams();
   const { replaceToAuth } = useAuthRedirect();
+  // 2026-05-10: useAuthRedirect возвращает свежую ссылку на каждый render —
+  // прямое использование в useEffect deps вызывает re-render loop
+  // (см. feedback_useauthredirect_deps). Кэшируем в ref, синкаем
+  // через эффект (React 19 запрещает писать в .current во время render).
+  const replaceToAuthRef = useRef(replaceToAuth);
+  useEffect(() => {
+    replaceToAuthRef.current = replaceToAuth;
+  });
 
   const [step, setStep] = useState<Step>("form");
   const [currentEmail, setCurrentEmail] = useState<string | null>(null);
@@ -66,7 +74,7 @@ function SettingsEmailContent() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        replaceToAuth();
+        replaceToAuthRef.current();
         return;
       }
       if (mounted) {
@@ -76,7 +84,7 @@ function SettingsEmailContent() {
     return () => {
       mounted = false;
     };
-  }, [replaceToAuth, callbackHandled]);
+  }, [callbackHandled]);
 
   // Handle email-change callback: PKCE code, hash fragment, or token_hash in query
   const handleCallback = useCallback(async () => {

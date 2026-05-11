@@ -20,7 +20,8 @@ import { supabase } from "../../lib/supabase";
 import type { Database, PlaceKind } from "../../types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { useUserAccessContext } from "../../contexts/UserAccessContext";
-import { useAuthRedirect } from "../../hooks/useAuthRedirect";
+// useAuthRedirect больше не используется — RequireAuth в (auth)/layout.tsx
+// гарантирует user. См. feedback_useauthredirect_deps.
 import { canUserAddPlace, canUserCreate, canUserCreateMulti, checkQuota } from "../../lib/access";
 import type { QuotaCheck } from "../../lib/access";
 import { EXTRA_LISTING, PLAN_CONFIG, formatPrice, suggestPlanForKind } from "../../lib/plans";
@@ -120,7 +121,6 @@ function splitPrimaryAndSecondary(kinds: PlaceKind[]): {
 export default function AddPlacePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { replaceToAuth } = useAuthRedirect();
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const impersonation = useImpersonationStatus();
   const isImpersonating = !!impersonation?.active;
@@ -151,13 +151,15 @@ export default function AddPlacePage() {
 
   const canAdd = canUserAddPlace(access);
 
-  // Гейт по авторизации (как раньше)
+  // Гейт по авторизации.
+  // 2026-05-10: убрали replaceToAuth() вызов + replaceToAuth из deps —
+  // (auth)/layout.tsx → RequireAuth уже рендерит null до user, эта ветка
+  // недостижима. replaceToAuth — fresh ref на каждый render, в deps
+  // вызывал бы re-render loop (см. feedback_useauthredirect_deps).
   useEffect(() => {
     if (accessLoading) return;
-    if (!user) {
-      replaceToAuth();
-    }
-  }, [accessLoading, user, replaceToAuth]);
+    if (!user) return;
+  }, [accessLoading, user]);
 
   // Если пользователь пришёл с ?kind= или ?kinds=… — создаём сразу.
   useEffect(() => {

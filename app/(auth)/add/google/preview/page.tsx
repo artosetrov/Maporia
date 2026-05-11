@@ -5,7 +5,8 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
-import { useAuthRedirect } from "../../../../hooks/useAuthRedirect";
+// useAuthRedirect больше не используется — RequireAuth в (auth)/layout.tsx
+// гарантирует user. См. feedback_useauthredirect_deps.
 import { canUserAddPlace } from "../../../../lib/access";
 import {
   GOOGLE_IMPORT_PREVIEW_STORAGE_KEY,
@@ -25,7 +26,6 @@ function cx(...a: Array<string | false | undefined | null>) {
 
 export default function GoogleImportPreviewPage() {
   const router = useRouter();
-  const { replaceToAuth } = useAuthRedirect();
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const [stored, setStored] = useState<GoogleImportPreviewStored | null>(null);
   const [importing, setImporting] = useState(false);
@@ -298,16 +298,16 @@ export default function GoogleImportPreviewPage() {
 
   useEffect(() => {
     if (accessLoading) return;
-    if (!user) {
-      replaceToAuth();
-      return;
-    }
+    // 2026-05-10: убрали replaceToAuth() — (auth)/layout.tsx → RequireAuth
+    // редиректит сам. replaceToAuth — fresh ref на каждый render →
+    // нельзя в deps (см. feedback_useauthredirect_deps).
+    if (!user) return;
     if (!canUserAddPlace(access)) {
       setError(
         "Only Premium users can create places. Please upgrade to Premium to add new places."
       );
     }
-  }, [user, access, accessLoading, replaceToAuth]);
+  }, [user, access, accessLoading]);
 
   useEffect(() => {
     if (selectedPhotos.length === 0) {

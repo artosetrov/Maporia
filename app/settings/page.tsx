@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import TopBar from "../components/TopBar";
 import { supabase } from "../lib/supabase";
@@ -18,6 +18,14 @@ import { PageSkeleton } from "../components/Skeleton";
 export default function SettingsPage() {
   const router = useRouter();
   const { replaceToAuth } = useAuthRedirect();
+  // 2026-05-10: useAuthRedirect возвращает свежую ссылку на каждый render —
+  // прямое использование в useEffect deps вызывает re-render loop
+  // (см. feedback_useauthredirect_deps). Кэшируем в ref, синкаем
+  // через эффект (React 19 запрещает писать в .current во время render).
+  const replaceToAuthRef = useRef(replaceToAuth);
+  useEffect(() => {
+    replaceToAuthRef.current = replaceToAuth;
+  });
   const [authLoading, setAuthLoading] = useState(true);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
@@ -49,7 +57,7 @@ export default function SettingsPage() {
       const { data } = await supabase.auth.getUser();
       if (!data.user) {
         setAuthLoading(false);
-        replaceToAuth();
+        replaceToAuthRef.current();
         return;
       }
       setUserEmail(data.user.email ?? null);
@@ -61,19 +69,19 @@ export default function SettingsPage() {
         .eq("id", data.user.id)
         .maybeSingle()) as ProfileResult;
       const { data: profile } = profileRes;
-      
+
       if (profile?.display_name) {
         setUserDisplayName(profile.display_name);
       } else {
         setUserDisplayName(data.user.email?.split("@")[0] || null);
       }
-      
+
       if (profile?.avatar_url) {
         setUserAvatar(profile.avatar_url);
       }
       setAuthLoading(false);
     })();
-  }, [replaceToAuth]);
+  }, []);
 
   async function handleLogout() {
     await supabase.auth.signOut();

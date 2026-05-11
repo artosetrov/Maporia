@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUserAccessContext } from "../../../contexts/UserAccessContext";
-import { useAuthRedirect } from "../../../hooks/useAuthRedirect";
+// useAuthRedirect больше не используется — RequireAuth в (auth)/layout.tsx
+// гарантирует user. См. feedback_useauthredirect_deps.
 import { canUserAddPlace } from "../../../lib/access";
 import GoogleImportField from "../../../components/GoogleImportField";
 import Icon from "../../../components/Icon";
@@ -12,7 +13,6 @@ import { PageSkeleton } from "../../../components/Skeleton";
 
 export default function GoogleImportPage() {
   const router = useRouter();
-  const { replaceToAuth } = useAuthRedirect();
   const { loading: accessLoading, user, access } = useUserAccessContext();
   const [error, setError] = useState<string | null>(null);
 
@@ -20,11 +20,11 @@ export default function GoogleImportPage() {
     if (accessLoading) return;
 
     (async () => {
-      // Check authentication
-      if (!user) {
-        replaceToAuth();
-        return;
-      }
+      // 2026-05-10: убрали replaceToAuth() — (auth)/layout.tsx → RequireAuth
+      // редиректит сам, сюда мы попадаем только когда user уже есть.
+      // replaceToAuth — fresh ref на каждый render → нельзя в deps
+      // (см. feedback_useauthredirect_deps).
+      if (!user) return;
 
       // Check if user can add places (only Premium and Admin)
       if (!canUserAddPlace(access)) {
@@ -32,7 +32,7 @@ export default function GoogleImportPage() {
         return;
       }
     })();
-  }, [user, access, accessLoading, replaceToAuth]);
+  }, [user, access, accessLoading]);
 
   if (accessLoading) {
     return <PageSkeleton />;
