@@ -401,7 +401,7 @@ Total: ~M+M+S+S+S+M+M+S+S+S = **2-3 дня** работы один челове�
   - Если выбраны kind'ы и suggested ≠ currentPlan → «Suggested plan: Pro Service from $14.99/mo. You'll see Monthly/Yearly options after you fill the form.»
   - Иначе (ничего не выбрано или план уже покрывает) → fallback на оригинальный текст.
 - Не блокируем выбор непокрытых типов (соответствует решению Артёма: «не блокировать, апсейл на финале»).
-- `/add` page **не трогали** — она ловит ?kinds=… как раньше, и при `checkQuota` падении показывает PaywallModal. /api/stripe/checkout v2 теперь получит правильный suggested plan + cycle из тех же registry-функций.
+- `/add` page ловит ?kinds=… как раньше, использует registry-backed `canUserCreateMulti` для secondary-location capability, делает client-side quota pre-check для primary locations и service/experience primary-or-secondary counts, а при server trigger rejection показывает Paywall/Limit modal. /api/stripe/checkout v2 получает правильный suggested plan + cycle из тех же registry-функций.
 - TS + ESLint зелёные.
 
 ### 2026-05-08 — Φ11 done (i18n инфра)

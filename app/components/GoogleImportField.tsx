@@ -7,7 +7,6 @@ import { logger } from "../lib/logger";
 import Icon from "./Icon";
 import { SkeletonBase } from "./Skeleton";
 import ImportPreviewCard from "./ImportPreviewCard";
-import { getGoogleMapsApiKey } from "../config/googleMaps";
 import {
   GOOGLE_IMPORT_PREVIEW_STORAGE_KEY,
   type GoogleImportSearchResult,
@@ -80,13 +79,7 @@ const toErrorLike = (error: unknown): ErrorLike => {
 // Helper to generate photo URL from photo reference (legacy Places API)
 // Returns a URL that can be used directly in img src
 function getPhotoUrl(photoReference: string, maxWidth: number = 800): string {
-  try {
-    const apiKey = getGoogleMapsApiKey();
-    return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photo_reference=${photoReference}&key=${apiKey}`;
-  } catch (error) {
-    logger.warn("Failed to get API key for photo URL:", error);
-    return `/api/google/photo?reference=${encodeURIComponent(photoReference)}&maxwidth=${maxWidth}`;
-  }
+  return `/api/google/photo?reference=${encodeURIComponent(photoReference)}&maxwidth=${maxWidth}`;
 }
 
 type GoogleImportFieldProps = {

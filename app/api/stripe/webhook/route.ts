@@ -428,17 +428,33 @@ async function handleSubscriptionDeleted(
   sub: Stripe.Subscription,
   supabaseAdmin: SupabaseAdminClient
 ) {
-  const userId = sub.metadata?.supabase_user_id;
-  if (!userId) return;
+  const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+  const userId = await resolveUserId({
+    supabaseAdmin,
+    metadataUserId: sub.metadata?.supabase_user_id,
+    stripeCustomerId: customerId,
+  });
+  if (!userId) {
+    logger.error("[stripe/webhook] subscription.deleted: cannot resolve user", {
+      subId: sub.id,
+      customerId,
+      sub_metadata: sub.metadata,
+    });
+    return;
+  }
 
   // Обновляем строку в subscriptions
-  await supabaseAdmin
+  const { error: subUpdateError } = await supabaseAdmin
     .from("subscriptions")
     .update({
       status: "cancelled",
       cancelled_at: new Date().toISOString(),
     })
     .eq("stripe_subscription_id", sub.id);
+  if (subUpdateError) {
+    logger.error("[stripe/webhook] subscription deleted update failed:", subUpdateError.message);
+    throw new Error(subUpdateError.message);
+  }
 
   // Проверяем, есть ли у юзера ещё какая-то активная подписка (на случай переключения тарифов)
   const { data: stillActive } = await supabaseAdmin
@@ -452,7 +468,7 @@ async function handleSubscriptionDeleted(
     return; // Есть другая активная — план не меняем.
   }
 
-  await supabaseAdmin
+  const { error: profileError } = await supabaseAdmin
     .from("profiles")
     .update({
       plan: "free",
@@ -462,6 +478,10 @@ async function handleSubscriptionDeleted(
       role: "standard",
     })
     .eq("id", userId);
+  if (profileError) {
+    logger.error("[stripe/webhook] subscription deleted profile update failed:", profileError.message);
+    throw new Error(profileError.message);
+  }
 
   logger.info("[stripe/webhook] subscription cancelled, user → free:", userId);
 }

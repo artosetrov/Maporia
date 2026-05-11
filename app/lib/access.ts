@@ -9,7 +9,7 @@
  */
 
 import type { Plan, Profile, Place } from "../types";
-import { planCoversKind, computeQuota, type PlanId } from "./pricing";
+import { planCoversKind, computeQuota, canCreateMultiKind, type PlanId } from "./pricing";
 
 export type UserRole = "guest" | "standard" | "premium" | "admin";
 export type SubscriptionStatus = "active" | "inactive";
@@ -244,8 +244,16 @@ export function canUserCreateMulti(
   if (userAccess.isAdmin) return true;
   if (kinds.length === 0) return true;
 
-  // Все kind'ы должны быть доступны на текущем плане одновременно.
-  return kinds.every((k) => canUserCreate(userAccess, k));
+  const priority: Array<"location" | "service" | "experience"> = ["service", "experience", "location"];
+  const primary = priority.find((k) => kinds.includes(k)) ?? kinds[0];
+  const secondary = kinds.filter((k) => k !== primary);
+
+  return canCreateMultiKind({
+    plan: userAccess.plan as PlanId,
+    primary,
+    secondary,
+    isAdmin: userAccess.isAdmin,
+  });
 }
 
 /**

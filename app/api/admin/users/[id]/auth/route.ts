@@ -20,6 +20,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getAppRedirectOrigin } from "@/app/lib/stripeRedirectOrigin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -43,13 +44,36 @@ type Body = {
   action?: Action;
   email?: string;       // for set_email
   password?: string;    // for set_password
-  redirectTo?: string;  // for send_reset_link / send_magic_link
 };
+
+const MUTATION_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const MUTATION_RATE_LIMIT_MAX_REQUESTS = 12;
+const mutationRateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
 // Минимальная валидация — серверу не нужна полная RFC5321,
 // только защита от очевидной дряни.
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function checkMutationRateLimit(key: string): boolean {
+  const now = Date.now();
+  const limit = mutationRateLimitMap.get(key);
+
+  if (!limit || now > limit.resetAt) {
+    mutationRateLimitMap.set(key, { count: 1, resetAt: now + MUTATION_RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+
+  if (limit.count >= MUTATION_RATE_LIMIT_MAX_REQUESTS) return false;
+
+  limit.count++;
+  return true;
+}
+
+function buildAdminAuthRedirect(request: NextRequest, nextPath: string): string {
+  const origin = getAppRedirectOrigin(request);
+  return `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
 }
 
 /**
@@ -146,6 +170,14 @@ export async function POST(
   const body = (await request.json().catch(() => ({}))) as Body;
   const { action } = body;
   if (!action) return jsonError("action is required", 400, "BAD_REQUEST");
+
+  if (!checkMutationRateLimit(`${callerUser.id}:${action}`)) {
+    return jsonError(
+      "Too many admin auth requests. Please wait a minute and try again.",
+      429,
+      "RATE_LIMITED"
+    );
+  }
 
   // 3. Резолвим таргета
   const { data: targetAuthData, error: targetAuthErr } =
@@ -252,21 +284,13 @@ export async function POST(
         return jsonError("Target user has no email", 400, "TARGET_NO_EMAIL");
       }
 
-      const origin =
-        request.headers.get("origin") ||
-        request.nextUrl.origin ||
-        "";
       // Совпадает со стандартным flow в lib/auth/requestPasswordReset.ts:
       // ссылка ведёт через /auth/callback на /auth/update-password.
-      const redirectTo =
-        body.redirectTo ||
-        (origin
-          ? `${origin}/auth/callback?next=${encodeURIComponent("/auth/update-password")}`
-          : undefined);
+      const redirectTo = buildAdminAuthRedirect(request, "/auth/update-password");
 
       const { error: resetErr } = await supabaseAdmin.auth.resetPasswordForEmail(
         email,
-        redirectTo ? { redirectTo } : undefined
+        { redirectTo }
       );
 
       if (resetErr) {
@@ -286,14 +310,8 @@ export async function POST(
         return jsonError("Target user has no email", 400, "TARGET_NO_EMAIL");
       }
 
-      const origin =
-        request.headers.get("origin") ||
-        request.nextUrl.origin ||
-        "";
       // Magic link → /auth/callback (там Supabase обменяет hash-токен на сессию).
-      const redirectTo =
-        body.redirectTo ||
-        (origin ? `${origin}/auth/callback?next=${encodeURIComponent("/")}` : undefined);
+      const redirectTo = buildAdminAuthRedirect(request, "/");
 
       // shouldCreateUser:false — не создавать нового пользователя, если targetUser
       // вдруг был удалён между resolve и отправкой.

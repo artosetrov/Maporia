@@ -17,6 +17,24 @@ type CollectionInsert = Database["public"]["Tables"]["collections"]["Insert"];
 const COLLECTION_COVERS_BUCKET = "place-photos";
 const COLLECTION_COVERS_PREFIX = "collections";
 const MAX_COVER_SIZE_MB = 5;
+const MAX_COVER_SIZE_BYTES = MAX_COVER_SIZE_MB * 1024 * 1024;
+const ALLOWED_COVER_TYPES = new Map([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/webp", "webp"],
+  ["image/avif", "avif"],
+]);
+
+function validateCoverFile(file: File): { extension: string | null; error: string | null } {
+  const extension = ALLOWED_COVER_TYPES.get(file.type) ?? null;
+  if (!extension) {
+    return { extension: null, error: "Please select a JPG, PNG, WebP, or AVIF image" };
+  }
+  if (file.size > MAX_COVER_SIZE_BYTES) {
+    return { extension: null, error: `File size must be under ${MAX_COVER_SIZE_MB} MB` };
+  }
+  return { extension, error: null };
+}
 
 type AccessType = "free" | "premium";
 
@@ -36,8 +54,9 @@ export default function NewCollectionPage() {
 
   async function uploadCover(file: File): Promise<{ url: string | null; error: string | null }> {
     try {
-      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-      const path = `${COLLECTION_COVERS_PREFIX}/temp/${crypto.randomUUID()}.${ext}`;
+      const { extension, error: validationError } = validateCoverFile(file);
+      if (validationError || !extension) return { url: null, error: validationError };
+      const path = `${COLLECTION_COVERS_PREFIX}/temp/${crypto.randomUUID()}.${extension}`;
       const { error: uploadError } = await supabase.storage
         .from(COLLECTION_COVERS_BUCKET)
         .upload(path, file, { cacheControl: "3600", upsert: false });
@@ -53,12 +72,9 @@ export default function NewCollectionPage() {
     const files = e.target.files;
     if (!files?.length) return;
     const file = files[0];
-    if (!file.type.startsWith("image/")) {
-      setError("Please select an image file (JPG, PNG, etc.)");
-      return;
-    }
-    if (file.size > MAX_COVER_SIZE_MB * 1024 * 1024) {
-      setError(`File size must be under ${MAX_COVER_SIZE_MB} MB`);
+    const { error: validationError } = validateCoverFile(file);
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setCoverUploading(true);
@@ -198,7 +214,7 @@ export default function NewCollectionPage() {
               <input
                 ref={coverInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp,image/avif"
                 className="hidden"
                 onChange={handleCoverFilePick}
                 aria-label="Upload cover from computer"

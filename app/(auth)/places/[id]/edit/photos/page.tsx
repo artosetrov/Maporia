@@ -28,6 +28,15 @@ function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
 }
 
+const MAX_PLACE_PHOTOS = 12;
+const MAX_PLACE_PHOTO_SIZE_BYTES = 8 * 1024 * 1024;
+const ALLOWED_PLACE_PHOTO_TYPES = new Map([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/webp", "webp"],
+  ["image/avif", "avif"],
+]);
+
 function generateUUID(): string {
   if (typeof window !== "undefined" && window.crypto && window.crypto.randomUUID) {
     return window.crypto.randomUUID();
@@ -37,6 +46,21 @@ function generateUUID(): string {
     const v = c === "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
+}
+
+function validatePlacePhotoFile(file: File): { extension: string | null; error: string | null } {
+  const extension = ALLOWED_PLACE_PHOTO_TYPES.get(file.type) ?? null;
+  if (!extension) {
+    return { extension: null, error: "Photos must be JPG, PNG, WebP, or AVIF images" };
+  }
+  if (file.size > MAX_PLACE_PHOTO_SIZE_BYTES) {
+    return { extension: null, error: "Each photo must be under 8MB" };
+  }
+  return { extension, error: null };
+}
+
+function revokeLocalObjectUrl(url: string) {
+  if (url.startsWith("blob:")) URL.revokeObjectURL(url);
 }
 
 type PageProps = { params: Promise<{ id: string }> };
@@ -160,8 +184,9 @@ export default function PhotosEditorPage(props: PageProps) {
 
   async function uploadToSupabase(file: File): Promise<{ url: string | null; error: string | null }> {
     try {
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `places/${generateUUID()}.${ext}`;
+      const { extension, error: validationError } = validatePlacePhotoFile(file);
+      if (validationError || !extension) return { url: null, error: validationError };
+      const path = `places/${placeId}/${generateUUID()}.${extension}`;
 
 
       const { error } = await supabase.storage
@@ -191,7 +216,19 @@ export default function PhotosEditorPage(props: PageProps) {
   function handleFilePick(files: FileList | null) {
     if (!files) return;
 
+    setError(null);
     const newFiles = Array.from(files);
+    if (photos.length + newFiles.length > MAX_PLACE_PHOTOS) {
+      setError(`You can upload up to ${MAX_PLACE_PHOTOS} photos.`);
+      return;
+    }
+
+    const invalidFile = newFiles.find((file) => validatePlacePhotoFile(file).error);
+    if (invalidFile) {
+      setError(validatePlacePhotoFile(invalidFile).error || "Invalid photo file");
+      return;
+    }
+
     const timestamp = Date.now();
     const newPhotos: Photo[] = newFiles.map((file, idx) => ({
       id: `new-${timestamp}-${idx}`,
@@ -211,7 +248,7 @@ export default function PhotosEditorPage(props: PageProps) {
         setPhotos((prev) =>
           prev.map((p) => {
             if (p.id !== photo.id) return p;
-            URL.revokeObjectURL(p.url);
+            revokeLocalObjectUrl(p.url);
             return { ...p, uploading: false, error: "File not found" };
           })
         );
@@ -226,10 +263,10 @@ export default function PhotosEditorPage(props: PageProps) {
         prev.map((p) => {
           if (p.id !== photo.id) return p;
           if (!result.url) {
-            URL.revokeObjectURL(p.url);
+            revokeLocalObjectUrl(p.url);
             return { ...p, uploading: false, error: result.error || "Upload failed" };
           }
-          URL.revokeObjectURL(p.url);
+          revokeLocalObjectUrl(p.url);
           return { ...p, url: result.url, uploading: false };
         })
       );
@@ -277,6 +314,7 @@ export default function PhotosEditorPage(props: PageProps) {
 
     setPhotos((prev) => {
       const filtered = prev.filter((p) => p.id !== photoId);
+      revokeLocalObjectUrl(photo.url);
       // If we removed the cover, make the first one the cover
       if (photo.is_cover && filtered.length > 0) {
         filtered[0].is_cover = true;
@@ -496,7 +534,7 @@ export default function PhotosEditorPage(props: PageProps) {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp,image/avif"
               multiple
               className="hidden"
               onChange={(e) => handleFilePick(e.target.files)}

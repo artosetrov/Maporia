@@ -500,8 +500,7 @@ type PlaceDetailsData = {
 function normalizePlaceData(
   placeData: PlaceDetailsData,
   originalQuery: string,
-  isUrl: boolean,
-  apiKey: string
+  isUrl: boolean
 ): GoogleImportSearchResponse {
   const displayName = placeData.name || null;
   const formattedAddress = placeData.formatted_address || null;
@@ -519,7 +518,7 @@ function normalizePlaceData(
     const ref = photo.photo_reference || "";
     return {
       id: `photo_${index}`,
-      url: ref ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${ref}&key=${apiKey}` : "",
+      url: ref ? `/api/google/photo?reference=${encodeURIComponent(ref)}&maxwidth=800` : "",
       reference: ref,
     };
   }).filter(p => p.reference);
@@ -676,7 +675,7 @@ export async function POST(request: NextRequest) {
     const placeData = await getPlaceDetails(googleApiKey, placeId);
 
     // Step 5: Normalize data
-    const normalizedData = normalizePlaceData(placeData, trimmedQuery, queryIsUrl, googleApiKey);
+    const normalizedData = normalizePlaceData(placeData, trimmedQuery, queryIsUrl);
 
     // Step 6: Cache the response
     if (placeId) {

@@ -1,6 +1,6 @@
 # Architecture
 
-Последнее обновление: 2026-05-10.
+Последнее обновление: 2026-05-11.
 
 ## Stack
 
@@ -79,7 +79,7 @@ Premium place определяется через несколько полей 
   - `service`: `creator_service` или `creator_all`.
   - `experience`: `creator_experience` или `creator_all`.
 - `canUserCreateMulti` требует права на каждый выбранный kind.
-- `checkQuota` учитывает текущие active service/experience listings и `bonus_listing_credits`.
+- `/add` checks creator capabilities through the registry-backed multi-kind rules: creator service/experience plans may attach a secondary location without requiring a location plan. `checkQuota` counts primary locations, service/experience primary-or-secondary usage, and `bonus_listing_credits` before insert; the database trigger remains the final enforcement layer.
 
 ## Billing Architecture
 
@@ -91,6 +91,8 @@ Stripe entry points:
 - `POST /api/stripe/webhook`: updates `profiles` и `subscriptions`.
 - `/api/stripe/verify`: проверка результата checkout.
 - `/api/stripe/portal`: customer portal.
+
+Webhook cancellation events resolve users through metadata first and `profiles.stripe_customer_id` as fallback, so dashboard-created or metadata-light subscription events can still downgrade the correct profile. `/api/stripe/verify` is a one-time Premium fallback only; it is disabled during impersonation and backfills both legacy premium flags and the newer `profiles.plan/plan_period` fields.
 
 Stripe success/cancel/portal return origins are resolved through `app/lib/stripeRedirectOrigin.ts`. Production should set `NEXT_PUBLIC_APP_URL` (or `APP_URL`) to the canonical HTTPS origin; request `Origin`/`Referer` is only accepted when it matches that origin, with localhost allowed in development.
 
@@ -117,6 +119,8 @@ Legacy env `STRIPE_PRICE_ID` остаётся только как fallback дл�
 Client-side singleton в `app/lib/supabase.ts` делает defensive init, не валит browser полностью при missing env и вручную стартует auth auto-refresh после session validation.
 
 Service-role operations должны жить только в API routes/server utils. Health-check уже проверяет, что service keys не попали в client files.
+
+Admin auth-management (`/api/admin/users/[id]/auth`) uses the same configured app-origin resolver as Stripe redirects for reset/magic-link emails, ignores client-supplied redirect URLs, and rate-limits credential/email actions per admin/action. Admin impersonation start is also rate-limited per admin/IP before generating Supabase magic links.
 
 ### Google Maps
 
@@ -148,6 +152,8 @@ Runtime guards:
 ### Google Import
 
 `/api/google-import/search` requires an authenticated Supabase user, validates JSON/query length, caches successful Place details responses in memory for 1 hour, and applies an in-memory per-user rate limit of 12 requests/minute before calling Google Places.
+
+Google Places photo previews must go through `/api/google/photo`. The route validates reference/width, applies a lightweight IP rate limit, streams image bytes from Google, and never returns a Google URL containing the API key.
 
 ### Resolve APIs
 

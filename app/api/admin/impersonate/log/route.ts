@@ -34,6 +34,12 @@ const supabaseAdmin =
 const jsonError = (message: string, status: number, code?: string) =>
   NextResponse.json({ error: message, code }, { status });
 
+function parseBoundedInteger(value: string | null, fallback: number, min: number, max: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(parsed, min), max);
+}
+
 type LogRow = {
   id: string;
   admin_id: string;
@@ -73,8 +79,8 @@ export async function GET(req: NextRequest) {
 
   // Pagination
   const url = new URL(req.url);
-  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 50), 1), 200);
-  const offset = Math.max(Number(url.searchParams.get("offset") ?? 0), 0);
+  const limit = parseBoundedInteger(url.searchParams.get("limit"), 50, 1, 200);
+  const offset = parseBoundedInteger(url.searchParams.get("offset"), 0, 0, 100_000);
 
   const { data: logs, error: logErr } = await supabaseAdmin
     .from("admin_impersonation_log")

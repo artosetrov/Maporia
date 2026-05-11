@@ -108,7 +108,8 @@ export type Place = {
    * Дополнительные kind'ы помимо primary `kind` (смотри miграцию add_secondary_kinds_to_places).
    * Один листинг может одновременно быть локацией+сервисом или локацией+experience.
    * `kind` остаётся primary (определяет шаблон отображения через kind-router).
-   * Pricing и quota-логика берут union(kind, secondary_kinds).
+   * Quota: location считается только как primary kind; service/experience
+   * считаются как primary OR secondary. См. docs/PRICING_V2_PLAN.md § 3.
    */
   secondary_kinds?: ('location' | 'service' | 'experience')[] | null;
 };

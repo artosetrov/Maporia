@@ -43,6 +43,39 @@ const supabaseAdmin =
 const jsonError = (message: string, status: number, code?: string) =>
   NextResponse.json({ error: message, code }, { status });
 
+const MAX_USER_ID_LENGTH = 128;
+const MAX_TOKEN_LENGTH = 20_000;
+const IMPERSONATION_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const IMPERSONATION_RATE_LIMIT_MAX_REQUESTS = 5;
+const impersonationRateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function getClientIp(request: NextRequest): string {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    request.headers.get("cf-connecting-ip") ||
+    "unknown"
+  );
+}
+
+function checkImpersonationRateLimit(key: string): boolean {
+  const now = Date.now();
+  const limit = impersonationRateLimitMap.get(key);
+
+  if (!limit || now > limit.resetAt) {
+    impersonationRateLimitMap.set(key, {
+      count: 1,
+      resetAt: now + IMPERSONATION_RATE_LIMIT_WINDOW_MS,
+    });
+    return true;
+  }
+
+  if (limit.count >= IMPERSONATION_RATE_LIMIT_MAX_REQUESTS) return false;
+
+  limit.count++;
+  return true;
+}
+
 export async function POST(request: NextRequest) {
   if (!supabaseAdmin) {
     return jsonError(
@@ -66,6 +99,13 @@ export async function POST(request: NextRequest) {
       "BAD_REQUEST"
     );
   }
+  if (
+    targetUserId.length > MAX_USER_ID_LENGTH ||
+    accessToken.length > MAX_TOKEN_LENGTH ||
+    refreshToken.length > MAX_TOKEN_LENGTH
+  ) {
+    return jsonError("Request body is invalid", 400, "BAD_REQUEST");
+  }
 
   // 2. Auth + admin gate
   const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(accessToken);
@@ -81,6 +121,15 @@ export async function POST(request: NextRequest) {
   if (callerErr || !callerProfile) return jsonError("Profile not found", 404, "PROFILE_MISSING");
   if (!callerProfile.is_admin && callerProfile.role !== "admin") {
     return jsonError("Forbidden", 403, "NOT_ADMIN");
+  }
+
+  const rateLimitKey = `${callerUser.id}:${getClientIp(request)}`;
+  if (!checkImpersonationRateLimit(rateLimitKey)) {
+    return jsonError(
+      "Too many impersonation attempts. Please wait a minute and try again.",
+      429,
+      "RATE_LIMITED"
+    );
   }
 
   // 3. Гарды

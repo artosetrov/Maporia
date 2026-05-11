@@ -14,8 +14,33 @@ function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
 }
 
+const MAX_AVATAR_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_AVATAR_TYPES = new Map([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/webp", "webp"],
+  ["image/avif", "avif"],
+]);
+
 function generateUUID() {
   return crypto.randomUUID();
+}
+
+function getStoragePathFromAvatarUrl(url: string | null): string | null {
+  if (!url || !url.includes("avatars/")) return null;
+  const pathMatch = url.match(/avatars\/(.+)$/);
+  return pathMatch?.[1]?.split("?")[0] ?? null;
+}
+
+function validateAvatarFile(file: File): { extension: string | null; error: string | null } {
+  const extension = ALLOWED_AVATAR_TYPES.get(file.type) ?? null;
+  if (!extension) {
+    return { extension: null, error: "Please select a JPG, PNG, WebP, or AVIF image" };
+  }
+  if (file.size > MAX_AVATAR_SIZE_BYTES) {
+    return { extension: null, error: "Image size should be less than 5MB" };
+  }
+  return { extension, error: null };
 }
 
 export default function AvatarEditorPage() {
@@ -57,8 +82,9 @@ export default function AvatarEditorPage() {
     if (!user) return { url: null, error: "User not found" };
 
     try {
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `${user.id}/${generateUUID()}.${ext}`;
+      const { extension, error: validationError } = validateAvatarFile(file);
+      if (validationError || !extension) return { url: null, error: validationError };
+      const path = `${user.id}/${generateUUID()}.${extension}`;
 
       const { error } = await supabase.storage.from("avatars").upload(path, file, {
         cacheControl: "3600",
@@ -84,27 +110,14 @@ export default function AvatarEditorPage() {
 
     const file = files[0];
 
-    if (!file.type.startsWith("image/")) {
-      setError("Please select an image file");
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setError("Image size should be less than 5MB");
+    const { error: validationError } = validateAvatarFile(file);
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
     setUploading(true);
     setError(null);
-
-    // Delete old avatar if exists
-    if (avatarUrl && avatarUrl.includes("avatars/")) {
-      const pathMatch = avatarUrl.match(/avatars\/(.+)$/);
-      if (pathMatch && pathMatch[1]) {
-        const path = pathMatch[1].split('?')[0];
-        await supabase.storage.from("avatars").remove([path]);
-      }
-    }
 
     const result = await uploadAvatar(file);
     setUploading(false);
@@ -134,6 +147,13 @@ export default function AvatarEditorPage() {
       return;
     }
 
+    if (originalAvatarUrl && originalAvatarUrl !== avatarUrl) {
+      const oldPath = getStoragePathFromAvatarUrl(originalAvatarUrl);
+      if (oldPath) {
+        await supabase.storage.from("avatars").remove([oldPath]);
+      }
+    }
+
     if (navigator.vibrate) navigator.vibrate(10);
     window.location.href = `/profile/edit`;
   }
@@ -145,12 +165,9 @@ export default function AvatarEditorPage() {
     setError(null);
 
     // Delete from storage
-    if (avatarUrl.includes("avatars/")) {
-      const pathMatch = avatarUrl.match(/avatars\/(.+)$/);
-      if (pathMatch && pathMatch[1]) {
-        const path = pathMatch[1].split('?')[0];
-        await supabase.storage.from("avatars").remove([path]);
-      }
+    const avatarPath = getStoragePathFromAvatarUrl(avatarUrl);
+    if (avatarPath) {
+      await supabase.storage.from("avatars").remove([avatarPath]);
     }
 
     // Update profile
@@ -171,6 +188,10 @@ export default function AvatarEditorPage() {
   }
 
   function handleCancel() {
+    if (avatarUrl && avatarUrl !== originalAvatarUrl) {
+      const unsavedPath = getStoragePathFromAvatarUrl(avatarUrl);
+      if (unsavedPath) void supabase.storage.from("avatars").remove([unsavedPath]);
+    }
     router.push(`/profile/edit`);
   }
 
@@ -262,7 +283,7 @@ export default function AvatarEditorPage() {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp,image/avif"
               onChange={(e) => handleFilePick(e.target.files)}
               className="hidden"
             />

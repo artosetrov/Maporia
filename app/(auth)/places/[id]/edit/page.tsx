@@ -53,6 +53,7 @@ import { supabase } from "../../../../lib/supabase";
 import type { Database } from "../../../../types/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
 import { isUserAdmin, canUserCreatePremiumPlace, type AccessLevel } from "../../../../lib/access";
+import { getPublicStoragePath, PLACE_PHOTOS_BUCKET } from "../../../../lib/storagePaths";
 
 type PlacePhotoUrlRow = Pick<Database["public"]["Tables"]["place_photos"]["Row"], "url">;
 import Icon from "../../../../components/Icon";
@@ -694,54 +695,51 @@ export default function PlaceEditorHub(props: PageProps) {
     setError(null);
 
     try {
-      // Step 1: Get all photos to delete from storage
+      const currentIsAdmin = isUserAdmin(access);
+      const targetQuery = supabase
+        .from("places")
+        .select("id, created_by")
+        .eq("id", placeId);
+
+      if (!currentIsAdmin) {
+        targetQuery.eq("created_by", user.id);
+      }
+
+      const { data: deleteTarget, error: targetError } = await targetQuery.single();
+      if (targetError || !deleteTarget) {
+        setError(targetError?.message || "You do not have permission to delete this place.");
+        setDeleting(false);
+        return;
+      }
+
       const { data: rawPhotos } = await supabase
         .from("place_photos")
         .select("url")
         .eq("place_id", placeId);
 
       const photosData = rawPhotos as PlacePhotoUrlRow[] | null;
-      // Step 2: Delete photos from storage (if they exist in storage bucket)
-      if (photosData && photosData.length > 0) {
-        const photoUrls = photosData.map((p) => p.url).filter(Boolean) as string[];
-        const bucketName = "place-photos";
+      const photoStoragePaths = Array.from(
+        new Set(
+          (photosData ?? [])
+            .map((photo) => getPublicStoragePath(photo.url, PLACE_PHOTOS_BUCKET))
+            .filter((path): path is string => Boolean(path)),
+        ),
+      );
 
-        for (const url of photoUrls) {
-          try {
-            // Only delete if it's a Supabase storage URL, not external URL
-            if (url.includes("supabase.co/storage")) {
-              // Format: .../storage/v1/object/public/place-photos/<path>
-              const storageMatch = url.match(/\/place-photos\/(.+)$/);
-              if (storageMatch && storageMatch[1]) {
-                const filePath = storageMatch[1];
-                const { error: storageError } = await supabase.storage
-                  .from(bucketName)
-                  .remove([filePath]);
-
-                if (storageError) {
-                  console.warn(`Failed to delete photo from storage: ${filePath}`, storageError);
-                }
-              }
-            }
-          } catch (storageErr) {
-            console.warn("Error deleting photo from storage:", storageErr);
-          }
-        }
-      }
-
-      // Step 3: Delete related data from database
       const [photosResult, commentsResult, reactionsResult] = await Promise.all([
         supabase.from("place_photos").delete().eq("place_id", placeId),
         supabase.from("comments").delete().eq("place_id", placeId),
         supabase.from("reactions").delete().eq("place_id", placeId),
       ]);
 
-      if (photosResult.error) console.warn("Error deleting place_photos:", photosResult.error);
-      if (commentsResult.error) console.warn("Error deleting comments:", commentsResult.error);
-      if (reactionsResult.error) console.warn("Error deleting reactions:", reactionsResult.error);
+      const relatedDeleteError = photosResult.error || commentsResult.error || reactionsResult.error;
+      if (relatedDeleteError) {
+        console.error("Related place delete error:", relatedDeleteError);
+        setError(relatedDeleteError.message || "Failed to delete related place data");
+        setDeleting(false);
+        return;
+      }
 
-      // Step 4: Delete the place itself (admin can delete any place, owner can delete their own)
-      const currentIsAdmin = isUserAdmin(access);
       const deleteQuery = supabase.from("places").delete().eq("id", placeId);
 
       if (!currentIsAdmin) {
@@ -755,6 +753,16 @@ export default function PlaceEditorHub(props: PageProps) {
         setError(deleteError.message || "Failed to delete place");
         setDeleting(false);
         return;
+      }
+
+      if (photoStoragePaths.length > 0) {
+        const { error: storageError } = await supabase.storage
+          .from(PLACE_PHOTOS_BUCKET)
+          .remove(photoStoragePaths);
+
+        if (storageError) {
+          console.warn("Failed to delete place photos from storage:", storageError);
+        }
       }
 
       router.push("/profile");
@@ -774,33 +782,49 @@ export default function PlaceEditorHub(props: PageProps) {
     const targetPath = returnTo || "/profile";
 
     try {
+      const currentIsAdmin = isUserAdmin(access);
+      const targetQuery = supabase
+        .from("places")
+        .select("id, created_by")
+        .eq("id", placeId);
+
+      if (!currentIsAdmin) {
+        targetQuery.eq("created_by", user.id);
+      }
+
+      const { data: deleteTarget, error: targetError } = await targetQuery.single();
+      if (targetError || !deleteTarget) {
+        setError(targetError?.message || "You do not have permission to cancel this place.");
+        setDeleting(false);
+        return;
+      }
+
       const { data: rawPhotos } = await supabase
         .from("place_photos")
         .select("url")
         .eq("place_id", placeId);
       const photosData = rawPhotos as PlacePhotoUrlRow[] | null;
-      if (photosData && photosData.length > 0) {
-        const photoUrls = photosData.map((p) => p.url).filter(Boolean) as string[];
-        const bucketName = "place-photos";
-        for (const url of photoUrls) {
-          try {
-            if (url.includes("supabase.co/storage")) {
-              const storageMatch = url.match(/\/place-photos\/(.+)$/);
-              if (storageMatch?.[1]) {
-                await supabase.storage.from(bucketName).remove([storageMatch[1]]);
-              }
-            }
-          } catch {
-            // ignore
-          }
-        }
-      }
-      await Promise.all([
+      const photoStoragePaths = Array.from(
+        new Set(
+          (photosData ?? [])
+            .map((photo) => getPublicStoragePath(photo.url, PLACE_PHOTOS_BUCKET))
+            .filter((path): path is string => Boolean(path)),
+        ),
+      );
+
+      const [photosResult, commentsResult, reactionsResult] = await Promise.all([
         supabase.from("place_photos").delete().eq("place_id", placeId),
         supabase.from("comments").delete().eq("place_id", placeId),
         supabase.from("reactions").delete().eq("place_id", placeId),
       ]);
-      const currentIsAdmin = isUserAdmin(access);
+
+      const relatedDeleteError = photosResult.error || commentsResult.error || reactionsResult.error;
+      if (relatedDeleteError) {
+        setError(relatedDeleteError.message || "Failed to cancel");
+        setDeleting(false);
+        return;
+      }
+
       const deleteQuery = supabase.from("places").delete().eq("id", placeId);
       if (!currentIsAdmin) deleteQuery.eq("created_by", user.id);
       const { error: deleteError } = await deleteQuery;
@@ -809,6 +833,17 @@ export default function PlaceEditorHub(props: PageProps) {
         setDeleting(false);
         return;
       }
+
+      if (photoStoragePaths.length > 0) {
+        const { error: storageError } = await supabase.storage
+          .from(PLACE_PHOTOS_BUCKET)
+          .remove(photoStoragePaths);
+
+        if (storageError) {
+          console.warn("Failed to delete place photos from storage:", storageError);
+        }
+      }
+
       router.push(targetPath);
     } catch (err) {
       console.error("Cancel Add Gem error:", err);

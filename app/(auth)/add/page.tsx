@@ -131,7 +131,7 @@ export default function AddPlacePage() {
   const [paywallKind, setPaywallKind] = useState<PlaceKind | null>(null);
   /** Если тариф позволяет, но достигнут лимит — модалка «докупить или upgrade». */
   const [limitState, setLimitState] = useState<{
-    kind: "service" | "experience";
+    kind: PlaceKind;
     quota: QuotaCheck;
   } | null>(null);
   const [buyingAddon, setBuyingAddon] = useState(false);
@@ -201,15 +201,20 @@ export default function AddPlacePage() {
       return;
     }
 
-    // 2) Для service/experience — проверяем квоту. Считаем активные карточки
-    //    (включая черновики и existing мульти-kind), вычитаем лимит и bonus_credits.
-    //    Карточка "содержит" kind, если он primary ИЛИ в secondary_kinds — это
-    //    1:1 с логикой триггера enforce_place_quota (см. add_secondary_kinds_to_places).
+    // 2) Проверяем quota до insert, чтобы показать нормальную модалку.
+    //    Location считается только по primary `kind='location'`. Service/experience
+    //    считаются по primary OR secondary, потому secondary service/experience
+    //    требуют direct capability и должны расходовать соответствующую квоту.
     const hasService = kinds.includes("service");
     const hasExperience = kinds.includes("experience");
 
-    if (hasService || hasExperience) {
-      const [serviceCountRes, experienceCountRes, profRes] = await Promise.all([
+    {
+      const [locationCountRes, serviceCountRes, experienceCountRes, profRes] = await Promise.all([
+        supabase
+          .from("places")
+          .select("id", { count: "exact", head: true })
+          .eq("created_by", user.id)
+          .eq("kind", "location"),
         supabase
           .from("places")
           .select("id", { count: "exact", head: true })
@@ -223,19 +228,18 @@ export default function AddPlacePage() {
         supabase.from("profiles").select("bonus_listing_credits").eq("id", user.id).single(),
       ]);
 
+      const locations = locationCountRes.count ?? 0;
       const services = serviceCountRes.count ?? 0;
       const experiences = experienceCountRes.count ?? 0;
       const credits =
         ((profRes.data as { bonus_listing_credits?: number } | null)?.bonus_listing_credits) ?? 0;
 
-      // checkQuota ожидает один kind. Проверяем оба (если оба выбраны),
-      // блокируемся на первом непрошедшем.
-      const kindsToCheck: Array<"service" | "experience"> = [];
+      const kindsToCheck: PlaceKind[] = [primary];
       if (hasService) kindsToCheck.push("service");
       if (hasExperience) kindsToCheck.push("experience");
 
-      for (const k of kindsToCheck) {
-        const quota = checkQuota(access, k, services, experiences, credits);
+      for (const k of Array.from(new Set(kindsToCheck))) {
+        const quota = checkQuota(access, k, services, experiences, credits, locations);
         if (!quota.allowed) {
           if (quota.reason === "no_plan") {
             setPaywallKind(k);
@@ -298,14 +302,12 @@ export default function AddPlacePage() {
         if (code === "P0002" || msg.includes("QUOTA_EXCEEDED")) {
           // На сервере план разрешает kind, но лимит/кредиты выбраны.
           // Подсчитаем актуальную квоту, чтобы показать корректные числа.
-          // Для модалки лимита нужен service|experience — берём первый из выбранных.
-          const limitKind: "service" | "experience" | null = hasService
-            ? "service"
-            : hasExperience
-            ? "experience"
-            : null;
-          if (limitKind) {
-            const [s, e, p] = await Promise.all([
+          const limitKind: PlaceKind = primary;
+          {
+            const [l, s, e, p] = await Promise.all([
+              supabase.from("places").select("id", { count: "exact", head: true })
+                .eq("created_by", user.id)
+                .eq("kind", "location"),
               supabase.from("places").select("id", { count: "exact", head: true })
                 .eq("created_by", user.id)
                 .or(placeContainsKindFilter("service")),
@@ -319,7 +321,8 @@ export default function AddPlacePage() {
               limitKind,
               s.count ?? 0,
               e.count ?? 0,
-              ((p.data as { bonus_listing_credits?: number } | null)?.bonus_listing_credits) ?? 0
+              ((p.data as { bonus_listing_credits?: number } | null)?.bonus_listing_credits) ?? 0,
+              l.count ?? 0
             );
             setLimitState({ kind: limitKind, quota: refreshedQuota });
           }
@@ -672,7 +675,7 @@ function LimitReachedModal({
   onBuyAddon,
   onUpgrade,
 }: {
-  kind: "service" | "experience";
+  kind: PlaceKind;
   quota: QuotaCheck;
   buying: boolean;
   isImpersonating: boolean;
@@ -680,7 +683,8 @@ function LimitReachedModal({
   onBuyAddon: () => void;
   onUpgrade: () => void;
 }) {
-  const kindLabel = kind === "service" ? "services" : "experiences";
+  const kindLabel =
+    kind === "service" ? "services" : kind === "experience" ? "experiences" : "locations";
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4"

@@ -155,7 +155,7 @@ export default function HomeHero({
                   <div
                     role="listbox"
                     aria-label="Choose a city"
-                    className="absolute left-1/2 lg:left-0 -translate-x-1/2 lg:translate-x-0 top-[calc(100%+8px)] z-30 min-w-[240px] bg-white border border-[#ebe7d8] rounded-2xl py-1.5 shadow-[0_8px_24px_rgba(31,36,23,0.10)]"
+                    className="absolute left-1/2 lg:left-0 -translate-x-1/2 lg:translate-x-0 top-[calc(100%+8px)] z-30 min-w-[220px] bg-white border border-[#ebe7d8] rounded-2xl py-1 shadow-[0_8px_24px_rgba(31,36,23,0.10)] font-sans tracking-normal leading-tight"
                   >
                     {cities.map((c) => {
                       const isSelected = (selectedCity ?? DEFAULT_CITY) === c;
@@ -170,7 +170,7 @@ export default function HomeHero({
                             setCityOpen(false);
                           }}
                           className={[
-                            "w-full text-left px-4 py-2.5 text-[14px] font-semibold",
+                            "w-full text-left px-4 py-2 text-[14px] font-semibold leading-tight",
                             isSelected
                               ? "text-[#4d5b27] bg-[#eef0e0]"
                               : "text-[#16190f] hover:bg-[#faf8f1]",
@@ -180,7 +180,7 @@ export default function HomeHero({
                         </button>
                       );
                     })}
-                    <div className="border-t border-[#ebe7d8] mt-1 pt-1">
+                    <div className="border-t border-[#ebe7d8] mt-0.5 pt-0.5">
                       <button
                         type="button"
                         role="option"

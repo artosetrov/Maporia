@@ -1,6 +1,6 @@
 # Feature Map
 
-Последнее обновление: 2026-05-07.
+Последнее обновление: 2026-05-11.
 
 ## Public Routes
 
@@ -70,7 +70,7 @@
 | `/api/cities/resolve` | City resolve/normalization |
 | `/api/collections/[id]/places` | Places внутри коллекции |
 | `/api/google/place-import` | Google place import |
-| `/api/google/photo` | Google photo proxy/fetch |
+| `/api/google/photo` | Google photo image proxy; streams Places photos without exposing Google API key |
 | `/api/google-import/search` | Google import search |
 | `/api/google-import/import` | Google import commit |
 | `/api/places/resolve-place-id` | Resolve internal/external place id |

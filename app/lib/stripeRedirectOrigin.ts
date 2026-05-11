@@ -33,7 +33,7 @@ function isLocalDevOrigin(origin: string | null): boolean {
   }
 }
 
-export function getStripeRedirectOrigin(request: NextRequest): string {
+export function getAppRedirectOrigin(request: NextRequest): string {
   const configured = configuredOrigin();
   const requestOrigin =
     normalizeOrigin(request.headers.get("origin")) ||
@@ -48,4 +48,8 @@ export function getStripeRedirectOrigin(request: NextRequest): string {
   }
 
   return requestOrigin || "http://localhost:3000";
+}
+
+export function getStripeRedirectOrigin(request: NextRequest): string {
+  return getAppRedirectOrigin(request);
 }
