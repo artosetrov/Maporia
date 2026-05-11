@@ -2685,7 +2685,7 @@ export default function PlacePage(props: PageProps) {
       {/* Host page: experiences/services прицеплённые к этой локации через place_links */}
       {place.kind === "location" && (
         <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-10">
-          <LocationChildrenSection parentId={place.id} />
+          <LocationChildrenSection parentId={place.id} canEdit={canEdit} />
         </div>
       )}
     </main>

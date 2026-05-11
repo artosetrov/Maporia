@@ -92,9 +92,12 @@ Stripe entry points:
 - `/api/stripe/verify`: проверка результата checkout.
 - `/api/stripe/portal`: customer portal.
 
+Stripe success/cancel/portal return origins are resolved through `app/lib/stripeRedirectOrigin.ts`. Production should set `NEXT_PUBLIC_APP_URL` (or `APP_URL`) to the canonical HTTPS origin; request `Origin`/`Referer` is only accepted when it matches that origin, with localhost allowed in development.
+
 Важные env:
 
 ```env
+NEXT_PUBLIC_APP_URL=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 STRIPE_PRICE_PREMIUM_ONETIME=
@@ -145,6 +148,11 @@ Runtime guards:
 ### Google Import
 
 `/api/google-import/search` requires an authenticated Supabase user, validates JSON/query length, caches successful Place details responses in memory for 1 hour, and applies an in-memory per-user rate limit of 12 requests/minute before calling Google Places.
+
+### Resolve APIs
+
+- `/api/places/resolve-place-id` requires auth, validates JSON/place id length, rate-limits at 20 requests/minute/user, enforces place view access, and only persists resolved `google_place_id` for the owner/admin.
+- `/api/cities/resolve` requires auth, validates JSON, normalizes text/coordinates, and rate-limits at 30 requests/minute/user before calling `get_or_create_city`.
 
 ## Scripts And Operations
 

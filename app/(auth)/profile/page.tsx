@@ -106,8 +106,8 @@ type CommentActivityRow = {
   user_id?: string;
 };
 
-type ReviewerProfileRow = Pick<Profile, "id" | "display_name" | "username" | "avatar_url">;
-type ReviewPlaceRow = Pick<Place, "id" | "title" | "address">;
+// A3 (2026-05-10): ReviewerProfileRow + ReviewPlaceRow больше не нужны —
+// review assembly теперь делает RPC `get_profile_dashboard`.
 type ActivityPlaceRow = Pick<Place, "id" | "title" | "cover_url" | "address">;
 
 function initialsFromName(name?: string | null) {
@@ -484,54 +484,56 @@ function ProfileInner() {
       try {
         const recentlyViewedIds = getRecentlyViewedPlaceIds();
 
-        // R1 (параллельно): added, reactions, commentsCount, recently-viewed
-        // A4 (2026-05-10): `comments LIMIT 50` (для activity timeline) убран
-        // отсюда — грузится лениво, только когда юзер открывает Activity.
-        const [
-          addedPlacesResult,
-          reactionsResult,
-          commentsCountResult,
-          recentlyViewedResult,
-        ] = await Promise.all([
-          supabase
-            .from("places")
-            .select("id,title,city,country,address,cover_url,created_at,categories,kind")
-            .eq("created_by", userIdLocal)
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("reactions")
-            .select("place_id, reaction, created_at")
-            .eq("user_id", userIdLocal)
-            .eq("reaction", "like"),
-          supabase
-            .from("comments")
-            .select("id", { count: "exact", head: true })
-            .eq("user_id", userIdLocal),
-          recentlyViewedIds.length > 0
-            ? supabase
-                .from("places")
-                .select("id,title,city,country,address,cover_url,created_at,categories,kind")
-                .in("id", recentlyViewedIds)
-                .limit(20)
-            : Promise.resolve({ data: null }),
-        ]);
+        // A3 (2026-05-10, docs/PROFILE_PERF_PLAN.md): один RPC вместо
+        // 3 цепочечных раундов запросов (R1+R2+R3). RPC возвращает
+        // added/saved/recently_viewed/comments_count/user_likes/
+        // reviews_received за один round-trip. Activity timeline всё
+        // ещё ленивая (отдельный useEffect ниже, A4).
+        //
+        // supabase-js v2.93 generic inference на rpc() ломается на
+        // typed Database — тот же workaround, что и в topCities.ts:
+        // узкий cast на конкретный вызов.
+        type DashboardData = {
+          added: Place[];
+          saved: Place[];
+          recently_viewed: Place[];
+          comments_count: number;
+          user_likes: ReactionActivityRow[];
+          reviews_received: Review[];
+        };
+        const rpc = supabase.rpc as unknown as (
+          fn: "get_profile_dashboard",
+          args: { p_user_id: string; p_recently_viewed_ids: string[] },
+        ) => Promise<{ data: DashboardData | null; error: { message: string } | null }>;
+        const { data: dashboard, error: dashboardErr } = await rpc(
+          "get_profile_dashboard",
+          {
+            p_user_id: userIdLocal,
+            p_recently_viewed_ids: recentlyViewedIds,
+          }
+        );
 
         if (!mounted) return;
+        if (dashboardErr) throw dashboardErr;
 
-        const addedPlaces = (addedPlacesResult.data ?? []) as Place[];
-        const reactions = (reactionsResult.data ?? []) as ReactionActivityRow[];
-        const commentsCountData = commentsCountResult.count ?? 0;
+        const addedPlaces = dashboard?.added ?? [];
+        const savedPlaces = dashboard?.saved ?? [];
+        const recentlyViewedRaw = dashboard?.recently_viewed ?? [];
+        const commentsCountData = dashboard?.comments_count ?? 0;
+        const userLikesData = dashboard?.user_likes ?? [];
+        const reviewsReceivedData = dashboard?.reviews_received ?? [];
 
-        // Added готов — флипаем флаг СРАЗУ (раньше ждал весь chain).
-        setAdded(addedPlaces as Place[]);
+        // Added и Saved готовы → флипаем флаги сразу.
+        setAdded(addedPlaces);
         setAddedLoading(false);
+        setSaved(savedPlaces);
+        setSavedLoading(false);
 
-        // userLikes — для lazy activity-effect (см. A4 ниже).
-        setUserLikes(reactions);
-
+        // Recently viewed: RPC возвращает без порядка, сортируем по
+        // recentlyViewedIds на клиенте (порядок из localStorage).
         let recentlyViewedPlaces: Place[] = [];
-        if (recentlyViewedResult.data && recentlyViewedIds.length > 0) {
-          const placesMap = new Map((recentlyViewedResult.data as Place[]).map((p) => [p.id, p]));
+        if (recentlyViewedIds.length > 0) {
+          const placesMap = new Map(recentlyViewedRaw.map((p) => [p.id, p]));
           recentlyViewedPlaces = recentlyViewedIds
             .map((id) => placesMap.get(id))
             .filter((p): p is Place => p !== undefined);
@@ -539,93 +541,11 @@ function ProfileInner() {
         setRecentlyViewed(recentlyViewedPlaces);
         setRecentlyViewedLoading(false);
 
-        setCommentsCount(commentsCountData || 0);
-
-        const placeIds = reactions.map((r) => r.place_id);
-        const addedPlaceIds = addedPlaces.map((p) => p.id);
-
-        // R2 (параллельно): saved (depends on reactions), commentsReceived (depends on added)
-        const [savedPlacesResult, commentsReceivedResult] = await Promise.all([
-          placeIds.length > 0
-            ? supabase
-                .from("places")
-                .select("id,title,city,country,address,cover_url,created_at,categories,kind")
-                .in("id", placeIds)
-                .order("created_at", { ascending: false })
-            : Promise.resolve({ data: [] }),
-          addedPlaceIds.length > 0
-            ? supabase
-                .from("comments")
-                .select("id, text, created_at, place_id, user_id")
-                .in("place_id", addedPlaceIds)
-                .neq("user_id", userIdLocal)
-                .order("created_at", { ascending: false })
-                .limit(20)
-            : Promise.resolve({ data: [] }),
-        ]);
-
-        if (!mounted) return;
-
-        const savedPlaces = (savedPlacesResult.data ?? []) as Place[];
-        setSaved(savedPlaces);
-        setSavedLoading(false);
-
-        const commentsReceived = (commentsReceivedResult.data ?? []) as CommentActivityRow[];
-        let reviewsReceivedData: Review[] = [];
-
-        if (commentsReceived.length > 0) {
-          const reviewerIds = Array.from(
-            new Set(commentsReceived.map((c) => c.user_id).filter((id): id is string => Boolean(id)))
-          );
-          const placeIdsForReviews = Array.from(new Set(commentsReceived.map((c) => c.place_id)));
-
-          // R3 (параллельно): reviewer profiles + review-place titles
-          const [profilesData, placesData] = await Promise.all([
-            supabase.from("profiles").select("id, display_name, username, avatar_url").in("id", reviewerIds),
-            supabase.from("places").select("id, title, address").in("id", placeIdsForReviews),
-          ]);
-
-          const profilesMap = new Map<string, { name: string; avatar: string | null }>();
-          ((profilesData.data ?? []) as ReviewerProfileRow[]).forEach((p) => {
-            profilesMap.set(p.id, {
-              name: p.display_name || p.username || "User",
-              avatar: p.avatar_url,
-            });
-          });
-
-          const placesMap = new Map<string, { title: string | null; address: string | null }>();
-          ((placesData.data ?? []) as ReviewPlaceRow[]).forEach((p) => {
-            placesMap.set(p.id, {
-              title: p.title,
-              address: p.address,
-            });
-          });
-
-          reviewsReceivedData = commentsReceived.map((c) => {
-            const reviewer = c.user_id ? profilesMap.get(c.user_id) : null;
-            const place = placesMap.get(c.place_id);
-            return {
-              id: c.id,
-              text: c.text,
-              created_at: c.created_at,
-              place_id: c.place_id,
-              place_title: place?.title ?? null,
-              place_address: place?.address ?? null,
-              reviewer_id: c.user_id ?? "",
-              reviewer_name: reviewer?.name ?? "User",
-              reviewer_avatar: reviewer?.avatar ?? null,
-              reviewer_location: null,
-            };
-          });
-        }
-
-        if (!mounted) return;
+        setCommentsCount(commentsCountData);
+        setUserLikes(userLikesData);
         setReviewsReceived(reviewsReceivedData);
 
-        // A4 (2026-05-10): activity timeline (R4) удалён из main effect.
-        // Грузится лениво в отдельном useEffect ниже — только когда юзер
-        // открывает раздел Activity. Это экономит 1 round-trip к Supabase
-        // на дефолтном открытии /profile.
+        // Activity timeline (lazy, см. useEffect ниже).
       } catch (extrasErr) {
         if (mounted) {
           setAddedLoading(false);

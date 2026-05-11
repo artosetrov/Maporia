@@ -5,9 +5,13 @@
  *
  * Рендерится на странице location-карточки (kind='location'). Если есть прицепленные
  * через `place_links` (status='active') experience/service — показывает их горизонтальным
- * скроллом. Если нет — компонент скрыт.
+ * скроллом.
  *
- * См. docs/PLACE_LINKS_PLAN.md § 4.1.
+ * Owner-режим (canEdit=true):
+ *  - Если children пусто, показываем mini-CTA «Host experiences or services here».
+ *  - Если children есть, в header'е появляется «+ Add» рядом с заголовком.
+ *
+ * См. docs/PLACE_LINKS_PLAN.md § 4.1, docs/PLACE_LINKS_PHASE6_PLAN.md § 1.2.
  */
 
 import { useEffect, useState } from "react";
@@ -18,9 +22,11 @@ import type { PlaceListItem } from "../../../types";
 
 type Props = {
   parentId: string;
+  /** owner или admin location-карточки — показываем CTAs для управления линками. */
+  canEdit?: boolean;
 };
 
-export default function LocationChildrenSection({ parentId }: Props) {
+export default function LocationChildrenSection({ parentId, canEdit }: Props) {
   const [children, setChildren] = useState<PlaceListItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -37,9 +43,28 @@ export default function LocationChildrenSection({ parentId }: Props) {
     };
   }, [parentId]);
 
-  // Скрываем секцию полностью пока загружается ИЛИ если нет children.
   if (loading) return null;
-  if (children.length === 0) return null;
+
+  // Owner + пусто → mini-CTA. Non-owner + пусто → скрываем секцию полностью.
+  if (children.length === 0) {
+    if (!canEdit) return null;
+    return (
+      <section className="mt-10 mb-6">
+        <Link
+          href={`/places/${parentId}/edit/links`}
+          className="block rounded-2xl border border-dashed border-[#ECEEE4] bg-[#FAFAF7] p-5 sm:p-6 text-center hover:border-[#8F9E4F] hover:bg-white transition-colors"
+        >
+          <div className="text-2xl mb-1.5">✨🛠</div>
+          <div className="font-fraunces font-semibold text-[#1F2A1F] text-base mb-1">
+            Host experiences or services here
+          </div>
+          <div className="text-xs text-[#6F7A5A]">
+            Add a guided tour, workshop, photographer, or any offering that happens at this place.
+          </div>
+        </Link>
+      </section>
+    );
+  }
 
   return (
     <section className="mt-10 mb-6">
@@ -47,9 +72,19 @@ export default function LocationChildrenSection({ parentId }: Props) {
         <h2 className="font-fraunces text-xl sm:text-2xl font-semibold text-[#1F2A1F]">
           Experiences & services here
         </h2>
-        <span className="text-sm text-[#6F7A5A]">
-          {children.length} {children.length === 1 ? "offering" : "offerings"}
-        </span>
+        <div className="flex items-baseline gap-3 shrink-0">
+          <span className="text-sm text-[#6F7A5A]">
+            {children.length} {children.length === 1 ? "offering" : "offerings"}
+          </span>
+          {canEdit && (
+            <Link
+              href={`/places/${parentId}/edit/links`}
+              className="text-sm text-[#8F9E4F] hover:text-[#556036] underline"
+            >
+              + Add
+            </Link>
+          )}
+        </div>
       </header>
 
       {/* Горизонтальный скролл — карточка ~280px */}

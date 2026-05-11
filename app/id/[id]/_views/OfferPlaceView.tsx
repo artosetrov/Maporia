@@ -451,8 +451,8 @@ export default function OfferPlaceView({
           </div>
         </div>
 
-        {/* Parent location backlink (host pattern) */}
-        <ParentLocationCard childId={place.id} />
+        {/* Parent location backlink + owner CTA (host pattern) */}
+        <ParentLocationCard childId={place.id} canEdit={canEdit} />
 
         {/* Description */}
         {place.description && (

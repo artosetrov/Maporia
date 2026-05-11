@@ -9,9 +9,11 @@
 
 import { supabase } from "./supabase";
 import type { PlaceListItem } from "../types";
+import { sanitizePostgrestValueForLike } from "../utils";
 
 export type PlaceLinkRelation = "happens_at";
 export type PlaceLinkStatus = "active" | "pending" | "rejected";
+export type PlaceKindLite = "location" | "service" | "experience";
 
 export type PlaceLink = {
   id: string;
@@ -262,4 +264,96 @@ export async function getPendingRequestsCount(): Promise<number> {
     return 0;
   }
   return count ?? 0;
+}
+
+/**
+ * Поиск кандидатов для линковки. RLS фильтрует доступ — отдаст public + own.
+ *
+ * Используется в AddPlaceLinkPanel. Сортирует own-первыми, затем по recency.
+ * Возвращает только active (не is_hidden), чтобы черновики не попадали в выдачу.
+ *
+ * См. docs/PLACE_LINKS_PHASE6_PLAN.md § 4.1.
+ */
+export async function searchLinkCandidates(args: {
+  query: string;
+  kinds: PlaceKindLite[];
+  excludePlaceId: string;
+  excludeIds?: string[];
+  limit?: number;
+}): Promise<PlaceListItem[]> {
+  const q = args.query.trim();
+  if (q.length < 2) return [];
+  if (args.kinds.length === 0) return [];
+
+  const limit = args.limit ?? 8;
+  const pattern = `%${sanitizePostgrestValueForLike(q)}%`;
+
+  // Все исключения: сама карточка + уже линкованные.
+  const excludeIds = Array.from(
+    new Set([args.excludePlaceId, ...(args.excludeIds ?? [])].filter(Boolean)),
+  );
+
+  // RLS отрежет приватные чужие карточки. Дополнительно отсеиваем черновики (is_hidden=true)
+  // на стороне клиента ниже — Postgres-фильтр по is_hidden=false здесь работает,
+  // но для null безопаснее проверять явно.
+  let queryBuilder = supabase
+    .from("places")
+    .select(
+      "id, title, description, city, city_name_cached, country, address, cover_url, categories, tags, lat, lng, created_at, created_by, access_level, visibility, kind",
+    )
+    .in("kind", args.kinds)
+    .or(`title.ilike.${pattern},city.ilike.${pattern}`)
+    .order("created_at", { ascending: false })
+    .limit(limit * 2); // запас — отфильтруем own/exclude/hidden ниже
+
+  if (excludeIds.length > 0) {
+    queryBuilder = queryBuilder.not(
+      "id",
+      "in",
+      `(${excludeIds.join(",")})`,
+    );
+  }
+
+  const { data, error } = await queryBuilder;
+  if (error) {
+    console.error("[placeLinks] searchLinkCandidates:", error.message);
+    return [];
+  }
+
+  const rows = (data ?? []) as PlaceListItem[];
+
+  // Sort: own first (если у нас есть session.user, см. ниже), затем by created_at desc.
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id ?? null;
+
+  return rows
+    .sort((a, b) => {
+      const aOwn = userId && a.created_by === userId ? 1 : 0;
+      const bOwn = userId && b.created_by === userId ? 1 : 0;
+      if (aOwn !== bOwn) return bOwn - aOwn;
+      return (b.created_at || "").localeCompare(a.created_at || "");
+    })
+    .slice(0, limit);
+}
+
+/**
+ * Резолвит уже существующий link между parent и child (любой status).
+ * Используется, чтобы UI мог отличить «ещё не линкован» от «уже линкован, видишь ниже».
+ */
+export async function findExistingLink(args: {
+  parentId: string;
+  childId: string;
+}): Promise<PlaceLink | null> {
+  const { data, error } = await supabase
+    .from("place_links")
+    .select(PLACE_LINK_SELECT)
+    .eq("parent_place_id", args.parentId)
+    .eq("child_place_id", args.childId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[placeLinks] findExistingLink:", error.message);
+    return null;
+  }
+  return (data as PlaceLink | null) ?? null;
 }

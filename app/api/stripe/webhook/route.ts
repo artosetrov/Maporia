@@ -52,6 +52,20 @@ async function tryClaimWebhookEvent(
   return Array.isArray(data) && data.length > 0;
 }
 
+async function releaseWebhookEventClaim(
+  supabaseAdmin: SupabaseAdminClient,
+  eventId: string,
+): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from("stripe_webhook_events")
+    .delete()
+    .eq("event_id", eventId);
+
+  if (error) {
+    logger.error("[stripe/webhook] failed to release event claim:", error.message);
+  }
+}
+
 export async function POST(request: NextRequest) {
   const stripe = getStripe();
   if (!stripe) {
@@ -64,7 +78,7 @@ export async function POST(request: NextRequest) {
 
   const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
   if (!WEBHOOK_SECRET) {
-    console.error("[stripe/webhook] Missing STRIPE_WEBHOOK_SECRET");
+    logger.error("[stripe/webhook] Missing STRIPE_WEBHOOK_SECRET");
     return NextResponse.json({ error: "Webhook not configured" }, { status: 503 });
   }
 
@@ -79,7 +93,7 @@ export async function POST(request: NextRequest) {
     event = stripe.webhooks.constructEvent(rawBody, signature, WEBHOOK_SECRET);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Signature verification failed";
-    console.error("[stripe/webhook] Signature verification failed:", message);
+    logger.error("[stripe/webhook] Signature verification failed:", message);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
@@ -99,7 +113,7 @@ export async function POST(request: NextRequest) {
   } catch (err: unknown) {
     // Если не смогли проверить idempotency — лучше отказать с 500, чем дважды активировать план.
     const message = err instanceof Error ? err.message : "Idempotency check failed";
-    console.error("[stripe/webhook] Idempotency check error:", message);
+    logger.error("[stripe/webhook] Idempotency check error:", message);
     return NextResponse.json({ error: "Idempotency unavailable" }, { status: 500 });
   }
 
@@ -123,9 +137,9 @@ export async function POST(request: NextRequest) {
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Webhook handler error";
-    console.error("[stripe/webhook] Handler error:", message, "event:", event.type);
-    // Возвращаем 200, чтобы Stripe не ретраил из-за ошибок логики (мы их логируем).
-    return NextResponse.json({ received: true, error: message }, { status: 200 });
+    logger.error("[stripe/webhook] Handler error:", message, "event:", event.type);
+    await releaseWebhookEventClaim(supabaseAdmin, event.id);
+    return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 });
   }
 
   return NextResponse.json({ received: true });
@@ -189,7 +203,7 @@ async function resolveUserId(args: {
     .maybeSingle();
 
   if (error) {
-    console.error("[stripe/webhook] resolveUserId failed:", error.message);
+    logger.error("[stripe/webhook] resolveUserId failed:", error.message);
     return null;
   }
   return data?.id ?? null;
@@ -217,7 +231,7 @@ async function handleCheckoutCompleted(
   });
 
   if (!userId) {
-    console.error("[stripe/webhook] checkout.session.completed: cannot resolve user", {
+    logger.error("[stripe/webhook] checkout.session.completed: cannot resolve user", {
       sessionId: session.id,
       customerId: customerIdEarly,
       metadata: session.metadata,
@@ -255,7 +269,7 @@ async function handleCheckoutCompleted(
       .eq("id", userId)
       .single();
     if (pErr) {
-      console.error("[stripe/webhook] extra_listing read profile failed:", pErr.message);
+      logger.error("[stripe/webhook] extra_listing read profile failed:", pErr.message);
       throw new Error(pErr.message);
     }
     const next = (prof?.bonus_listing_credits ?? 0) + 1;
@@ -264,7 +278,7 @@ async function handleCheckoutCompleted(
       .update({ bonus_listing_credits: next, stripe_customer_id: customerId })
       .eq("id", userId);
     if (uErr) {
-      console.error("[stripe/webhook] extra_listing update failed:", uErr.message);
+      logger.error("[stripe/webhook] extra_listing update failed:", uErr.message);
       throw new Error(uErr.message);
     }
     logger.info("[stripe/webhook] +1 listing credit for", userId, "→", next);
@@ -285,7 +299,7 @@ async function handleCheckoutCompleted(
     .eq("id", userId);
 
   if (error) {
-    console.error("[stripe/webhook] Failed to activate premium:", error.message);
+    logger.error("[stripe/webhook] Failed to activate premium:", error.message);
     throw new Error(`Failed to activate premium for ${userId}: ${error.message}`);
   }
   logger.info("[stripe/webhook] Premium (lifetime) activated for", userId);
@@ -313,7 +327,7 @@ async function handleSubscriptionUpsert(
   });
 
   if (!userId) {
-    console.error("[stripe/webhook] subscription: cannot resolve user", {
+    logger.error("[stripe/webhook] subscription: cannot resolve user", {
       subId: sub.id,
       customerId,
       sub_metadata: sub.metadata,
@@ -378,7 +392,7 @@ async function handleSubscriptionUpsert(
     .from("subscriptions")
     .upsert(subRow, { onConflict: "stripe_subscription_id" });
   if (upsertErr) {
-    console.error("[stripe/webhook] subscriptions upsert failed:", upsertErr.message);
+    logger.error("[stripe/webhook] subscriptions upsert failed:", upsertErr.message);
     throw new Error(upsertErr.message);
   }
 
@@ -397,7 +411,7 @@ async function handleSubscriptionUpsert(
       })
       .eq("id", userId);
     if (profErr) {
-      console.error("[stripe/webhook] profile update failed:", profErr.message);
+      logger.error("[stripe/webhook] profile update failed:", profErr.message);
       throw new Error(profErr.message);
     }
     logger.info("[stripe/webhook] subscription active:", { userId, plan, period });

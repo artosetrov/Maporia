@@ -30,6 +30,8 @@ import {
   type PlanId,
 } from "../../../lib/pricing";
 import { isImpersonatingFromRequest } from "../../../lib/impersonation";
+import { getStripeRedirectOrigin } from "../../../lib/stripeRedirectOrigin";
+import { logger } from "../../../lib/logger";
 import type { PaidPlan } from "../../../types";
 
 export const dynamic = "force-dynamic";
@@ -170,10 +172,7 @@ export async function POST(request: NextRequest) {
 
     const stripeCustomerId = await getOrCreateStripeCustomer(user.id, user.email || "");
 
-    const origin =
-      request.headers.get("origin") ||
-      request.headers.get("referer")?.replace(/\/+$/, "") ||
-      "http://localhost:3000";
+    const origin = getStripeRedirectOrigin(request);
 
     const session = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
@@ -190,7 +189,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ url: session.url });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to create checkout session";
-    console.error("[stripe/checkout] Error:", message);
+    logger.error("[stripe/checkout] Error:", message);
     return jsonError(message, 500, "CHECKOUT_ERROR");
   }
 }

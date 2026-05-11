@@ -18,7 +18,7 @@
  * См. docs/PLACE_LINKS_PLAN.md § 4.4.
  */
 
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -33,6 +33,7 @@ import {
 } from "../../../../../lib/placeLinks";
 import { ErrorBoundary } from "../../../../../components/ErrorBoundary";
 import { PageSkeleton } from "../../../../../components/Skeleton";
+import AddPlaceLinkPanel from "../../../../../components/AddPlaceLinkPanel";
 
 type PlaceMini = {
   id: string;
@@ -70,75 +71,73 @@ export default function EditLinksPage({
   const isOwner = !!user && place?.created_by === user.id;
   const canManage = isOwner || isAdmin;
 
-  // Load place + linked rows
+  // Грузим place + linked rows. Выделено в callback, чтобы AddPlaceLinkPanel мог
+  // дёрнуть `refresh()` после успешного createLink.
+  const refresh = useCallback(async (): Promise<void> => {
+    const { data: placeData, error: placeErr } = await supabase
+      .from("places")
+      .select("id, title, kind, cover_url, created_by")
+      .eq("id", placeId)
+      .single();
+
+    if (placeErr || !placeData) {
+      setError("Place not found");
+      return;
+    }
+
+    const p = placeData as PlaceMini;
+    setPlace(p);
+
+    // RLS вернёт нам только то что мы можем видеть (active + наши pending/rejected).
+    const linksQuery = supabase
+      .from("place_links")
+      .select(
+        `
+        *,
+        child:places!place_links_child_place_id_fkey(id, title, kind, cover_url, created_by),
+        parent:places!place_links_parent_place_id_fkey(id, title, kind, cover_url, created_by)
+      `,
+      );
+    const scopedLinksQuery =
+      p.kind === "location"
+        ? linksQuery.eq("parent_place_id", placeId)
+        : linksQuery.eq("child_place_id", placeId);
+
+    const { data: linksData, error: linksErr } = await scopedLinksQuery.order(
+      "created_at",
+      { ascending: false },
+    );
+
+    if (linksErr) {
+      setError(linksErr.message);
+    } else {
+      // Supabase возвращает joined как объект или массив. Нормализуем.
+      const rows = (linksData ?? []) as Array<
+        PlaceLink & {
+          child: PlaceMini | PlaceMini[] | null;
+          parent: PlaceMini | PlaceMini[] | null;
+        }
+      >;
+      const normalized: LinkWithJoin[] = rows.map((row) => ({
+        ...row,
+        child: Array.isArray(row.child) ? row.child[0] ?? null : row.child,
+        parent: Array.isArray(row.parent) ? row.parent[0] ?? null : row.parent,
+      }));
+      setLinks(normalized);
+    }
+  }, [placeId]);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-
     (async () => {
-      const { data: placeData, error: placeErr } = await supabase
-        .from("places")
-        .select("id, title, kind, cover_url, created_by")
-        .eq("id", placeId)
-        .single();
-
-      if (placeErr || !placeData) {
-        if (!cancelled) {
-          setError("Place not found");
-          setLoading(false);
-        }
-        return;
-      }
-
-      const p = placeData as PlaceMini;
-      if (cancelled) return;
-      setPlace(p);
-
-      // RLS вернёт нам только то что мы можем видеть (active + наши pending/rejected).
-      const linksQuery = supabase
-        .from("place_links")
-        .select(
-          `
-          *,
-          child:places!place_links_child_place_id_fkey(id, title, kind, cover_url, created_by),
-          parent:places!place_links_parent_place_id_fkey(id, title, kind, cover_url, created_by)
-        `,
-        );
-      const scopedLinksQuery =
-        p.kind === "location"
-          ? linksQuery.eq("parent_place_id", placeId)
-          : linksQuery.eq("child_place_id", placeId);
-
-      const { data: linksData, error: linksErr } = await scopedLinksQuery.order(
-        "created_at",
-        { ascending: false },
-      );
-
-      if (cancelled) return;
-      if (linksErr) {
-        setError(linksErr.message);
-      } else {
-        // Supabase возвращает joined как объект или массив. Нормализуем.
-        const rows = (linksData ?? []) as Array<
-          PlaceLink & {
-            child: PlaceMini | PlaceMini[] | null;
-            parent: PlaceMini | PlaceMini[] | null;
-          }
-        >;
-        const normalized: LinkWithJoin[] = rows.map((row) => ({
-          ...row,
-          child: Array.isArray(row.child) ? row.child[0] ?? null : row.child,
-          parent: Array.isArray(row.parent) ? row.parent[0] ?? null : row.parent,
-        }));
-        setLinks(normalized);
-      }
-      setLoading(false);
+      await refresh();
+      if (!cancelled) setLoading(false);
     })();
-
     return () => {
       cancelled = true;
     };
-  }, [placeId]);
+  }, [refresh]);
 
   async function handleApprove(linkId: string) {
     setActingId(linkId);
@@ -257,6 +256,20 @@ export default function EditLinksPage({
               {error}
             </div>
           )}
+
+          {/* Add new link — autocomplete + Create new */}
+          <AddPlaceLinkPanel
+            placeId={placeId}
+            kind={place.kind}
+            excludeIds={links
+              .filter((l) => l.status === "active" || l.status === "pending")
+              .map((l) =>
+                place.kind === "location" ? l.child_place_id : l.parent_place_id,
+              )}
+            onLinked={() => {
+              void refresh();
+            }}
+          />
 
           {/* Approval inbox — только для location owner'а */}
           {isLocation && pendingIncoming.length > 0 && (
@@ -401,11 +414,6 @@ export default function EditLinksPage({
             </SectionCard>
           )}
 
-          <div className="mt-8 rounded-xl bg-[#FAFAF7] border border-[#ECEEE4] p-4 text-xs text-[#6F7A5A] leading-relaxed">
-            💡 To <strong>add</strong> a link, go to the offering&apos;s edit page or
-            create a new one and pick a location during setup. (Add-from-here UI
-            coming in next update.)
-          </div>
         </div>
       </main>
     </ErrorBoundary>

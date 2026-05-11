@@ -53,7 +53,9 @@ npm run build
 - Admin видит admin routes и может impersonate/exit.
 - Google import: search, preview, import, photos, including 429 behavior after repeated requests.
 - AI description generation: premium/admin access, invalid JSON, missing key, 429 behavior after repeated requests.
-- Stripe webhook: one-time Premium, subscription created/updated/deleted, payment failed.
+- Resolve APIs: city resolve and Google place-id resolve reject bad JSON, enforce auth, and return 429 after repeated requests.
+- Stripe checkout/portal: return URLs use the configured app origin, not arbitrary request origins.
+- Stripe verify/webhook: one-time Premium, extra listing does not activate Premium, subscription created/updated/deleted, payment failed, webhook handler failures return 500 for retry.
 
 ## Env Checklist
 
@@ -63,6 +65,7 @@ Required:
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+NEXT_PUBLIC_APP_URL=
 ```
 
 Recommended/feature-dependent:

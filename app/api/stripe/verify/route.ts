@@ -29,7 +29,10 @@ export async function POST(request: NextRequest) {
     }
 
     // --- Auth ---
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return jsonError("Invalid JSON body", 400, "INVALID_JSON");
+    }
     const { access_token } = body as { access_token?: string };
 
     if (!access_token) {
@@ -66,9 +69,15 @@ export async function POST(request: NextRequest) {
       limit: 5,
     });
 
-    const paidSession = sessions.data.find(
-      (s) => s.payment_status === "paid" && s.metadata?.supabase_user_id === user.id
-    );
+    const paidSession = sessions.data.find((s) => {
+      if (s.payment_status !== "paid") return false;
+      if (s.mode !== "payment") return false;
+      if (s.metadata?.supabase_user_id !== user.id) return false;
+      if (s.metadata?.kind === "extra_listing") return false;
+      const plan = s.metadata?.plan;
+      const period = s.metadata?.period || s.metadata?.cycle;
+      return (!plan || plan === "premium_viewer") && (!period || period === "lifetime");
+    });
 
     if (!paidSession) {
       return NextResponse.json({ status: "no_payment_found", activated: false });
@@ -84,7 +93,7 @@ export async function POST(request: NextRequest) {
       .eq("id", user.id);
 
     if (updateError) {
-      console.error("[stripe/verify] Failed to activate premium:", updateError.message);
+      logger.error("[stripe/verify] Failed to activate premium:", updateError.message);
       return jsonError("Failed to activate premium.", 500, "DB_ERROR");
     }
 
@@ -92,7 +101,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "activated", activated: true });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Verification failed";
-    console.error("[stripe/verify] Error:", message);
+    logger.error("[stripe/verify] Error:", message);
     return jsonError(message, 500, "VERIFY_ERROR");
   }
 }

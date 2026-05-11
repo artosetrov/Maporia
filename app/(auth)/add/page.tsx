@@ -25,6 +25,7 @@ import { useUserAccessContext } from "../../contexts/UserAccessContext";
 import { canUserAddPlace, canUserCreate, canUserCreateMulti, checkQuota } from "../../lib/access";
 import type { QuotaCheck } from "../../lib/access";
 import { EXTRA_LISTING, PLAN_CONFIG, formatPrice, suggestPlanForKind } from "../../lib/plans";
+import { createLink } from "../../lib/placeLinks";
 import Icon from "../../components/Icon";
 import ImpersonationDisclaimer from "../../components/ImpersonationDisclaimer";
 import { useImpersonationStatus } from "../../hooks/useImpersonationStatus";
@@ -135,7 +136,23 @@ export default function AddPlacePage() {
   } | null>(null);
   const [buyingAddon, setBuyingAddon] = useState(false);
 
-  const returnTo = useMemo(() => searchParams.get("returnTo") || "/profile", [searchParams]);
+  /**
+   * `?linkTo=<placeId>` — после создания авто-создаём place_link к этому place.
+   * Направление parent/child вычисляется по kind'ам (см. createAndRedirect).
+   * См. docs/PLACE_LINKS_PHASE6_PLAN.md § 4.2.
+   */
+  const presetLinkTo = useMemo(() => {
+    const v = searchParams.get("linkTo");
+    return v && v.trim().length > 0 ? v : null;
+  }, [searchParams]);
+  const returnTo = useMemo(() => {
+    const explicit = searchParams.get("returnTo");
+    if (explicit) return explicit;
+    // Если зашли через linkTo — Cancel и пост-save должны возвращать в edit/links
+    // карточки, к которой мы линкуемся.
+    if (presetLinkTo) return `/places/${presetLinkTo}/edit/links`;
+    return "/profile";
+  }, [searchParams, presetLinkTo]);
   const presetKindParam = searchParams.get("kind");
   const presetKindsParam = searchParams.get("kinds");
   const presetKind: PlaceKind | null = isValidKind(presetKindParam) ? presetKindParam : null;
@@ -325,6 +342,67 @@ export default function AddPlacePage() {
         setError("Failed to create place. No ID returned. Check RLS policies.");
         setCreating(false);
         return;
+      }
+
+      // Авто-link, если пришли с ?linkTo=. Бэк сам решит status (same-owner=active,
+      // cross-owner=pending). Ошибка линка не должна откатывать создание — карточка
+      // уже есть, line можно повторить руками из /edit/links. Логируем и идём дальше.
+      if (presetLinkTo) {
+        try {
+          const { data: target, error: targetErr } = await supabase
+            .from("places")
+            .select("id, kind")
+            .eq("id", presetLinkTo)
+            .maybeSingle();
+          if (targetErr || !target) {
+            console.warn(
+              "[add] linkTo target not found or inaccessible:",
+              presetLinkTo,
+              targetErr?.message,
+            );
+          } else {
+            // Supabase-cli generates `never` для select() из-за branded types;
+            // в этой кодовой базе cast — стандартный workaround.
+            const targetTyped = target as { id: string; kind: PlaceKind | null };
+            const targetKind = targetTyped.kind;
+            const newKind = primary;
+            let linkParent: string | null = null;
+            let linkChild: string | null = null;
+
+            // location-parent + service|experience-child — единственно валидная пара.
+            if (
+              newKind === "location" &&
+              (targetKind === "service" || targetKind === "experience")
+            ) {
+              linkParent = placeData.id;
+              linkChild = targetTyped.id;
+            } else if (
+              (newKind === "service" || newKind === "experience") &&
+              targetKind === "location"
+            ) {
+              linkParent = targetTyped.id;
+              linkChild = placeData.id;
+            }
+
+            if (linkParent && linkChild) {
+              try {
+                await createLink({ parentId: linkParent, childId: linkChild });
+              } catch (linkErr) {
+                console.warn(
+                  "[add] createLink failed (place created anyway):",
+                  linkErr,
+                );
+              }
+            } else {
+              console.warn(
+                "[add] linkTo kind mismatch — skipping auto-link",
+                { newKind, targetKind },
+              );
+            }
+          }
+        } catch (e) {
+          console.warn("[add] linkTo flow exception:", e);
+        }
       }
 
       const editUrl = `/places/${placeData.id}/edit?returnTo=${encodeURIComponent(returnTo)}`;

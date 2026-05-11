@@ -17,9 +17,11 @@ import type { PlaceListItem } from "../../../types";
 
 type Props = {
   childId: string;
+  /** Owner или admin страницы — показываем CTA «Link this to a location» / «Manage». */
+  canEdit?: boolean;
 };
 
-export default function ParentLocationCard({ childId }: Props) {
+export default function ParentLocationCard({ childId, canEdit }: Props) {
   const [parents, setParents] = useState<PlaceListItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -37,7 +39,27 @@ export default function ParentLocationCard({ childId }: Props) {
   }, [childId]);
 
   if (loading) return null;
-  if (parents.length === 0) return null;
+
+  // Если parents нет — для owner'а показываем CTA, для остальных скрываемся.
+  if (parents.length === 0) {
+    if (!canEdit) return null;
+    return (
+      <section className="my-6">
+        <Link
+          href={`/places/${childId}/edit/links`}
+          className="block rounded-2xl border border-dashed border-[#ECEEE4] bg-[#FAFAF7] p-4 sm:p-5 text-center hover:border-[#8F9E4F] hover:bg-white transition-colors"
+        >
+          <div className="text-xl mb-1.5">📍</div>
+          <div className="font-fraunces font-semibold text-[#1F2A1F] text-[15px] mb-0.5">
+            Link this to a location
+          </div>
+          <div className="text-xs text-[#6F7A5A]">
+            Pin where this happens — it appears on the host location&apos;s page and on the map.
+          </div>
+        </Link>
+      </section>
+    );
+  }
 
   // Single-parent: большая карточка
   if (parents.length === 1) {
@@ -71,6 +93,16 @@ export default function ParentLocationCard({ childId }: Props) {
             </span>
           </div>
         </Link>
+        {canEdit && (
+          <div className="mt-2 text-right">
+            <Link
+              href={`/places/${childId}/edit/links`}
+              className="text-xs text-[#8F9E4F] hover:text-[#556036] underline"
+            >
+              Manage location link
+            </Link>
+          </div>
+        )}
       </section>
     );
   }
@@ -78,8 +110,18 @@ export default function ParentLocationCard({ childId }: Props) {
   // Multi-parent (тур по нескольким локациям): горизонтальный список
   return (
     <section className="my-6">
-      <div className="text-[11px] uppercase tracking-wide text-[#6F7A5A] font-semibold mb-2">
-        Stops on this {parents.length === 2 ? "route" : "tour"}
+      <div className="flex items-baseline justify-between gap-2 mb-2">
+        <div className="text-[11px] uppercase tracking-wide text-[#6F7A5A] font-semibold">
+          Stops on this {parents.length === 2 ? "route" : "tour"}
+        </div>
+        {canEdit && (
+          <Link
+            href={`/places/${childId}/edit/links`}
+            className="text-xs text-[#8F9E4F] hover:text-[#556036] underline shrink-0"
+          >
+            Manage
+          </Link>
+        )}
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1">
         {parents.map((p) => (

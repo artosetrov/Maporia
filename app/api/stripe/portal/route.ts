@@ -12,6 +12,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe, getSupabaseAdmin } from "../../../lib/stripe";
 import { isImpersonatingFromRequest } from "../../../lib/impersonation";
+import { getStripeRedirectOrigin } from "../../../lib/stripeRedirectOrigin";
+import { logger } from "../../../lib/logger";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -54,10 +56,7 @@ export async function POST(request: NextRequest) {
       return jsonError("You don't have a subscription yet.", 400, "NO_CUSTOMER");
     }
 
-    const origin =
-      request.headers.get("origin") ||
-      request.headers.get("referer")?.replace(/\/+$/, "") ||
-      "http://localhost:3000";
+    const origin = getStripeRedirectOrigin(request);
 
     const session = await stripe.billingPortal.sessions.create({
       customer: profile.stripe_customer_id,
@@ -67,7 +66,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ url: session.url });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to open billing portal";
-    console.error("[stripe/portal] Error:", message);
+    logger.error("[stripe/portal] Error:", message);
     return jsonError(message, 500, "PORTAL_ERROR");
   }
 }
