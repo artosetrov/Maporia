@@ -90,6 +90,10 @@ export const supabaseOtp = createClient<Database>(safeUrl, safeKey, {
     autoRefreshToken: false,
     detectSessionInUrl: false,
     flowType: 'implicit',
+    // ВАЖНО: разные storageKey между клиентами — иначе DevTools пишет
+    // "Multiple GoTrueClient instances detected" и они переписывают
+    // состояние друг друга в localStorage → race condition.
+    storageKey: 'sb-maporia-otp-auth',
   },
   global: {
     headers: {

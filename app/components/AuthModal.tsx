@@ -71,6 +71,11 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
   const [code, setCode] = useState<string[]>(() => Array(CODE_LENGTH).fill(""));
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  // Ref-guard от double-call: setVerifying(true) не успевает запропагироваться
+  // если verifyCode вызван 2 раза подряд (React batching, auto-fill paste,
+  // strict-mode duplicate). А Supabase инвалидирует OTP после первой попытки,
+  // поэтому второй заход всегда возвращает 403. См. DevTools-скрин 2026-05-12.
+  const verifyingRef = useRef(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -153,17 +158,23 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
   }
 
   async function verifyCode(joinedCode: string) {
-    if (joinedCode.length !== CODE_LENGTH || verifying) return;
+    if (joinedCode.length !== CODE_LENGTH) return;
+    // ref-guard: setVerifying асинхронен, второй вызов (React batching/paste)
+    // успевает зайти ДО обновления state. Ref обновляется синхронно.
+    if (verifyingRef.current) return;
+    verifyingRef.current = true;
     setError(null);
     setVerifying(true);
 
     // verifyOtp на supabaseOtp (тот же клиент, что слал код).
-    // Supabase непредсказуемо помечает OTP-сессию: для существующих юзеров —
-    // 'magiclink', для новых — 'email'/'signup', а для тех у кого был
-    // password-reset state — 'recovery'. Пробуем все три по очереди.
-    // Auth-логи показали: для нашего юзера auth_event.action =
-    // 'user_recovery_requested', поэтому 'recovery' нужен.
-    const otpTypes = ["email", "magiclink", "recovery", "signup"] as const;
+    // Supabase помечает OTP-сессию по-разному: 'email' (signup), 'magiclink'
+    // (signInWithOtp existing user), 'recovery' (если у юзера был
+    // password-reset state). Auth-логи 2026-05-12 показали для нашего юзера
+    // auth_event.action = 'user_recovery_requested' → ставим 'recovery'
+    // ПЕРВЫМ, иначе Supabase инвалидирует OTP после первой неверной попытки
+    // и 'recovery' уже не пройдёт. Если на проде окажется не recovery —
+    // следующий тип в списке будет пробоваться при свежем коде.
+    const otpTypes = ["recovery", "email", "magiclink", "signup"] as const;
     let verifyError: { message?: string } | null = null;
     for (const t of otpTypes) {
       const { error } = await supabaseOtp.auth.verifyOtp({
@@ -176,6 +187,12 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
         break;
       }
       verifyError = error;
+      // Если Supabase ответил "expired/invalid" — значит OTP сожжён первой
+      // попыткой. Дальше пробовать бессмысленно, только усугубим rate-limit.
+      const errMsg = (error?.message || "").toLowerCase();
+      if (errMsg.includes("expired") || errMsg.includes("invalid")) {
+        break;
+      }
     }
 
     // После успешного verifyOtp сессия лежит в supabaseOtp.auth — нужно
@@ -192,6 +209,7 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
     }
 
     setVerifying(false);
+    verifyingRef.current = false;
     if (verifyError) {
       setError("Invalid or expired code. Try again.");
       setCode(Array(CODE_LENGTH).fill(""));
