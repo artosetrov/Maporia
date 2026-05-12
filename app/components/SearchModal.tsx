@@ -15,8 +15,10 @@ import { sanitizePostgrestValueForLike, tokenizeQuery, buildTokenSearchExpr } fr
 import {
   CITY_RADIUS_MILES,
   buildCityRadiusFilter,
+  getCityCoords,
   populateCityCoordsCache,
 } from "../lib/cityRadius";
+import { filterPlaces, type FilterablePlace } from "../lib/filterPlaces";
 
 // Fields searched for free-text token matching across the places table.
 // Keep in sync with the columns selected in performSearch below.
@@ -49,6 +51,16 @@ type SearchPlaceRow = {
   kind: string | null;
   categories: string[] | null;
   cover_url: string | null;
+  lat?: number | null;
+  lng?: number | null;
+};
+
+type CountPlaceRow = FilterablePlace & {
+  id: string;
+  title: string | null;
+  description: string | null;
+  country: string | null;
+  address: string | null;
 };
 
 const toErrorLike = (error: unknown): ErrorLike => {
@@ -323,13 +335,82 @@ export default function SearchModal({
   // Look up city coordinates from loaded cities
   const getCityLatLng = useCallback(
     (cityName: string): { lat: number | null; lng: number | null } => {
-      const match = cities.find(
+      const matches = cities.filter(
         (c) => c.name.toLowerCase() === cityName.toLowerCase(),
       );
+      const match =
+        matches.find((city) => city.lat != null && city.lng != null) ??
+        matches[0];
       return { lat: match?.lat ?? null, lng: match?.lng ?? null };
     },
     [cities],
   );
+
+  const countPlacesWithClientFilters = useCallback(async (
+    city: string | null,
+    tags: string[],
+    searchQuery: string,
+    kind: HomeKind | null,
+  ): Promise<number> => {
+    try {
+      let placesQuery = supabase
+        .from("places")
+        .select("id,title,description,country,city,city_name_cached,address,kind,categories,lat,lng,access_level,visibility")
+        .eq("is_hidden", false);
+
+      if (kind) {
+        placesQuery = placesQuery.eq("kind", kind);
+      }
+
+      const { data, error } = await placesQuery;
+      if (error) {
+        if (!isAbortLikeError(error)) {
+          console.error("Error counting places:", error);
+        }
+        return 0;
+      }
+
+      let rows = (data ?? []) as CountPlaceRow[];
+
+      if (searchQuery.trim()) {
+        const tokens = tokenizeQuery(searchQuery);
+        const normalizeForMatch = (s: string): string =>
+          s.toLowerCase().replace(/[''`‘’]/g, "_");
+        const fallbackNeedle = normalizeForMatch(searchQuery.trim());
+
+        rows = rows.filter((place) => {
+          const haystack = PLACE_SEARCH_FIELDS
+            .map((field) => place[field])
+            .filter((value) => typeof value === "string" && value.length > 0)
+            .map((value) => normalizeForMatch(String(value)))
+            .join(" || ");
+
+          if (tokens.length > 0) {
+            return tokens.some((token) => haystack.includes(token));
+          }
+
+          return fallbackNeedle.length > 0 && haystack.includes(fallbackNeedle);
+        });
+      }
+
+      const coords = city ? await getCityCoords(city) : null;
+      const cityCoordsMap = city
+        ? new Map([[city.toLowerCase().trim(), coords ?? { lat: null, lng: null }]])
+        : undefined;
+
+      return filterPlaces(rows, {
+        cities: city ? [city] : undefined,
+        categories: tags.length > 0 ? tags : undefined,
+        kinds: kind ? [kind] : undefined,
+        cityCoordsMap,
+      }).length;
+    } catch (err: unknown) {
+      if (!isAbortLikeError(err)) {
+        console.error("Error in countPlacesWithClientFilters:", err);
+      }
+      return 0;
+    }
+  }, [getCityLatLng]);
 
   // Get count for a single tag in a city (optionally constrained by kind).
   const getTagCount = useCallback(async (
@@ -337,54 +418,8 @@ export default function SearchModal({
     tag: string,
     kind: HomeKind | null,
   ) => {
-    try {
-      let countQuery = supabase
-        .from("places")
-        .select("id", { count: 'exact', head: true })
-        .eq("is_hidden", false);
-
-      // Filter by city (with radius)
-      if (city) {
-        const coords = getCityLatLng(city);
-        countQuery = countQuery.or(buildCityRadiusFilter(city, coords.lat, coords.lng));
-      }
-
-      // Filter by single tag (category)
-      countQuery = countQuery.contains("categories", [tag]);
-
-      // Filter by kind so service/experience категории не давали 0 от location-карточек
-      if (kind) {
-        countQuery = countQuery.eq("kind", kind);
-      }
-
-      const { count, error } = await countQuery;
-      if (error) {
-        // Silently ignore AbortError
-        if (isAbortLikeError(error)) {
-          return 0;
-        }
-        // Enhanced logging for production
-        if (process.env.NODE_ENV === 'production') {
-          console.error("Error counting places for tag:", {
-            tag,
-            message: error.message,
-            code: error.code,
-            details: error.details,
-            hint: error.hint,
-          });
-        } else {
-          console.error("Error counting places for tag:", error);
-        }
-        return 0;
-      }
-      return count || 0;
-    } catch (err: unknown) {
-      if (!isAbortLikeError(err)) {
-        console.error("Error in getTagCount:", err);
-      }
-      return 0;
-    }
-  }, [getCityLatLng]);
+    return countPlacesWithClientFilters(city, [tag], "", kind);
+  }, [countPlacesWithClientFilters]);
 
   // Load tag counts when city + kind are selected
   useEffect(() => {
@@ -416,35 +451,15 @@ export default function SearchModal({
     const loadKindCounts = async () => {
       setKindCountsLoading(true);
       try {
-        const coords = getCityLatLng(tempSelectedCity);
-        const radiusFilter = buildCityRadiusFilter(
-          tempSelectedCity,
-          coords.lat,
-          coords.lng,
-        );
         const next: Record<HomeKind, number | null> = {
           location: 0,
           experience: 0,
           service: 0,
         };
-        // Параллельные запросы — три типа независимы.
         const tabs: HomeKind[] = ["location", "experience", "service"];
         await Promise.all(
           tabs.map(async (tab) => {
-            const { count, error } = await supabase
-              .from("places")
-              .select("id", { count: "exact", head: true })
-              .eq("kind", tab)
-              .eq("is_hidden", false)
-              .or(radiusFilter);
-            if (error) {
-              if (process.env.NODE_ENV !== "production") {
-                console.error("Error counting kind:", { tab, error });
-              }
-              next[tab] = 0;
-              return;
-            }
-            next[tab] = count || 0;
+            next[tab] = await countPlacesWithClientFilters(tempSelectedCity, [], "", tab);
           }),
         );
         if (!cancelled) setKindCounts(next);
@@ -462,7 +477,7 @@ export default function SearchModal({
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [isOpen, step, tempSelectedCity, getCityLatLng]);
+  }, [isOpen, step, tempSelectedCity, countPlacesWithClientFilters]);
 
   // Get filtered places count (with city, tags, query, kind)
   const getFilteredPlacesCount = useCallback(async (
@@ -471,89 +486,8 @@ export default function SearchModal({
     searchQuery: string,
     kind: HomeKind | null,
   ) => {
-    try {
-      let countQuery = supabase
-        .from("places")
-        .select("id", { count: 'exact', head: true })
-        .eq("is_hidden", false);
-
-      // Filter by city (with radius)
-      if (city) {
-        const coords = getCityLatLng(city);
-        countQuery = countQuery.or(buildCityRadiusFilter(city, coords.lat, coords.lng));
-      }
-
-      // Filter by kind (primary kind only — согласовано с FiltersModal)
-      if (kind) {
-        countQuery = countQuery.eq("kind", kind);
-      }
-
-      // Filter by tags (categories)
-      if (tags.length > 0) {
-        // Use overlaps to match any of the selected tags in categories array
-        countQuery = countQuery.overlaps("categories", tags);
-      }
-
-      // Filter by query — token-based: place matches if ANY token appears in
-      // ANY of the searched fields. This makes "Cap's Restaurant" still match
-      // a place named "Cap's Place" via the "cap" token.
-      if (searchQuery.trim()) {
-        const tokens = tokenizeQuery(searchQuery);
-        if (tokens.length > 0) {
-          const expr = buildTokenSearchExpr(tokens, [...PLACE_SEARCH_FIELDS]);
-          if (expr) countQuery = countQuery.or(expr);
-        } else {
-          // Fallback: query consisted only of punctuation / 1-char tokens.
-          const s = sanitizePostgrestValueForLike(searchQuery.trim());
-          countQuery = countQuery.or(
-            `title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`
-          );
-        }
-      }
-
-      const { count, error } = await countQuery;
-      if (error) {
-        // Silently ignore AbortError
-        if (isAbortLikeError(error)) {
-          return 0;
-        }
-        // Enhanced logging for production
-        if (process.env.NODE_ENV === 'production') {
-          console.error("Error counting places:", {
-            city,
-            tags,
-            query: searchQuery,
-            message: error.message,
-            code: error.code,
-            details: error.details,
-            hint: error.hint,
-          });
-        } else {
-          console.error("Error counting places:", error);
-        }
-        return 0;
-      }
-      return count || 0;
-    } catch (err: unknown) {
-      // Silently ignore AbortError
-      if (isAbortLikeError(err)) {
-        return 0;
-      }
-      const error = toErrorLike(err);
-      // Enhanced logging for production
-      if (process.env.NODE_ENV === 'production') {
-        console.error("Error in getFilteredPlacesCount:", {
-          city,
-          tags,
-          query: searchQuery,
-          error: error.message || String(err),
-        });
-      } else {
-        console.error("Error in getFilteredPlacesCount:", err);
-      }
-      return 0;
-    }
-  }, [getCityLatLng]);
+    return countPlacesWithClientFilters(city, tags, searchQuery, kind);
+  }, [countPlacesWithClientFilters]);
 
   // Search places and cities (for search results display)
   const performSearch = useCallback(async (
@@ -907,14 +841,6 @@ export default function SearchModal({
     [cities, currentCity],
   );
 
-  const topCityCountByName = useMemo(
-    () =>
-      Object.fromEntries(
-        topCities.map(({ city, total }) => [city.toLowerCase(), total]),
-      ) as Record<string, number>,
-    [topCities],
-  );
-
   const suggestedCityNames = useMemo(
     () => [currentCity, ...popularCities.map((city) => city.name)],
     [currentCity, popularCities],
@@ -923,28 +849,11 @@ export default function SearchModal({
   useEffect(() => {
     let isCancelled = false;
 
-    const baseCounts = Object.fromEntries(
-      suggestedCityNames.flatMap((cityName) => {
-        const count = topCityCountByName[cityName.toLowerCase()];
-        return count === undefined ? [] : [[cityName.toLowerCase(), count] as const];
-      }),
-    );
-
-    setSuggestedCityCounts(baseCounts);
-
-    const missingCityNames = suggestedCityNames.filter(
-      (cityName) => topCityCountByName[cityName.toLowerCase()] === undefined,
-    );
-
-    if (missingCityNames.length === 0) {
-      return () => {
-        isCancelled = true;
-      };
-    }
+    setSuggestedCityCounts({});
 
     (async () => {
       const resolvedCounts = await Promise.all(
-        missingCityNames.map(async (cityName) => [
+        suggestedCityNames.map(async (cityName) => [
           cityName.toLowerCase(),
           await getFilteredPlacesCount(cityName, [], "", null),
         ] as const),
@@ -952,16 +861,13 @@ export default function SearchModal({
 
       if (isCancelled) return;
 
-      setSuggestedCityCounts({
-        ...baseCounts,
-        ...Object.fromEntries(resolvedCounts),
-      });
+      setSuggestedCityCounts(Object.fromEntries(resolvedCounts));
     })();
 
     return () => {
       isCancelled = true;
     };
-  }, [getFilteredPlacesCount, suggestedCityNames, topCityCountByName]);
+  }, [getFilteredPlacesCount, suggestedCityNames]);
 
   const formatLocationsCount = useCallback((count?: number) => {
     if (count === undefined) return null;
@@ -1344,6 +1250,7 @@ export default function SearchModal({
                     {placesCount !== null && placesCount > 0 ? (
                       <div className="text-sm text-[#6F7A5A]">
                         {placesCount}{" "}
+                        unique{" "}
                         {tempSelectedKind === "service"
                           ? placesCount === 1 ? "service" : "services"
                           : tempSelectedKind === "experience"
@@ -1376,7 +1283,7 @@ export default function SearchModal({
                 What's your vibe?
               </h3>
               <p className="text-sm text-[#6F7A5A]">
-                Pick one or a few — we'll handle the rest.
+                Pick one or a few — places can match multiple vibes.
               </p>
             </div>
 

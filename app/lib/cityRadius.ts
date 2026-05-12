@@ -41,6 +41,12 @@ export const populateCityCoordsCache = (
 ): void => {
   for (const city of cities) {
     const key = city.name.toLowerCase().trim();
+    const existing = cityCoordsCacheMap.get(key);
+    const cityHasCoords = city.lat != null && city.lng != null;
+    const existingHasCoords = existing?.lat != null && existing?.lng != null;
+
+    if (existingHasCoords && !cityHasCoords) continue;
+
     cityCoordsCacheMap.set(key, { lat: city.lat, lng: city.lng });
   }
 };
@@ -53,17 +59,20 @@ export const getCityCoords = async (cityName: string): Promise<CityCoords> => {
   const key = cityName.toLowerCase().trim();
 
   const cached = cityCoordsCacheMap.get(key);
-  if (cached !== undefined) return cached;
+  if (cached?.lat != null && cached.lng != null) return cached;
 
   try {
-    const { data, error } = await supabase
+    const { data: rows, error } = await supabase
       .from("cities")
       .select("lat, lng")
       .ilike("name", cityName.trim())
-      .limit(1)
-      .maybeSingle();
+      .limit(10);
 
-    const row = data as { lat: number | null; lng: number | null } | null;
+    const cities = (rows ?? []) as Array<{ lat: number | null; lng: number | null }>;
+    const row =
+      cities.find((city) => city.lat != null && city.lng != null) ??
+      cities[0] ??
+      null;
     const result: CityCoords =
       !error && row
         ? { lat: row.lat ?? null, lng: row.lng ?? null }

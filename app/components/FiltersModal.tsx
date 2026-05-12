@@ -88,6 +88,7 @@ type FiltersModalProps = {
    * ещё не мигрировали).
    */
   getFilterPlaces?: () => Promise<FilterablePlace[]>;
+  cityCoordsMap?: Map<string, { lat: number | null; lng: number | null }>;
 
   // Optional: user access level - used to determine if Premium filter should be shown
   userAccess?: UserAccess;
@@ -129,6 +130,7 @@ export default function FiltersModal({
   getAvailableTags,
   getTagCounts,
   getFilterPlaces,
+  cityCoordsMap,
   userAccess,
   onResetAll,
   hideKindFilter,
@@ -321,6 +323,7 @@ export default function FiltersModal({
       kinds: draftKinds.length > 0 ? draftKinds : undefined,
       // Города интегрируем здесь же, чтобы счётчики реагировали на city-фильтр.
       cities: draftCities.length > 0 ? draftCities : undefined,
+      cityCoordsMap,
     };
     const counts = computeFilterCounts(placesForCounts, {
       filters: filtersForCount,
@@ -348,6 +351,7 @@ export default function FiltersModal({
     visibleCategoriesFlat,
     availableTags,
     draftCities,
+    cityCoordsMap,
   ]);
 
   // Load available tags when categories change (reactive to draftFilters.categories)

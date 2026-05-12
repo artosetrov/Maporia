@@ -776,8 +776,8 @@ function MapPageContent() {
   
   useEffect(() => {
     const cityNames = [...new Set([
-      ...(appliedCities.filter(c => c !== DEFAULT_CITY)),
-      ...(appliedCity && appliedCity !== DEFAULT_CITY ? [appliedCity] : []),
+      ...appliedCities.filter((city) => hasExplicitCityInUrlState || city !== DEFAULT_CITY),
+      ...(appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) ? [appliedCity] : []),
     ])];
     if (cityNames.length === 0) {
       setCityCoordsMap(new Map());
@@ -795,7 +795,7 @@ function MapPageContent() {
       if (!cancelled) setCityCoordsMap(map);
     })();
     return () => { cancelled = true; };
-  }, [appliedCity, appliedCities]);
+  }, [appliedCity, appliedCities, hasExplicitCityInUrlState]);
 
   // Создаем строковые ключи для отслеживания изменений массивов
   // Используем JSON.stringify с сортировкой для надежного отслеживания изменений
@@ -1435,7 +1435,8 @@ function MapPageContent() {
         onResetAll={handleClearAllFilters}
         appliedFilters={activeFilters}
         appliedCity={appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY) ? appliedCity : null}
-        appliedCities={appliedCities.filter(city => city !== DEFAULT_CITY)}
+        appliedCities={appliedCities.filter(city => hasExplicitCityInUrlState || city !== DEFAULT_CITY)}
+        cityCoordsMap={cityCoordsMap}
         userAccess={access}
         getAvailableTags={async (categories: string[]) => {
           if (!categories || categories.length === 0) return [];
