@@ -3,6 +3,7 @@ import {
   AlertCircle,
   ArrowDown,
   ArrowUp,
+  BarChart3,
   Bookmark,
   Briefcase,
   Calendar,
@@ -124,7 +125,8 @@ export type IconName =
   | "alert-circle"
   | "activity"
   | "sparkles"
-  | "wrench";
+  | "wrench"
+  | "bar-chart";
 
 type IconProps = {
   name: IconName;
@@ -200,6 +202,7 @@ const iconMap: Record<IconName, LucideIcon> = {
   activity: Activity,
   sparkles: Sparkles,
   wrench: Wrench,
+  "bar-chart": BarChart3,
 };
 
 /** Icons that visually swap to a filled style when `filled`/`active` is true. */

@@ -996,6 +996,13 @@ function ProfileInner() {
                       <Icon name="activity" size={24} className="flex-shrink-0" />
                       <span>Health</span>
                     </Link>
+                    <Link
+                      href="/admin/analytics"
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition text-[#6F7A5A] hover:bg-[#FAFAF7]"
+                    >
+                      <Icon name="bar-chart" size={24} className="flex-shrink-0" />
+                      <span>Analytics</span>
+                    </Link>
                   </>
                 )}
               </nav>
@@ -1453,6 +1460,19 @@ function ProfileInner() {
                           <Icon name="activity" size={32} className="text-[#A8B096]" />
                         </div>
                         <div className="text-sm font-medium text-[#1F2A1F] text-center">Health</div>
+                      </Link>
+                    )}
+
+                    {/* Analytics - Admin only */}
+                    {isAdmin && (
+                      <Link
+                        href="/admin/analytics"
+                        className="bg-white rounded-2xl border border-[#ECEEE4] p-4 shadow-sm hover:shadow-md transition group"
+                      >
+                        <div className="aspect-square rounded-xl overflow-visible bg-white mb-3 relative flex items-center justify-center" style={{ minHeight: '120px' }}>
+                          <Icon name="bar-chart" size={32} className="text-[#A8B096]" />
+                        </div>
+                        <div className="text-sm font-medium text-[#1F2A1F] text-center">Analytics</div>
                       </Link>
                     )}
                   </div>

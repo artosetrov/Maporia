@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import GoogleMapsProvider from "./providers/GoogleMapsProvider";
 import { ProductionDiagnostics } from "./components/ProductionDiagnostics";
@@ -7,6 +8,7 @@ import { PremiumModalProvider } from "./contexts/PremiumModalContext";
 import { UserAccessProvider } from "./contexts/UserAccessContext";
 import GlobalModals from "./components/GlobalModals";
 import ImpersonationBanner from "./components/ImpersonationBanner";
+import AnalyticsTracker from "./components/AnalyticsTracker";
 
 export const metadata: Metadata = {
   title: "Maporia",
@@ -40,6 +42,10 @@ export default function RootLayout({
                 {children}
               </GoogleMapsProvider>
               <GlobalModals />
+              {/* Page-view tracker. Suspense нужен из-за useSearchParams. */}
+              <Suspense fallback={null}>
+                <AnalyticsTracker />
+              </Suspense>
             </UserAccessProvider>
           </PremiumModalProvider>
         </ErrorBoundary>
