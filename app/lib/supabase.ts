@@ -34,29 +34,17 @@ if (typeof window !== 'undefined') {
   }
 }
 
+// IMPORTANT: НЕ throw'им на server side, иначе Next.js prerender (Generating
+// static pages) валит build, если env vars не подсосались в build-окружение.
+// Импорт модуля сам по себе безопасен — placeholder клиент всё равно
+// собирается, а реальные API-вызовы происходят runtime, где у нас уже
+// есть hasValidSupabaseConfig-чек и проверка `safeUrl !== placeholder`.
 if (!supabaseUrl) {
-  const error = "Missing NEXT_PUBLIC_SUPABASE_URL environment variable";
-  console.error("❌", error);
-  if (typeof window !== 'undefined') {
-    console.error("This error will prevent the app from working. Please set NEXT_PUBLIC_SUPABASE_URL in your environment variables.");
-    // Don't throw in browser - allow app to render with error state
-    // This prevents complete app failure on production
-  } else {
-    // Throw on server side to fail fast during build
-    throw new Error(error);
-  }
+  console.error("❌ Missing NEXT_PUBLIC_SUPABASE_URL environment variable");
 }
 
 if (!supabaseAnonKey) {
-  const error = "Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable";
-  console.error("❌", error);
-  if (typeof window !== 'undefined') {
-    console.error("This error will prevent the app from working. Please set NEXT_PUBLIC_SUPABASE_ANON_KEY in your environment variables.");
-    // Don't throw in browser - allow app to render with error state
-  } else {
-    // Throw on server side to fail fast during build
-    throw new Error(error);
-  }
+  console.error("❌ Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable");
 }
 
 // Check if we have valid environment variables
