@@ -158,21 +158,24 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
     setVerifying(true);
 
     // verifyOtp на supabaseOtp (тот же клиент, что слал код).
-    // Тип "email" — стандартный для signInWithOtp в implicit-режиме.
-    // Magiclink-fallback на случай если сервер пометил OTP именно так.
-    let { error: verifyError } = await supabaseOtp.auth.verifyOtp({
-      email,
-      token: joinedCode,
-      type: "email",
-    });
-
-    if (verifyError) {
-      const fallback = await supabaseOtp.auth.verifyOtp({
+    // Supabase непредсказуемо помечает OTP-сессию: для существующих юзеров —
+    // 'magiclink', для новых — 'email'/'signup', а для тех у кого был
+    // password-reset state — 'recovery'. Пробуем все три по очереди.
+    // Auth-логи показали: для нашего юзера auth_event.action =
+    // 'user_recovery_requested', поэтому 'recovery' нужен.
+    const otpTypes = ["email", "magiclink", "recovery", "signup"] as const;
+    let verifyError: { message?: string } | null = null;
+    for (const t of otpTypes) {
+      const { error } = await supabaseOtp.auth.verifyOtp({
         email,
         token: joinedCode,
-        type: "magiclink",
+        type: t,
       });
-      verifyError = fallback.error;
+      if (!error) {
+        verifyError = null;
+        break;
+      }
+      verifyError = error;
     }
 
     // После успешного verifyOtp сессия лежит в supabaseOtp.auth — нужно
