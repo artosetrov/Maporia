@@ -11,7 +11,7 @@ import { sanitizePostgrestValue } from "../utils";
 // ---------------------------------------------------------------------------
 
 /** Configurable radius in miles for city search */
-export const CITY_RADIUS_MILES = 10;
+export const CITY_RADIUS_MILES = 25;
 
 /** Radius in kilometers (1 mile ≈ 1.60934 km) */
 export const CITY_RADIUS_KM = CITY_RADIUS_MILES * 1.60934;
