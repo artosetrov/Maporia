@@ -184,6 +184,22 @@ function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
 }
 
+function normalizeExternalUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "#";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+function stripUrlForCompare(raw: string | null | undefined): string {
+  if (!raw) return "";
+  return raw
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .replace(/\/$/, "")
+    .toLowerCase();
+}
+
 // ---------- component ----------
 
 export default function OfferPlaceView({
@@ -221,7 +237,7 @@ export default function OfferPlaceView({
     [place.lat, place.lng]
   );
 
-  const ctaLabel = isService ? "Contact" : "Book";
+  const ctaLabel = "Contact";
 
   const allPhotos = useMemo(() => {
     if (photos && photos.length > 0) return photos;
@@ -235,16 +251,20 @@ export default function OfferPlaceView({
 
   const [photoGalleryOpen, setPhotoGalleryOpen] = useState(false);
   const [galleryPhotoIndex, setGalleryPhotoIndex] = useState(0);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
 
   useEffect(() => {
-    if (!photoGalleryOpen) return;
+    if (!photoGalleryOpen && !contactModalOpen) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setPhotoGalleryOpen(false);
-      if (event.key === "ArrowLeft") {
+      if (event.key === "Escape") {
+        setPhotoGalleryOpen(false);
+        setContactModalOpen(false);
+      }
+      if (photoGalleryOpen && event.key === "ArrowLeft") {
         setGalleryPhotoIndex((current) => (current > 0 ? current - 1 : allPhotos.length - 1));
       }
-      if (event.key === "ArrowRight") {
+      if (photoGalleryOpen && event.key === "ArrowRight") {
         setGalleryPhotoIndex((current) => (current < allPhotos.length - 1 ? current + 1 : 0));
       }
     };
@@ -255,7 +275,7 @@ export default function OfferPlaceView({
       document.body.style.overflow = "";
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [photoGalleryOpen, allPhotos.length]);
+  }, [photoGalleryOpen, contactModalOpen, allPhotos.length]);
 
   const openPhotoGallery = (index: number) => {
     if (allPhotos.length === 0) return;
@@ -273,6 +293,38 @@ export default function OfferPlaceView({
 
   const showPreviousPhoto = () => {
     setGalleryPhotoIndex((current) => (current > 0 ? current - 1 : allPhotos.length - 1));
+  };
+
+  const contactLink = place.link?.trim() || null;
+  const showContactLink = Boolean(
+    contactLink && stripUrlForCompare(contactLink) !== stripUrlForCompare(place.website)
+  );
+  const hasContactDetails = Boolean(
+    place.phone?.trim() ||
+    place.website?.trim() ||
+    place.instagram?.trim() ||
+    place.youtube?.trim() ||
+    place.telegram?.trim() ||
+    showContactLink
+  );
+
+  const handleShare = async () => {
+    const url = `${window.location.origin}/id/${place.id}`;
+    const shareData = {
+      title: place.title || "Maporia",
+      text: place.description || place.title || "Maporia",
+      url,
+    };
+
+    try {
+      if (navigator.share && navigator.canShare?.(shareData)) {
+        await navigator.share(shareData);
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // Sharing is a convenience action; leave the modal open if the user cancels.
+    }
   };
 
   // Aggregate rating через RPC. Молча ничего не показываем при ошибке.
@@ -408,6 +460,95 @@ export default function OfferPlaceView({
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {contactModalOpen && (
+        <div
+          className="fixed inset-0 z-[90] flex items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+          onClick={() => setContactModalOpen(false)}
+        >
+          <div
+            className="max-h-[88vh] w-full overflow-y-auto rounded-t-3xl border border-[#ECEEE4] bg-white p-5 shadow-2xl sm:max-w-lg sm:rounded-3xl sm:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="text-xs font-medium uppercase tracking-wide text-[#6F7A5A]">Contact</div>
+                <h2 className="font-fraunces text-2xl font-semibold leading-tight text-[#1F2A1F]">
+                  {place.title || "Provider"}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setContactModalOpen(false)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#ECEEE4] bg-white text-[#1F2A1F] transition hover:bg-[#FAFAF7]"
+                aria-label="Close contact modal"
+              >
+                <Icon name="close" size={20} />
+              </button>
+            </div>
+
+            {hasContactDetails ? (
+              <div className="space-y-3">
+                <PlaceContacts
+                  phone={place.phone}
+                  website={place.website}
+                  instagram={place.instagram}
+                  youtube={place.youtube}
+                  telegram={place.telegram}
+                  title={null}
+                  variant="inline"
+                />
+                {showContactLink && contactLink && (
+                  <a
+                    href={normalizeExternalUrl(contactLink)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] px-4 py-3 text-sm font-medium text-[#1F2A1F] transition hover:bg-[#ECEEE4]"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#556036]">
+                      <Icon name="external-link" size={18} />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">
+                      {stripUrlForCompare(contactLink) || "Contact link"}
+                    </span>
+                    <Icon name="forward" size={16} className="text-[#6F7A5A]" />
+                  </a>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-[#ECEEE4] bg-[#FAFAF7] p-4 text-sm text-[#6F7A5A]">
+                Contact details have not been added yet.
+              </div>
+            )}
+
+            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={handleShare}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#ECEEE4] bg-white px-4 text-sm font-medium text-[#1F2A1F] transition hover:bg-[#FAFAF7]"
+              >
+                <Icon name="share" size={16} />
+                Share
+              </button>
+              <button
+                type="button"
+                onClick={onToggleFavorite}
+                disabled={favoriteLoading}
+                className={cx(
+                  "inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-medium transition",
+                  isFavorite
+                    ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#8F9E4F] hover:bg-[#ECEEE4]"
+                    : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:bg-[#FAFAF7]",
+                  favoriteLoading && "opacity-50"
+                )}
+              >
+                <FavoriteIcon isActive={isFavorite} size={16} />
+                {isFavorite ? "Saved" : "Add to favorites"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -722,28 +863,18 @@ export default function OfferPlaceView({
               <div className="text-sm text-[#6F7A5A]">Price on request</div>
             )}
           </div>
-          {place.link ? (
-            <a
-              href={place.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-xl bg-[#8F9E4F] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#556036] transition"
-            >
-              {ctaLabel}
-            </a>
-          ) : (
-            <button
-              type="button"
-              disabled
-              className={cx(
-                "rounded-xl bg-[#ECEEE4] px-5 py-2.5 text-sm font-medium text-[#6F7A5A]",
-                "cursor-not-allowed"
-              )}
-              title="No contact link provided"
-            >
-              {ctaLabel}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setContactModalOpen(true)}
+            className={cx(
+              "rounded-xl px-5 py-2.5 text-sm font-medium transition",
+              hasContactDetails
+                ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
+                : "bg-[#ECEEE4] text-[#6F7A5A] hover:bg-[#E2E5D8]"
+            )}
+          >
+            {ctaLabel}
+          </button>
         </div>
       </div>
     </main>
