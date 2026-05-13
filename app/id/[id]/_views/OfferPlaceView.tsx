@@ -13,12 +13,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { GoogleMap, Marker } from "@react-google-maps/api";
 import { useGoogleMaps } from "../../../providers/GoogleMapsProvider";
+import { PLACE_LAYOUT_CONFIG } from "../../../config/placeLayout";
 import { getMapOptions } from "../../../config/googleMaps";
 import { createStaticPinSvg } from "../../../lib/mapMarkers";
 import { supabase } from "../../../lib/supabase";
 import TopBar from "../../../components/TopBar";
+import DesktopMosaic from "../../../components/DesktopMosaic";
+import MobileCarousel from "../../../components/MobileCarousel";
 import FavoriteIcon from "../../../components/FavoriteIcon";
 import Icon from "../../../components/Icon";
 import PremiumBadge from "../../../components/PremiumBadge";
@@ -85,6 +89,8 @@ type Props = {
   onToggleFavorite: () => void;
   /** Профиль создателя карточки (host) — для блока «Hosted by». */
   hostProfile?: HostProfile | null;
+  /** Already batched by the parent page: place_photos, then legacy fallbacks. */
+  photos?: string[];
 };
 
 // ---------- helpers ----------
@@ -191,6 +197,7 @@ export default function OfferPlaceView({
   favoriteLoading,
   onToggleFavorite,
   hostProfile,
+  photos,
 }: Props) {
   const router = useRouter();
   const { isLoaded: mapsLoaded, loadError: mapsLoadError } = useGoogleMaps();
@@ -208,7 +215,6 @@ export default function OfferPlaceView({
   const scheduleText = useMemo(() => describeSchedule(place.schedule), [place.schedule]);
 
   const isPremium = isPlacePremium(place);
-  const cover = place.cover_url || (place.photo_urls?.find((u) => typeof u === "string" && u.length > 0) ?? null);
 
   const center = useMemo(
     () => (place.lat && place.lng ? { lat: place.lat, lng: place.lng } : null),
@@ -217,16 +223,57 @@ export default function OfferPlaceView({
 
   const ctaLabel = isService ? "Contact" : "Book";
 
-  // Все фото места: cover + photo_urls. Уникальные, обрезанные до 5 для mosaic.
-  const galleryPhotos = useMemo(() => {
+  const allPhotos = useMemo(() => {
+    if (photos && photos.length > 0) return photos;
     const list: string[] = [];
     if (place.cover_url) list.push(place.cover_url);
     for (const u of place.photo_urls ?? []) {
       if (typeof u === "string" && u.length > 0 && !list.includes(u)) list.push(u);
     }
-    return list.slice(0, 5);
-  }, [place.cover_url, place.photo_urls]);
-  const hasMosaic = galleryPhotos.length >= 5;
+    return list;
+  }, [photos, place.cover_url, place.photo_urls]);
+
+  const [photoGalleryOpen, setPhotoGalleryOpen] = useState(false);
+  const [galleryPhotoIndex, setGalleryPhotoIndex] = useState(0);
+
+  useEffect(() => {
+    if (!photoGalleryOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPhotoGalleryOpen(false);
+      if (event.key === "ArrowLeft") {
+        setGalleryPhotoIndex((current) => (current > 0 ? current - 1 : allPhotos.length - 1));
+      }
+      if (event.key === "ArrowRight") {
+        setGalleryPhotoIndex((current) => (current < allPhotos.length - 1 ? current + 1 : 0));
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [photoGalleryOpen, allPhotos.length]);
+
+  const openPhotoGallery = (index: number) => {
+    if (allPhotos.length === 0) return;
+    setGalleryPhotoIndex(Math.min(Math.max(index, 0), allPhotos.length - 1));
+    setPhotoGalleryOpen(true);
+  };
+
+  const closePhotoGallery = () => {
+    setPhotoGalleryOpen(false);
+  };
+
+  const showNextPhoto = () => {
+    setGalleryPhotoIndex((current) => (current < allPhotos.length - 1 ? current + 1 : 0));
+  };
+
+  const showPreviousPhoto = () => {
+    setGalleryPhotoIndex((current) => (current > 0 ? current - 1 : allPhotos.length - 1));
+  };
 
   // Aggregate rating через RPC. Молча ничего не показываем при ошибке.
   const [rating, setRating] = useState<{ avg: number; count: number } | null>(null);
@@ -262,54 +309,26 @@ export default function OfferPlaceView({
         />
       </div>
 
-      {/* HERO — mobile: single cover; desktop: photo mosaic when ≥5 photos */}
+      {/* HERO — same gallery system used by location pages */}
       <section className="relative w-full bg-[#FAFAF7]">
-        {/* Mobile single cover */}
-        <div className="relative w-full lg:hidden" style={{ paddingBottom: "56.25%" }}>
-          {cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={cover}
-              alt={place.title || "Cover"}
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center text-6xl">
-              {kindEmoji}
-            </div>
-          )}
+        <div className="lg:hidden relative">
+          <MobileCarousel
+            photos={allPhotos}
+            title={place.title || "Untitled"}
+            height={PLACE_LAYOUT_CONFIG.mobile.galleryHeight}
+            onPhotoClick={openPhotoGallery}
+          />
         </div>
 
-        {/* Desktop: 5-photo mosaic, иначе single cover */}
-        <div className="hidden lg:block max-w-6xl mx-auto px-4 sm:px-6 pt-6">
-          {hasMosaic ? (
-            <div className="grid grid-cols-4 grid-rows-2 gap-2 h-[420px] rounded-2xl overflow-hidden">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={galleryPhotos[0]}
-                alt={place.title || "Cover"}
-                className="col-span-2 row-span-2 h-full w-full object-cover"
-              />
-              {galleryPhotos.slice(1, 5).map((u, i) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={u + i}
-                  src={u}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
-              ))}
-            </div>
-          ) : cover ? (
-            <div className="rounded-2xl overflow-hidden h-[420px]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={cover} alt={place.title || "Cover"} className="h-full w-full object-cover" />
-            </div>
-          ) : (
-            <div className="h-[420px] flex items-center justify-center text-6xl bg-[#FAFAF7] rounded-2xl">
-              {kindEmoji}
-            </div>
-          )}
+        <div className="hidden lg:block max-w-[1280px] mx-auto px-6 pt-6">
+          <DesktopMosaic
+            photos={allPhotos}
+            title={place.title || "Untitled"}
+            gap={PLACE_LAYOUT_CONFIG.desktopXL.galleryGap}
+            radius={PLACE_LAYOUT_CONFIG.desktopXL.galleryRadius}
+            onShowAll={() => openPhotoGallery(allPhotos.length > 5 ? 5 : 0)}
+            onPhotoClick={openPhotoGallery}
+          />
         </div>
 
         {/* Mobile back button */}
@@ -341,6 +360,56 @@ export default function OfferPlaceView({
           {isPremium && <PremiumBadge />}
         </div>
       </section>
+
+      {photoGalleryOpen && allPhotos.length > 0 && (
+        <div className="fixed inset-0 z-[100] bg-black">
+          <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-3 sm:p-4 pt-safe-top">
+            <div className="absolute left-1/2 -translate-x-1/2 rounded-lg bg-black/50 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm">
+              {galleryPhotoIndex + 1} / {allPhotos.length}
+            </div>
+            <button
+              type="button"
+              onClick={closePhotoGallery}
+              className="ml-auto flex h-12 w-12 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition hover:bg-black/70"
+              aria-label="Close"
+            >
+              <Icon name="close" size={24} className="text-white" />
+            </button>
+          </div>
+
+          <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+            <Image
+              src={allPhotos[galleryPhotoIndex]}
+              alt={`${place.title || "Photo"} - Photo ${galleryPhotoIndex + 1}`}
+              fill
+              sizes="100vw"
+              className="object-contain"
+              priority
+            />
+          </div>
+
+          {allPhotos.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={showPreviousPhoto}
+                className="absolute left-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition hover:bg-black/70 sm:left-4"
+                aria-label="Previous photo"
+              >
+                <Icon name="back" size={24} className="text-white" />
+              </button>
+              <button
+                type="button"
+                onClick={showNextPhoto}
+                className="absolute right-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition hover:bg-black/70 sm:right-4"
+                aria-label="Next photo"
+              >
+                <Icon name="forward" size={24} className="text-white" />
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* CONTENT */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">

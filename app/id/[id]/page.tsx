@@ -1226,6 +1226,7 @@ export default function PlacePage(props: PageProps) {
           favoriteLoading={favoriteLoading}
           onToggleFavorite={toggleFavorite}
           hostProfile={creatorProfile}
+          photos={allPhotos}
         />
       </SectionErrorBoundary>
     );
