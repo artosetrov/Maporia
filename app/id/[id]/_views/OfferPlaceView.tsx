@@ -341,7 +341,7 @@ export default function OfferPlaceView({
           <Icon name="back" size={18} />
         </button>
 
-        {/* Favorite — top right (mobile only, на desktop в TopBar) */}
+        {/* Favorite — top right (mobile only). Desktop has a labeled action in the title row. */}
         <button
           type="button"
           onClick={onToggleFavorite}
@@ -418,14 +418,33 @@ export default function OfferPlaceView({
           <h1 className="font-fraunces text-2xl sm:text-3xl font-semibold text-[#1F2A1F] leading-tight">
             {place.title || "Untitled"}
           </h1>
-          {canEdit && (
-            <Link
-              href={`/places/${place.id}/edit`}
-              className="shrink-0 text-sm text-[#8F9E4F] underline hover:text-[#556036]"
+          <div className="shrink-0 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onToggleFavorite}
+              disabled={favoriteLoading}
+              className={cx(
+                "hidden lg:inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-5 text-sm font-medium transition-colors",
+                isFavorite
+                  ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#8F9E4F] hover:bg-[#ECEEE4]"
+                  : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:bg-[#FAFAF7]",
+                favoriteLoading && "opacity-50"
+              )}
+              aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
             >
-              Edit
-            </Link>
-          )}
+              <FavoriteIcon isActive={isFavorite} size={16} />
+              {isFavorite ? "Saved" : "Add to favorites"}
+            </button>
+            {canEdit && (
+              <Link
+                href={`/places/${place.id}/edit`}
+                className="shrink-0 text-sm text-[#8F9E4F] underline hover:text-[#556036] lg:inline-flex lg:h-11 lg:items-center lg:justify-center lg:gap-2 lg:rounded-xl lg:border lg:border-[#ECEEE4] lg:bg-white lg:px-5 lg:font-medium lg:text-[#1F2A1F] lg:no-underline lg:transition-colors lg:hover:bg-[#FAFAF7]"
+              >
+                <Icon name="edit" size={16} className="hidden lg:block" />
+                Edit
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* Aggregate rating под title — Airbnb-style. Скрыт пока нет отзывов. */}
