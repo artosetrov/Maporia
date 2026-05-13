@@ -1,6 +1,19 @@
 # Operations And Risks
 
-Последнее обновление: 2026-05-11.
+Последнее обновление: 2026-05-13.
+
+## 2026-05-13 Admin Users Role Fix
+
+Что было исправлено после ошибки `infinite recursion detected in policy for relation "profiles"` в Users admin UI:
+
+- Admin manual plan/role saves now call `/api/admin/users/[id]/role`, which verifies the admin session and updates `profiles` with the service-role client instead of writing from the browser Supabase client.
+- Added `scripts/sql/fix-profiles-rls-recursion.sql` to replace the recursive `profiles` UPDATE policy. Apply it in Supabase SQL Editor or via an authenticated Supabase migration before relying on direct self-profile updates.
+
+Проверки после фикса:
+
+- `npm run typecheck`
+- `npm run docs:check`
+- Manual smoke: admin opens `/profile?section=users`, changes a non-self user plan, saves, refreshes, and confirms `profiles.plan/role/is_admin` changed without RLS recursion.
 
 ## 2026-05-11 QA Fix Sweep
 

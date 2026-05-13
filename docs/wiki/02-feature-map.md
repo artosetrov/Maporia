@@ -1,6 +1,6 @@
 # Feature Map
 
-Последнее обновление: 2026-05-11.
+Последнее обновление: 2026-05-13.
 
 ## Public Routes
 
@@ -65,6 +65,8 @@
 | `GET /api/tags` | Public tags |
 | `/api/admin/tags` | Admin tags |
 | `/api/admin/premium-modal-settings` | Настройки premium modal |
+| `/api/admin/users/[id]/role` | Admin manual plan/admin assignment through service-role API |
+| `/api/admin/users/[id]/auth` | Admin email/password/reset/magic-link management |
 | `/api/admin/impersonate/*` | Start/status/exit/log/cleanup impersonation |
 | `/api/ai/generate-description` | AI description generation через OpenAI |
 | `/api/cities/resolve` | City resolve/normalization |

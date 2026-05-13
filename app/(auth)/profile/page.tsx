@@ -3529,6 +3529,40 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
     }
   }
 
+  async function callAdminRoleApi(
+    targetId: string,
+    assignment: AdminAssignable
+  ): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+    const {
+      data: { session },
+      error: sessionErr,
+    } = await supabase.auth.getSession();
+    if (sessionErr || !session) {
+      return { ok: false, error: "Не удалось получить admin-сессию" };
+    }
+
+    try {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(targetId)}/role`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ assignment }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        return { ok: false, error: body?.error || `HTTP ${res.status}` };
+      }
+      return { ok: true, data: body };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : "Network error",
+      };
+    }
+  }
+
   async function openManageModal(user: User) {
     setManageUserId(user.id);
     setManageEmail(user.email || "");
@@ -3693,56 +3727,9 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
     setError(null);
 
     try {
-      // Маппинг назначения админа на колонки profiles:
-      //  - admin            → is_admin=true (план не трогаем — админ обходит квоты в trigger).
-      //  - free             → plan='free', is_admin=false, subscription_status='inactive'.
-      //  - premium_viewer   → plan='premium_viewer', period='lifetime' (наш Premium one-time).
-      //  - creator_*        → plan='creator_*',     period='month' (manually granted creator).
-      //                       Реальная подписка не создаётся — Stripe этим юзером не управляет.
-      //                       Это ручное предоставление прав; webhook'и от Stripe потом могут
-      //                       перетереть, если юзер сам что-то купит.
-      const updates: Record<string, unknown> = {};
-
-      if (next === "admin") {
-        updates.is_admin = true;
-        updates.role = "admin";
-      } else {
-        updates.is_admin = false;
-        updates.plan = next;
-        if (next === "free") {
-          updates.plan_period = null;
-          updates.plan_renews_at = null;
-          updates.subscription_status = "inactive";
-          updates.role = "standard";
-        } else if (next === "premium_viewer") {
-          updates.plan_period = "lifetime";
-          updates.plan_renews_at = null;
-          updates.subscription_status = "active";
-          updates.role = "premium";
-        } else {
-          // creator_service / creator_experience / creator_all — manual grant
-          updates.plan_period = "month";
-          updates.subscription_status = "active";
-          updates.role = "premium";
-        }
-      }
-
-      const { data, error } = await supabase
-        .from("profiles")
-        // @ts-expect-error Supabase generated types infer update payload as never
-        .update(updates)
-        .eq("id", userId)
-        .select();
-
-      if (error) {
-        console.error("Error updating user role:", error);
-        setError(`Failed to update user role: ${error.message}`);
-        return;
-      }
-
-      if (!data || data.length === 0) {
-        console.error("No data returned from update");
-        setError("Failed to update user role: No data returned. Check RLS policies.");
+      const result = await callAdminRoleApi(userId, next);
+      if (!result.ok) {
+        setError(`Failed to update user role: ${result.error || "Unknown error"}`);
         return;
       }
 

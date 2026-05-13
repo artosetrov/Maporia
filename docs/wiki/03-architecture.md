@@ -1,6 +1,6 @@
 # Architecture
 
-Последнее обновление: 2026-05-11.
+Последнее обновление: 2026-05-13.
 
 ## Stack
 
@@ -125,7 +125,9 @@ Client-side singleton в `app/lib/supabase.ts` делает defensive init, не
 
 Service-role operations должны жить только в API routes/server utils. Health-check уже проверяет, что service keys не попали в client files.
 
-Admin auth-management (`/api/admin/users/[id]/auth`) uses the same configured app-origin resolver as Stripe redirects for reset/magic-link emails, ignores client-supplied redirect URLs, and rate-limits credential/email actions per admin/action. Admin impersonation start is also rate-limited per admin/IP before generating Supabase magic links.
+Admin role/plan assignment goes through `/api/admin/users/[id]/role` with a service-role Supabase client after verifying the caller's Bearer session and `profiles.is_admin`/`role='admin'`. The profile page should not update role, plan, or `is_admin` directly from the browser client because those writes depend on `profiles` RLS. Admin auth-management (`/api/admin/users/[id]/auth`) uses the same configured app-origin resolver as Stripe redirects for reset/magic-link emails, ignores client-supplied redirect URLs, and rate-limits credential/email actions per admin/action. Admin impersonation start is also rate-limited per admin/IP before generating Supabase magic links.
+
+`scripts/sql/fix-profiles-rls-recursion.sql` fixes the known recursive `profiles` UPDATE policy by moving the current `role/is_admin` lookup into a private `SECURITY DEFINER` helper and recreating the self-update policy without a direct `profiles` subquery.
 
 ### Google Maps
 
@@ -181,5 +183,6 @@ Google Places photo previews must go through `/api/google/photo`. The route vali
 | `npm run migrate:photos` | Google photo migration |
 | `npm run fix-rls` | RLS fix helper |
 | `npm run db:types` | Generate Supabase types from linked project |
+| `scripts/sql/fix-profiles-rls-recursion.sql` | Manual SQL patch for recursive `profiles` UPDATE policy |
 
 SQL scripts live in `scripts/sql/`. They are not a single ordered migration chain, so before applying manually, read names and current DB state.
