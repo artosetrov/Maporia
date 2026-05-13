@@ -318,6 +318,35 @@ export default function OfferPlaceView({
             height={PLACE_LAYOUT_CONFIG.mobile.galleryHeight}
             onPhotoClick={openPhotoGallery}
           />
+
+          {/* Mobile back button */}
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="absolute left-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur shadow"
+            aria-label="Back"
+          >
+            <Icon name="back" size={18} />
+          </button>
+
+          {/* Favorite — top right. A labeled action is also shown below the title. */}
+          <button
+            type="button"
+            onClick={onToggleFavorite}
+            disabled={favoriteLoading}
+            className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur shadow disabled:opacity-50"
+            aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+          >
+            <FavoriteIcon isActive={isFavorite} size={20} />
+          </button>
+
+          {/* Kind chip — bottom left (mobile only) */}
+          <div className="absolute left-3 bottom-3 z-10 flex items-center gap-2">
+            <span className="rounded-full bg-white/95 px-3 py-1 text-xs font-medium text-[#1F2A1F] shadow">
+              {kindEmoji} {kindLabel}
+            </span>
+            {isPremium && <PremiumBadge />}
+          </div>
         </div>
 
         <div className="hidden lg:block max-w-[1280px] mx-auto px-6 pt-6">
@@ -329,35 +358,6 @@ export default function OfferPlaceView({
             onShowAll={() => openPhotoGallery(allPhotos.length > 5 ? 5 : 0)}
             onPhotoClick={openPhotoGallery}
           />
-        </div>
-
-        {/* Mobile back button */}
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="lg:hidden absolute left-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur shadow"
-          aria-label="Back"
-        >
-          <Icon name="back" size={18} />
-        </button>
-
-        {/* Favorite — top right (mobile only). Desktop has a labeled action in the title row. */}
-        <button
-          type="button"
-          onClick={onToggleFavorite}
-          disabled={favoriteLoading}
-          className="lg:hidden absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur shadow disabled:opacity-50"
-          aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-        >
-          <FavoriteIcon isActive={isFavorite} size={20} />
-        </button>
-
-        {/* Kind chip — bottom left (mobile only) */}
-        <div className="lg:hidden absolute left-3 bottom-3 z-10 flex items-center gap-2">
-          <span className="rounded-full bg-white/95 px-3 py-1 text-xs font-medium text-[#1F2A1F] shadow">
-            {kindEmoji} {kindLabel}
-          </span>
-          {isPremium && <PremiumBadge />}
         </div>
       </section>
 
@@ -414,17 +414,17 @@ export default function OfferPlaceView({
       {/* CONTENT */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Title row */}
-        <div className="flex items-start justify-between gap-4 mb-2">
+        <div className="flex flex-col gap-3 mb-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <h1 className="font-fraunces text-2xl sm:text-3xl font-semibold text-[#1F2A1F] leading-tight">
             {place.title || "Untitled"}
           </h1>
-          <div className="shrink-0 flex items-center gap-2">
+          <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
             <button
               type="button"
               onClick={onToggleFavorite}
               disabled={favoriteLoading}
               className={cx(
-                "hidden lg:inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-5 text-sm font-medium transition-colors",
+                "inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-medium transition-colors sm:flex-none lg:h-11 lg:px-5",
                 isFavorite
                   ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#8F9E4F] hover:bg-[#ECEEE4]"
                   : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:bg-[#FAFAF7]",
