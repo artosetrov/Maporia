@@ -47,7 +47,6 @@ type ProfileUpdate = {
   plan_period?: "month" | "lifetime" | null;
   plan_renews_at?: string | null;
   subscription_status?: "active" | "inactive";
-  updated_at: string;
 };
 
 function isAdminAssignable(value: string | undefined): value is AdminAssignable {
@@ -55,13 +54,10 @@ function isAdminAssignable(value: string | undefined): value is AdminAssignable 
 }
 
 function buildProfileUpdate(assignment: AdminAssignable): ProfileUpdate {
-  const updated_at = new Date().toISOString();
-
   if (assignment === "admin") {
     return {
       is_admin: true,
       role: "admin",
-      updated_at,
     };
   }
 
@@ -73,7 +69,6 @@ function buildProfileUpdate(assignment: AdminAssignable): ProfileUpdate {
       plan_renews_at: null,
       subscription_status: "inactive",
       role: "standard",
-      updated_at,
     };
   }
 
@@ -85,7 +80,6 @@ function buildProfileUpdate(assignment: AdminAssignable): ProfileUpdate {
       plan_renews_at: null,
       subscription_status: "active",
       role: "premium",
-      updated_at,
     };
   }
 
@@ -96,7 +90,6 @@ function buildProfileUpdate(assignment: AdminAssignable): ProfileUpdate {
     plan_renews_at: null,
     subscription_status: "active",
     role: "premium",
-    updated_at,
   };
 }
 
