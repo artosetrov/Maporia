@@ -1,1 +1,4 @@
-export { PATCH, dynamic, runtime } from "../role/route";
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+export { PATCH } from "../role/route";
