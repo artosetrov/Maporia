@@ -312,7 +312,33 @@ export default function PlacePage(props: PageProps) {
     }
   };
 
+  const closePhotoGallery = () => {
+    setPhotoGalleryOpen(false);
+    setIsImageTransitioning(false);
+    setPhotoZoom(1);
+    setPhotoPosition({ x: 0, y: 0 });
+    setIsDragging(false);
+    setDragStart({ x: 0, y: 0 });
+    setSwipeStart(null);
+    setPinchStartDistance(null);
+  };
+
+  const isGalleryControlTarget = (target: EventTarget | null) =>
+    target instanceof Element && Boolean(target.closest('[data-gallery-control="true"]'));
+
+  const stopGalleryControlTouch = (e: React.TouchEvent) => {
+    e.stopPropagation();
+  };
+
+  const handleGalleryClosePress = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closePhotoGallery();
+  };
+
   const handleGalleryTouchStart = (e: React.TouchEvent) => {
+    if (isGalleryControlTarget(e.target)) return;
+
     if (e.touches.length === 2) {
       // Pinch zoom start
       const touch1 = e.touches[0];
@@ -339,6 +365,8 @@ export default function PlacePage(props: PageProps) {
   };
 
   const handleGalleryTouchMove = (e: React.TouchEvent) => {
+    if (isGalleryControlTarget(e.target)) return;
+
     if (e.touches.length === 2 && pinchStartDistance !== null) {
       // Pinch zoom
       e.preventDefault();
@@ -361,6 +389,8 @@ export default function PlacePage(props: PageProps) {
   };
 
   const handleGalleryTouchEnd = (e: React.TouchEvent) => {
+    if (isGalleryControlTarget(e.target)) return;
+
     if (e.touches.length === 0 && swipeStart && photoZoom === 1 && !isDragging) {
       // Swipe navigation
       const touch = e.changedTouches[0];
@@ -2625,17 +2655,19 @@ export default function PlacePage(props: PageProps) {
 
             {/* Close button */}
             <button
-              onClick={() => {
-                setPhotoGalleryOpen(false);
-                setIsImageTransitioning(false);
-                setPhotoZoom(1);
-                setPhotoPosition({ x: 0, y: 0 });
-              }}
-              className="relative w-14 h-14 sm:w-14 sm:h-14 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center active:bg-black/70 transition-colors touch-manipulation ml-auto before:absolute before:content-[''] before:-inset-3 before:rounded-full"
-              style={{ minWidth: '56px', minHeight: '56px' }}
+              type="button"
+              data-gallery-control="true"
+              onPointerDownCapture={handleGalleryClosePress}
+              onTouchStartCapture={handleGalleryClosePress}
+              onClick={handleGalleryClosePress}
+              onTouchStart={stopGalleryControlTouch}
+              onTouchMove={stopGalleryControlTouch}
+              onTouchEnd={stopGalleryControlTouch}
+              className="fixed right-3 z-[120] flex h-16 w-16 min-h-16 min-w-16 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm transition-colors touch-manipulation active:bg-black/70 sm:right-4 sm:h-14 sm:w-14 sm:min-h-14 sm:min-w-14 before:absolute before:content-[''] before:-inset-2 before:rounded-full"
+              style={{ top: 'calc(env(safe-area-inset-top) + 0.75rem)' }}
               aria-label="Close"
             >
-              <Icon name="close" size={24} className="text-white" />
+              <Icon name="close" size={24} className="pointer-events-none text-white" />
             </button>
           </div>
 
@@ -2667,18 +2699,28 @@ export default function PlacePage(props: PageProps) {
           {allPhotos.length > 1 && (
             <>
               <button
+                type="button"
+                data-gallery-control="true"
                 onClick={handlePrevPhoto}
-                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center hover:bg-black/70 active:bg-black/80 transition-all z-20"
+                onTouchStart={stopGalleryControlTouch}
+                onTouchMove={stopGalleryControlTouch}
+                onTouchEnd={stopGalleryControlTouch}
+                className="absolute left-2 sm:left-4 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm transition-all touch-manipulation hover:bg-black/70 active:bg-black/80"
                 aria-label="Previous photo"
               >
-                <Icon name="back" size={24} className="text-white" />
+                <Icon name="back" size={24} className="pointer-events-none text-white" />
               </button>
               <button
+                type="button"
+                data-gallery-control="true"
                 onClick={handleNextPhoto}
-                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center hover:bg-black/70 active:bg-black/80 transition-all z-20"
+                onTouchStart={stopGalleryControlTouch}
+                onTouchMove={stopGalleryControlTouch}
+                onTouchEnd={stopGalleryControlTouch}
+                className="absolute right-2 sm:right-4 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm transition-all touch-manipulation hover:bg-black/70 active:bg-black/80"
                 aria-label="Next photo"
               >
-                <Icon name="forward" size={24} className="text-white" />
+                <Icon name="forward" size={24} className="pointer-events-none text-white" />
               </button>
             </>
           )}
@@ -2691,13 +2733,10 @@ export default function PlacePage(props: PageProps) {
                 if (e.key === 'ArrowLeft') handlePrevPhoto();
                 if (e.key === 'ArrowRight') handleNextPhoto();
                 if (e.key === 'Escape') {
-                  setPhotoGalleryOpen(false);
-                  setIsImageTransitioning(false);
-                  setPhotoZoom(1);
-                  setPhotoPosition({ x: 0, y: 0 });
+                  closePhotoGallery();
                 }
               }}
-              className="absolute inset-0"
+              className="pointer-events-none absolute inset-0"
               style={{ outline: 'none' }}
             />
           )}
