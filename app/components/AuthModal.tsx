@@ -17,16 +17,17 @@ type AuthModalProps = {
 };
 
 const VARIANT_SUBTITLE: Record<AuthModalVariant, string> = {
-  default: "Sign in to like, comment, and save your favorite places",
-  profile: "Sign in to view your profile and manage your account",
-  saved: "Sign in to view your saved places",
-  premium: "Sign in to unlock premium places and collections",
+  default: "Create an account or sign in to like, comment, and save your favorite places",
+  profile: "Create an account or sign in to view your profile and manage your account",
+  saved: "Create an account or sign in to view your saved places",
+  premium: "Create an account or sign in to unlock premium places and collections",
 };
 
 const CODE_LENGTH = 6;
 const RESEND_COOLDOWN_SECONDS = 30;
 
 type Step = "email" | "code";
+type AuthIntent = "signin" | "signup";
 
 /**
  * Перевод raw-ошибок Supabase Auth в дружелюбные сообщения.
@@ -67,6 +68,7 @@ function friendlyOtpError(message: string | undefined | null): string {
 export default function AuthModal({ isOpen, onClose, redirectPath, variant = "default" }: AuthModalProps) {
   const router = useRouter();
   const [step, setStep] = useState<Step>("email");
+  const [intent, setIntent] = useState<AuthIntent>("signin");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState<string[]>(() => Array(CODE_LENGTH).fill(""));
   const [loading, setLoading] = useState(false);
@@ -86,6 +88,7 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
   useEffect(() => {
     if (isOpen) {
       setStep("email");
+      setIntent("signin");
       setEmail("");
       setCode(Array(CODE_LENGTH).fill(""));
       setError(null);
@@ -279,6 +282,13 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
     setError(null);
   }
 
+  function switchIntent(nextIntent: AuthIntent) {
+    setIntent(nextIntent);
+    setStep("email");
+    setCode(Array(CODE_LENGTH).fill(""));
+    setError(null);
+  }
+
   async function signInWithGoogle() {
     setError(null);
     setGoogleLoading(true);
@@ -321,9 +331,13 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
 
         {step === "email" ? (
           <>
-            <h2 className="text-2xl font-semibold text-[#1F2A1F] mb-2">Sign in to Maporia</h2>
+            <h2 className="text-2xl font-semibold text-[#1F2A1F] mb-2">
+              {intent === "signup" ? "Create your account" : "Log in or sign up"}
+            </h2>
             <p className="text-[#A8B096] text-sm mb-6">
-              {VARIANT_SUBTITLE[variant]}
+              {intent === "signup"
+                ? "Join Maporia to save places, comment, and build your local map."
+                : VARIANT_SUBTITLE[variant]}
             </p>
 
             {error && (
@@ -349,7 +363,7 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
                     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
                     <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                   </svg>
-                  Continue with Google
+                  {intent === "signup" ? "Sign up with Google" : "Continue with Google"}
                 </>
               )}
             </button>
@@ -388,13 +402,28 @@ export default function AuthModal({ isOpen, onClose, redirectPath, variant = "de
                 disabled={loading || googleLoading || !email}
                 className="w-full py-3 px-4 rounded-xl bg-[#8F9E4F] text-white font-semibold text-sm hover:brightness-110 active:brightness-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? "Sending code..." : "Continue"}
+                {loading ? "Sending code..." : intent === "signup" ? "Create account" : "Continue"}
               </button>
             </form>
 
             <p className="text-xs text-[#A8B096] text-center mt-4">
-              We&apos;ll email you a 6-digit code to sign in.
+              {intent === "signup"
+                ? "We'll email you a 6-digit code to create your account."
+                : "We'll email you a 6-digit code. New here? We'll create your account automatically."}
             </p>
+
+            <div className="mt-5 rounded-2xl border border-[#ECEEE4] bg-[#FAFAF7] p-3 text-center">
+              <p className="text-sm text-[#6F7A5A] mb-3">
+                {intent === "signup" ? "Already have an account?" : "New to Maporia?"}
+              </p>
+              <button
+                type="button"
+                onClick={() => switchIntent(intent === "signup" ? "signin" : "signup")}
+                className="w-full py-3 px-4 rounded-xl border border-[#DDE3CF] bg-white text-[#1F2A1F] font-semibold text-sm hover:bg-[#F4F6ED] transition-colors"
+              >
+                {intent === "signup" ? "Log in to another account" : "Create account"}
+              </button>
+            </div>
           </>
         ) : (
           <>

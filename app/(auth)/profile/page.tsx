@@ -388,6 +388,24 @@ function ProfileInner() {
   
   // Check if user can add places
   const canAddPlace = canUserAddPlace(access);
+  const currentPlan = (access?.plan ?? "free") as PlanId;
+  const currentPlanDisplay = PRICING_REGISTRY[currentPlan]?.display ?? null;
+  const currentPlanPeriod = profile?.plan_period as "month" | "year" | "lifetime" | null | undefined;
+  const currentPlanCycle: Cycle =
+    currentPlanPeriod === "year" || currentPlanPeriod === "lifetime"
+      ? currentPlanPeriod
+      : "month";
+  const currentPlanPrice =
+    currentPlan !== "free" ? priceDisplay(currentPlan, currentPlanCycle) : null;
+  const mobilePlanPreview = PROFILE_BILLING_PLANS.map((id) => {
+    const spec = PRICING_REGISTRY[id];
+    const cycle = profileEffectiveCycle(id, "month");
+    return {
+      id,
+      display: spec.display,
+      price: priceDisplay(id, cycle),
+    };
+  }).filter((item) => item.display && item.price);
 
   const stats = useMemo(() => {
     return {
@@ -876,7 +894,7 @@ function ProfileInner() {
         <div className="hidden lg:flex min-h-[calc(100vh-80px)]">
           {/* Left Sidebar */}
           <aside className="w-64 border-r border-[#ECEEE4] bg-white flex-shrink-0">
-            <div className="sticky top-[80px] p-6">
+            <div className="sticky top-[80px] max-h-[calc(100vh-80px)] overflow-y-auto overscroll-contain p-6 pb-8">
               <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F] mb-6">Profile</h2>
               <nav className="space-y-1">
                 <button
@@ -1188,6 +1206,177 @@ function ProfileInner() {
                           </div>
                         </div>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Mobile Premium Widget */}
+                  <section className="bg-white rounded-[24px] p-5 border border-[#ECEEE4] shadow-sm">
+                    {currentPlan !== "free" && currentPlanDisplay ? (
+                      <>
+                        <div className="flex items-start justify-between gap-3 mb-4">
+                          <div>
+                            <div className="text-xs uppercase tracking-wide text-[#6F7A5A] mb-1">
+                              Current subscription
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-2xl" aria-hidden>
+                                {currentPlanDisplay.emoji}
+                              </span>
+                              <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F]">
+                                {currentPlanDisplay.name}
+                              </h2>
+                            </div>
+                          </div>
+                          <span className="rounded-full bg-[#8F9E4F] text-white text-[10px] font-semibold uppercase tracking-wide px-2 py-1">
+                            Active
+                          </span>
+                        </div>
+                        <p className="text-sm text-[#6F7A5A] mb-4">
+                          {currentPlanDisplay.tagline}
+                        </p>
+                        {currentPlanPrice && (
+                          <div className="rounded-2xl bg-[#FAFAF7] border border-[#ECEEE4] px-4 py-3 mb-4">
+                            <div className="flex items-baseline gap-1">
+                              <span className="font-fraunces text-2xl font-semibold text-[#1F2A1F]">
+                                {currentPlanPrice.primary}
+                              </span>
+                              <span className="text-xs text-[#6F7A5A]">
+                                {currentPlanPrice.suffix}
+                              </span>
+                            </div>
+                            {currentPlanPrice.secondary && (
+                              <div className="text-xs text-[#6F7A5A] mt-1">
+                                {currentPlanPrice.secondary}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setSection("premium")}
+                          className="w-full h-11 rounded-xl bg-[#8F9E4F] text-white text-sm font-semibold hover:bg-[#556036] active:bg-[#556036] transition-colors"
+                        >
+                          Manage subscription
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div>
+                            <div className="text-xs uppercase tracking-wide text-[#6F7A5A] mb-1">
+                              Premium & creator plans
+                            </div>
+                            <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F]">
+                              Unlock Maporia
+                            </h2>
+                          </div>
+                          <Icon name="star" size={24} className="text-[#8F9E4F] flex-shrink-0" />
+                        </div>
+                        <p className="text-sm text-[#6F7A5A] mb-4">
+                          Get hidden places with Premium, or choose a creator plan to publish locations, services, and experiences.
+                        </p>
+                        <div className="grid grid-cols-2 gap-2 mb-4">
+                          {mobilePlanPreview.map(({ id, display, price }) => (
+                            <div
+                              key={id}
+                              className="rounded-2xl border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-3 min-w-0"
+                            >
+                              <div className="flex items-center gap-1.5 text-sm font-semibold text-[#1F2A1F] min-w-0">
+                                <span aria-hidden>{display?.emoji}</span>
+                                <span className="truncate">{display?.name}</span>
+                              </div>
+                              {price && (
+                                <div className="mt-1 text-xs text-[#6F7A5A]">
+                                  <span className="font-semibold text-[#1F2A1F]">
+                                    {price.primary}
+                                  </span>{" "}
+                                  {price.suffix}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSection("premium")}
+                          className="w-full h-11 rounded-xl bg-[#8F9E4F] text-white text-sm font-semibold hover:bg-[#556036] active:bg-[#556036] transition-colors"
+                        >
+                          View plans
+                        </button>
+                      </>
+                    )}
+                  </section>
+
+                  {/* Mobile Profile Menu */}
+                  <div className="bg-white rounded-[24px] p-2 border border-[#ECEEE4] shadow-sm">
+                    <div className="grid grid-cols-2 gap-1">
+                      <button
+                        onClick={() => setSection("trips")}
+                        className="flex items-center gap-2 rounded-2xl px-3 py-3 text-left text-[#1F2A1F] hover:bg-[#FAFAF7] active:bg-[#F4F6ED] transition-colors"
+                      >
+                        <Icon name="bookmark" size={20} className="text-[#6F7A5A] flex-shrink-0" />
+                        <span className="min-w-0 truncate text-sm font-medium">My favorites</span>
+                      </button>
+                      <button
+                        onClick={() => setSection("added")}
+                        className="flex items-center gap-2 rounded-2xl px-3 py-3 text-left text-[#1F2A1F] hover:bg-[#FAFAF7] active:bg-[#F4F6ED] transition-colors"
+                      >
+                        <Icon name="add" size={20} className="text-[#6F7A5A] flex-shrink-0" />
+                        <span className="min-w-0 truncate text-sm font-medium">Added</span>
+                      </button>
+                      <button
+                        onClick={() => setSection("history")}
+                        className="flex items-center gap-2 rounded-2xl px-3 py-3 text-left text-[#1F2A1F] hover:bg-[#FAFAF7] active:bg-[#F4F6ED] transition-colors"
+                      >
+                        <Icon name="clock" size={20} className="text-[#6F7A5A] flex-shrink-0" />
+                        <span className="min-w-0 truncate text-sm font-medium">History</span>
+                      </button>
+                      <button
+                        onClick={() => setSection("activity")}
+                        className="flex items-center gap-2 rounded-2xl px-3 py-3 text-left text-[#1F2A1F] hover:bg-[#FAFAF7] active:bg-[#F4F6ED] transition-colors"
+                      >
+                        <Icon name="activity" size={20} className="text-[#6F7A5A] flex-shrink-0" />
+                        <span className="min-w-0 truncate text-sm font-medium">Activity</span>
+                      </button>
+                      <Link
+                        href="/profile/edit"
+                        className="flex items-center gap-2 rounded-2xl px-3 py-3 text-left text-[#1F2A1F] hover:bg-[#FAFAF7] active:bg-[#F4F6ED] transition-colors"
+                      >
+                        <Icon name="edit" size={20} className="text-[#6F7A5A] flex-shrink-0" />
+                        <span className="min-w-0 truncate text-sm font-medium">Edit profile</span>
+                      </Link>
+                      {isAdmin && (
+                        <>
+                          <button
+                            onClick={() => setSection("users")}
+                            className="flex items-center gap-2 rounded-2xl px-3 py-3 text-left text-[#1F2A1F] hover:bg-[#FAFAF7] active:bg-[#F4F6ED] transition-colors"
+                          >
+                            <Icon name="users" size={20} className="text-[#6F7A5A] flex-shrink-0" />
+                            <span className="min-w-0 truncate text-sm font-medium">Users</span>
+                          </button>
+                          <button
+                            onClick={() => setSection("elements")}
+                            className="flex items-center gap-2 rounded-2xl px-3 py-3 text-left text-[#1F2A1F] hover:bg-[#FAFAF7] active:bg-[#F4F6ED] transition-colors"
+                          >
+                            <Icon name="package" size={20} className="text-[#6F7A5A] flex-shrink-0" />
+                            <span className="min-w-0 truncate text-sm font-medium">Elements</span>
+                          </button>
+                          <Link
+                            href="/admin/health"
+                            className="flex items-center gap-2 rounded-2xl px-3 py-3 text-left text-[#1F2A1F] hover:bg-[#FAFAF7] active:bg-[#F4F6ED] transition-colors"
+                          >
+                            <Icon name="activity" size={20} className="text-[#6F7A5A] flex-shrink-0" />
+                            <span className="min-w-0 truncate text-sm font-medium">Health</span>
+                          </Link>
+                          <Link
+                            href="/admin/analytics"
+                            className="flex items-center gap-2 rounded-2xl px-3 py-3 text-left text-[#1F2A1F] hover:bg-[#FAFAF7] active:bg-[#F4F6ED] transition-colors"
+                          >
+                            <Icon name="bar-chart" size={20} className="text-[#6F7A5A] flex-shrink-0" />
+                            <span className="min-w-0 truncate text-sm font-medium">Analytics</span>
+                          </Link>
+                        </>
+                      )}
                     </div>
                   </div>
 
