@@ -3542,7 +3542,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
     }
 
     try {
-      const res = await fetch(`/api/admin/users/${encodeURIComponent(targetId)}/role-v2`, {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(targetId)}/role-v3`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
