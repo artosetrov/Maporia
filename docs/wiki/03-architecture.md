@@ -125,6 +125,8 @@ Client-side singleton в `app/lib/supabase.ts` делает defensive init, не
 
 Service-role operations должны жить только в API routes/server utils. Health-check уже проверяет, что service keys не попали в client files.
 
+Current-user profile edits for safe fields (`avatar_url`, `display_name`, `bio`, `username`, `favorite_categories`, `favorite_tags`) go through `PATCH /api/profile`, which verifies the user's Bearer session and updates only that user's `profiles` row via service role. This avoids the recursive `profiles` UPDATE RLS policy while keeping client writes allowlisted.
+
 Admin role/plan assignment goes through `/api/admin/users/[id]/role` with a service-role Supabase client after verifying the caller's Bearer session and `profiles.is_admin`/`role='admin'`. The profile page should not update role, plan, or `is_admin` directly from the browser client because those writes depend on `profiles` RLS. Admin auth-management (`/api/admin/users/[id]/auth`) uses the same configured app-origin resolver as Stripe redirects for reset/magic-link emails, ignores client-supplied redirect URLs, and rate-limits credential/email actions per admin/action. Admin impersonation start is also rate-limited per admin/IP before generating Supabase magic links.
 
 `scripts/sql/fix-profiles-rls-recursion.sql` fixes the known recursive `profiles` UPDATE policy by moving the current `role/is_admin` lookup into a private `SECURITY DEFINER` helper and recreating the self-update policy without a direct `profiles` subquery.

@@ -76,6 +76,7 @@
 | `/api/google-import/search` | Google import search |
 | `/api/google-import/import` | Google import commit |
 | `/api/places/resolve-place-id` | Resolve internal/external place id |
+| `PATCH /api/profile` | Current-user profile field updates through service-role API |
 | `/api/stripe/checkout` | Создание checkout session |
 | `/api/stripe/portal` | Stripe customer portal |
 | `/api/stripe/verify` | Verify checkout result |

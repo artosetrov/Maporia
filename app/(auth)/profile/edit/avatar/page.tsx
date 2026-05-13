@@ -9,6 +9,7 @@ import { supabase } from "../../../../lib/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
 import Icon from "../../../../components/Icon";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
+import { updateOwnProfile } from "../../../../lib/profileUpdate";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
@@ -135,15 +136,12 @@ export default function AvatarEditorPage() {
     setSaving(true);
     setError(null);
 
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({ avatar_url: avatarUrl } as never)
-      .eq("id", user.id);
+    const { error: updateError } = await updateOwnProfile({ avatar_url: avatarUrl });
 
     setSaving(false);
 
     if (updateError) {
-      setError(updateError.message || "Failed to save avatar");
+      setError(updateError || "Failed to save avatar");
       return;
     }
 
@@ -171,15 +169,12 @@ export default function AvatarEditorPage() {
     }
 
     // Update profile
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({ avatar_url: null } as never)
-      .eq("id", user.id);
+    const { error: updateError } = await updateOwnProfile({ avatar_url: null });
 
     setUploading(false);
 
     if (updateError) {
-      setError(updateError.message || "Failed to delete avatar");
+      setError(updateError || "Failed to delete avatar");
       return;
     }
 

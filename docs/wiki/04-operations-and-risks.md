@@ -7,6 +7,7 @@
 Что было исправлено после ошибки `infinite recursion detected in policy for relation "profiles"` в Users admin UI:
 
 - Admin manual plan/role saves now call `/api/admin/users/[id]/role`, which verifies the admin session and updates `profiles` with the service-role client instead of writing from the browser Supabase client.
+- Current-user profile edits now call `PATCH /api/profile` for avatar/name/bio/username/interests instead of browser-side `profiles.update`, which avoids the same recursive `profiles` RLS policy on profile edit screens.
 - Added `scripts/sql/fix-profiles-rls-recursion.sql` to replace the recursive `profiles` UPDATE policy. Apply it in Supabase SQL Editor or via an authenticated Supabase migration before relying on direct self-profile updates.
 
 Проверки после фикса:

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
 import type { Database } from "../../../../types/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
+import { updateOwnProfile } from "../../../../lib/profileUpdate";
 
 type ProfileInterestsRow = Pick<Database["public"]["Tables"]["profiles"]["Row"], "favorite_categories" | "favorite_tags">;
 import Icon from "../../../../components/Icon";
@@ -107,19 +108,15 @@ export default function InterestsEditorPage() {
     setSaving(true);
     setError(null);
 
-    const { error: updateError } = await supabase
-      .from("profiles")
-      // @ts-expect-error Supabase generated types infer update payload as never
-      .update({
-        favorite_categories: selectedCategories.length > 0 ? selectedCategories : null,
-        favorite_tags: selectedTags.length > 0 ? selectedTags : null,
-      })
-      .eq("id", user.id);
+    const { error: updateError } = await updateOwnProfile({
+      favorite_categories: selectedCategories.length > 0 ? selectedCategories : null,
+      favorite_tags: selectedTags.length > 0 ? selectedTags : null,
+    });
 
     setSaving(false);
 
     if (updateError) {
-      setError(updateError.message || "Failed to save interests");
+      setError(updateError || "Failed to save interests");
       return;
     }
 

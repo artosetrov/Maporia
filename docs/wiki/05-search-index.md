@@ -7,7 +7,7 @@
 | Термин | Что искать | Где обычно живет |
 | --- | --- | --- |
 | Auth | `auth`, `signIn`, `signUp`, `magicLink`, `reset` | `app/lib/auth/`, `app/components/auth/`, `app/auth/**` |
-| Profile | `profiles`, `display_name`, `username`, `avatar_url` | `app/(auth)/profile/**`, `app/types.ts` |
+| Profile | `profiles`, `display_name`, `username`, `avatar_url`, `updateOwnProfile` | `app/(auth)/profile/**`, `app/api/profile/route.ts`, `app/lib/profileUpdate.ts`, `app/types.ts` |
 | Access | `getUserAccess`, `canUserViewPlace`, `isPlacePremium` | `app/lib/access.ts` |
 | Premium | `premium_viewer`, `PremiumUpsellModal`, `LockedPlaceOverlay` | `app/lib/plans.ts`, `app/components/` |
 | Pricing entitlements | `chooseBestEntitlement`, `planTier`, `BillingEntitlement` | `app/lib/pricing/entitlements.ts`, `app/api/stripe/**` |

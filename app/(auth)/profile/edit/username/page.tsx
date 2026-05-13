@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
 import type { Database } from "../../../../types/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
+import { updateOwnProfile } from "../../../../lib/profileUpdate";
 
 type ProfileUsernameRow = Pick<Database["public"]["Tables"]["profiles"]["Row"], "username">;
 import Icon from "../../../../components/Icon";
@@ -98,16 +99,12 @@ export default function UsernameEditorPage() {
     setSaving(true);
     setError(null);
 
-    const { error: updateError } = await supabase
-      .from("profiles")
-      // @ts-expect-error Supabase generated types infer update payload as never
-      .update({ username: username.trim() || null })
-      .eq("id", user.id);
+    const { error: updateError } = await updateOwnProfile({ username: username.trim() || null });
 
     setSaving(false);
 
     if (updateError) {
-      setError(updateError.message || "Failed to save username");
+      setError(updateError || "Failed to save username");
       return;
     }
 
