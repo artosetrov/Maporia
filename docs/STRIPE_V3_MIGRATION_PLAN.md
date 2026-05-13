@@ -38,6 +38,9 @@ $19.99 в `app/lib/pricing/registry.ts`, но **Stripe-сторона никог
 |---|---|---|
 | `scripts/setup-stripe.mjs` | + `creator_pro` (month/year), `creator_all` → $19.99/$191.88 c lookup_key suffix `_v3`, `creator_service`/`_experience` помечены `legacy: true` | Provision Stripe products + prices, идемпотентно |
 | `scripts/migrate-all-in-to-v3.mjs` | Новый скрипт: находит active subs со старым $34.99 price и переключает их на новый $19.99 price | Чтобы grandfathered $34.99 подписчики не остались под старой ценой после ENV-swap |
+| `scripts/all-in-precheck.sql` | Read-only SQL: 7 диагностических запросов (counts по легаси, candidate-list, orphan-проверка, profile↔sub mismatch, MRR delta) | Pre-flight перед Φ1, оценка blast radius |
+| `scripts/notify-all-in-repricing.mjs` | Резендит письмо «we lowered your price» через Resend API клиентам с metadata `pricing_v3_migrated_at` | Прозрачность с подписчиками после Φ3 |
+| `docs/email-templates/all-in-repricing-notice.md` | Шаблон письма (subject + plain + html, плейсхолдер `{{first_name}}`) | Текст вынесен из скрипта, чтобы менять без правки кода |
 | `docs/STRIPE_V3_MIGRATION_PLAN.md` | Этот файл | Runbook + чек-лист |
 
 `app/lib/pricing/registry.ts` **не трогаем** — он уже v3-корректный.
@@ -55,19 +58,16 @@ $34.99 подписок вернёт `null`, и план юзера сброси
 
 ### Φ0 — Pre-check blast radius (1 min, перед всем)
 
-В Supabase MCP / SQL editor:
+Прогнать `scripts/all-in-precheck.sql` целиком (через Supabase SQL Editor или MCP). Файл содержит 7
+read-only запросов. Главные числа:
 
-```sql
-SELECT plan, period, COUNT(*) AS active_subs
-FROM subscriptions
-WHERE status = 'active' AND plan IN ('creator_service','creator_experience','creator_all')
-GROUP BY plan, period
-ORDER BY plan, period;
-```
-
-Если `creator_all` count = 0, шаги Φ3 (migrate-all-in) можно пропустить — мигрировать некого.
-Если `creator_service`/`_experience` count > 0 — это grandfathered, их **не трогаем**, они остаются
-на v2 price'ах.
+- **§1** — counts активных подписок по legacy + creator_all. Если `creator_all` count = 0, шаги Φ3
+  (migrate-all-in) можно пропустить — мигрировать некого.
+- **§3** — список candidate-юзеров для миграции с `current_period_end` (когда их следующий billing).
+- **§7** — MRR delta (сколько мы недополучим в month после переключения на $19.99 — потенциально
+  компенсируется новыми подписчиками).
+- §4–§5 — sanity-проверки на orphan/mismatch между `profiles.plan` и `subscriptions`. Если что-то
+  найдётся — отдельный фикс, миграцию не блокирует, но стоит знать.
 
 ### Φ1 — Test mode: создать новые Stripe Prices
 
@@ -167,16 +167,35 @@ echo "$STRIPE_PRICE_CREATOR_ALL_YEAR_value"  | vercel env add STRIPE_PRICE_CREAT
    creator_pro`.
 5. На /profile видно «Current plan: Pro Creator».
 
-### Φ6 — Cleanup (опционально, через неделю)
+### Φ6 — Уведомить подписчиков (после успешного Φ3l)
 
-После того как все активные creator_all мигрированы:
+```bash
+# dry-run: показывает кому будет письмо, ничего не шлёт
+STRIPE_SECRET_KEY=sk_live_... node scripts/notify-all-in-repricing.mjs
+
+# боевая отправка через Resend (домен @maporia.co должен быть verified)
+STRIPE_SECRET_KEY=sk_live_... RESEND_API_KEY=re_... node scripts/notify-all-in-repricing.mjs --send
+```
+
+Скрипт находит подписки с `metadata.pricing_v3_migrated_at` (его проставляет
+`migrate-all-in-to-v3.mjs`) → дедуплицирует по customer → шлёт письмо по шаблону
+`docs/email-templates/all-in-repricing-notice.md`. Локальный лог `scripts/.notify-all-in-sent.json`
+дедуплицирует повторные прогоны. Файл в .gitignore — не коммитим (содержит email'ы).
+
+Subject: «Good news — your Maporia Pro All-in is now $19.99/mo». Текст в .md, можно поменять без
+правки кода.
+
+### Φ7 — Cleanup старых Stripe price'ов (опционально, через неделю)
+
+После того как все активные creator_all мигрированы и уведомлены:
 
 ```bash
 STRIPE_SECRET_KEY=sk_live_... node scripts/migrate-all-in-to-v3.mjs --deactivate-old
 ```
 
-Этот флаг деактивирует старые price'ы `maporia_pro_all_month` / `_year` в Stripe. После этого
-никто не сможет случайно подписаться на $34.99. (Существующие подписки на них уже мигрированы.)
+Этот флаг деактивирует старые price'ы `maporia_pro_all_month` / `_year` в Stripe. Скрипт сначала
+перепроверяет, что на старом price нет ни одной active/trialing/past_due подписки — иначе откажет
+с exit code 3. После деактивации никто не сможет случайно подписаться на $34.99.
 
 ---
 
@@ -223,6 +242,9 @@ STRIPE_SECRET_KEY=sk_live_... node scripts/migrate-all-in-to-v3.mjs --deactivate
 - [ ] `scripts/setup-stripe.mjs` содержит блоки `creator_pro` (×2) и обновлённый `creator_all` (×2 с
       lookup_key `_v3`).
 - [ ] `scripts/migrate-all-in-to-v3.mjs` существует, поддерживает `--dry-run` и `--deactivate-old`.
+- [ ] `scripts/all-in-precheck.sql` прогнан, blast radius известен.
+- [ ] `scripts/notify-all-in-repricing.mjs` + `docs/email-templates/all-in-repricing-notice.md`
+      существуют, dry-run выдаёт корректный candidate-list.
 - [ ] Stripe (test mode): новые prices созданы, видны в Dashboard.
 - [ ] Vercel preview env обновлён.
 - [ ] Preview /pricing рендерит 4 карточки.

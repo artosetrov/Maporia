@@ -47,3 +47,6 @@ health-report.json
 # local commit message scratchpads
 .git-commit-msg*.txt
 
+# notify-all-in-repricing.mjs sent log (contains customer emails)
+scripts/.notify-all-in-sent.json
+
