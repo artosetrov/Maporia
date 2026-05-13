@@ -141,7 +141,7 @@ export default function CategoryCarousel({ kind }: CategoryCarouselProps) {
           что и HomeSection, чтобы карточки уезжали под край экрана. */}
       <div
         ref={scrollContainerRef}
-        className="overflow-x-auto scrollbar-hide max-lg:-mr-6 lg:mr-0"
+        className="overflow-x-auto scrollbar-hide -mr-4 sm:max-lg:-mr-6 lg:mr-0"
         style={{
           scrollPaddingLeft: "var(--home-page-padding, 16px)",
           scrollSnapType: "x mandatory",
