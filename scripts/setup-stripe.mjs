@@ -27,6 +27,17 @@ import { execSync } from "node:child_process";
 // Plans config — должен совпадать с app/lib/pricing/registry.ts
 // ──────────────────────────────────────────────────────────────
 
+// v3 (2026-05-12, см. docs/PRICING_V3_CREATOR_MERGE.md и docs/STRIPE_V3_MIGRATION_PLAN.md):
+//   - Добавлен creator_pro ($14.99/$143.88).
+//   - creator_all переоценён с $34.99/$335.88 на $19.99/$191.88. Stripe Prices иммутабельны,
+//     поэтому новые цены создаются под НОВЫМИ lookup_keys (`*_v3`). Старые $34.99 prices
+//     остаются активными в Stripe до прогона `scripts/migrate-all-in-to-v3.mjs`, который
+//     переключит активные подписки и (с флагом `--deactivate-old`) выключит их.
+//   - creator_service / creator_experience помечены `legacy: true` — они нужны для grandfathered
+//     подписчиков. Скрипт всё равно проходит по ним (идемпотентно — ensureProduct/ensurePrice
+//     находят существующие объекты по metadata/lookup_key и не пересоздают), чтобы portal-whitelist
+//     включал их (grandfathered юзеры должны иметь возможность открыть Portal и cancel'нуть).
+//     Флаг `legacy: true` влияет только на лог.
 const PLANS = [
   {
     maporiaId: "premium_viewer",
@@ -52,6 +63,26 @@ const PLANS = [
     lookupKey: "maporia_pro_location_year",
     envVar: "STRIPE_PRICE_CREATOR_LOCATION_YEAR",
   },
+  // ── Pro Creator (v3, merged from creator_service + creator_experience) ──
+  {
+    maporiaId: "creator_pro",
+    name: "Maporia Pro Creator",
+    description:
+      "Publish up to 5 services or experiences (any mix) on Maporia. Premium included. Secondary location free.",
+    price: { amount: 1499, currency: "usd", type: "recurring", interval: "month" },
+    lookupKey: "maporia_pro_creator_month",
+    envVar: "STRIPE_PRICE_CREATOR_PRO_MONTH",
+  },
+  {
+    maporiaId: "creator_pro",
+    name: "Maporia Pro Creator",
+    description:
+      "Publish up to 5 services or experiences (any mix) on Maporia. Premium included. Secondary location free.",
+    price: { amount: 14388, currency: "usd", type: "recurring", interval: "year" },
+    lookupKey: "maporia_pro_creator_year",
+    envVar: "STRIPE_PRICE_CREATOR_PRO_YEAR",
+  },
+  // ── Legacy v2 (grandfathered) — провижатся только с `--include-legacy` ──
   {
     maporiaId: "creator_service",
     name: "Maporia Pro Service",
@@ -59,6 +90,7 @@ const PLANS = [
     price: { amount: 1499, currency: "usd", type: "recurring", interval: "month" },
     lookupKey: "maporia_pro_service_month",
     envVar: "STRIPE_PRICE_CREATOR_SERVICE_MONTH",
+    legacy: true,
   },
   {
     maporiaId: "creator_service",
@@ -67,6 +99,7 @@ const PLANS = [
     price: { amount: 14388, currency: "usd", type: "recurring", interval: "year" },
     lookupKey: "maporia_pro_service_year",
     envVar: "STRIPE_PRICE_CREATOR_SERVICE_YEAR",
+    legacy: true,
   },
   {
     maporiaId: "creator_experience",
@@ -75,6 +108,7 @@ const PLANS = [
     price: { amount: 1499, currency: "usd", type: "recurring", interval: "month" },
     lookupKey: "maporia_pro_experience_month",
     envVar: "STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH",
+    legacy: true,
   },
   {
     maporiaId: "creator_experience",
@@ -83,21 +117,27 @@ const PLANS = [
     price: { amount: 14388, currency: "usd", type: "recurring", interval: "year" },
     lookupKey: "maporia_pro_experience_year",
     envVar: "STRIPE_PRICE_CREATOR_EXPERIENCE_YEAR",
+    legacy: true,
   },
+  // ── Pro All-in v3 ($19.99 / $191.88, новые lookup_keys *_v3) ──
+  // ⚠ Старые $34.99/$335.88 prices (lookup_keys без `_v3`) удалять нельзя пока
+  // `scripts/migrate-all-in-to-v3.mjs` не переключил все активные подписки.
   {
     maporiaId: "creator_all",
     name: "Maporia Pro All-in",
-    description: "Up to 10 listings combined (services + experiences) + unlimited locations + Premium.",
-    price: { amount: 3499, currency: "usd", type: "recurring", interval: "month" },
-    lookupKey: "maporia_pro_all_month",
+    description:
+      "Up to 10 listings combined (locations + services + experiences) + Premium.",
+    price: { amount: 1999, currency: "usd", type: "recurring", interval: "month" },
+    lookupKey: "maporia_pro_all_month_v3",
     envVar: "STRIPE_PRICE_CREATOR_ALL_MONTH",
   },
   {
     maporiaId: "creator_all",
     name: "Maporia Pro All-in",
-    description: "Up to 10 listings combined (services + experiences + locations) + Premium.",
-    price: { amount: 33588, currency: "usd", type: "recurring", interval: "year" },
-    lookupKey: "maporia_pro_all_year",
+    description:
+      "Up to 10 listings combined (locations + services + experiences) + Premium.",
+    price: { amount: 19188, currency: "usd", type: "recurring", interval: "year" },
+    lookupKey: "maporia_pro_all_year_v3",
     envVar: "STRIPE_PRICE_CREATOR_ALL_YEAR",
   },
   {
@@ -157,13 +197,14 @@ const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" });
 // ──────────────────────────────────────────────────────────────
 
 async function ensureProduct(plan) {
+  const tag = plan.legacy ? " [legacy/grandfathered]" : "";
   // Match by metadata.maporia_id
   const existing = await stripe.products.search({
     query: `metadata['maporia_id']:'${plan.maporiaId}' AND active:'true'`,
     limit: 1,
   });
   if (existing.data.length > 0) {
-    console.log(`   ✓ product exists: ${plan.name} (${existing.data[0].id})`);
+    console.log(`   ✓ product exists${tag}: ${plan.name} (${existing.data[0].id})`);
     return existing.data[0];
   }
   const product = await stripe.products.create({
@@ -171,11 +212,12 @@ async function ensureProduct(plan) {
     description: plan.description,
     metadata: { maporia_id: plan.maporiaId },
   });
-  console.log(`   + created product: ${plan.name} (${product.id})`);
+  console.log(`   + created product${tag}: ${plan.name} (${product.id})`);
   return product;
 }
 
 async function ensurePrice(plan, product) {
+  const tag = plan.legacy ? " [legacy/grandfathered]" : "";
   // Match by lookup_key
   const existing = await stripe.prices.list({
     lookup_keys: [plan.lookupKey],
@@ -183,7 +225,7 @@ async function ensurePrice(plan, product) {
     limit: 1,
   });
   if (existing.data.length > 0) {
-    console.log(`   ✓ price exists: ${plan.lookupKey} (${existing.data[0].id})`);
+    console.log(`   ✓ price exists${tag}: ${plan.lookupKey} (${existing.data[0].id})`);
     return existing.data[0];
   }
   const params = {
@@ -197,7 +239,7 @@ async function ensurePrice(plan, product) {
     params.recurring = { interval: plan.price.interval };
   }
   const price = await stripe.prices.create(params);
-  console.log(`   + created price: ${plan.lookupKey} (${price.id})`);
+  console.log(`   + created price${tag}: ${plan.lookupKey} (${price.id})`);
   return price;
 }
 

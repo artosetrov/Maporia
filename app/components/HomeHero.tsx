@@ -6,10 +6,60 @@ import { CITIES, DEFAULT_CITY } from "../constants";
 import { fetchTopCities, topCityNames } from "../lib/topCities";
 import type { HomeKind } from "../types/home";
 import { useHomeKindCounts } from "../hooks/useHomeKindCounts";
+import { useStatsBannerSettings } from "../hooks/useStatsBannerSettings";
 import HomeTabsSegmented from "./HomeTabsSegmented";
 import HomeSearchHero from "./HomeSearchHero";
 import HomePopularTags from "./HomePopularTags";
 import HomeVisualPanel from "./HomeVisualPanel";
+import Icon from "./Icon";
+
+/**
+ * MobileActiveUsersBadge — eyebrow-чип над H1 на мобиле (sm:hidden).
+ * Десктопная версия StatsTicker под TopBar скрыта на <sm (`hidden sm:block`
+ * в page.tsx), поэтому на мобиле социальное доказательство (active users)
+ * было невидимо вообще. Этот чип закрывает дырку, не дублируя контент
+ * на десктопе.
+ *
+ * Источник правды — `app_settings.stats_banner` (тот же, что и StatsTicker):
+ *   - settings.enabled        → глобальный тоггл всего блока
+ *   - metrics.users.enabled   → тоггл конкретно метрики users
+ *   - metrics.users.manual    → ручной override (null = live count)
+ *   - metrics.users.label     → подпись («explorers», «users», ...)
+ * Live-число — `useHomeKindCounts().counts.users` (тот же хук, что
+ * использует HomeTabsSegmented и StatsTicker, fetch дедуп в React).
+ */
+function MobileActiveUsersBadge() {
+  const { settings } = useStatsBannerSettings();
+  const { counts } = useHomeKindCounts();
+  if (!settings.enabled) return null;
+  const m = settings.metrics.users;
+  if (!m.enabled) return null;
+  const value = m.manual !== null ? m.manual : counts.users;
+  if (value == null) return null;
+  return (
+    <div className="sm:hidden">
+      <span
+        className={[
+          "inline-flex items-center gap-2 rounded-full border border-[#e4e8da]",
+          "bg-white/95 px-3 py-1.5 shadow-[0_1px_3px_rgba(31,42,31,0.06)]",
+        ].join(" ")}
+      >
+        <span
+          aria-hidden
+          className="flex size-5 items-center justify-center rounded-full bg-[#eef0e0] text-[#5d6b3f]"
+        >
+          <Icon name="users" size={12} />
+        </span>
+        <span className="text-[12px] font-semibold tabular-nums tracking-[-0.01em] text-[#16190f]">
+          <span className="text-[#16190f]">
+            {new Intl.NumberFormat("en-US").format(value)}
+          </span>{" "}
+          <span className="font-medium text-[#6F7A5A]">active {m.label}</span>
+        </span>
+      </span>
+    </div>
+  );
+}
 
 /**
  * HomeHero (v2) — composite hero for the home page (Dribbble-style).
@@ -286,6 +336,7 @@ export default function HomeHero({
                 onFiltersClick={onFiltersClick}
                 activeFiltersCount={activeFiltersCount}
               />
+              <MobileActiveUsersBadge />
               <div className="hidden min-w-0 w-full lg:block">
                 <HomePopularTags
                   activeKind={activeKind}

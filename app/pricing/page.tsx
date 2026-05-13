@@ -262,13 +262,13 @@ export default function PricingPage() {
                 Yearly
                 <span
                   className={cx(
-                    "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                    "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold leading-none",
                     cycleToggle === "year"
-                      ? "bg-[#A4B968] text-[#1F2A1F]"
+                      ? "bg-[#D6E7A0] text-[#1F2A1F] ring-1 ring-[#A4B968]"
                       : "bg-[#A4B968]/20 text-[#556036]",
                   )}
                 >
-                  Save {Math.round(ANNUAL_DISCOUNT * 100)}%
+                  −{Math.round(ANNUAL_DISCOUNT * 100)}%
                 </span>
               </button>
             </div>

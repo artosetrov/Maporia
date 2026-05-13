@@ -830,8 +830,8 @@ export default function PlacePage(props: PageProps) {
     return null;
   };
 
-  const handleOpenGoogleMaps = async (e: React.MouseEvent) => {
-    e.preventDefault();
+  const handleOpenGoogleMaps = async (e?: React.MouseEvent) => {
+    e?.preventDefault();
     if (!place) return;
 
     const fallbackUrl = getGoogleMapsFallbackUrl(place);
@@ -1803,7 +1803,7 @@ export default function PlacePage(props: PageProps) {
           {place.lat && place.lng ? (
             <div className="space-y-4">
               <div className="h-[400px] lg:h-[500px] rounded-xl overflow-hidden bg-[#FAFAF7]">
-                <PlaceMapView place={place} />
+                <PlaceMapView place={place} onMarkerClick={() => handleOpenGoogleMaps()} />
               </div>
               <button
                 onClick={handleOpenGoogleMaps}
@@ -2379,7 +2379,7 @@ export default function PlacePage(props: PageProps) {
             {place.lat && place.lng ? (
               <div className="space-y-4">
                 <div className="h-[400px] rounded-xl overflow-hidden bg-[#FAFAF7]">
-                  <PlaceMapView place={place} />
+                  <PlaceMapView place={place} onMarkerClick={() => handleOpenGoogleMaps()} />
                 </div>
                 <button
                   onClick={handleOpenGoogleMaps}
@@ -2746,7 +2746,7 @@ export default function PlacePage(props: PageProps) {
 }
 
 // Map View Component
-function PlaceMapView({ place }: { place: Place }) {
+function PlaceMapView({ place, onMarkerClick }: { place: Place; onMarkerClick?: () => void }) {
   const shouldLoadMap = true;
   
   // SDK already initialized at app shell (see GoogleMapsProvider in RootLayout).
@@ -2825,6 +2825,8 @@ function PlaceMapView({ place }: { place: Place }) {
         <Marker
           position={{ lat: place.lat, lng: place.lng }}
           title={place.title}
+          onClick={onMarkerClick}
+          cursor={onMarkerClick ? "pointer" : undefined}
           icon={{
             url: createStaticPinSvg(32),
             scaledSize: new google.maps.Size(32, 32),
