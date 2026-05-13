@@ -2,6 +2,15 @@
 
 Последнее обновление: 2026-05-13.
 
+## Production Deployment Target
+
+Live production traffic for Maporia is served by the Vercel project `maporia_full`, not the separate `maporia` project.
+
+- Production domains: `https://www.maporia.co`, `https://maporia.co`.
+- Vercel project: `maporia_full`.
+- Project id for clean temp deploys: `prj_7h0OXlw5rrbQuREEIso0NGkkLsxp`.
+- Deployment rule: when asked to deploy the live site, run production deploy against `maporia_full`. Deploying only to `maporia` / `https://maporia.vercel.app` will not update the customer-facing site.
+
 ## 2026-05-13 Admin Users Role Fix
 
 Что было исправлено после ошибки `infinite recursion detected in policy for relation "profiles"` в Users admin UI:

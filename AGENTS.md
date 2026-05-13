@@ -22,6 +22,15 @@ Current important product concepts:
 - Home redesign is feature-flagged by `NEXT_PUBLIC_HOME_REDESIGN`.
 - Product health is tracked by `npm run health:json`.
 
+## Deployment Target
+
+Always deploy the live Maporia site to the Vercel project `maporia_full`, which serves:
+
+- `https://www.maporia.co`
+- `https://maporia.co`
+
+Do not treat the separate Vercel project `maporia` / `https://maporia.vercel.app` as the live production site. When using a clean temp deploy copy, write `.vercel/repo.json` for project id `prj_7h0OXlw5rrbQuREEIso0NGkkLsxp` (`maporia_full`) before running `vercel deploy --prod`.
+
 ## Source Of Truth
 
 | Domain | File |
