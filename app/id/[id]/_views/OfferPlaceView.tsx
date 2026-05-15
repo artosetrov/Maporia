@@ -323,11 +323,6 @@ export default function OfferPlaceView({
   const kindLabel = isService ? "Service" : "Experience";
   const kindEmoji = isService ? "🛠" : "✨";
 
-  const priceText = useMemo(
-    () => formatPrice(place.price_amount, place.price_currency),
-    [place.price_amount, place.price_currency]
-  );
-  const priceUnitLabel = place.price_unit ? PRICE_UNIT_LABEL[place.price_unit] ?? "" : "";
   const basePriceText = useMemo(
     () => formatBasePrice(place.price_amount, place.price_currency, place.price_unit),
     [place.price_amount, place.price_currency, place.price_unit]
@@ -684,41 +679,42 @@ export default function OfferPlaceView({
       )}
 
       {/* CONTENT */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        {/* Title row */}
-        <div className="flex flex-col gap-3 mb-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-          <h1 className="font-fraunces text-2xl sm:text-3xl font-semibold text-[#1F2A1F] leading-tight">
-            {place.title || "Untitled"}
-          </h1>
-          <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
-            <button
-              type="button"
-              onClick={onToggleFavorite}
-              disabled={favoriteLoading}
-              className={cx(
-                "inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-medium transition-colors sm:flex-none lg:h-11 lg:px-5",
-                isFavorite
-                  ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#8F9E4F] hover:bg-[#ECEEE4]"
-                  : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:bg-[#FAFAF7]",
-                favoriteLoading && "opacity-50"
-              )}
-              aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-            >
-              <FavoriteIcon isActive={isFavorite} size={16} />
-              {isFavorite ? "Saved" : "Add to favorites"}
-            </button>
-            {canEdit && (
-              <Link
-                href={`/places/${place.id}/edit`}
-                className="shrink-0 text-sm text-[#8F9E4F] underline hover:text-[#556036] lg:inline-flex lg:h-11 lg:items-center lg:justify-center lg:gap-2 lg:rounded-xl lg:border lg:border-[#ECEEE4] lg:bg-white lg:px-5 lg:font-medium lg:text-[#1F2A1F] lg:no-underline lg:transition-colors lg:hover:bg-[#FAFAF7]"
-              >
-                <Icon name="edit" size={16} className="hidden lg:block" />
-                Edit
-              </Link>
-            )}
-          </div>
-        </div>
-
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]">
+          <div className="min-w-0">
+            {/* Title row */}
+            <div className="flex flex-col gap-3 mb-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+              <h1 className="font-fraunces text-2xl sm:text-3xl font-semibold text-[#1F2A1F] leading-tight">
+                {place.title || "Untitled"}
+              </h1>
+              <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
+                <button
+                  type="button"
+                  onClick={onToggleFavorite}
+                  disabled={favoriteLoading}
+                  className={cx(
+                    "inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-medium transition-colors sm:flex-none lg:hidden",
+                    isFavorite
+                      ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#8F9E4F] hover:bg-[#ECEEE4]"
+                      : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:bg-[#FAFAF7]",
+                    favoriteLoading && "opacity-50"
+                  )}
+                  aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                >
+                  <FavoriteIcon isActive={isFavorite} size={16} />
+                  {isFavorite ? "Saved" : "Add to favorites"}
+                </button>
+                {canEdit && (
+                  <Link
+                    href={`/places/${place.id}/edit`}
+                    className="shrink-0 text-sm text-[#8F9E4F] underline hover:text-[#556036] lg:inline-flex lg:h-11 lg:items-center lg:justify-center lg:gap-2 lg:rounded-xl lg:border lg:border-[#ECEEE4] lg:bg-white lg:px-5 lg:font-medium lg:text-[#1F2A1F] lg:no-underline lg:transition-colors lg:hover:bg-[#FAFAF7]"
+                  >
+                    <Icon name="edit" size={16} className="hidden lg:block" />
+                    Edit
+                  </Link>
+                )}
+              </div>
+            </div>
         {/* Aggregate rating под title — Airbnb-style. Скрыт пока нет отзывов. */}
         {rating && (
           <div className="flex items-center gap-1.5 mb-3 text-sm text-[#1F2A1F]">
@@ -772,102 +768,74 @@ export default function OfferPlaceView({
 
         {/* Offer snapshot — one price anchor, with package details below. */}
         <section className="mb-6 overflow-hidden rounded-lg border border-[#ECEEE4] bg-white shadow-sm">
-          <div className="grid gap-0 lg:grid-cols-[1.3fr_0.7fr]">
-            <div className="p-5 sm:p-6">
-              <div className="mb-4 flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-1 text-xs font-semibold text-[#556036]">
-                  <Icon name={isService ? "wrench" : "sparkles"} size={14} />
-                  {kindLabel}
+          <div className="p-5 sm:p-6">
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-1 text-xs font-semibold text-[#556036]">
+                <Icon name={isService ? "wrench" : "sparkles"} size={14} />
+                {kindLabel}
+              </span>
+              {leadOfferBadge && (
+                <span className="inline-flex rounded-full bg-[#8F9E4F]/10 px-3 py-1 text-xs font-semibold text-[#556036]">
+                  {leadOfferBadge}
                 </span>
-                {leadOfferBadge && (
-                  <span className="inline-flex rounded-full bg-[#8F9E4F]/10 px-3 py-1 text-xs font-semibold text-[#556036]">
-                    {leadOfferBadge}
-                  </span>
-                )}
-                {rating && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#1F2A1F]">
-                    <Icon name="star" size={12} active className="text-[#D6B25E]" />
-                    {rating.avg.toFixed(2)}
-                  </span>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
-                    {priceOptions.length > 0 ? "Recommended pick" : "Experience details"}
-                  </div>
-                  <h2 className="mt-1 font-fraunces text-2xl font-semibold leading-tight text-[#1F2A1F]">
-                    {leadOfferTitle}
-                  </h2>
-                </div>
-                <div className="shrink-0 text-left sm:text-right">
-                  {leadPriceText ? (
-                    <>
-                      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
-                        {priceOptions.length > 0 ? "Starts at" : "Price"}
-                      </div>
-                      <div className="font-fraunces text-3xl font-semibold leading-none text-[#1F2A1F]">
-                        {leadPriceText}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-2 text-sm font-medium text-[#6F7A5A]">
-                      Price on request
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {snapshotFacts.length > 0 && (
-                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {snapshotFacts.map((fact) => (
-                    <div
-                      key={fact.label}
-                      className="flex min-h-[64px] items-center gap-3 rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-2"
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#8F9E4F]">
-                        <Icon name={fact.icon} size={16} />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
-                          {fact.label}
-                        </span>
-                        <span className="block truncate text-sm font-medium text-[#1F2A1F]">
-                          {fact.value}
-                        </span>
-                      </span>
-                    </div>
-                  ))}
-                </div>
+              )}
+              {rating && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#1F2A1F]">
+                  <Icon name="star" size={12} active className="text-[#D6B25E]" />
+                  {rating.avg.toFixed(2)}
+                </span>
               )}
             </div>
 
-            <div className="border-t border-[#ECEEE4] bg-[#F7F8F0] p-5 sm:p-6 lg:border-l lg:border-t-0">
-              <div className="flex h-full flex-col justify-between gap-5">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
-                    Hosted booking
-                  </div>
-                  <div className="mt-2 text-sm leading-relaxed text-[#1F2A1F]">
-                    Contact the host for availability, final timing, and the best package for your group.
-                  </div>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="min-w-0">
+                <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                  {priceOptions.length > 0 ? "Recommended pick" : "Experience details"}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setContactModalOpen(true)}
-                  className={cx(
-                    "inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold transition",
-                    hasContactDetails
-                      ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
-                      : "bg-white text-[#6F7A5A] ring-1 ring-inset ring-[#ECEEE4] hover:bg-[#FAFAF7]"
-                  )}
-                >
-                  {ctaLabel}
-                  <Icon name="forward" size={16} />
-                </button>
+                <h2 className="mt-1 font-fraunces text-2xl font-semibold leading-tight text-[#1F2A1F]">
+                  {leadOfferTitle}
+                </h2>
+              </div>
+              <div className="shrink-0 text-left sm:text-right">
+                {leadPriceText ? (
+                  <>
+                    <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                      {priceOptions.length > 0 ? "Starts at" : "Price"}
+                    </div>
+                    <div className="font-fraunces text-3xl font-semibold leading-none text-[#1F2A1F]">
+                      {leadPriceText}
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-2 text-sm font-medium text-[#6F7A5A]">
+                    Price on request
+                  </div>
+                )}
               </div>
             </div>
+
+            {snapshotFacts.length > 0 && (
+              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {snapshotFacts.map((fact) => (
+                  <div
+                    key={fact.label}
+                    className="flex min-h-[64px] items-center gap-3 rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-2"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#8F9E4F]">
+                      <Icon name={fact.icon} size={16} />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                        {fact.label}
+                      </span>
+                      <span className="block truncate text-sm font-medium text-[#1F2A1F]">
+                        {fact.value}
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
@@ -1120,37 +1088,86 @@ export default function OfferPlaceView({
           </section>
         )}
 
-        {/* Contacts — телефон, сайт, соцсети. Скрывается, если все 5 пустые. */}
-        <section className="mb-8">
-          <PlaceContacts
-            phone={place.phone}
-            website={place.website}
-            instagram={place.instagram}
-            youtube={place.youtube}
-            telegram={place.telegram}
-          />
-        </section>
+            {/* Reviews — pb для запаса под sticky-CTA снизу */}
+            <div className="pb-8">
+              <ReviewsSection placeId={place.id} commentsEnabled={place.comments_enabled} />
+            </div>
+          </div>
 
-        {/* Reviews — pb для запаса под sticky-CTA снизу */}
-        <div className="pb-8">
-          <ReviewsSection placeId={place.id} commentsEnabled={place.comments_enabled} />
+          <aside className="hidden lg:block">
+            <div className="sticky top-24 rounded-lg border border-[#ECEEE4] bg-white p-5 shadow-sm">
+              <div className="space-y-4">
+                <button
+                  type="button"
+                  onClick={() => setContactModalOpen(true)}
+                  className={cx(
+                    "inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold transition",
+                    hasContactDetails
+                      ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
+                      : "bg-[#ECEEE4] text-[#6F7A5A] hover:bg-[#E2E5D8]"
+                  )}
+                >
+                  {ctaLabel}
+                  <Icon name="forward" size={16} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onToggleFavorite}
+                  disabled={favoriteLoading}
+                  className={cx(
+                    "inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border px-4 text-sm font-medium transition",
+                    isFavorite
+                      ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#8F9E4F] hover:bg-[#ECEEE4]"
+                      : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:bg-[#FAFAF7]",
+                    favoriteLoading && "opacity-50"
+                  )}
+                >
+                  <FavoriteIcon isActive={isFavorite} size={16} />
+                  {isFavorite ? "Saved" : "Add to favorites"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-[#ECEEE4] bg-white px-4 text-sm font-medium text-[#1F2A1F] transition hover:bg-[#FAFAF7]"
+                >
+                  <Icon name="share" size={16} />
+                  Share
+                </button>
+
+                <div className="border-t border-[#ECEEE4] pt-5">
+                  <h3 className="mb-3 font-fraunces text-lg font-semibold text-[#1F2A1F]">
+                    Contact
+                  </h3>
+                  {hasContactDetails ? (
+                    <PlaceContacts
+                      phone={place.phone}
+                      website={place.website}
+                      instagram={place.instagram}
+                      youtube={place.youtube}
+                      telegram={place.telegram}
+                      title={null}
+                      variant="inline"
+                    />
+                  ) : (
+                    <div className="rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] p-4 text-sm leading-relaxed text-[#6F7A5A]">
+                      Contact details have not been added yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
       </div>
 
       {/* Bottom CTA bar — sticky */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#ECEEE4] bg-white/95 backdrop-blur pb-safe-bottom">
-        <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#ECEEE4] bg-white/95 backdrop-blur pb-safe-bottom lg:hidden">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="min-w-0">
-            {priceText ? (
-              <div className="font-fraunces text-lg font-semibold text-[#1F2A1F]">
-                {place.price_unit === "from" && <span className="text-sm font-normal text-[#6F7A5A] mr-1">from</span>}
-                {priceText}
-                {priceUnitLabel && place.price_unit !== "from" && (
-                  <span className="text-sm font-normal text-[#6F7A5A] ml-1">{priceUnitLabel}</span>
-                )}
-              </div>
-            ) : primaryPriceOptionText ? (
-              <div className="font-fraunces text-lg font-semibold text-[#1F2A1F]">{primaryPriceOptionText}</div>
+            {leadPriceText ? (
+              <div className="font-fraunces text-lg font-semibold text-[#1F2A1F]">{leadPriceText}</div>
             ) : (
               <div className="text-sm text-[#6F7A5A]">Price on request</div>
             )}
