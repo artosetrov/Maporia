@@ -93,6 +93,7 @@ type Place = {
   price_amount?: number | null;
   price_currency?: string | null;
   price_unit?: string | null;
+  price_options?: unknown[] | null;
   duration_minutes?: number | null;
   schedule?: unknown | null;
   host_qualification?: string | null;
@@ -124,6 +125,7 @@ type RequiredStep = {
   label: string;
   completed: boolean;
   route?: string;
+  priority: "required" | "recommended";
 };
 
 function cx(...a: Array<string | false | undefined | null>) {
@@ -137,6 +139,7 @@ const PRICE_UNIT_SUFFIX: Record<string, string> = {
   per_hour: " / hr",
   per_person: " / person",
   per_day: " / day",
+  per_month: " / month",
   per_session: " / session",
 };
 const CURRENCY_SYMBOL: Record<string, string> = {
@@ -205,6 +208,47 @@ function formatScheduleSummary(raw: unknown, durationMinutes: number | null | un
   return parts.length > 0 ? parts.join(" • ") : "Not set";
 }
 
+function hasText(value: string | null | undefined): boolean {
+  return !!(value && value.trim().length > 0);
+}
+
+function hasContactInfo(placeData: Place): boolean {
+  return [
+    placeData.phone,
+    placeData.website,
+    placeData.instagram,
+    placeData.youtube,
+    placeData.telegram,
+  ].some(hasText);
+}
+
+function hasOfferLocation(placeData: Place): boolean {
+  return !!(
+    hasText(placeData.city_name_cached) ||
+    hasText(placeData.city) ||
+    hasText(placeData.address)
+  );
+}
+
+function hasScheduleInfo(placeData: Place): boolean {
+  return !!placeData.schedule || !!(placeData.duration_minutes && placeData.duration_minutes > 0);
+}
+
+function hasHostInfo(placeData: Place): boolean {
+  return hasText(placeData.host_qualification) || !!placeData.service_mode;
+}
+
+function hasExperienceDetails(placeData: Place): boolean {
+  return !!(
+    placeData.max_guests ||
+    placeData.min_guests ||
+    hasText(placeData.meeting_point) ||
+    hasText(placeData.cancellation_policy) ||
+    (placeData.included_items && placeData.included_items.length > 0) ||
+    (placeData.bring_items && placeData.bring_items.length > 0)
+  );
+}
+
 type PageProps = { params: Promise<{ id: string }> };
 
 export default function PlaceEditorHub(props: PageProps) {
@@ -223,11 +267,13 @@ export default function PlaceEditorHub(props: PageProps) {
   const isHiddenRef = useRef(false);
   const [hiding, setHiding] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [showPublishConfirm, setShowPublishConfirm] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [commentsEnabled, setCommentsEnabled] = useState(true); // Default to enabled
   const [togglingComments, setTogglingComments] = useState(false);
   const [togglingAccess, setTogglingAccess] = useState(false);
-  const autoVisibilityEnabledRef = useRef(false); // Track if auto-visibility was already enabled
   const isUpdatingRef = useRef(false); // Track if we're currently updating to prevent reload
 
   useEffect(() => {
@@ -254,7 +300,7 @@ export default function PlaceEditorHub(props: PageProps) {
       const [placeRes, photosRes] = await Promise.all([
         supabase
           .from("places")
-          .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, is_hidden, manually_hidden, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
+          .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, is_hidden, manually_hidden, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, price_options, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
           .eq("id", placeId)
           .single(),
         supabase
@@ -374,7 +420,7 @@ export default function PlaceEditorHub(props: PageProps) {
         (async () => {
           const { data: rawPlace } = await supabase
             .from("places")
-            .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, is_hidden, manually_hidden, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
+            .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, is_hidden, manually_hidden, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, price_options, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
             .eq("id", placeId)
             .single();
 
@@ -409,11 +455,15 @@ export default function PlaceEditorHub(props: PageProps) {
     setError(null);
 
     const newHiddenState = !isHidden;
+    if (!newHiddenState && !allRequiredFieldsFilled) {
+      setError("Finish the required items before making this listing public.");
+      return;
+    }
     console.log("Toggling visibility:", { placeId, newHiddenState, currentIsHidden: isHidden });
 
-    // Try multiple possible field names
-    // manually_hidden — explicit user intent. Когда true, auto-publish effect ниже
-    // не будет переоткрывать карточку, даже если все обязательные поля заполнены.
+    // Try multiple possible field names.
+    // manually_hidden stores explicit user intent. Publishing sets it false;
+    // hiding sets it true so the listing stays a draft/private listing.
     const payload: Record<string, boolean | string> = {
       is_hidden: newHiddenState,
       visibility: newHiddenState ? "hidden" : "public",
@@ -513,12 +563,6 @@ export default function PlaceEditorHub(props: PageProps) {
         return current;
       });
     }, 100);
-
-    // ВАЖНО: НЕ сбрасываем autoVisibilityEnabledRef при ручном hide.
-    // Раньше тут стоял `autoVisibilityEnabledRef.current = false`, и сразу после ручного
-    // скрытия срабатывал auto-publish effect, мгновенно возвращая видимость обратно.
-    // Теперь явное намерение пользователя живёт в БД-флаге places.manually_hidden,
-    // и auto-publish effect его уважает (см. условие ниже).
 
     console.log("Visibility updated successfully:", { 
       newHiddenState, 
@@ -865,141 +909,172 @@ export default function PlaceEditorHub(props: PageProps) {
     router.push(`/id/${placeId}`);
   }
 
-  // Calculate required steps
+  // Calculate publishing checklist
   const requiredSteps = useMemo<RequiredStep[]>(() => {
     if (!place) return [];
 
     const steps: RequiredStep[] = [];
+    const isService = place.kind === "service";
+    const isExperience = place.kind === "experience";
+    const isOfferKind = isService || isExperience;
 
-    // Cover photo required
     steps.push({
       id: "cover",
       label: "Add a cover photo",
       completed: photos.length > 0,
       route: `/places/${placeId}/edit/photos`,
+      priority: "required",
     });
 
-    // Title required
     steps.push({
       id: "title",
       label: "Add a title",
       completed: !!(place.title && place.title.trim().length > 0),
       route: `/places/${placeId}/edit/title`,
+      priority: "required",
     });
 
-    // Category required
     steps.push({
       id: "category",
       label: "Select a category",
       completed: !!(place.categories && place.categories.length > 0),
       route: `/places/${placeId}/edit/categories`,
+      priority: "required",
     });
 
-    // Location required.
-    // location → нужны координаты (lat/lng). service/experience → достаточно city ИЛИ address
-    // (карточка не является геоточкой, поэтому Google Places там не используется).
-    const isOfferKind = place.kind === "service" || place.kind === "experience";
-    const offerLocationFilled = !!(
-      (place.city_name_cached && place.city_name_cached.trim().length > 0) ||
-      (place.city && place.city.trim().length > 0) ||
-      (place.address && place.address.trim().length > 0)
-    );
     steps.push({
       id: "location",
       label: isOfferKind ? "Set city or address" : "Set location",
-      completed: isOfferKind ? offerLocationFilled : !!(place.lat && place.lng),
+      completed: isOfferKind ? hasOfferLocation(place) : !!(place.lat && place.lng),
       route: `/places/${placeId}/edit/location`,
+      priority: "required",
     });
 
-    // Description (optional but recommended)
     steps.push({
       id: "description",
       label: "Add description",
       completed: !!(place.description && place.description.trim().length > 0),
       route: `/places/${placeId}/edit/description`,
+      priority: "recommended",
     });
+
+    if (isOfferKind) {
+      steps.push({
+        id: "contacts",
+        label: "Add a contact method",
+        completed: hasContactInfo(place),
+        route: `/places/${placeId}/edit/contacts`,
+        priority: "required",
+      });
+
+      steps.push({
+        id: "price",
+        label: "Set price or keep By request",
+        completed: true,
+        route: `/places/${placeId}/edit/price`,
+        priority: "recommended",
+      });
+
+      steps.push({
+        id: "host",
+        label: "Add host/provider info",
+        completed: hasHostInfo(place),
+        route: `/places/${placeId}/edit/host`,
+        priority: "recommended",
+      });
+    }
+
+    if (isExperience) {
+      steps.push({
+        id: "schedule",
+        label: "Set schedule or duration",
+        completed: hasScheduleInfo(place),
+        route: `/places/${placeId}/edit/schedule`,
+        priority: "required",
+      });
+
+      steps.push({
+        id: "details",
+        label: "Add guest size and meeting details",
+        completed: hasExperienceDetails(place),
+        route: `/places/${placeId}/edit/details`,
+        priority: "recommended",
+      });
+    } else if (isService) {
+      steps.push({
+        id: "schedule",
+        label: "Add availability",
+        completed: hasScheduleInfo(place),
+        route: `/places/${placeId}/edit/schedule`,
+        priority: "recommended",
+      });
+    }
 
     return steps;
   }, [place, photos, placeId]);
 
-  const incompleteSteps = requiredSteps.filter((s) => !s.completed);
-  const completionPercentage = requiredSteps.length > 0 
-    ? Math.round((requiredSteps.filter((s) => s.completed).length / requiredSteps.length) * 100)
+  const publishSteps = requiredSteps.filter((s) => s.priority === "required");
+  const recommendedSteps = requiredSteps.filter((s) => s.priority === "recommended");
+  const incompleteSteps = publishSteps.filter((s) => !s.completed);
+  const incompleteRecommendedSteps = recommendedSteps.filter((s) => !s.completed);
+  const nextStep = incompleteSteps[0] ?? incompleteRecommendedSteps[0] ?? null;
+  const completionPercentage = publishSteps.length > 0
+    ? Math.round((publishSteps.filter((s) => s.completed).length / publishSteps.length) * 100)
     : 100;
 
-  // Check if all required fields are filled (excluding description which is optional)
+  // Check if all publish-required fields are filled.
   const allRequiredFieldsFilled = useMemo(() => {
-    if (!place) return false;
-    // Required fields: cover photo, title, category, location.
-    // Для service/experience «location» = city ИЛИ address (без lat/lng), потому что
-    // эти карточки не являются геоточками — они привязаны к городу (или к месту через place_links).
-    const isOfferKind = place.kind === "service" || place.kind === "experience";
-    const locationFilled = isOfferKind
-      ? !!(
-          (place.city_name_cached && place.city_name_cached.trim().length > 0) ||
-          (place.city && place.city.trim().length > 0) ||
-          (place.address && place.address.trim().length > 0)
-        )
-      : !!(place.lat && place.lng);
-    return (
-      photos.length > 0 &&
-      !!(place.title && place.title.trim().length > 0) &&
-      !!(place.categories && place.categories.length > 0) &&
-      locationFilled
-    );
-  }, [place, photos]);
+    return publishSteps.length > 0 && publishSteps.every((s) => s.completed);
+  }, [publishSteps]);
 
-  // Automatically enable Visibility when all required fields are filled
-  // ВАЖНО: эффект публикует только черновик (manually_hidden !== true).
-  // Если пользователь явно скрыл карточку через тумблер, place.manually_hidden = true,
-  // и эффект её НЕ трогает, иначе ручное скрытие моментально откатывалось бы.
-  useEffect(() => {
-    const isManuallyHidden = place?.manually_hidden === true;
-    if (!placeId || !user || !place || !allRequiredFieldsFilled || !isHidden || isManuallyHidden) {
-      // Reset ref when conditions are not met (но НЕ когда заблокировано ручным флагом —
-      // там reset бесполезен, потому что ref всё равно ничего не делает).
-      if (!allRequiredFieldsFilled || !isHidden) {
-        autoVisibilityEnabledRef.current = false;
-      }
+  async function publishListing() {
+    if (!placeId || !user || !place) return;
+    if (!allRequiredFieldsFilled) {
+      setError("Finish the required items before publishing.");
+      setShowPublishConfirm(false);
       return;
     }
 
-    // Prevent duplicate requests
-    if (autoVisibilityEnabledRef.current) return;
+    setPublishing(true);
+    setError(null);
 
-    // Only auto-enable if currently hidden AND not manually hidden by the user
-    autoVisibilityEnabledRef.current = true;
-    (async () => {
-      const currentIsAdmin = isUserAdmin(access);
-      const updateQuery = supabase
-        .from("places")
-        // @ts-expect-error Supabase generated types infer update payload as never
-        .update({ is_hidden: false, visibility: "public" })
-        .eq("id", placeId);
+    const updateQuery = supabase
+      .from("places")
+      // @ts-expect-error Supabase generated types infer update payload as never
+      .update({ is_hidden: false, visibility: "public", manually_hidden: false })
+      .eq("id", placeId);
 
-      if (!currentIsAdmin) {
-        updateQuery.eq("created_by", user.id);
-      }
+    if (!isUserAdmin(access)) {
+      updateQuery.eq("created_by", user.id);
+    }
 
-      const { error: updateError } = await updateQuery.select();
+    const { error: updateError, data: updateData } = await updateQuery.select();
+    setPublishing(false);
+    setShowPublishConfirm(false);
 
-      if (!updateError) {
-        setIsHidden(false);
-        setPlace((prev) =>
-          prev
-            ? {
-                ...prev,
-                is_hidden: false,
-                visibility: "public",
-              }
-            : prev
-        );
-      } else {
-        // Reset ref on error so it can retry
-        autoVisibilityEnabledRef.current = false;
-      }
-    })();
-  }, [placeId, user, place, allRequiredFieldsFilled, isHidden, access]);
+    if (updateError) {
+      setError(updateError.message || "Failed to publish listing");
+      return;
+    }
+
+    if (updateData?.[0]) {
+      setIsHidden(false);
+      setPlace((prev) =>
+        prev
+          ? {
+              ...prev,
+              ...(updateData[0] as Place),
+              is_hidden: false,
+              visibility: "public",
+              manually_hidden: false,
+            }
+          : prev
+      );
+    }
+
+    if (navigator.vibrate) navigator.vibrate(10);
+    router.push(`/id/${placeId}`);
+  }
 
   // Determine if this is a new place (no title or empty title)
   const isNewPlace = !place || !place.title || place.title.trim().length === 0;
@@ -1013,6 +1088,32 @@ export default function PlaceEditorHub(props: PageProps) {
     place?.kind === "service"    ? "service" :
     place?.kind === "experience" ? "experience" :
                                     "place";
+  const placeKindLabel =
+    place?.kind === "service"    ? "Service" :
+    place?.kind === "experience" ? "Experience" :
+                                    "Location";
+  const previewCoverUrl = photos[0]?.url || place?.cover_url || null;
+  const previewTitle = place?.title?.trim() || newPlaceTitle;
+  const previewLocation =
+    place?.address || place?.city_name_cached || place?.city || "Location not set";
+  const previewCategory =
+    place?.categories && place.categories.length > 0 ? place.categories[0] : "No category yet";
+  const previewContactSummary = place && hasContactInfo(place)
+    ? [
+        place.phone && "Phone",
+        place.website && "Website",
+        place.instagram && "Instagram",
+        place.youtube && "YouTube",
+        place.telegram && "Telegram",
+      ].filter(Boolean).join(", ")
+    : "No contact method yet";
+  const priceOptionsCount = Array.isArray(place?.price_options) ? place.price_options.length : 0;
+  const hasPriceInfo = (place?.price_amount != null) || priceOptionsCount > 0;
+  const priceSummary = place?.price_amount != null
+    ? formatPriceSummary(place.price_amount, place.price_currency, place.price_unit)
+    : priceOptionsCount > 0
+      ? `${priceOptionsCount} ${priceOptionsCount === 1 ? "price option" : "price options"}`
+      : "By request";
 
   // NOTE: keep editor minimal (as before)
 
@@ -1088,8 +1189,105 @@ export default function PlaceEditorHub(props: PageProps) {
               <GoogleImportField userId={user.id} targetPlaceId={placeId} redirectToPreview />
             )}
 
-            {/* Required Steps Card (Progress) */}
-            {incompleteSteps.length > 0 && (
+            {/* Next best step */}
+            <div className="rounded-2xl border border-[#DDE5C2] bg-[#F4F7EA] p-5 shadow-sm">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                    Next step
+                  </div>
+                  <h2 className="mt-1 font-fraunces text-lg font-semibold text-[#1F2A1F]">
+                    {nextStep ? nextStep.label : "Preview and publish"}
+                  </h2>
+                  <p className="mt-1 text-sm text-[#6F7A5A]">
+                    {nextStep
+                      ? nextStep.priority === "required"
+                        ? "This is required before the listing can go live."
+                        : "This is optional, but it will make the listing easier to trust."
+                      : "Everything required is ready. Check the listing preview before it goes public."}
+                  </p>
+                </div>
+                {nextStep ? (
+                  <Link
+                    href={nextStep.route || `/places/${placeId}/edit`}
+                    className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-[#1F2A1F] px-5 text-sm font-medium text-white hover:bg-[#2A3A2A] transition"
+                  >
+                    Continue
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowPreviewModal(true)}
+                    className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-[#1F2A1F] px-5 text-sm font-medium text-white hover:bg-[#2A3A2A] transition"
+                  >
+                    Preview
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Publishing checklist */}
+            <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition">
+              <div className="mb-4">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <span className="text-sm font-medium text-[#1F2A1F]">Ready to publish</span>
+                  <span className="text-sm font-semibold text-[#1F2A1F]">
+                    {publishSteps.filter((s) => s.completed).length}/{publishSteps.length}
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-[#ECEEE4] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#8F9E4F] rounded-full transition-all duration-300"
+                    style={{ width: `${completionPercentage}%` }}
+                  />
+                </div>
+              </div>
+
+              {incompleteSteps.length > 0 ? (
+                <>
+                  <p className="text-sm text-[#6F7A5A]">
+                    Finish the required items before publishing your {placeKindNoun}.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {incompleteSteps.slice(0, 4).map((step) => (
+                      <Link
+                        key={step.id}
+                        href={step.route || `/places/${placeId}/edit`}
+                        className="rounded-full border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-1 text-xs font-medium text-[#3F4A35] hover:border-[#8F9E4F] hover:bg-white transition"
+                      >
+                        {step.label}
+                      </Link>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-[#6F7A5A]">
+                  Required items are complete. Use Publish when you are ready for this {placeKindNoun} to go live.
+                </p>
+              )}
+
+              {incompleteRecommendedSteps.length > 0 && (
+                <div className="mt-4 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] p-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                    Recommended
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {incompleteRecommendedSteps.slice(0, 4).map((step) => (
+                      <Link
+                        key={step.id}
+                        href={step.route || `/places/${placeId}/edit`}
+                        className="rounded-full bg-white px-3 py-1 text-xs text-[#6F7A5A] hover:text-[#1F2A1F] transition"
+                      >
+                        {step.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Legacy progress card, kept only for an empty checklist fallback */}
+            {requiredSteps.length === 0 && incompleteSteps.length > 0 && (
               <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition">
                 <div className="mb-4">
                   <div className="flex items-center justify-between mb-2">
@@ -1372,20 +1570,18 @@ export default function PlaceEditorHub(props: PageProps) {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3 flex-1">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                        place.price_amount != null ? 'bg-[#7FA35C]' : 'bg-[#ECEEE4]'
+                        hasPriceInfo ? 'bg-[#7FA35C]' : 'bg-[#ECEEE4]'
                       }`}>
                         <Icon
                           name="check"
                           size={16}
-                          className={place.price_amount != null ? 'text-white' : 'text-[#A8B096]'}
+                          className={hasPriceInfo ? 'text-white' : 'text-[#A8B096]'}
                         />
                       </div>
                       <div className="flex-1">
                         <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Price</h3>
                         <p className="text-sm text-[#6F7A5A]">
-                          {place.price_amount != null
-                            ? formatPriceSummary(place.price_amount, place.price_currency, place.price_unit)
-                            : "By request"}
+                          {priceSummary}
                         </p>
                       </div>
                     </div>
@@ -1536,7 +1732,7 @@ export default function PlaceEditorHub(props: PageProps) {
                   )}
                   role="switch"
                   aria-checked={!isHidden}
-                  aria-label={!isHidden ? "Visible to users" : "Hidden from users"}
+                  aria-label={!isHidden ? "Public listing" : "Draft listing"}
                 >
                   <span
                     className={cx(
@@ -1569,7 +1765,7 @@ export default function PlaceEditorHub(props: PageProps) {
                   )}
                   role="switch"
                   aria-checked={commentsEnabled}
-                  aria-label={commentsEnabled ? "Disable comments" : "Enable comments"}
+                  aria-label="Comments enabled"
                 >
                   <span
                     className={cx(
@@ -1607,7 +1803,7 @@ export default function PlaceEditorHub(props: PageProps) {
                   )}
                   role="switch"
                   aria-checked={place.access_level === "premium"}
-                  aria-label={place.access_level === "premium" ? "Premium (on)" : "Public (off)"}
+                  aria-label={place.access_level === "premium" ? "Premium access" : "Free access"}
                 >
                   <span
                     className={cx(
@@ -1674,48 +1870,239 @@ export default function PlaceEditorHub(props: PageProps) {
         </div>
       )}
 
+      {/* Listing preview modal */}
+      {showPreviewModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="listing-preview-modal-title"
+        >
+          <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-[#ECEEE4] bg-white shadow-lg">
+            <div className="flex items-center justify-between border-b border-[#ECEEE4] px-5 py-4">
+              <div>
+                <h2 id="listing-preview-modal-title" className="font-fraunces text-xl font-semibold text-[#1F2A1F]">
+                  Listing preview
+                </h2>
+                <p className="mt-0.5 text-sm text-[#6F7A5A]">
+                  This is the core information buyers will see first.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPreviewModal(false)}
+                className="rounded-lg p-2 text-[#1F2A1F] hover:bg-[#FAFAF7] transition"
+                aria-label="Close preview"
+              >
+                <Icon name="close" size={18} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-5">
+              <div className="overflow-hidden rounded-2xl border border-[#ECEEE4] bg-[#FFFEFB]">
+                <div className="relative aspect-[16/9] bg-[#ECEEE4]">
+                  {previewCoverUrl ? (
+                    <Image
+                      src={previewCoverUrl}
+                      alt={previewTitle}
+                      fill
+                      sizes="(max-width: 768px) 100vw, 640px"
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-[#6F7A5A]">
+                      No cover photo yet
+                    </div>
+                  )}
+                  <div className="absolute left-3 top-3 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-[#1F2A1F] shadow-sm">
+                    {placeKindLabel}
+                  </div>
+                </div>
+
+                <div className="space-y-4 p-5">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#8F9E4F]">
+                      {previewCategory}
+                    </div>
+                    <h3 className="mt-1 font-fraunces text-2xl font-semibold leading-tight text-[#1F2A1F]">
+                      {previewTitle}
+                    </h3>
+                    <p className="mt-1 text-sm text-[#6F7A5A]">{previewLocation}</p>
+                  </div>
+
+                  <p className="text-sm leading-relaxed text-[#3F4A35]">
+                    {place.description?.trim() || "Description is not set yet."}
+                  </p>
+
+                  {place.kind !== "location" && (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border border-[#ECEEE4] bg-white p-3">
+                        <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                          Price
+                        </div>
+                        <div className="mt-1 text-sm font-medium text-[#1F2A1F]">
+                          {priceSummary}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-[#ECEEE4] bg-white p-3">
+                        <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                          Schedule
+                        </div>
+                        <div className="mt-1 text-sm font-medium text-[#1F2A1F]">
+                          {formatScheduleSummary(place.schedule, place.duration_minutes)}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {place.kind === "experience" && (
+                    <div className="rounded-xl border border-[#ECEEE4] bg-white p-3">
+                      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                        Details
+                      </div>
+                      <div className="mt-1 text-sm font-medium text-[#1F2A1F]">
+                        {formatDetailsSummary(place)}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="rounded-xl border border-[#ECEEE4] bg-white p-3">
+                    <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                      Contact
+                    </div>
+                    <div className="mt-1 text-sm font-medium text-[#1F2A1F]">
+                      {previewContactSummary}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {!allRequiredFieldsFilled && (
+                <div className="mt-4 rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 p-3 text-sm text-[#C96A5B]">
+                  Finish required items before publishing: {incompleteSteps.map((step) => step.label).join(", ")}.
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-[#ECEEE4] px-5 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowPreviewModal(false)}
+                className="h-11 rounded-xl border border-[#ECEEE4] bg-white px-5 text-sm font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] transition"
+              >
+                Keep editing
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPreviewModal(false);
+                  setShowPublishConfirm(true);
+                }}
+                disabled={!allRequiredFieldsFilled || publishing}
+                className={cx(
+                  "h-11 rounded-xl px-5 text-sm font-medium transition",
+                  allRequiredFieldsFilled && !publishing
+                    ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
+                    : "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
+                )}
+              >
+                Publish
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Publish confirmation modal */}
+      {showPublishConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="publish-listing-modal-title"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white border border-[#ECEEE4] shadow-lg p-6">
+            <h2 id="publish-listing-modal-title" className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-2">
+              Publish {placeKindNoun}
+            </h2>
+            <p className="text-sm text-[#6F7A5A] mb-4">
+              This {placeKindNoun} will become visible on Maporia. You can still edit it later.
+            </p>
+            {incompleteRecommendedSteps.length > 0 && (
+              <div className="mb-5 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] p-3">
+                <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                  Still recommended
+                </div>
+                <div className="mt-1 text-sm text-[#3F4A35]">
+                  {incompleteRecommendedSteps.slice(0, 3).map((step) => step.label).join(", ")}
+                </div>
+              </div>
+            )}
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowPublishConfirm(false)}
+                disabled={publishing}
+                className="px-4 py-2.5 rounded-xl border border-[#ECEEE4] bg-white text-[#1F2A1F] text-sm font-medium hover:bg-[#FAFAF7] transition disabled:opacity-50"
+              >
+                Keep editing
+              </button>
+              <button
+                type="button"
+                onClick={publishListing}
+                disabled={publishing}
+                className="px-4 py-2.5 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] transition disabled:opacity-50"
+              >
+                {publishing ? "Publishing..." : "Publish"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Bottom Action Buttons */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#ECEEE4] pb-safe-bottom">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex gap-3">
             <button
-              onClick={handleExitEditor}
-              disabled={deleting}
+              onClick={() => router.push("/profile?section=added")}
+              disabled={deleting || publishing}
               className={cx(
                 "flex-1 h-11 rounded-xl border border-[#ECEEE4] bg-white px-5 text-sm font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] transition",
-                deleting && "opacity-50 cursor-not-allowed"
+                (deleting || publishing) && "opacity-50 cursor-not-allowed"
               )}
             >
-              {deleting ? "Cancelling…" : "Cancel"}
+              Save draft
             </button>
             <button
               type="button"
-              onClick={async () => {
-                // Если карточка ещё скрыта, но все обязательные поля есть — явно публикуем
-                // (auto-unhide effect мог не отработать, если юзер быстро ушёл со страницы).
-                // НО уважаем manually_hidden: если пользователь намеренно скрыл карточку
-                // тумблером, кнопка Save не публикует её автоматически.
-                const manuallyHidden = place?.manually_hidden === true;
-                if (isHidden && allRequiredFieldsFilled && placeId && !manuallyHidden) {
-                  isUpdatingRef.current = true;
-                  const updateQuery = supabase
-                    .from("places")
-                    // @ts-expect-error Supabase generated types infer update payload as never
-                    .update({ is_hidden: false, visibility: "public" })
-                    .eq("id", placeId);
-                  if (!isUserAdmin(access) && user) updateQuery.eq("created_by", user.id);
-                  await updateQuery.select();
-                }
-                router.push("/profile?section=added");
-              }}
+              onClick={() => setShowPreviewModal(true)}
+              disabled={deleting || publishing}
               className={cx(
-                "flex-1 h-11 rounded-xl px-5 text-sm font-medium text-center transition flex items-center justify-center",
-                isHidden && allRequiredFieldsFilled
-                  ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
-                  : "bg-[#8F9E4F] text-white hover:bg-[#556036]"
+                "flex-1 h-11 rounded-xl border border-[#8F9E4F] bg-white px-5 text-sm font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] transition",
+                (deleting || publishing) && "opacity-50 cursor-not-allowed"
               )}
             >
-              {isHidden && allRequiredFieldsFilled && place?.manually_hidden !== true ? "Publish" : "Save"}
+              Preview
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!allRequiredFieldsFilled) {
+                  setError("Finish the required items before publishing.");
+                  return;
+                }
+                setShowPreviewModal(true);
+              }}
+              disabled={!allRequiredFieldsFilled || deleting || publishing}
+              className={cx(
+                "flex-1 h-11 rounded-xl px-5 text-sm font-medium text-center transition flex items-center justify-center",
+                allRequiredFieldsFilled && !deleting && !publishing
+                  ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
+                  : "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
+              )}
+            >
+              {isHidden ? "Publish" : "Update live listing"}
             </button>
           </div>
         </div>

@@ -71,6 +71,7 @@ type Place = {
   price_amount?: number | null;
   price_currency?: string | null;
   price_unit?: string | null;
+  price_options?: unknown | null;
   duration_minutes?: number | null;
   schedule?: unknown | null; // jsonb — конкретный тип в app/types/supabase.ts (PlaceSchedule)
   host_qualification?: string | null;
@@ -536,7 +537,7 @@ export default function PlacePage(props: PageProps) {
       // existing; missing/deleted places render a real 404-like state.
       const { data: placeData, error: pErr } = await supabase
         .from("places")
-        .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
+        .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, price_options, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
         .eq("id", id)
         .single();
 

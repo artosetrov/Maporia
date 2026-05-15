@@ -1,6 +1,6 @@
 # Architecture
 
-Последнее обновление: 2026-05-13.
+Последнее обновление: 2026-05-14.
 
 ## Stack
 
@@ -49,6 +49,8 @@ Storage buckets из README:
 - `avatars` - public profile pictures.
 - `place-photos` - public place photos.
 
+Offer pricing for service/experience cards uses `places.price_amount`, `places.price_currency`, and `places.price_unit` as the compact summary price. Detailed pricing menus live in `places.price_options` as a JSON array. Each option supports the legacy fields `label`, `amount`, `currency`, `unit`, and `note`, plus `group_label`, `compare_at_amount`, `duration_minutes`, `badge`, `is_featured`, and `sort_order` for grouped packages, trial lessons, memberships, discounts, and highlighted options. Supported `price_unit` values are `fixed`, `from`, `per_hour`, `per_person`, `per_day`, `per_month`, and `per_session`; the database check constraint is updated by `scripts/sql/add-price-unit-per-month.sql`.
+
 ## Access Model
 
 Источник правды: `app/lib/access.ts`.
@@ -76,8 +78,8 @@ Premium place определяется через несколько полей 
 - `canUserAddPlace` сейчас разрешает add только `premium` или `admin`.
 - `canUserCreate(kind)` уточняет права по типам:
   - `location`: любой paid plan.
-  - `service`: `creator_service` или `creator_all`.
-  - `experience`: `creator_experience` или `creator_all`.
+  - `service`: `creator_pro`, legacy `creator_service`, или `creator_all`.
+  - `experience`: `creator_pro`, legacy `creator_experience`, или `creator_all`.
 - `canUserCreateMulti` требует права на каждый выбранный kind.
 - `/add` checks creator capabilities through the registry-backed multi-kind rules: creator service/experience plans may attach a secondary location without requiring a location plan. `checkQuota` counts primary locations, service/experience primary-or-secondary usage, and `bonus_listing_credits` before insert; the database trigger remains the final enforcement layer.
 - Empty `/add` drafts are considered abandoned when they are hidden, manually_hidden is not true, title/content/photos/location/pricing/contact fields are empty, and they are older than 24h. `/add` cleans the current user's stale drafts before quota checks, and `/api/maintenance/cleanup-drafts` runs by cron/admin with service role for global cleanup.
@@ -106,6 +108,8 @@ STRIPE_WEBHOOK_SECRET=
 STRIPE_PRICE_PREMIUM_ONETIME=
 STRIPE_PRICE_CREATOR_LOCATION_MONTH=
 STRIPE_PRICE_CREATOR_LOCATION_YEAR=
+STRIPE_PRICE_CREATOR_PRO_MONTH=
+STRIPE_PRICE_CREATOR_PRO_YEAR=
 STRIPE_PRICE_CREATOR_SERVICE_MONTH=
 STRIPE_PRICE_CREATOR_SERVICE_YEAR=
 STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH=

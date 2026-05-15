@@ -42,7 +42,23 @@ export type PriceUnit =
   | 'per_hour'
   | 'per_person'
   | 'per_day'
+  | 'per_month'
   | 'per_session';
+
+export type PriceOption = {
+  id?: string | null
+  group_label?: string | null
+  label?: string | null
+  amount: number
+  compare_at_amount?: number | null
+  currency?: string | null
+  unit?: PriceUnit | null
+  duration_minutes?: number | null
+  badge?: string | null
+  is_featured?: boolean | null
+  note?: string | null
+  sort_order?: number | null
+};
 
 /**
  * Гибкое расписание / даты для services и experiences.
@@ -158,6 +174,7 @@ export interface Database {
           price_amount: number | null
           price_currency: string | null
           price_unit: PriceUnit | null
+          price_options: PriceOption[] | null
           duration_minutes: number | null
           schedule: PlaceSchedule | null
           host_qualification: string | null
@@ -207,6 +224,7 @@ export interface Database {
           price_amount?: number | null
           price_currency?: string | null
           price_unit?: PriceUnit | null
+          price_options?: PriceOption[] | null
           duration_minutes?: number | null
           schedule?: PlaceSchedule | null
           host_qualification?: string | null
@@ -256,6 +274,7 @@ export interface Database {
           price_amount?: number | null
           price_currency?: string | null
           price_unit?: PriceUnit | null
+          price_options?: PriceOption[] | null
           duration_minutes?: number | null
           schedule?: PlaceSchedule | null
           host_qualification?: string | null

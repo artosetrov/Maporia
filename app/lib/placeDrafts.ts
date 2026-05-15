@@ -31,6 +31,7 @@ export type OrphanAddDraftCandidate = {
   price_amount?: number | null;
   price_currency?: string | null;
   price_unit?: PriceUnit | null;
+  price_options?: unknown[] | null;
   duration_minutes?: number | null;
   schedule?: unknown;
   host_qualification?: string | null;
@@ -72,6 +73,7 @@ export const ORPHAN_ADD_DRAFT_SELECT = [
   "price_amount",
   "price_currency",
   "price_unit",
+  "price_options",
   "duration_minutes",
   "schedule",
   "host_qualification",
@@ -130,6 +132,7 @@ export function isOrphanAddDraftCandidate(place: OrphanAddDraftCandidate): boole
     place.price_amount == null &&
     isBlank(place.price_currency) &&
     place.price_unit == null &&
+    isEmptyArray(place.price_options) &&
     place.duration_minutes == null &&
     isEmptyJsonObject(place.schedule) &&
     isBlank(place.host_qualification) &&

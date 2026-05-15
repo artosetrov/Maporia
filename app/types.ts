@@ -107,6 +107,11 @@ export type Place = {
   visibility?: string | null;
   // Google Maps integration
   google_place_id?: string | null;
+  // Service / experience pricing
+  price_amount?: number | null;
+  price_currency?: string | null;
+  price_unit?: string | null;
+  price_options?: unknown | null;
   // For draft state in wizard
   accessLevel?: AccessLevel;
   /**
@@ -221,6 +226,9 @@ export type PlaceListItem = {
   visibility?: string | null;
   // Тип карточки (для маркеров на карте и фильтра)
   kind?: 'location' | 'service' | 'experience' | null;
+  // Offer readiness fields used by home services/experiences.
+  schedule?: unknown | null;
+  service_mode?: 'at_provider' | 'at_client' | 'online' | 'flexible' | string | null;
   // Computed fields (added by some queries)
   commentsCount?: number;
   likesCount?: number;

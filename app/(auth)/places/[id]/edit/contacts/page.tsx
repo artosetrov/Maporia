@@ -20,14 +20,64 @@ import { ErrorBoundary } from "../../../../../components/ErrorBoundary";
 
 type PlaceContactsRow = Pick<
   Database["public"]["Tables"]["places"]["Row"],
-  "created_by" | "phone" | "website" | "instagram" | "youtube" | "telegram"
+  "created_by" | "kind" | "phone" | "website" | "instagram" | "youtube" | "telegram"
 >;
+
+type ContactFormState = {
+  phone: string;
+  website: string;
+  instagram: string;
+  youtube: string;
+  telegram: string;
+};
+
+type LinkedLocationContacts = ContactFormState & {
+  id: string;
+  title: string;
+};
+
+type LinkedLocationContactRow = {
+  id: string;
+  title: string | null;
+  kind: string | null;
+  phone: string | null;
+  website: string | null;
+  instagram: string | null;
+  youtube: string | null;
+  telegram: string | null;
+};
+
+type LinkWithParentContacts = {
+  parent: LinkedLocationContactRow | LinkedLocationContactRow[] | null;
+};
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
 }
 
 const MAX_LEN = 200;
+
+function toContactFormState(
+  input: Partial<Record<keyof ContactFormState, string | null | undefined>>,
+): ContactFormState {
+  return {
+    phone: input.phone ?? "",
+    website: input.website ?? "",
+    instagram: input.instagram ?? "",
+    youtube: input.youtube ?? "",
+    telegram: input.telegram ?? "",
+  };
+}
+
+function hasAnyContact(input: ContactFormState): boolean {
+  return Boolean(
+    input.phone.trim() ||
+      input.website.trim() ||
+      input.instagram.trim() ||
+      input.youtube.trim() ||
+      input.telegram.trim(),
+  );
+}
 
 /** Нормализуем перед сохранением: trim + auto-https для website. */
 function normalizeContacts(input: {
@@ -86,6 +136,8 @@ function ContactsEditorPageContent(props: PageProps) {
     youtube: "",
     telegram: "",
   });
+  const [linkedLocations, setLinkedLocations] = useState<LinkedLocationContacts[]>([]);
+  const [copiedFromLocation, setCopiedFromLocation] = useState<string | null>(null);
 
   // Load place contacts
   useEffect(() => {
@@ -96,7 +148,7 @@ function ContactsEditorPageContent(props: PageProps) {
       setLoading(true);
       const { data: rawData, error: placeError } = await supabase
         .from("places")
-        .select("created_by, phone, website, instagram, youtube, telegram")
+        .select("created_by, kind, phone, website, instagram, youtube, telegram")
         .eq("id", placeId)
         .single();
 
@@ -115,20 +167,50 @@ function ContactsEditorPageContent(props: PageProps) {
 
       if (cancelled) return;
 
-      const init = {
-        phone: data.phone ?? "",
-        website: data.website ?? "",
-        instagram: data.instagram ?? "",
-        youtube: data.youtube ?? "",
-        telegram: data.telegram ?? "",
-      };
+      const init = toContactFormState(data);
       setPhone(init.phone);
       setWebsite(init.website);
       setInstagram(init.instagram);
       setYoutube(init.youtube);
       setTelegram(init.telegram);
       setOriginal(init);
-      setLoading(false);
+
+      if (data.kind === "service" || data.kind === "experience") {
+        const { data: rawLinks } = await supabase
+          .from("place_links")
+          .select(
+            `
+            parent:places!place_links_parent_place_id_fkey(
+              id,
+              title,
+              kind,
+              phone,
+              website,
+              instagram,
+              youtube,
+              telegram
+            )
+          `,
+          )
+          .eq("child_place_id", placeId)
+          .eq("status", "active");
+
+        if (!cancelled) {
+          const locations = ((rawLinks ?? []) as LinkWithParentContacts[])
+            .map((link) => (Array.isArray(link.parent) ? link.parent[0] ?? null : link.parent))
+            .filter((parent): parent is LinkedLocationContactRow => parent?.kind === "location")
+            .map((parent) => ({
+              id: parent.id,
+              title: parent.title?.trim() || "Linked location",
+              ...toContactFormState(parent),
+            }));
+
+          setLinkedLocations(locations);
+        }
+      } else {
+        setLinkedLocations([]);
+      }
+      if (!cancelled) setLoading(false);
     })();
 
     return () => {
@@ -152,6 +234,15 @@ function ContactsEditorPageContent(props: PageProps) {
     telegram.length > MAX_LEN;
 
   const canSave = hasChanges && !tooLong && !saving;
+
+  function fillContactsFromLocation(location: LinkedLocationContacts) {
+    setPhone((current) => location.phone || current);
+    setWebsite((current) => location.website || current);
+    setInstagram((current) => location.instagram || current);
+    setYoutube((current) => location.youtube || current);
+    setTelegram((current) => location.telegram || current);
+    setCopiedFromLocation(location.title);
+  }
 
   async function handleSave() {
     if (!canSave || !user || !placeId) return;
@@ -238,6 +329,49 @@ function ContactsEditorPageContent(props: PageProps) {
           Add ways for visitors to reach you. All fields are optional — leave empty what you
           don&apos;t want to share.
         </p>
+
+        {linkedLocations.length > 0 && (
+          <div className="mb-6 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-[#1F2A1F]">
+                  Use contacts from linked location
+                </div>
+                <p className="mt-1 text-xs text-[#6F7A5A]">
+                  Fill available phone, website and socials from the location attached to this listing.
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-col gap-2">
+              {linkedLocations.map((location) => {
+                const canCopy = hasAnyContact(location);
+                return (
+                  <button
+                    key={location.id}
+                    type="button"
+                    disabled={!canCopy}
+                    onClick={() => fillContactsFromLocation(location)}
+                    className={cx(
+                      "w-full rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition",
+                      canCopy
+                        ? "border-[#DADDD0] bg-white text-[#1F2A1F] hover:border-[#8F9E4F] hover:bg-[#F4F6EE]"
+                        : "border-[#ECEEE4] bg-white text-[#A8B096] cursor-not-allowed",
+                    )}
+                  >
+                    {canCopy
+                      ? `Fill contacts from ${location.title}`
+                      : `${location.title} has no contact details yet`}
+                  </button>
+                );
+              })}
+            </div>
+            {copiedFromLocation && (
+              <p className="mt-3 text-xs text-[#6F7A5A]">
+                Filled from {copiedFromLocation}. Review the fields and save.
+              </p>
+            )}
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 p-3 text-sm text-[#C96A5B]">

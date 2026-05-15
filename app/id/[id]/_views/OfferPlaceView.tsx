@@ -59,6 +59,7 @@ type OfferPlace = {
   price_amount?: number | null;
   price_currency?: string | null;
   price_unit?: string | null;
+  price_options?: unknown | null;
   duration_minutes?: number | null;
   schedule?: unknown | null;
   host_qualification?: string | null;
@@ -101,7 +102,28 @@ const PRICE_UNIT_LABEL: Record<string, string> = {
   per_hour: "/ hr",
   per_person: "/ person",
   per_day: "/ day",
+  per_month: "/ month",
   per_session: "/ session",
+};
+
+type PriceOption = {
+  id?: string | null;
+  group_label?: string | null;
+  label?: string | null;
+  amount: number;
+  compare_at_amount?: number | null;
+  currency?: string | null;
+  unit?: string | null;
+  duration_minutes?: number | null;
+  badge?: string | null;
+  is_featured?: boolean | null;
+  note?: string | null;
+  sort_order?: number | null;
+};
+
+type PriceOptionGroup = {
+  label: string | null;
+  options: PriceOption[];
 };
 
 const SERVICE_MODE_LABELS: Record<string, string> = {
@@ -149,6 +171,72 @@ function formatPrice(amount: number | null | undefined, currency: string | null 
   const hasCents = amount % 1 !== 0;
   const formatted = hasCents ? amount.toFixed(2) : Math.round(amount).toString();
   return symbol ? `${symbol}${formatted}` : `${formatted} ${cur}`;
+}
+
+function normalizePriceOptions(raw: unknown): PriceOption[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item): PriceOption | null => {
+      if (!item || typeof item !== "object") return null;
+      const option = item as Record<string, unknown>;
+      const amount = typeof option.amount === "number" ? option.amount : Number(option.amount);
+      if (!Number.isFinite(amount)) return null;
+      const compareAtAmount =
+        typeof option.compare_at_amount === "number" && Number.isFinite(option.compare_at_amount)
+          ? option.compare_at_amount
+          : null;
+      const durationMinutes =
+        typeof option.duration_minutes === "number" && Number.isFinite(option.duration_minutes)
+          ? Math.round(option.duration_minutes)
+          : null;
+      const sortOrder =
+        typeof option.sort_order === "number" && Number.isFinite(option.sort_order)
+          ? option.sort_order
+          : null;
+      return {
+        id: typeof option.id === "string" ? option.id : null,
+        group_label: typeof option.group_label === "string" ? option.group_label : null,
+        label: typeof option.label === "string" ? option.label : null,
+        amount,
+        compare_at_amount: compareAtAmount,
+        currency: typeof option.currency === "string" ? option.currency : "USD",
+        unit: typeof option.unit === "string" ? option.unit : "fixed",
+        duration_minutes: durationMinutes,
+        badge: typeof option.badge === "string" ? option.badge : null,
+        is_featured: option.is_featured === true,
+        note: typeof option.note === "string" ? option.note : null,
+        sort_order: sortOrder,
+      };
+    })
+    .filter((item): item is PriceOption => Boolean(item))
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+}
+
+function formatPriceOption(option: PriceOption): string {
+  const text = formatPrice(option.amount, option.currency) ?? "";
+  const unit = option.unit ? PRICE_UNIT_LABEL[option.unit] ?? "" : "";
+  const fromPrefix = option.unit === "from" ? "from " : "";
+  const suffix = unit && option.unit !== "from" ? ` ${unit}` : "";
+  return `${fromPrefix}${text}${suffix}`;
+}
+
+function getPrimaryPriceOption(options: PriceOption[]): PriceOption | null {
+  if (options.length === 0) return null;
+  return options.find((option) => option.is_featured) ?? options[0];
+}
+
+function groupPriceOptions(options: PriceOption[]): PriceOptionGroup[] {
+  const groups: PriceOptionGroup[] = [];
+  for (const option of options) {
+    const label = option.group_label?.trim() || null;
+    const existing = groups.find((group) => group.label === label);
+    if (existing) {
+      existing.options.push(option);
+    } else {
+      groups.push({ label, options: [option] });
+    }
+  }
+  return groups;
 }
 
 function formatDuration(minutes: number | null | undefined): string | null {
@@ -227,6 +315,10 @@ export default function OfferPlaceView({
     [place.price_amount, place.price_currency]
   );
   const priceUnitLabel = place.price_unit ? PRICE_UNIT_LABEL[place.price_unit] ?? "" : "";
+  const priceOptions = useMemo(() => normalizePriceOptions(place.price_options), [place.price_options]);
+  const primaryPriceOption = useMemo(() => getPrimaryPriceOption(priceOptions), [priceOptions]);
+  const primaryPriceOptionText = primaryPriceOption ? formatPriceOption(primaryPriceOption) : null;
+  const priceOptionGroups = useMemo(() => groupPriceOptions(priceOptions), [priceOptions]);
   const durationText = useMemo(() => formatDuration(place.duration_minutes), [place.duration_minutes]);
   const scheduleText = useMemo(() => describeSchedule(place.schedule), [place.schedule]);
 
@@ -652,6 +744,8 @@ export default function OfferPlaceView({
                   <span className="text-sm font-normal text-[#6F7A5A] ml-1">{priceUnitLabel}</span>
                 )}
               </div>
+            ) : primaryPriceOptionText ? (
+              <div className="font-fraunces text-xl font-semibold text-[#1F2A1F]">{primaryPriceOptionText}</div>
             ) : (
               <div className="text-sm text-[#A8B096]">By request</div>
             )}
@@ -682,6 +776,88 @@ export default function OfferPlaceView({
 
         {/* Parent location backlink + owner CTA (host pattern) */}
         <ParentLocationCard childId={place.id} canEdit={canEdit} />
+
+        {priceOptions.length > 0 && (
+          <section className="mb-8">
+            <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-4">Pricing menu</h2>
+            <div className="space-y-7">
+              {priceOptionGroups.map((group, groupIndex) => (
+                <div key={group.label || `group-${groupIndex}`}>
+                  {group.label && (
+                    <h3 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                      {group.label}
+                    </h3>
+                  )}
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                    {group.options.map((option, index) => {
+                      const oldPrice = option.compare_at_amount != null
+                        ? formatPrice(option.compare_at_amount, option.currency)
+                        : null;
+                      const duration = formatDuration(option.duration_minutes);
+                      return (
+                        <div
+                          key={option.id || `${option.label || "price"}-${groupIndex}-${index}`}
+                          className={cx(
+                            "rounded-2xl border p-4 shadow-sm",
+                            option.is_featured
+                              ? "border-[#8F9E4F] bg-[#1F6F84] text-white shadow-md"
+                              : "border-[#ECEEE4] bg-white text-[#1F2A1F]",
+                          )}
+                        >
+                          <div className={cx(
+                            "mb-3 flex min-h-5 items-start justify-between gap-2 text-xs font-semibold uppercase tracking-[0.08em]",
+                            option.is_featured ? "text-[#DDE7C8]" : "text-[#6F7A5A]",
+                          )}>
+                            <span>{option.label || `Option ${index + 1}`}</span>
+                            {option.badge && (
+                              <span className={cx(
+                                "rounded-full border px-2 py-0.5 text-[10px]",
+                                option.is_featured
+                                  ? "border-white/30 text-white"
+                                  : "border-[#C96A5B]/30 text-[#B63D32]",
+                              )}>
+                                {option.badge}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-baseline gap-2">
+                            <div className="font-fraunces text-3xl font-semibold">
+                              {formatPriceOption(option)}
+                            </div>
+                            {oldPrice && (
+                              <div className={cx(
+                                "text-sm line-through",
+                                option.is_featured ? "text-white/60" : "text-[#8A9281]",
+                              )}>
+                                {oldPrice}
+                              </div>
+                            )}
+                          </div>
+                          {duration && (
+                            <div className={cx(
+                              "mt-2 text-sm",
+                              option.is_featured ? "text-white/80" : "text-[#6F7A5A]",
+                            )}>
+                              {duration}
+                            </div>
+                          )}
+                          {option.note && (
+                            <div className={cx(
+                              "mt-3 text-sm leading-relaxed",
+                              option.is_featured ? "text-white/80" : "text-[#6F7A5A]",
+                            )}>
+                              {option.note}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Description */}
         {place.description && (
@@ -859,6 +1035,8 @@ export default function OfferPlaceView({
                   <span className="text-sm font-normal text-[#6F7A5A] ml-1">{priceUnitLabel}</span>
                 )}
               </div>
+            ) : primaryPriceOptionText ? (
+              <div className="font-fraunces text-lg font-semibold text-[#1F2A1F]">{primaryPriceOptionText}</div>
             ) : (
               <div className="text-sm text-[#6F7A5A]">Price on request</div>
             )}

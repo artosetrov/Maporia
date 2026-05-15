@@ -11,11 +11,11 @@
 | Access | `getUserAccess`, `canUserViewPlace`, `isPlacePremium` | `app/lib/access.ts` |
 | Premium | `premium_viewer`, `PremiumUpsellModal`, `LockedPlaceOverlay` | `app/lib/plans.ts`, `app/components/` |
 | Pricing entitlements | `chooseBestEntitlement`, `planTier`, `BillingEntitlement` | `app/lib/pricing/entitlements.ts`, `app/api/stripe/**` |
-| Creator plans | `creator_service`, `creator_experience`, `creator_all` | `app/lib/plans.ts`, `app/lib/access.ts` |
+| Creator plans | `creator_location`, `creator_pro`, `creator_all`, legacy `creator_service`, `creator_experience` | `app/lib/pricing/registry.ts`, `app/lib/access.ts` |
 | Quota | `checkQuota`, `bonus_listing_credits`, `EXTRA_LISTING` | `app/lib/access.ts`, `app/lib/plans.ts` |
 | Places | `places`, `Place`, `PlaceListItem`, `kind` | `app/types.ts`, `app/types/supabase.ts`, `app/(auth)/places/**` |
 | Draft cleanup | `orphan`, `cleanup-drafts`, `ORPHAN_ADD_DRAFT` | `app/lib/placeDrafts.ts`, `app/api/maintenance/cleanup-drafts/route.ts`, `app/(auth)/add/page.tsx` |
-| Service/Experience | `OfferPlaceView`, `price_amount`, `schedule`, `host_qualification` | `app/id/[id]/_views/`, edit pages |
+| Service/Experience | `OfferPlaceView`, `price_amount`, `price_options`, `schedule`, `host_qualification` | `app/id/[id]/_views/`, edit pages |
 | Collections | `collections`, `place_collections` | `app/collections/**`, `app/(auth)/admin/collections/**` |
 | Tags | `tags`, `category_ids`, `emoji` | `app/api/tags`, `app/api/admin/tags`, `scripts/sql/*tags*` |
 | Cities | `cities`, `city_id`, `city_name_cached`, `resolve` | `app/lib/cities.ts`, `app/lib/cityResolver.ts`, `app/api/cities/resolve` |
