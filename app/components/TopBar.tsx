@@ -384,14 +384,15 @@ export default function TopBar({
           <div className="px-8 pt-safe-top pt-3 pb-3">
             {/* Main row: Logo + SearchBar + Auth */}
             <div className="flex items-center gap-6">
-              {/* Left: Logo - Logo_maporia1.svg */}
-              <Link href="/" className="flex-shrink-0">
+              {/* Left: desktop wordmark logo */}
+              <Link href="/" className="flex-shrink-0" aria-label="Go to Home">
                 <Image
-                  src="/Logo_maporia1.svg"
+                  src="/Logo.svg"
                   alt="Maporia"
-                  width={40}
-                  height={40}
-                  className="h-10 w-auto"
+                  width={141}
+                  height={32}
+                  className="h-8 w-auto"
+                  priority={isHome}
                 />
               </Link>
 
