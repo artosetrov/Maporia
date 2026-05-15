@@ -67,6 +67,8 @@
 | `/api/admin/premium-modal-settings` | Настройки premium modal |
 | `/api/admin/users/[id]/role` | Admin manual plan/admin assignment through service-role API |
 | `/api/admin/users/[id]/auth` | Admin email/password/reset/magic-link management |
+| `/api/admin/users/search` | Admin user lookup for assignment tools |
+| `/api/admin/places/[id]/owner` | Admin place owner transfer endpoint |
 | `/api/admin/impersonate/*` | Start/status/exit/log/cleanup impersonation |
 | `/api/ai/generate-description` | AI description generation через OpenAI |
 | `/api/cities/resolve` | City resolve/normalization |
