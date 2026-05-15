@@ -6,7 +6,7 @@
 
 ## Что он делает
 
-1. Создаёт продукты в Stripe: Premium, Pro Location, Pro Service, Pro Experience, Pro All, Extra Listing.
+1. Создаёт продукты в Stripe: Premium, Pro Location, Pro Creator, legacy Pro Service/Experience, Pro All, Extra Listing.
 2. Создаёт цены для всех public plan variants: one-time Premium, monthly/yearly Pro plans, one-time Extra Listing.
 3. Создаёт webhook endpoint с пятью нужными событиями (если передан URL).
 4. Создаёт Customer Portal конфиг (если ещё нет).
@@ -21,9 +21,10 @@
 | --- | --- | ---: | --- | --- |
 | `premium_viewer` | Maporia Premium | $35 | one-time | `STRIPE_PRICE_PREMIUM_ONETIME` |
 | `creator_location` | Maporia Pro Location | $9.99 / $95.88 | monthly/yearly subscription | `STRIPE_PRICE_CREATOR_LOCATION_MONTH`, `STRIPE_PRICE_CREATOR_LOCATION_YEAR` |
-| `creator_service` | Maporia Pro Service | $14.99 / $143.88 | monthly/yearly subscription | `STRIPE_PRICE_CREATOR_SERVICE_MONTH`, `STRIPE_PRICE_CREATOR_SERVICE_YEAR` |
-| `creator_experience` | Maporia Pro Experience | $14.99 / $143.88 | monthly/yearly subscription | `STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH`, `STRIPE_PRICE_CREATOR_EXPERIENCE_YEAR` |
-| `creator_all` | Maporia Pro All-in | $34.99 / $335.88 | monthly/yearly subscription | `STRIPE_PRICE_CREATOR_ALL_MONTH`, `STRIPE_PRICE_CREATOR_ALL_YEAR` |
+| `creator_pro` | Maporia Pro Creator | $14.99 / $143.88 | monthly/yearly subscription | `STRIPE_PRICE_CREATOR_PRO_MONTH`, `STRIPE_PRICE_CREATOR_PRO_YEAR` |
+| `creator_service` | Maporia Pro Service | $14.99 / $143.88 | legacy monthly/yearly subscription | `STRIPE_PRICE_CREATOR_SERVICE_MONTH`, `STRIPE_PRICE_CREATOR_SERVICE_YEAR` |
+| `creator_experience` | Maporia Pro Experience | $14.99 / $143.88 | legacy monthly/yearly subscription | `STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH`, `STRIPE_PRICE_CREATOR_EXPERIENCE_YEAR` |
+| `creator_all` | Maporia Pro All-in | $19.99 / $191.88 | monthly/yearly subscription | `STRIPE_PRICE_CREATOR_ALL_MONTH`, `STRIPE_PRICE_CREATOR_ALL_YEAR` |
 | `extra_listing` | Maporia Extra Listing | $2.99 | one-time add-on | `STRIPE_PRICE_EXTRA_LISTING` |
 
 `STRIPE_PRICE_ID` остаётся legacy fallback для старого one-time Premium checkout. Для новых флоу используй plan/addon env выше.
@@ -42,6 +43,8 @@ STRIPE_SECRET_KEY=sk_test_XXXXX npm run setup:stripe -- \
 STRIPE_PRICE_PREMIUM_ONETIME=price_1AbCd…
 STRIPE_PRICE_CREATOR_LOCATION_MONTH=price_1AbCd…
 STRIPE_PRICE_CREATOR_LOCATION_YEAR=price_1AbCd…
+STRIPE_PRICE_CREATOR_PRO_MONTH=price_1AbCd…
+STRIPE_PRICE_CREATOR_PRO_YEAR=price_1AbCd…
 STRIPE_PRICE_CREATOR_SERVICE_MONTH=price_1AbCd…
 STRIPE_PRICE_CREATOR_SERVICE_YEAR=price_1AbCd…
 STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH=price_1AbCd…
@@ -86,6 +89,8 @@ STRIPE_WEBHOOK_SECRET=
 STRIPE_PRICE_PREMIUM_ONETIME=
 STRIPE_PRICE_CREATOR_LOCATION_MONTH=
 STRIPE_PRICE_CREATOR_LOCATION_YEAR=
+STRIPE_PRICE_CREATOR_PRO_MONTH=
+STRIPE_PRICE_CREATOR_PRO_YEAR=
 STRIPE_PRICE_CREATOR_SERVICE_MONTH=
 STRIPE_PRICE_CREATOR_SERVICE_YEAR=
 STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH=
@@ -125,14 +130,14 @@ invoice.payment_failed
 ```
 
 ```json
-{ "access_token": "...", "plan": "creator_service" }
+{ "access_token": "...", "plan": "creator_pro" }
 ```
 
 ```json
 { "access_token": "...", "addon": "extra_listing" }
 ```
 
-Поддерживаемые plans: `premium_viewer`, `creator_location`, `creator_service`, `creator_experience`, `creator_all`.
+Поддерживаемые public plans: `premium_viewer`, `creator_location`, `creator_pro`, `creator_all`. Legacy plans `creator_service` и `creator_experience` остаются в webhook/portal для grandfathered подписчиков.
 
 Поддерживаемый addon: `extra_listing`.
 
@@ -167,7 +172,7 @@ subscription_update.proration_behavior = create_prorations
 
 ## Smoke-тест
 
-После настройки запусти `npm run dev`, открой `/pricing`, нажми «Subscribe» на Pro Service, в Stripe Checkout вбей тестовую карту `4242 4242 4242 4242` (любая дата, любой CVC). Должен пройти редирект на `/profile?section=premium&payment=success` и через ~5–10 секунд (webhook/verify догоняет) увидишь активный план.
+После настройки запусти `npm run dev`, открой `/pricing`, нажми «Subscribe» на Pro Creator, в Stripe Checkout вбей тестовую карту `4242 4242 4242 4242` (любая дата, любой CVC). Должен пройти редирект на `/profile?section=premium&payment=success` и через ~5–10 секунд (webhook/verify догоняет) увидишь активный план.
 
 Карты для разных сценариев — https://docs.stripe.com/testing.
 

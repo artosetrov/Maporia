@@ -11,6 +11,19 @@ Live production traffic for Maporia is served by the Vercel project `maporia_ful
 - Project id for clean temp deploys: `prj_7h0OXlw5rrbQuREEIso0NGkkLsxp`.
 - Deployment rule: when asked to deploy the live site, run production deploy against `maporia_full`. Deploying only to `maporia` / `https://maporia.vercel.app` will not update the customer-facing site.
 
+## 2026-05-14 Stripe Price Env Repair
+
+Production checkout was returning `MISSING_PLAN_PRICE` for Pro Location because `maporia_full` production env did not include `STRIPE_PRICE_CREATOR_LOCATION_MONTH/YEAR`. The v3 `creator_pro` env keys were also missing from docs/env examples.
+
+Actions taken:
+
+- Created/found Stripe test-mode Prices for Premium, Pro Location, Pro Creator, legacy Pro Service/Experience, Pro All-in, and Extra Listing using the production `STRIPE_SECRET_KEY` currently configured in Vercel.
+- Added/overrode all `STRIPE_PRICE_*` production env vars in Vercel project `maporia_full`.
+- Rebuilt the latest production deployment with `vercel redeploy` so serverless functions pick up the updated env.
+- Updated `STRIPE_SETUP.md`, `.env.example`, and wiki env checklists to include `STRIPE_PRICE_CREATOR_PRO_MONTH/YEAR`.
+
+Follow-up: production is currently configured with a `sk_test_...` Stripe secret. Before accepting real customer payments, switch `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and all `STRIPE_PRICE_*` vars to live-mode values and redeploy `maporia_full`.
+
 ## 2026-05-13 Admin Users Role Fix
 
 Что было исправлено после ошибки `infinite recursion detected in policy for relation "profiles"` в Users admin UI:
@@ -126,6 +139,8 @@ STRIPE_WEBHOOK_SECRET=
 STRIPE_PRICE_PREMIUM_ONETIME=
 STRIPE_PRICE_CREATOR_LOCATION_MONTH=
 STRIPE_PRICE_CREATOR_LOCATION_YEAR=
+STRIPE_PRICE_CREATOR_PRO_MONTH=
+STRIPE_PRICE_CREATOR_PRO_YEAR=
 STRIPE_PRICE_CREATOR_SERVICE_MONTH=
 STRIPE_PRICE_CREATOR_SERVICE_YEAR=
 STRIPE_PRICE_CREATOR_EXPERIENCE_MONTH=

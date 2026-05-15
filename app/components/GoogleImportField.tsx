@@ -502,7 +502,7 @@ export default function GoogleImportField({
                   Place already exists
                 </h3>
                 <p className="text-sm text-[#6F7A5A] mt-1">
-                  This place is already in your account.
+                  This Google place is already on Maporia. Open the existing listing instead of creating a duplicate.
                 </p>
               </div>
               <button

@@ -137,7 +137,7 @@ export default function HomeVisualPanel({
       aria-label="Featured places"
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
-      className="relative rounded-[22px] overflow-hidden hidden lg:block isolate"
+      className="relative rounded-[22px] overflow-hidden hidden lg:block isolate cursor-pointer"
       style={{
         height: 480,
         boxShadow:
@@ -146,6 +146,12 @@ export default function HomeVisualPanel({
     >
       {/* ── Florida map background ── */}
       <FloridaMap />
+
+      <Link
+        href="/map?view=map"
+        aria-label="Open map view"
+        className="absolute inset-0 z-[1] rounded-[22px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-2"
+      />
 
       {/* No floating red pins on this version — the illustration already
           carries its own "pins" (sand castles, lighthouses, boats), and
@@ -160,7 +166,7 @@ export default function HomeVisualPanel({
 
       {/* live counter chip */}
       <div
-        className="absolute right-[18px] top-[18px] bg-[#16190f] text-[#f7f3da] rounded-full px-3.5 py-2 text-[12px] font-semibold inline-flex items-center gap-2"
+        className="absolute right-[18px] top-[18px] z-[2] bg-[#16190f] text-[#f7f3da] rounded-full px-3.5 py-2 text-[12px] font-semibold inline-flex items-center gap-2 pointer-events-none"
         style={{
           boxShadow:
             "0 1px 2px rgba(31,36,23,.04), 0 8px 24px rgba(31,36,23,.06)",

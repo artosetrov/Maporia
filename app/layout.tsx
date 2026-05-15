@@ -11,8 +11,37 @@ import ImpersonationBanner from "./components/ImpersonationBanner";
 import AnalyticsTracker from "./components/AnalyticsTracker";
 
 export const metadata: Metadata = {
-  title: "Maporia",
+  metadataBase: new URL("https://www.maporia.co"),
+  applicationName: "Maporia",
+  title: {
+    default: "Maporia",
+    template: "%s | Maporia",
+  },
   description: "Places locals love",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    url: "/",
+    siteName: "Maporia",
+    title: "Maporia",
+    description: "Places locals love",
+    images: [
+      {
+        url: "/maporia-social-preview.jpg",
+        width: 2571,
+        height: 1350,
+        alt: "Maporia - Places locals love",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Maporia",
+    description: "Places locals love",
+    images: ["/maporia-social-preview.jpg"],
+  },
 };
 
 export const viewport: Viewport = {

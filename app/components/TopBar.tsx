@@ -412,15 +412,22 @@ export default function TopBar({
 
               {/* Right: Auth area */}
               <div className="flex-shrink-0 flex items-center gap-4 ml-auto">
-                {/* Become a provider — видна всем, включая анонимов.
-                    Логин-гейт сработает внутри модалки на «Continue». */}
-                <button
-                  type="button"
-                  onClick={() => setBecomeProviderOpen(true)}
-                  className="text-sm font-medium text-[#1F2A1F] px-3.5 py-2.5 h-11 rounded-full hover:bg-[#FAFAF7] transition-colors whitespace-nowrap"
-                >
-                  Become a provider
-                </button>
+                {canAddPlace ? (
+                  <Link
+                    href={`/add?returnTo=${encodeURIComponent(pathname)}`}
+                    className="text-sm font-medium text-[#1F2A1F] px-3.5 py-2.5 h-11 rounded-full hover:bg-[#FAFAF7] transition-colors whitespace-nowrap inline-flex items-center"
+                  >
+                    Add listing
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setBecomeProviderOpen(true)}
+                    className="text-sm font-medium text-[#1F2A1F] px-3.5 py-2.5 h-11 rounded-full hover:bg-[#FAFAF7] transition-colors whitespace-nowrap"
+                  >
+                    Become a provider
+                  </button>
+                )}
 
                 {/* Get Started — для неавторизованных. Переход на страницу логина */}
                 {!isAuthenticated && (
@@ -525,7 +532,7 @@ export default function TopBar({
                     <div className="w-14 h-14 lg:w-12 lg:h-12 rounded-full bg-white/20 group-hover:bg-white/30 flex items-center justify-center mb-2 transition-colors">
                       <Icon name="add" size={24} className="text-white" />
                     </div>
-                    <span className="text-sm lg:text-xs font-medium text-white text-center">Add Gem</span>
+                    <span className="text-sm lg:text-xs font-medium text-white text-center">Add listing</span>
                   </Link>
                 )}
                 <Link

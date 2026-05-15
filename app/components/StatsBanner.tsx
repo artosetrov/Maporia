@@ -6,6 +6,7 @@ import {
   useStatsBannerSettings,
   type StatsMetricKey,
 } from "../hooks/useStatsBannerSettings";
+import { applyHomeOfferReadyFilter } from "../lib/homeOfferReadiness";
 import StatsBannerView, { type StatsBannerItem } from "./StatsBannerView";
 
 /**
@@ -78,11 +79,15 @@ export default function StatsBanner() {
           }
           // location | service | experience — фильтр по primary kind.
           const placeKind = key === "locations" ? "location" : key === "services" ? "service" : "experience";
-          return supabase
+          let query = supabase
             .from("places")
             .select("id", { count: "exact", head: true })
             .eq("kind", placeKind)
             .eq("is_hidden", false);
+          if (placeKind !== "location") {
+            query = applyHomeOfferReadyFilter(query);
+          }
+          return query;
         });
 
         const results = await Promise.all(requests);

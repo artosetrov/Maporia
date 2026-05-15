@@ -53,8 +53,8 @@ Publishing rights and pricing:
 - `free`: public browsing.
 - `premium_viewer`: one-time Premium, sees premium places; v2 treats it as consumer-only for new buyers.
 - `creator_location`: monthly/yearly, Premium included, location quota.
-- `creator_service`: monthly/yearly, Premium included, service quota.
-- `creator_experience`: monthly/yearly, Premium included, experience quota.
+- `creator_pro`: monthly/yearly, Premium included, combined service/experience quota.
+- `creator_service` / `creator_experience`: legacy grandfathered subscription plans.
 - `creator_all`: monthly/yearly, combined service/experience quota.
 - `extra_listing`: one-time add-on credit.
 

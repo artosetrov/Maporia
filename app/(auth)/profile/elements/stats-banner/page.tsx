@@ -25,6 +25,7 @@ import {
   type StatsBannerSettings,
   type StatsMetricKey,
 } from "../../../../hooks/useStatsBannerSettings";
+import { applyHomeOfferReadyFilter } from "../../../../lib/homeOfferReadiness";
 
 const METRIC_KEYS: StatsMetricKey[] = ["users", "locations", "services", "experiences"];
 
@@ -42,12 +43,12 @@ const METRIC_META: Record<StatsMetricKey, { emoji: string; title: string; source
   services: {
     emoji: "🛠",
     title: "Services",
-    sourceHint: "Auto: places where kind = 'service'",
+    sourceHint: "Auto: offer-ready places where kind = 'service'",
   },
   experiences: {
     emoji: "✨",
     title: "Experiences",
-    sourceHint: "Auto: places where kind = 'experience'",
+    sourceHint: "Auto: offer-ready places where kind = 'experience'",
   },
 };
 
@@ -150,16 +151,20 @@ export default function StatsBannerSettingsPage() {
             .select("id", { count: "exact", head: true })
             .eq("kind", "location")
             .eq("is_hidden", false),
-          supabase
-            .from("places")
-            .select("id", { count: "exact", head: true })
-            .eq("kind", "service")
-            .eq("is_hidden", false),
-          supabase
-            .from("places")
-            .select("id", { count: "exact", head: true })
-            .eq("kind", "experience")
-            .eq("is_hidden", false),
+          applyHomeOfferReadyFilter(
+            supabase
+              .from("places")
+              .select("id", { count: "exact", head: true })
+              .eq("kind", "service")
+              .eq("is_hidden", false),
+          ),
+          applyHomeOfferReadyFilter(
+            supabase
+              .from("places")
+              .select("id", { count: "exact", head: true })
+              .eq("kind", "experience")
+              .eq("is_hidden", false),
+          ),
         ]);
         if (cancelled) return;
         setLiveCounts({

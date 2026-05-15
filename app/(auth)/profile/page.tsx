@@ -3911,64 +3911,66 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
           <div className="text-center py-16 text-[#6F7A5A]">No users found</div>
         ) : (
           users.map((user) => (
-            <div key={user.id} className="bg-white border border-[#ECEEE4] rounded-2xl p-6">
-              <div className="flex items-start gap-4">
-                {/* Avatar */}
-                <div className="h-12 w-12 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] flex items-center justify-center flex-shrink-0 overflow-hidden">
-                  {user.avatar_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={user.avatar_url} alt={user.display_name || user.email || "User"} className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-sm font-semibold text-[#8F9E4F]">
-                      {initialsFromName(user.display_name || user.email)}
-                    </span>
-                  )}
-                </div>
-
-                {/* User Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-[#1F2A1F] truncate">
-                      {user.display_name || user.username || user.email || "User"}
-                    </h3>
-                    {(() => {
-                      const cur = currentAdminAssignable(user);
-                      if (cur === "admin") {
-                        return (
-                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-[#8F9E4F] text-white">
-                            Admin
-                          </span>
-                        );
-                      }
-                      if (cur === "free") return null;
-                      const label =
-                        cur === "premium_viewer"     ? "Premium" :
-                        cur === "creator_service"    ? "Pro Service" :
-                        cur === "creator_experience" ? "Pro Experience" :
-                        cur === "creator_all"        ? "Pro All-in" : null;
-                      return label ? (
-                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-[#D6B25E] text-white">
-                          {label}
-                        </span>
-                      ) : null;
-                    })()}
+            <div key={user.id} className="bg-white border border-[#ECEEE4] rounded-2xl p-4 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
+                  {/* Avatar */}
+                  <div className="h-12 w-12 rounded-full bg-[#FAFAF7] border border-[#ECEEE4] flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    {user.avatar_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={user.avatar_url} alt={user.display_name || user.email || "User"} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-sm font-semibold text-[#8F9E4F]">
+                        {initialsFromName(user.display_name || user.email)}
+                      </span>
+                    )}
                   </div>
-                  {user.email && (
-                    <p className="text-sm text-[#6F7A5A] truncate">{user.email}</p>
-                  )}
-                  <p className="text-xs text-[#A8B096] mt-1">
-                    Joined {new Date(user.created_at).toLocaleDateString()}
-                  </p>
+
+                  {/* User Info */}
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
+                      <h3 className="min-w-0 max-w-full truncate font-semibold text-[#1F2A1F]">
+                        {user.display_name || user.username || user.email || "User"}
+                      </h3>
+                      {(() => {
+                        const cur = currentAdminAssignable(user);
+                        if (cur === "admin") {
+                          return (
+                            <span className="flex-shrink-0 px-2 py-0.5 rounded text-xs font-medium bg-[#8F9E4F] text-white">
+                              Admin
+                            </span>
+                          );
+                        }
+                        if (cur === "free") return null;
+                        const label =
+                          cur === "premium_viewer"     ? "Premium" :
+                          cur === "creator_service"    ? "Pro Service" :
+                          cur === "creator_experience" ? "Pro Experience" :
+                          cur === "creator_all"        ? "Pro All-in" : null;
+                        return label ? (
+                          <span className="flex-shrink-0 px-2 py-0.5 rounded text-xs font-medium bg-[#D6B25E] text-white">
+                            {label}
+                          </span>
+                        ) : null;
+                      })()}
+                    </div>
+                    {user.email && (
+                      <p className="text-sm text-[#6F7A5A] truncate">{user.email}</p>
+                    )}
+                    <p className="text-xs text-[#A8B096] mt-1">
+                      Joined {new Date(user.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-2">
+                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap sm:justify-end">
                   {/* Plan / Admin Selector */}
                   <select
                     value={pendingRoleChanges.get(user.id) || currentAdminAssignable(user)}
                     onChange={(e) => handleRoleChange(user.id, e.target.value as AdminAssignable)}
                     disabled={updatingUserId === user.id || user.id === currentUserId}
-                    className="px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="h-10 min-w-[11rem] flex-1 rounded-lg border border-[#ECEEE4] bg-white px-3 text-sm text-[#1F2A1F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] disabled:cursor-not-allowed disabled:opacity-50 sm:w-44 sm:flex-none"
                   >
                     {ADMIN_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -3981,7 +3983,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
                       <button
                         onClick={() => saveUserRole(user.id)}
                         disabled={updatingUserId === user.id}
-                        className="px-3 py-2 rounded-lg bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                        className="h-10 rounded-lg bg-[#8F9E4F] px-3 text-sm font-medium text-white hover:bg-[#556036] transition disabled:cursor-not-allowed disabled:opacity-50 flex items-center gap-1"
                         title="Save changes"
                       >
                         {updatingUserId === user.id ? (
@@ -3999,7 +4001,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
                       <button
                         onClick={() => cancelRoleChange(user.id)}
                         disabled={updatingUserId === user.id}
-                        className="px-3 py-2 rounded-lg border border-[#ECEEE4] bg-white text-[#6F7A5A] text-sm font-medium hover:bg-[#FAFAF7] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#ECEEE4] bg-white text-sm font-medium text-[#6F7A5A] hover:bg-[#FAFAF7] transition disabled:cursor-not-allowed disabled:opacity-50"
                         title="Cancel changes"
                       >
                         <Icon name="close" size={16} />
@@ -4011,7 +4013,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
                   {user.id !== currentUserId && !user.is_admin && !pendingRoleChanges.has(user.id) && (
                     <button
                       onClick={() => openManageModal(user)}
-                      className="p-2 rounded-lg border border-[#ECEEE4] text-[#6F7A5A] hover:bg-[#FAFAF7] hover:text-[#8F9E4F] transition"
+                      className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#ECEEE4] text-[#6F7A5A] hover:bg-[#FAFAF7] hover:text-[#8F9E4F] transition"
                       title="Управление учётными данными"
                       aria-label="Manage user credentials"
                     >
@@ -4024,7 +4026,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
 	                    <button
 	                      onClick={() => openImpersonationConfirm(user)}
 	                      disabled={impersonatingUserId === user.id}
-	                      className="p-2 rounded-lg border border-[#ECEEE4] text-[#6F7A5A] hover:bg-[#FAFAF7] hover:text-[#8F9E4F] transition disabled:opacity-50 disabled:cursor-not-allowed"
+	                      className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#ECEEE4] text-[#6F7A5A] hover:bg-[#FAFAF7] hover:text-[#8F9E4F] transition disabled:cursor-not-allowed disabled:opacity-50"
                       title="Войти как этот пользователь"
                       aria-label="Войти как этот пользователь"
                     >
@@ -4041,7 +4043,7 @@ function UsersSection({ loading, currentUserId }: { loading: boolean; currentUse
                     <button
                       onClick={() => openDeleteConfirm(user.id)}
                       disabled={deletingUserId === user.id}
-                      className="p-2 rounded-lg border border-[#C96A5B]/30 text-[#C96A5B] hover:bg-[#C96A5B]/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#C96A5B]/30 text-[#C96A5B] hover:bg-[#C96A5B]/10 transition disabled:cursor-not-allowed disabled:opacity-50"
                       title="Delete user"
                     >
                       {deletingUserId === user.id ? (

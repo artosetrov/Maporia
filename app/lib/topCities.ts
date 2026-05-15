@@ -27,9 +27,10 @@ import { CITIES } from "../constants";
  */
 export type TopCity = { city: string; total: number };
 
-let pending: Promise<TopCity[]> | null = null;
+const pendingByLimit = new Map<number, Promise<TopCity[]>>();
 
 export function fetchTopCities(limit = 5): Promise<TopCity[]> {
+  const pending = pendingByLimit.get(limit);
   if (pending) return pending;
 
   if (!hasValidSupabaseConfig) {
@@ -38,7 +39,7 @@ export function fetchTopCities(limit = 5): Promise<TopCity[]> {
     );
   }
 
-  pending = (async () => {
+  const request = (async () => {
     try {
       // supabase-js v2.93's rpc() generic inference fails when the client
       // is typed with a Database. Cast the CLIENT (not the method) so we
@@ -66,12 +67,13 @@ export function fetchTopCities(limit = 5): Promise<TopCity[]> {
       return rows;
     } catch {
       // Reset cache so a future call can retry.
-      pending = null;
+      pendingByLimit.delete(limit);
       return CITIES.map((city) => ({ city, total: 0 })).slice(0, limit);
     }
   })();
 
-  return pending;
+  pendingByLimit.set(limit, request);
+  return request;
 }
 
 /** Sync helper for components that just want city names. */

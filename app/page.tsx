@@ -56,6 +56,7 @@ import { SectionErrorBoundary } from "./components/SectionErrorBoundary";
 import { sanitizePostgrestValueForLike } from "./utils";
 import { buildCityRadiusFilter, getCityCoords } from "./lib/cityRadius";
 import { canUserCreate } from "./lib/access";
+import { applyHomeOfferReadyFilter } from "./lib/homeOfferReadiness";
 import Icon from "./components/Icon";
 
 /**
@@ -148,6 +149,15 @@ function HomePageInner() {
 
   // Build sections list with conditional Recommended section
   const sectionsToRender = useMemo(() => {
+    if (activeKind === "service" || activeKind === "experience") {
+      return [
+        {
+          title: activeKind === "service" ? "All services" : "All experiences",
+          allListings: true,
+        },
+      ];
+    }
+
     const sections = [...HOME_SECTIONS];
     
     // Add Recommended section at the beginning if user has interests
@@ -159,7 +169,7 @@ function HomePageInner() {
     }
     
     return sections;
-  }, [hasInterests]);
+  }, [activeKind, hasInterests]);
 
   // Check Supabase configuration
   useEffect(() => {
@@ -179,11 +189,13 @@ function HomePageInner() {
     setKindIsEmpty(null); // показываем секции (skeletons), пока считаем
     (async () => {
       try {
-        const { count, error } = await supabase
+        let countQuery = supabase
           .from("places")
           .select("id", { count: "exact", head: true })
           .eq("kind", activeKind)
           .eq("is_hidden", false);
+        countQuery = applyHomeOfferReadyFilter(countQuery);
+        const { count, error } = await countQuery;
         if (cancelled) return;
         if (error) {
           // Не блокируем UI — показываем секции, они сами справятся.
@@ -476,6 +488,34 @@ function HomePageInner() {
     if (activeKind && activeKind !== "location") {
       params.set("kinds", activeKind);
     }
+    router.push(`/map?${params.toString()}`);
+  }
+
+  function openMobileMap() {
+    const params = new URLSearchParams();
+    params.set("view", "map");
+
+    if (selectedCity) params.set("city", selectedCity);
+    if (searchValue.trim()) params.set("q", searchValue.trim());
+    if (activeFilters.categories.length > 0) {
+      params.set("categories", activeFilters.categories.join(","));
+    }
+    if ((activeFilters.tags ?? []).length > 0) {
+      params.set("tags", (activeFilters.tags ?? []).join(","));
+    }
+    if (activeFilters.sort) {
+      params.set("sort", activeFilters.sort);
+    }
+
+    const kinds = activeFilters.kinds?.length
+      ? activeFilters.kinds
+      : activeKind !== "location"
+        ? [activeKind]
+        : [];
+    if (kinds.length > 0) {
+      params.set("kinds", kinds.join(","));
+    }
+
     router.push(`/map?${params.toString()}`);
   }
 
@@ -835,6 +875,19 @@ function HomePageInner() {
           </div>
         </div>
       </div>
+
+      <button
+        type="button"
+        onClick={openMobileMap}
+        style={{
+          bottom: "calc(24px + env(safe-area-inset-bottom, 0px))",
+        }}
+        className="fixed left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full bg-[#8F9E4F] px-6 py-3 text-white shadow-lg transition-all hover:bg-[#7A8A3F] lg:hidden"
+        aria-label="Show all places on the map"
+      >
+        <Icon name="map" size={20} className="text-white" />
+        <span className="text-sm font-medium">Show map</span>
+      </button>
 
     </main>
   );

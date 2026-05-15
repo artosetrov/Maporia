@@ -340,6 +340,7 @@ export default function AddPlacePage() {
         access_level: "public",
         is_hidden: true, // черновик до заполнения обязательных полей
         created_by: user.id,
+        schedule: primary === "experience" ? { type: "on_request" } : null,
       };
 
       const result = (await supabase

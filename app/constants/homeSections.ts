@@ -7,6 +7,7 @@ export type HomeSectionFilter = {
   daysAgo?: number; // для "New this week" - created_at >= now - daysAgo
   recentlyViewed?: boolean; // для "Recently viewed" - загружает из localStorage
   recommended?: boolean; // для "Recommended for you" - на основе интересов пользователя
+  allListings?: boolean; // для Services/Experiences tabs — общая лента всех карточек типа
 };
 
 export const HOME_SECTIONS: HomeSectionFilter[] = [

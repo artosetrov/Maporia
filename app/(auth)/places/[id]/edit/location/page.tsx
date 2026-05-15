@@ -33,6 +33,7 @@ import dynamicImport from "next/dynamic";
 import Icon from "../../../../../components/Icon";
 import { resolveCity, extractCityFromAddressComponents } from "../../../../../lib/cityResolver";
 import { getCitiesWithPlaces, type City } from "../../../../../lib/cities";
+import { fetchTopCities, type TopCity } from "../../../../../lib/topCities";
 import Pill from "../../../../../components/Pill";
 import UnifiedGoogleImportField from "../../../../../components/UnifiedGoogleImportField";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
@@ -49,6 +50,31 @@ const CityAutocomplete = dynamicImport(
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
+}
+
+function orderCitiesByTopCount(cities: City[], topCities: TopCity[]): City[] {
+  if (topCities.length === 0) return cities;
+
+  const cityByName = new Map(
+    cities.map((city) => [city.name.toLowerCase(), city]),
+  );
+  const ordered: City[] = [];
+  const seen = new Set<string>();
+
+  for (const topCity of topCities) {
+    const city = cityByName.get(topCity.city.toLowerCase());
+    if (!city || seen.has(city.id)) continue;
+    ordered.push(city);
+    seen.add(city.id);
+  }
+
+  return [...ordered, ...cities.filter((city) => !seen.has(city.id))];
+}
+
+function buildTopCityCounts(topCities: TopCity[]): Record<string, number> {
+  return Object.fromEntries(
+    topCities.map((topCity) => [topCity.city.toLowerCase(), topCity.total]),
+  );
 }
 
 type PageProps = { params: Promise<{ id: string }> };
@@ -70,6 +96,7 @@ export default function LocationEditorPage(props: PageProps) {
   const [city, setCity] = useState("");
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
   const [availableCities, setAvailableCities] = useState<City[]>([]);
+  const [topCityCounts, setTopCityCounts] = useState<Record<string, number>>({});
   const [googlePlaceId, setGooglePlaceId] = useState<string | null>(null);
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
@@ -89,8 +116,12 @@ export default function LocationEditorPage(props: PageProps) {
   // Load available cities
   useEffect(() => {
     (async () => {
-      const cities = await getCitiesWithPlaces();
-      setAvailableCities(cities);
+      const [cities, topCities] = await Promise.all([
+        getCitiesWithPlaces(),
+        fetchTopCities(10),
+      ]);
+      setTopCityCounts(buildTopCityCounts(topCities));
+      setAvailableCities(orderCitiesByTopCount(cities, topCities));
     })();
   }, []);
 
@@ -616,42 +647,53 @@ export default function LocationEditorPage(props: PageProps) {
             {/* City tags for quick selection */}
             {availableCities.length > 0 && (
               <div className="mt-3">
-                <div className="text-xs text-[#6F7A5A] mb-2">Quick select:</div>
+                <div className="text-xs text-[#6F7A5A] mb-2">Popular cities:</div>
                 <div className="flex flex-wrap gap-2">
-                  {availableCities.slice(0, 10).map((cityOption) => (
-                    <Pill
-                      key={cityOption.id}
-                      active={selectedCity?.id === cityOption.id || city === cityOption.name}
-                      onClick={async () => {
-                        setCity(cityOption.name);
-                        setSelectedCity(cityOption);
-                        // Optionally resolve city to ensure it's linked
-                        const cityData = await resolveCity(
-                          cityOption.name,
-                          cityOption.state,
-                          cityOption.country,
-                          cityOption.lat,
-                          cityOption.lng
-                        );
-                        if (cityData) {
-                          const { data: cityRecord } = await supabase
-                            .from("cities")
-                            .select("id, name, slug, state, country, lat, lng")
-                            .eq("id", cityData.city_id)
-                            .single();
-                          if (cityRecord) {
-                            setSelectedCity(cityRecord as City);
+                  {availableCities.slice(0, 10).map((cityOption) => {
+                    const isActive = selectedCity?.id === cityOption.id || city === cityOption.name;
+                    const placeCount = topCityCounts[cityOption.name.toLowerCase()];
+
+                    return (
+                      <Pill
+                        key={cityOption.id}
+                        active={isActive}
+                        onClick={async () => {
+                          setCity(cityOption.name);
+                          setSelectedCity(cityOption);
+                          // Optionally resolve city to ensure it's linked
+                          const cityData = await resolveCity(
+                            cityOption.name,
+                            cityOption.state,
+                            cityOption.country,
+                            cityOption.lat,
+                            cityOption.lng
+                          );
+                          if (cityData) {
+                            const { data: cityRecord } = await supabase
+                              .from("cities")
+                              .select("id, name, slug, state, country, lat, lng")
+                              .eq("id", cityData.city_id)
+                              .single();
+                            if (cityRecord) {
+                              setSelectedCity(cityRecord as City);
+                            }
                           }
-                        }
-                      }}
-                      variant="filter"
-                    >
-                      {cityOption.name}
-                      {cityOption.state && (
-                        <span className="ml-1 text-[#A8B096]">({cityOption.state})</span>
-                      )}
-                    </Pill>
-                  ))}
+                        }}
+                        variant="filter"
+                      >
+                        {cityOption.name}
+                        {typeof placeCount === "number" && placeCount > 0 ? (
+                          <span className={cx("ml-1", isActive ? "text-white/80" : "text-[#A8B096]")}>
+                            ({placeCount.toLocaleString()} {placeCount === 1 ? "place" : "places"})
+                          </span>
+                        ) : cityOption.state ? (
+                          <span className={cx("ml-1", isActive ? "text-white/80" : "text-[#A8B096]")}>
+                            ({cityOption.state})
+                          </span>
+                        ) : null}
+                      </Pill>
+                    );
+                  })}
                   {availableCities.length > 10 && (
                     <span className="text-xs text-[#6F7A5A] self-center">
                       +{availableCities.length - 10} more

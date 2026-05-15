@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
+import { applyHomeOfferReadyFilter } from "../lib/homeOfferReadiness";
 import { SERVICE_CATEGORIES, EXPERIENCE_CATEGORIES } from "../constants";
 
 type CategoryCarouselProps = {
@@ -62,11 +63,13 @@ export default function CategoryCarousel({ kind }: CategoryCarouselProps) {
     setLoading(true);
     (async () => {
       try {
-        const { data, error } = await supabase
-          .from("places")
-          .select("categories")
-          .eq("kind", kind)
-          .eq("is_hidden", false);
+        const { data, error } = await applyHomeOfferReadyFilter(
+          supabase
+            .from("places")
+            .select("categories")
+            .eq("kind", kind)
+            .eq("is_hidden", false),
+        );
         if (cancelled || error) {
           setLoading(false);
           return;

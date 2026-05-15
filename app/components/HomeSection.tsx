@@ -14,6 +14,7 @@ import { HomeSectionSkeleton } from "./Skeleton";
 import { getRecentlyViewedPlaceIds, sanitizePostgrestValue } from "../utils";
 import type { PlaceListItem as Place } from "../types";
 import { buildCityRadiusFilter, getCityCoords } from "../lib/cityRadius";
+import { applyHomeOfferReadyFilter, isHomeOfferReady } from "../lib/homeOfferReadiness";
 import { useBatchPlaceData } from "../hooks/useBatchPlaceData";
 
 function HomeSectionCollageImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
@@ -118,19 +119,42 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
           }
           let recentlyViewedQuery = supabase
             .from("places")
-            .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility")
+            .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility,kind,schedule,service_mode")
             .in("id", recentlyViewedIds)
             .eq("is_hidden", false);
           if (kindFilter) recentlyViewedQuery = recentlyViewedQuery.eq("kind", kindFilter);
           const { data, error } = await recentlyViewedQuery.limit(10);
           if (error) throw error;
-          const placesMap = new Map(((data ?? []) as Place[]).map((p) => [p.id, p]));
+          const offerReadyPlaces = ((data ?? []) as Place[]).filter(isHomeOfferReady);
+          const placesMap = new Map(offerReadyPlaces.map((p) => [p.id, p]));
           const result = recentlyViewedIds
             .map(id => placesMap.get(id))
             .filter((p): p is Place => p !== undefined)
             .slice(0, 10);
           if (!cancelled) {
             setPlaces(result);
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (section.allListings) {
+          let allQuery = supabase
+            .from("places")
+            .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility,kind,schedule,service_mode")
+            .eq("is_hidden", false);
+          if (kindFilter) {
+            allQuery = allQuery.eq("kind", kindFilter);
+            if (kindFilter !== "location") {
+              allQuery = applyHomeOfferReadyFilter(allQuery);
+            }
+          }
+          allQuery = allQuery.order("created_at", { ascending: false }).limit(10);
+
+          const { data, error } = await allQuery;
+          if (error) throw error;
+          if (!cancelled) {
+            setPlaces(((data || []) as Place[]).filter(isHomeOfferReady));
             setLoading(false);
           }
           return;
@@ -182,7 +206,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
           }
           let recQuery = supabase
             .from("places")
-            .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility")
+            .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility,kind,schedule,service_mode")
             .eq("is_hidden", false);
           if (orParts.length > 0) {
             recQuery = recQuery.or(orParts.join(","));
@@ -202,6 +226,8 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
 
           // Filter places based on interests
           const recommendedPlaces = (allPlaces as Place[]).filter((place) => {
+            if (!isHomeOfferReady(place)) return false;
+
             // Check if place matches user interests
             const matchesCategory = favoriteCategories.length > 0 &&
               place.categories &&
@@ -259,7 +285,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
 
         let query = supabase
           .from("places")
-          .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility")
+          .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility,kind,schedule,service_mode")
           .eq("is_hidden", false);
         if (section.city) {
           const coords = await getCityCoords(section.city);
@@ -284,7 +310,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
         const { data, error } = await query;
         if (error) throw error;
         if (!cancelled) {
-          setPlaces((data || []) as Place[]);
+          setPlaces(((data || []) as Place[]).filter(isHomeOfferReady));
           setLoading(false);
         }
       } catch (err) {
@@ -297,7 +323,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
     })();
 
     return () => { cancelled = true; };
-  }, [section.title, section.city, section.tag, sectionCategories, categoriesKey, section.daysAgo, section.sort, section.recentlyViewed, section.recommended, userId, userAccess, defaultUserAccess, refreshKey, kindFilter]);
+  }, [section.title, section.city, section.tag, sectionCategories, categoriesKey, section.daysAgo, section.sort, section.recentlyViewed, section.recommended, section.allListings, userId, userAccess, defaultUserAccess, refreshKey, kindFilter]);
 
   // Helper function to calculate relevance score
   function calculateRelevanceScore(place: Place, favoriteCategories: string[], favoriteTags: string[]): number {
@@ -368,9 +394,13 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
 
   // Формируем URL для "See all"
   const getSeeAllUrl = () => {
+    if (section.allListings && kindFilter) {
+      return `/map?kinds=${kindFilter}`;
+    }
+
     // For "Recently viewed", just go to map page
     if (section.recentlyViewed) {
-      return "/map";
+      return kindFilter ? `/map?kinds=${kindFilter}` : "/map";
     }
     
     const params = new URLSearchParams();
@@ -381,6 +411,9 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
       // Используем categories (CSV) для поддержки нескольких категорий
       params.set("categories", sectionCategories.join(','));
       params.set("ref", "home");
+    }
+    if (kindFilter) {
+      params.set("kinds", kindFilter);
     }
     return `/map?${params.toString()}`;
   };

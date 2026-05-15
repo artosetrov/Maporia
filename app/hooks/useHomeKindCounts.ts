@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase, hasValidSupabaseConfig } from "../lib/supabase";
+import { applyHomeOfferReadyFilter } from "../lib/homeOfferReadiness";
 
 /**
  * useHomeKindCounts — единый источник live-чисел для главной (v2).
@@ -9,8 +10,8 @@ import { supabase, hasValidSupabaseConfig } from "../lib/supabase";
  * Возвращает 4 счётчика:
  *   - users       (profiles)
  *   - locations   (places where kind='location'    and is_hidden=false)
- *   - services    (places where kind='service'     and is_hidden=false)
- *   - experiences (places where kind='experience'  and is_hidden=false)
+ *   - services    (places where kind='service',    is_hidden=false, offer-ready)
+ *   - experiences (places where kind='experience', is_hidden=false, offer-ready)
  *
  * Считаем ТОЛЬКО primary `kind` без `secondary_kinds` — согласовано
  * с фильтрами и StatsBanner (см. memory: maporia_place_kinds.md).
@@ -65,16 +66,20 @@ export function useHomeKindCounts(): {
             .select("id", { count: "exact", head: true })
             .eq("kind", "location")
             .eq("is_hidden", false),
-          supabase
-            .from("places")
-            .select("id", { count: "exact", head: true })
-            .eq("kind", "service")
-            .eq("is_hidden", false),
-          supabase
-            .from("places")
-            .select("id", { count: "exact", head: true })
-            .eq("kind", "experience")
-            .eq("is_hidden", false),
+          applyHomeOfferReadyFilter(
+            supabase
+              .from("places")
+              .select("id", { count: "exact", head: true })
+              .eq("kind", "service")
+              .eq("is_hidden", false),
+          ),
+          applyHomeOfferReadyFilter(
+            supabase
+              .from("places")
+              .select("id", { count: "exact", head: true })
+              .eq("kind", "experience")
+              .eq("is_hidden", false),
+          ),
         ]);
         if (cancelled) return;
         setCounts({

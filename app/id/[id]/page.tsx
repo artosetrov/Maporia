@@ -179,6 +179,53 @@ function initialsFromName(displayName?: string | null, username?: string | null)
 }
 
 type PageProps = { params: Promise<{ id: string }> };
+type PlaceLoadResult = { data: Place | null; error: unknown | null };
+
+const PLACE_SELECT_BASE =
+  "id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items";
+
+const PLACE_SELECT_WITH_PRICE_OPTIONS =
+  "id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, price_options, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items";
+
+function isMissingPriceOptionsColumn(error: unknown): boolean {
+  const err = toErrorLike(error);
+  return (
+    err.code === "42703" &&
+    (err.message?.includes("places.price_options") === true ||
+      err.message?.includes("price_options") === true)
+  );
+}
+
+async function loadPlaceById(id: string): Promise<{ data: Place | null; error: unknown | null }> {
+  const primary = (await supabase
+    .from("places")
+    .select(PLACE_SELECT_WITH_PRICE_OPTIONS)
+    .eq("id", id)
+    .single()) as PlaceLoadResult;
+
+  if (!primary.error) {
+    return { data: primary.data as Place, error: null };
+  }
+
+  if (!isMissingPriceOptionsColumn(primary.error)) {
+    return { data: null, error: primary.error };
+  }
+
+  const fallback = (await supabase
+    .from("places")
+    .select(PLACE_SELECT_BASE)
+    .eq("id", id)
+    .single()) as PlaceLoadResult;
+
+  if (fallback.error || !fallback.data) {
+    return { data: null, error: fallback.error ?? primary.error };
+  }
+
+  return {
+    data: { ...(fallback.data as Place), price_options: null },
+    error: null,
+  };
+}
 
 export default function PlacePage(props: PageProps) {
   const router = useRouter();
@@ -535,19 +582,16 @@ export default function PlacePage(props: PageProps) {
       setPlaceNotFound(false);
       // Step 1: load the place itself. Everything else depends on `placeData`
       // existing; missing/deleted places render a real 404-like state.
-      const { data: placeData, error: pErr } = await supabase
-        .from("places")
-        .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, price_options, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
-        .eq("id", id)
-        .single();
+      const { data: placeData, error: pErr } = await loadPlaceById(id);
 
       if (pErr || !placeData) {
-        console.error("Failed to load place:", pErr?.message || "Place not found", { id });
+        const placeError = toErrorLike(pErr);
+        console.error("Failed to load place:", placeError.message || "Place not found", { id });
         setPlace(null);
         setPlaceNotFound(true);
         return;
       }
-      const placeItem = placeData as Place;
+      const placeItem = placeData;
       setPlace(placeItem);
       saveToRecentlyViewed(id);
       setCommentsLoading(true);
