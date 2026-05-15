@@ -1,6 +1,6 @@
 # Architecture
 
-Последнее обновление: 2026-05-14.
+Последнее обновление: 2026-05-15.
 
 ## Stack
 
@@ -43,6 +43,7 @@
 | `app_settings` | Настройки приложения, включая premium modal |
 | `subscriptions` | История/состояние Stripe subscriptions |
 | `admin_impersonation_log` | Журнал impersonation |
+| `admin_place_owner_transfers` | Audit log for admin listing owner transfers |
 
 Storage buckets из README:
 
@@ -133,7 +134,7 @@ Service-role operations должны жить только в API routes/server 
 
 Current-user profile edits for safe fields (`avatar_url`, `display_name`, `bio`, `username`, `favorite_categories`, `favorite_tags`) go through `PATCH /api/profile`, which verifies the user's Bearer session and updates only that user's `profiles` row via service role. This avoids the recursive `profiles` UPDATE RLS policy while keeping client writes allowlisted.
 
-Admin role/plan assignment goes through `/api/admin/users/[id]/role` with a service-role Supabase client after verifying the caller's Bearer session and `profiles.is_admin`/`role='admin'`. The profile page should not update role, plan, or `is_admin` directly from the browser client because those writes depend on `profiles` RLS. Admin auth-management (`/api/admin/users/[id]/auth`) uses the same configured app-origin resolver as Stripe redirects for reset/magic-link emails, ignores client-supplied redirect URLs, and rate-limits credential/email actions per admin/action. Admin impersonation start is also rate-limited per admin/IP before generating Supabase magic links.
+Admin role/plan assignment goes through `/api/admin/users/[id]/role` with a service-role Supabase client after verifying the caller's Bearer session and `profiles.is_admin`/`role='admin'`. The profile page should not update role, plan, or `is_admin` directly from the browser client because those writes depend on `profiles` RLS. Admin auth-management (`/api/admin/users/[id]/auth`) uses the same configured app-origin resolver as Stripe redirects for reset/magic-link emails, ignores client-supplied redirect URLs, and rate-limits credential/email actions per admin/action. Admin place owner transfer goes through `/api/admin/places/[id]/owner`, updates `places.created_by` with the service role, and writes `admin_place_owner_transfers` when the audit table exists. Admin user lookup for this flow uses `/api/admin/users/search`. Admin impersonation start is also rate-limited per admin/IP before generating Supabase magic links.
 
 `scripts/sql/fix-profiles-rls-recursion.sql` fixes the known recursive `profiles` UPDATE policy by moving the current `role/is_admin` lookup into a private `SECURITY DEFINER` helper and recreating the self-update policy without a direct `profiles` subquery.
 
@@ -192,5 +193,7 @@ Google Places photo previews must go through `/api/google/photo`. The route vali
 | `npm run fix-rls` | RLS fix helper |
 | `npm run db:types` | Generate Supabase types from linked project |
 | `scripts/sql/fix-profiles-rls-recursion.sql` | Manual SQL patch for recursive `profiles` UPDATE policy |
+| `scripts/sql/admin-place-owner-transfers.sql` | Audit table/RLS for admin owner transfer history |
+| `scripts/sql/fix-place-editor-admin-and-price-options.sql` | Admin edit RLS plus `places.price_options` schema repair |
 
 SQL scripts live in `scripts/sql/`. They are not a single ordered migration chain, so before applying manually, read names and current DB state.

@@ -29,7 +29,7 @@
 | `/settings`, `/settings/email` | Настройки аккаунта |
 | `/add` | Выбор и создание draft location/service/experience |
 | `/add/google`, `/add/google/preview` | Google import flow |
-| `/places/[id]/edit` | Главный редактор карточки: Google import, next-best-step guidance, type-aware checklist, preview, Save draft / explicit Publish |
+| `/places/[id]/edit` | Главный редактор карточки: Google import, admin owner transfer, next-best-step guidance, type-aware checklist, preview, Save draft / explicit Publish |
 | `/places/[id]/edit/title` | Название |
 | `/places/[id]/edit/description` | Описание |
 | `/places/[id]/edit/location` | Адрес, координаты, карта |

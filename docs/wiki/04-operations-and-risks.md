@@ -27,11 +27,17 @@ Follow-up:
 
 ## 2026-05-15 Admin Place Owner Transfer
 
-Admin place editors now include an owner-transfer panel backed by `/api/admin/users/search` and `/api/admin/places/[id]/owner`. The transfer endpoint uses the service-role client, verifies the caller is admin, updates `places.created_by`, and attempts to write an audit row.
+Admins can transfer a listing to another registered user from `/places/[id]/edit`. The browser only calls admin APIs with the current Bearer session; ownership writes happen server-side with the service-role client.
+
+Actions taken:
+
+- Added `/api/admin/users/search` for admin-only profile/auth email lookup.
+- Added `/api/admin/places/[id]/owner` to update `places.created_by` and attempt an audit insert.
+- Added `scripts/sql/admin-place-owner-transfers.sql` for the audit table and admin-readable RLS.
 
 Follow-up:
 
-- Apply `scripts/sql/admin-place-owner-transfers.sql` in Supabase SQL Editor to create the optional owner-transfer audit table and RLS policies.
+- Apply `scripts/sql/admin-place-owner-transfers.sql` in Supabase SQL Editor to persist transfer history. If missing, transfers still work but the API returns an `auditWarning`.
 
 ## 2026-05-14 Stripe Price Env Repair
 
