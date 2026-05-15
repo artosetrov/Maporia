@@ -220,6 +220,19 @@ function formatPriceOption(option: PriceOption): string {
   return `${fromPrefix}${text}${suffix}`;
 }
 
+function formatBasePrice(
+  amount: number | null | undefined,
+  currency: string | null | undefined,
+  unit: string | null | undefined
+): string | null {
+  const text = formatPrice(amount, currency);
+  if (!text) return null;
+  const unitLabel = unit ? PRICE_UNIT_LABEL[unit] ?? "" : "";
+  const fromPrefix = unit === "from" ? "from " : "";
+  const suffix = unitLabel && unit !== "from" ? ` ${unitLabel}` : "";
+  return `${fromPrefix}${text}${suffix}`;
+}
+
 function getPrimaryPriceOption(options: PriceOption[]): PriceOption | null {
   if (options.length === 0) return null;
   return options.find((option) => option.is_featured) ?? options[0];
@@ -315,10 +328,23 @@ export default function OfferPlaceView({
     [place.price_amount, place.price_currency]
   );
   const priceUnitLabel = place.price_unit ? PRICE_UNIT_LABEL[place.price_unit] ?? "" : "";
+  const basePriceText = useMemo(
+    () => formatBasePrice(place.price_amount, place.price_currency, place.price_unit),
+    [place.price_amount, place.price_currency, place.price_unit]
+  );
   const priceOptions = useMemo(() => normalizePriceOptions(place.price_options), [place.price_options]);
   const primaryPriceOption = useMemo(() => getPrimaryPriceOption(priceOptions), [priceOptions]);
   const primaryPriceOptionText = primaryPriceOption ? formatPriceOption(primaryPriceOption) : null;
   const priceOptionGroups = useMemo(() => groupPriceOptions(priceOptions), [priceOptions]);
+  const badgeCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const option of priceOptions) {
+      const key = option.badge?.trim().toLowerCase();
+      if (!key) continue;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [priceOptions]);
   const durationText = useMemo(() => formatDuration(place.duration_minutes), [place.duration_minutes]);
   const scheduleText = useMemo(() => describeSchedule(place.schedule), [place.schedule]);
 
@@ -439,9 +465,22 @@ export default function OfferPlaceView({
   const hasIncluded = (place.included_items?.length ?? 0) > 0;
   const hasBring = (place.bring_items?.length ?? 0) > 0;
   const hasLogistics = guestsText || place.meeting_point || place.cancellation_policy;
+  const leadPriceText = primaryPriceOptionText || basePriceText;
+  const leadOfferTitle =
+    primaryPriceOption?.label?.trim() ||
+    (priceOptions.length > 0 ? (isService ? "Featured service" : "Featured experience") : kindLabel);
+  const leadOfferBadge =
+    primaryPriceOption?.badge?.trim() ||
+    (priceOptions.length > 1 ? `${priceOptions.length} options` : isPremium ? "Premium" : kindLabel);
+  const snapshotFacts = [
+    durationText ? { icon: "clock" as const, label: "Duration", value: durationText } : null,
+    scheduleText ? { icon: "calendar" as const, label: isService ? "Hours" : "Dates", value: scheduleText } : null,
+    guestsText ? { icon: "users" as const, label: "Group", value: guestsText } : null,
+    place.service_mode ? { icon: "location" as const, label: "Format", value: SERVICE_MODE_LABELS[place.service_mode] } : null,
+  ].filter((fact): fact is { icon: "clock" | "calendar" | "users" | "location"; label: string; value: string } => Boolean(fact));
 
   return (
-    <main className="min-h-screen bg-white pb-24">
+    <main className="min-h-screen bg-[#FAFAF7] pb-24">
       {/* Top bar — desktop only; на мобиле есть назад/сердечко в hero */}
       <div className="hidden lg:block">
         <TopBar
@@ -731,55 +770,125 @@ export default function OfferPlaceView({
           </div>
         )}
 
-        {/* Quick facts row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-          {/* Price */}
-          <div className="rounded-2xl border border-[#ECEEE4] bg-white p-4">
-            <div className="text-xs uppercase tracking-wide text-[#6F7A5A] mb-1">Price</div>
-            {priceText ? (
-              <div className="font-fraunces text-xl font-semibold text-[#1F2A1F]">
-                {place.price_unit === "from" && <span className="text-sm font-normal text-[#6F7A5A] mr-1">from</span>}
-                {priceText}
-                {priceUnitLabel && place.price_unit !== "from" && (
-                  <span className="text-sm font-normal text-[#6F7A5A] ml-1">{priceUnitLabel}</span>
+        {/* Offer snapshot — one price anchor, with package details below. */}
+        <section className="mb-6 overflow-hidden rounded-lg border border-[#ECEEE4] bg-white shadow-sm">
+          <div className="grid gap-0 lg:grid-cols-[1.3fr_0.7fr]">
+            <div className="p-5 sm:p-6">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-1 text-xs font-semibold text-[#556036]">
+                  <Icon name={isService ? "wrench" : "sparkles"} size={14} />
+                  {kindLabel}
+                </span>
+                {leadOfferBadge && (
+                  <span className="inline-flex rounded-full bg-[#8F9E4F]/10 px-3 py-1 text-xs font-semibold text-[#556036]">
+                    {leadOfferBadge}
+                  </span>
+                )}
+                {rating && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#1F2A1F]">
+                    <Icon name="star" size={12} active className="text-[#D6B25E]" />
+                    {rating.avg.toFixed(2)}
+                  </span>
                 )}
               </div>
-            ) : primaryPriceOptionText ? (
-              <div className="font-fraunces text-xl font-semibold text-[#1F2A1F]">{primaryPriceOptionText}</div>
-            ) : (
-              <div className="text-sm text-[#A8B096]">By request</div>
-            )}
-          </div>
 
-          {/* Duration — particularly important for experiences */}
-          <div className="rounded-2xl border border-[#ECEEE4] bg-white p-4">
-            <div className="text-xs uppercase tracking-wide text-[#6F7A5A] mb-1">Duration</div>
-            {durationText ? (
-              <div className="font-fraunces text-xl font-semibold text-[#1F2A1F]">{durationText}</div>
-            ) : (
-              <div className="text-sm text-[#A8B096]">Not set</div>
-            )}
-          </div>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                    {priceOptions.length > 0 ? "Recommended pick" : "Experience details"}
+                  </div>
+                  <h2 className="mt-1 font-fraunces text-2xl font-semibold leading-tight text-[#1F2A1F]">
+                    {leadOfferTitle}
+                  </h2>
+                </div>
+                <div className="shrink-0 text-left sm:text-right">
+                  {leadPriceText ? (
+                    <>
+                      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                        {priceOptions.length > 0 ? "Starts at" : "Price"}
+                      </div>
+                      <div className="font-fraunces text-3xl font-semibold leading-none text-[#1F2A1F]">
+                        {leadPriceText}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-2 text-sm font-medium text-[#6F7A5A]">
+                      Price on request
+                    </div>
+                  )}
+                </div>
+              </div>
 
-          {/* Schedule */}
-          <div className="rounded-2xl border border-[#ECEEE4] bg-white p-4">
-            <div className="text-xs uppercase tracking-wide text-[#6F7A5A] mb-1">
-              {isService ? "Hours" : "Dates"}
+              {snapshotFacts.length > 0 && (
+                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {snapshotFacts.map((fact) => (
+                    <div
+                      key={fact.label}
+                      className="flex min-h-[64px] items-center gap-3 rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-2"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#8F9E4F]">
+                        <Icon name={fact.icon} size={16} />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                          {fact.label}
+                        </span>
+                        <span className="block truncate text-sm font-medium text-[#1F2A1F]">
+                          {fact.value}
+                        </span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            {scheduleText ? (
-              <div className="text-sm text-[#1F2A1F]">{scheduleText}</div>
-            ) : (
-              <div className="text-sm text-[#A8B096]">{isService ? "By appointment" : "TBA"}</div>
-            )}
+
+            <div className="border-t border-[#ECEEE4] bg-[#F7F8F0] p-5 sm:p-6 lg:border-l lg:border-t-0">
+              <div className="flex h-full flex-col justify-between gap-5">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                    Hosted booking
+                  </div>
+                  <div className="mt-2 text-sm leading-relaxed text-[#1F2A1F]">
+                    Contact the host for availability, final timing, and the best package for your group.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setContactModalOpen(true)}
+                  className={cx(
+                    "inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold transition",
+                    hasContactDetails
+                      ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
+                      : "bg-white text-[#6F7A5A] ring-1 ring-inset ring-[#ECEEE4] hover:bg-[#FAFAF7]"
+                  )}
+                >
+                  {ctaLabel}
+                  <Icon name="forward" size={16} />
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
 
         {/* Parent location backlink + owner CTA (host pattern) */}
         <ParentLocationCard childId={place.id} canEdit={canEdit} />
 
         {priceOptions.length > 0 && (
           <section className="mb-8">
-            <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-4">Pricing menu</h2>
+            <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                  {isService ? "Service menu" : "Experience menu"}
+                </div>
+                <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F]">
+                  Choose a package
+                </h2>
+              </div>
+              <div className="text-sm text-[#6F7A5A]">
+                {priceOptions.length} option{priceOptions.length === 1 ? "" : "s"}
+              </div>
+            </div>
             <div className="space-y-7">
               {priceOptionGroups.map((group, groupIndex) => (
                 <div key={group.label || `group-${groupIndex}`}>
@@ -794,26 +903,31 @@ export default function OfferPlaceView({
                         ? formatPrice(option.compare_at_amount, option.currency)
                         : null;
                       const duration = formatDuration(option.duration_minutes);
+                      const badgeKey = option.badge?.trim().toLowerCase();
+                      const showBadge = Boolean(
+                        option.badge &&
+                        (option.is_featured || !badgeKey || (badgeCounts.get(badgeKey) ?? 0) === 1)
+                      );
                       return (
                         <div
                           key={option.id || `${option.label || "price"}-${groupIndex}-${index}`}
                           className={cx(
-                            "rounded-2xl border p-4 shadow-sm",
+                            "relative rounded-lg border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md",
                             option.is_featured
-                              ? "border-[#8F9E4F] bg-[#1F6F84] text-white shadow-md"
+                              ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#1F2A1F] shadow-md ring-1 ring-[#8F9E4F]/30"
                               : "border-[#ECEEE4] bg-white text-[#1F2A1F]",
                           )}
                         >
                           <div className={cx(
                             "mb-3 flex min-h-5 items-start justify-between gap-2 text-xs font-semibold uppercase tracking-[0.08em]",
-                            option.is_featured ? "text-[#DDE7C8]" : "text-[#6F7A5A]",
+                            "text-[#6F7A5A]",
                           )}>
                             <span>{option.label || `Option ${index + 1}`}</span>
-                            {option.badge && (
+                            {showBadge && option.badge && (
                               <span className={cx(
-                                "rounded-full border px-2 py-0.5 text-[10px]",
+                                "rounded-full border px-2 py-0.5 text-[10px] leading-4",
                                 option.is_featured
-                                  ? "border-white/30 text-white"
+                                  ? "border-[#8F9E4F]/30 bg-[#8F9E4F] text-white"
                                   : "border-[#C96A5B]/30 text-[#B63D32]",
                               )}>
                                 {option.badge}
@@ -827,7 +941,7 @@ export default function OfferPlaceView({
                             {oldPrice && (
                               <div className={cx(
                                 "text-sm line-through",
-                                option.is_featured ? "text-white/60" : "text-[#8A9281]",
+                                "text-[#8A9281]",
                               )}>
                                 {oldPrice}
                               </div>
@@ -836,7 +950,7 @@ export default function OfferPlaceView({
                           {duration && (
                             <div className={cx(
                               "mt-2 text-sm",
-                              option.is_featured ? "text-white/80" : "text-[#6F7A5A]",
+                              "text-[#6F7A5A]",
                             )}>
                               {duration}
                             </div>
@@ -844,7 +958,7 @@ export default function OfferPlaceView({
                           {option.note && (
                             <div className={cx(
                               "mt-3 text-sm leading-relaxed",
-                              option.is_featured ? "text-white/80" : "text-[#6F7A5A]",
+                              "text-[#6F7A5A]",
                             )}>
                               {option.note}
                             </div>
