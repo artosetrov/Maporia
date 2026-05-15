@@ -1,0 +1,994 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maporia Price Editor Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --page: #f7f6ef;
+    --surface: #fffefa;
+    --surface-2: #f1f3e8;
+    --ink: #1f2a1f;
+    --muted: #667157;
+    --line: #e2e6d6;
+    --line-strong: #c9d0ad;
+    --olive: #718135;
+    --olive-dark: #526025;
+    --mint: #e8f2de;
+    --blue: #e9f0fb;
+    --blue-ink: #355b87;
+    --rose: #c85b4d;
+    --amber: #f2dfad;
+    --shadow: 0 18px 48px rgba(31, 42, 31, .08);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background:
+      linear-gradient(180deg, rgba(113, 129, 53, .08), transparent 260px),
+      var(--page);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button, input, select, textarea { font: inherit; }
+  button { cursor: pointer; }
+
+  .app {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: rgba(255, 254, 250, .9);
+    border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(16px);
+  }
+
+  .topbar-inner {
+    width: min(1120px, calc(100% - 32px));
+    height: 64px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 44px 1fr 44px;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .icon-btn:hover { background: var(--surface-2); border-color: var(--line); }
+
+  .title {
+    margin: 0;
+    text-align: center;
+    font-family: Fraunces, Georgia, serif;
+    font-size: 26px;
+    line-height: 1;
+  }
+
+  .workspace {
+    width: min(1120px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 28px 0 112px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 24px;
+    align-items: start;
+  }
+
+  .main-flow { display: grid; gap: 24px; min-width: 0; }
+  .section { display: grid; gap: 14px; }
+
+  .section-head {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .section-title {
+    margin: 0;
+    font-family: Fraunces, Georgia, serif;
+    font-size: 28px;
+    line-height: 1.05;
+  }
+
+  .section-note {
+    margin: 6px 0 0;
+    max-width: 560px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .summary-strip {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) 180px;
+    gap: 12px;
+  }
+
+  .field-card {
+    min-width: 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 1px 0 rgba(31, 42, 31, .02);
+  }
+
+  .field-label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .amount-line {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 116px;
+    gap: 10px;
+  }
+
+  .input, .select, .textarea {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fbfbf7;
+    color: var(--ink);
+    outline: none;
+    transition: border-color .15s, background-color .15s, box-shadow .15s;
+  }
+
+  .input, .select { min-height: 48px; padding: 0 14px; }
+  .textarea { min-height: 76px; padding: 12px 14px; resize: vertical; }
+  .input:focus, .select:focus, .textarea:focus {
+    border-color: var(--olive);
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(113, 129, 53, .13);
+  }
+
+  .amount-input {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .helper {
+    margin: 8px 0 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .segmented {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .unit-btn {
+    min-height: 64px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    padding: 10px;
+    text-align: left;
+    color: var(--ink);
+  }
+
+  .unit-btn strong {
+    display: block;
+    font-size: 13px;
+    line-height: 1.2;
+  }
+
+  .unit-btn span {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.25;
+  }
+
+  .unit-btn.active {
+    border-color: var(--olive);
+    background: var(--mint);
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .chip, .ghost-btn, .primary-btn, .danger-btn {
+    min-width: 0;
+    min-height: 38px;
+    border-radius: 8px;
+    padding: 0 13px;
+    font-size: 13px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .chip {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  .chip.primary {
+    border-color: var(--olive);
+    background: #fbfff4;
+  }
+
+  .ghost-btn {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  .primary-btn {
+    border: 1px solid var(--olive);
+    background: var(--olive);
+    color: #fff;
+  }
+
+  .danger-btn {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--rose);
+  }
+
+  .option-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .option-card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+    box-shadow: 0 1px 0 rgba(31, 42, 31, .02);
+  }
+
+  .option-card.featured {
+    border-color: var(--olive);
+    box-shadow: 0 0 0 3px rgba(113, 129, 53, .08);
+  }
+
+  .option-card.invalid { border-color: rgba(200, 91, 77, .5); }
+
+  .option-summary {
+    width: 100%;
+    min-height: 78px;
+    border: 0;
+    background: transparent;
+    padding: 13px 14px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 28px;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+    color: var(--ink);
+  }
+
+  .option-summary:hover { background: #fbfbf7; }
+
+  .option-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .drag {
+    width: 20px;
+    height: 28px;
+    color: #9aa284;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .option-title {
+    min-width: 0;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .option-sub {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+
+  .badge {
+    min-height: 22px;
+    border-radius: 999px;
+    padding: 3px 8px;
+    background: var(--surface-2);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .badge.featured { background: var(--mint); color: var(--olive-dark); }
+  .badge.sale { background: var(--amber); color: #66501a; }
+  .badge.info { background: var(--blue); color: var(--blue-ink); }
+
+  .option-price {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .option-price strong {
+    display: block;
+    font-size: 20px;
+    line-height: 1.1;
+  }
+
+  .option-price span {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .chevron {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--surface-2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    transition: transform .16s;
+  }
+
+  .option-card[data-open="true"] .chevron { transform: rotate(180deg); }
+
+  .option-body {
+    display: none;
+    border-top: 1px solid var(--line);
+    padding: 14px;
+    background: #fffefa;
+  }
+
+  .option-card[data-open="true"] .option-body { display: block; }
+
+  .form-grid {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .full { grid-column: 1 / -1; }
+
+  .inline-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .toggle {
+    min-height: 46px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fbfbf7;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 13px;
+  }
+
+  .toggle input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--olive);
+  }
+
+  .card-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .side {
+    position: sticky;
+    top: 88px;
+    display: grid;
+    gap: 12px;
+  }
+
+  .preview {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+  }
+
+  .preview h2 {
+    margin: 0 0 12px;
+    font-family: Fraunces, Georgia, serif;
+    font-size: 22px;
+  }
+
+  .offer-preview {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px;
+    background: #fbfbf7;
+  }
+
+  .preview-price {
+    margin: 0;
+    font-family: Fraunces, Georgia, serif;
+    font-size: 28px;
+    font-weight: 700;
+  }
+
+  .preview-price span {
+    font-family: Inter, sans-serif;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .preview-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .preview-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border-top: 1px solid var(--line);
+    padding-top: 8px;
+    font-size: 13px;
+  }
+
+  .preview-line strong { white-space: nowrap; }
+
+  .tip {
+    border: 1px solid #d7deef;
+    border-radius: 8px;
+    background: var(--blue);
+    padding: 14px;
+    color: #244461;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .mobile-rail {
+    display: none;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 2px 0 4px;
+    scrollbar-width: none;
+  }
+
+  .mobile-rail::-webkit-scrollbar { display: none; }
+
+  .rail-pill {
+    min-width: max-content;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    padding: 8px 11px;
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .rail-pill.active {
+    border-color: var(--olive);
+    background: var(--mint);
+  }
+
+  .footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    border-top: 1px solid var(--line);
+    background: rgba(255, 254, 250, .92);
+    backdrop-filter: blur(16px);
+  }
+
+  .footer-inner {
+    width: min(1120px, calc(100% - 32px));
+    margin: 0 auto;
+    min-height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .save-state {
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .footer-actions { display: flex; gap: 10px; }
+  .footer-actions .ghost-btn, .footer-actions .primary-btn { min-width: 150px; }
+
+  @media (max-width: 920px) {
+    .workspace {
+      width: min(720px, calc(100% - 28px));
+      grid-template-columns: 1fr;
+      padding-top: 18px;
+    }
+
+    .side { display: none; }
+    .mobile-rail { display: flex; }
+    .summary-strip { grid-template-columns: 1fr; }
+    .segmented { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+
+  @media (max-width: 620px) {
+    body { overflow-x: hidden; }
+
+    .topbar-inner {
+      width: calc(100% - 20px);
+      height: 60px;
+      grid-template-columns: 40px 1fr 40px;
+    }
+
+    .title { font-size: 24px; }
+
+    .workspace {
+      width: calc(100% - 20px);
+      padding-bottom: 132px;
+      gap: 18px;
+    }
+
+    .section-title { font-size: 25px; }
+    .section-note { font-size: 13px; }
+    .section-head { align-items: start; flex-direction: column; }
+    .field-card { padding: 13px; }
+    .amount-line { grid-template-columns: 1fr; }
+    .amount-input { font-size: 20px; }
+    .segmented { grid-template-columns: 1fr; }
+
+    .toolbar {
+      position: sticky;
+      top: 60px;
+      z-index: 10;
+      margin: 0 -10px;
+      padding: 10px;
+      background: rgba(247, 246, 239, .92);
+      border-bottom: 1px solid rgba(226, 230, 214, .7);
+      backdrop-filter: blur(14px);
+    }
+
+    .chips {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .chip { padding: 0 8px; font-size: 12px; }
+
+    .option-summary {
+      grid-template-columns: minmax(0, 1fr) auto;
+      min-height: 86px;
+    }
+
+    .chevron { display: none; }
+    .option-price strong { font-size: 17px; }
+    .badges { display: none; }
+    .form-grid { grid-template-columns: 1fr; }
+    .full { grid-column: auto; }
+
+    .card-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .footer-inner {
+      width: calc(100% - 20px);
+      min-height: 86px;
+      align-items: stretch;
+      justify-content: center;
+      flex-direction: column;
+      padding: 10px 0 calc(10px + env(safe-area-inset-bottom));
+    }
+
+    .save-state { text-align: center; font-size: 12px; }
+    .footer-actions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+    .footer-actions .ghost-btn, .footer-actions .primary-btn { min-width: 0; min-height: 46px; }
+  }
+</style>
+</head>
+<body>
+<main class="app">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <button class="icon-btn" aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <h1 class="title">Price</h1>
+      <button class="icon-btn" aria-label="Preview">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <div class="main-flow">
+      <section class="section" aria-labelledby="base-price-title">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title" id="base-price-title">Main price</h2>
+            <p class="section-note">Keep this as the headline price. Leave it empty when the offer is by request, then use menu cards for packages.</p>
+          </div>
+        </div>
+
+        <div class="summary-strip">
+          <div class="field-card">
+            <label class="field-label" for="amount">Amount</label>
+            <div class="amount-line">
+              <input class="input amount-input" id="amount" type="number" min="0" step="0.01" value="72" />
+              <select class="select" aria-label="Currency">
+                <option>USD</option>
+                <option>EUR</option>
+                <option>GBP</option>
+                <option>RUB</option>
+              </select>
+            </div>
+            <p class="helper">Shown on the listing card. Clear it for “By request”.</p>
+          </div>
+
+          <div class="field-card">
+            <label class="field-label" for="duration">Default duration</label>
+            <input class="input" id="duration" type="number" min="1" value="60" />
+            <p class="helper">Minutes, optional.</p>
+          </div>
+        </div>
+
+        <div class="field-card">
+          <label class="field-label">How is this charged?</label>
+          <div class="segmented" role="group" aria-label="Charge unit">
+            <button class="unit-btn active" type="button"><strong>Fixed</strong><span>One total price</span></button>
+            <button class="unit-btn" type="button"><strong>Starts from</strong><span>Minimum price</span></button>
+            <button class="unit-btn" type="button"><strong>Per person</strong><span>Groups, tours</span></button>
+            <button class="unit-btn" type="button"><strong>Per month</strong><span>Memberships</span></button>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="menu-title">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title" id="menu-title">Pricing menu</h2>
+            <p class="section-note">Each card collapses into a clean buyer-facing summary. Open one card when editing; close it when it is ready.</p>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <div class="chips">
+            <button class="chip primary" type="button" data-add="blank">+ Price</button>
+            <button class="chip" type="button" data-add="trial">Trial</button>
+            <button class="chip" type="button" data-add="member">Membership</button>
+          </div>
+          <button class="ghost-btn" type="button" id="collapseAll">Collapse all</button>
+        </div>
+
+        <div class="mobile-rail" aria-label="Quick jump">
+          <button class="rail-pill active" type="button">Monthly · $199</button>
+          <button class="rail-pill" type="button">Trial · $72</button>
+          <button class="rail-pill" type="button">Trial · $60</button>
+          <button class="rail-pill" type="button">Private · empty</button>
+        </div>
+
+        <div class="option-list" id="optionList">
+          <article class="option-card featured" data-open="false">
+            <button class="option-summary" type="button" aria-expanded="false">
+              <div>
+                <div class="option-title-row">
+                  <span class="drag" aria-hidden="true">
+                    <svg width="16" height="18" viewBox="0 0 16 18" fill="none">
+                      <path d="M5 4h.01M11 4h.01M5 9h.01M11 9h.01M5 14h.01M11 14h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                    </svg>
+                  </span>
+                  <span class="option-title">Monthly Membership</span>
+                </div>
+                <div class="option-sub">30 min / week · Per month · Reserved for ages 5-7</div>
+                <div class="badges">
+                  <span class="badge featured">Highlighted</span>
+                  <span class="badge sale">Most popular</span>
+                </div>
+              </div>
+              <div class="option-price"><strong>$199</strong><span>old $75</span></div>
+              <span class="chevron" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+            </button>
+            <div class="option-body">
+              <div class="form-grid">
+                <label><span class="field-label">Group</span><input class="input" value="Monthly Membership" /></label>
+                <label><span class="field-label">Label</span><input class="input" value="30 min / week" /></label>
+                <label><span class="field-label">Amount</span><input class="input" type="number" value="199" /></label>
+                <label><span class="field-label">Old price</span><input class="input" type="number" value="75" /></label>
+                <label><span class="field-label">Currency</span><select class="select"><option>USD</option><option>EUR</option></select></label>
+                <label><span class="field-label">Charged</span><select class="select"><option>Per month</option><option>Fixed price</option></select></label>
+                <label class="full"><span class="field-label">Badge</span><input class="input" value="Most popular" /></label>
+                <label class="toggle full"><input type="checkbox" checked /> Highlight this option</label>
+                <label class="full"><span class="field-label">Note</span><textarea class="textarea">Reserved for ages 5-7</textarea></label>
+              </div>
+              <div class="card-actions">
+                <button class="danger-btn" type="button">Remove</button>
+                <button class="ghost-btn done-btn" type="button">Done</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="option-card" data-open="true">
+            <button class="option-summary" type="button" aria-expanded="true">
+              <div>
+                <div class="option-title-row">
+                  <span class="drag" aria-hidden="true">
+                    <svg width="16" height="18" viewBox="0 0 16 18" fill="none">
+                      <path d="M5 4h.01M11 4h.01M5 9h.01M11 9h.01M5 14h.01M11 14h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                    </svg>
+                  </span>
+                  <span class="option-title">Trial Lesson</span>
+                </div>
+                <div class="option-sub">60 minutes · Fixed price · New student promo</div>
+                <div class="badges">
+                  <span class="badge info">Trial</span>
+                  <span class="badge sale">New student promo</span>
+                </div>
+              </div>
+              <div class="option-price"><strong>$72</strong><span>old $90</span></div>
+              <span class="chevron" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+            </button>
+            <div class="option-body">
+              <div class="form-grid">
+                <label><span class="field-label">Group</span><input class="input" value="Trial Lesson" /></label>
+                <label><span class="field-label">Label</span><input class="input" value="60 minutes" /></label>
+                <label><span class="field-label">Amount</span><input class="input" type="number" value="72" /></label>
+                <label><span class="field-label">Old price</span><input class="input" type="number" value="90" /></label>
+                <label><span class="field-label">Currency</span><select class="select"><option>USD</option><option>EUR</option></select></label>
+                <label><span class="field-label">Duration</span><input class="input" type="number" value="60" /></label>
+                <label><span class="field-label">Charged</span><select class="select"><option>Fixed price</option><option>Per person</option></select></label>
+                <label><span class="field-label">Badge</span><input class="input" value="New student promo" /></label>
+                <label class="toggle full"><input type="checkbox" /> Highlight this option</label>
+                <label class="full"><span class="field-label">Note</span><textarea class="textarea" placeholder="For monthly members, includes private events"></textarea></label>
+              </div>
+              <div class="card-actions">
+                <button class="danger-btn" type="button">Remove</button>
+                <button class="ghost-btn done-btn" type="button">Done</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="option-card" data-open="false">
+            <button class="option-summary" type="button" aria-expanded="false">
+              <div>
+                <div class="option-title-row">
+                  <span class="drag" aria-hidden="true">
+                    <svg width="16" height="18" viewBox="0 0 16 18" fill="none">
+                      <path d="M5 4h.01M11 4h.01M5 9h.01M11 9h.01M5 14h.01M11 14h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                    </svg>
+                  </span>
+                  <span class="option-title">Trial Lesson</span>
+                </div>
+                <div class="option-sub">45 minutes · Fixed price · For younger students</div>
+                <div class="badges"><span class="badge info">Trial</span></div>
+              </div>
+              <div class="option-price"><strong>$60</strong><span>old $75</span></div>
+              <span class="chevron" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+            </button>
+            <div class="option-body">
+              <div class="form-grid">
+                <label><span class="field-label">Group</span><input class="input" value="Trial Lesson" /></label>
+                <label><span class="field-label">Label</span><input class="input" value="45 minutes" /></label>
+                <label><span class="field-label">Amount</span><input class="input" type="number" value="60" /></label>
+                <label><span class="field-label">Old price</span><input class="input" type="number" value="75" /></label>
+                <label><span class="field-label">Currency</span><select class="select"><option>USD</option><option>EUR</option></select></label>
+                <label><span class="field-label">Duration</span><input class="input" type="number" value="45" /></label>
+              </div>
+              <div class="card-actions">
+                <button class="danger-btn" type="button">Remove</button>
+                <button class="ghost-btn done-btn" type="button">Done</button>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
+
+    <aside class="side" aria-label="Preview and guidance">
+      <div class="preview">
+        <h2>Buyer preview</h2>
+        <div class="offer-preview">
+          <p class="preview-price">$72 <span>fixed price</span></p>
+          <div class="preview-list">
+            <div class="preview-line"><span>Monthly Membership</span><strong>$199/mo</strong></div>
+            <div class="preview-line"><span>Trial Lesson</span><strong>$72</strong></div>
+            <div class="preview-line"><span>Trial Lesson</span><strong>$60</strong></div>
+          </div>
+        </div>
+      </div>
+      <div class="tip">
+        UX rule for the real build: newly added cards open automatically; completing a card collapses it and updates the summary, so long menus stay scannable.
+      </div>
+    </aside>
+  </div>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="save-state">3 menu prices · 1 highlighted · unsaved prototype changes</div>
+      <div class="footer-actions">
+        <button class="ghost-btn" type="button">Cancel</button>
+        <button class="primary-btn" type="button">Save</button>
+      </div>
+    </div>
+  </footer>
+</main>
+
+<script>
+  const optionList = document.querySelector("#optionList");
+  const collapseAll = document.querySelector("#collapseAll");
+
+  function setOpen(card, open) {
+    card.dataset.open = String(open);
+    const summary = card.querySelector(".option-summary");
+    if (summary) summary.setAttribute("aria-expanded", String(open));
+  }
+
+  function closeSiblings(card) {
+    document.querySelectorAll(".option-card").forEach((item) => {
+      if (item !== card) setOpen(item, false);
+    });
+  }
+
+  optionList.addEventListener("click", (event) => {
+    const summary = event.target.closest(".option-summary");
+    const done = event.target.closest(".done-btn");
+    const remove = event.target.closest(".danger-btn");
+    const card = event.target.closest(".option-card");
+
+    if (summary && card) {
+      const willOpen = card.dataset.open !== "true";
+      closeSiblings(card);
+      setOpen(card, willOpen);
+    }
+
+    if (done && card) setOpen(card, false);
+    if (remove && card) card.remove();
+  });
+
+  collapseAll.addEventListener("click", () => {
+    document.querySelectorAll(".option-card").forEach((card) => setOpen(card, false));
+  });
+
+  document.querySelectorAll(".unit-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.querySelectorAll(".unit-btn").forEach((item) => item.classList.remove("active"));
+      button.classList.add("active");
+    });
+  });
+
+  document.querySelectorAll("[data-add]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const type = button.getAttribute("data-add");
+      const title = type === "member" ? "Monthly Membership" : type === "trial" ? "Trial Lesson" : "New Price";
+      const label = type === "member" ? "45 min / week" : type === "trial" ? "45 minutes" : "Add label";
+      const amount = type === "member" ? "199" : "";
+      const card = document.createElement("article");
+      card.className = type === "member" ? "option-card featured" : "option-card invalid";
+      card.dataset.open = "true";
+      card.innerHTML = `
+        <button class="option-summary" type="button" aria-expanded="true">
+          <div>
+            <div class="option-title-row">
+              <span class="drag" aria-hidden="true">
+                <svg width="16" height="18" viewBox="0 0 16 18" fill="none"><path d="M5 4h.01M11 4h.01M5 9h.01M11 9h.01M5 14h.01M11 14h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+              </span>
+              <span class="option-title">${title}</span>
+            </div>
+            <div class="option-sub">${label} · fill amount to save</div>
+            <div class="badges"><span class="badge info">New</span></div>
+          </div>
+          <div class="option-price"><strong>${amount ? "$" + amount : "Empty"}</strong><span>draft</span></div>
+          <span class="chevron" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </button>
+        <div class="option-body">
+          <div class="form-grid">
+            <label><span class="field-label">Group</span><input class="input" value="${title}" /></label>
+            <label><span class="field-label">Label</span><input class="input" value="${label}" /></label>
+            <label><span class="field-label">Amount</span><input class="input" type="number" value="${amount}" placeholder="0" /></label>
+            <label><span class="field-label">Old price</span><input class="input" type="number" placeholder="Optional" /></label>
+            <label><span class="field-label">Currency</span><select class="select"><option>USD</option><option>EUR</option></select></label>
+            <label><span class="field-label">Charged</span><select class="select"><option>Fixed price</option><option>Per month</option></select></label>
+            <label class="toggle full"><input type="checkbox" ${type === "member" ? "checked" : ""} /> Highlight this option</label>
+          </div>
+          <div class="card-actions">
+            <button class="danger-btn" type="button">Remove</button>
+            <button class="ghost-btn done-btn" type="button">Done</button>
+          </div>
+        </div>
+      `;
+      closeSiblings(card);
+      optionList.prepend(card);
+      card.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  });
+</script>
+</body>
+</html>
