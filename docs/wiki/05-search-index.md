@@ -26,6 +26,7 @@
 | AI description | `generate-description`, `placeDescription` | `app/api/ai/generate-description`, `app/lib/ai/` |
 | Impersonation | `impersonate`, `admin_impersonation_log` | `app/api/admin/impersonate/**`, `app/lib/impersonation.ts` |
 | Admin users | `admin/users`, `AdminAssignable`, `fix-profiles-rls-recursion` | `app/(auth)/profile/page.tsx`, `app/api/admin/users/**`, `scripts/sql/fix-profiles-rls-recursion.sql` |
+| Admin place ownership | `admin/places`, `created_by`, `owner transfer`, `admin_place_owner_transfers` | `app/(auth)/places/[id]/edit/page.tsx`, `app/api/admin/places/**`, `scripts/sql/admin-place-owner-transfers.sql` |
 | Health | `health`, `CheckResult`, `health:json` | `scripts/health/**`, `app/api/health/route.ts` |
 | LLM orientation | `AGENTS.md`, `LLM Brief`, `wiki` | `AGENTS.md`, `docs/wiki/00-llm-brief.md`, `docs/wiki/README.md` |
 | Wiki freshness | `docs:check`, `checkWikiFreshness` | `scripts/wiki/checkWikiFreshness.ts`, `package.json` |
@@ -50,7 +51,7 @@ rg "access_level|premium_only|is_premium|canUserViewPlace|isPlacePremium" app
 rg "PLAN_CONFIG|STRIPE_|checkout|webhook|subscription|bonus_listing_credits" app scripts
 
 # admin users / role assignment
-rg "admin/users|AdminAssignable|fix-profiles-rls-recursion" app scripts docs
+rg "admin/users|admin/places|AdminAssignable|owner transfer|admin_place_owner_transfers|fix-profiles-rls-recursion" app scripts docs
 
 # карта и маркеры
 rg "GoogleMap|MarkerClusterer|AdvancedMarker|google\\.maps\\.Marker" app
