@@ -110,7 +110,30 @@ export async function GET(request: NextRequest) {
     return jsonError(profilesError.message || "Failed to search users", 500, "SEARCH_FAILED");
   }
 
-  const profileRows = (profiles ?? []) as ProfileRow[];
+  let profileRows = (profiles ?? []) as ProfileRow[];
+
+  if (ids.length === 0 && q) {
+    const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    });
+    const matchedAuthIds =
+      authUsers?.users
+        ?.filter((authUser) => authUser.email?.toLowerCase().includes(q.toLowerCase()))
+        .map((authUser) => authUser.id) ?? [];
+    const missingIds = matchedAuthIds.filter(
+      (id) => !profileRows.some((profile) => profile.id === id),
+    );
+
+    if (missingIds.length > 0) {
+      const { data: emailProfiles } = await supabaseAdmin
+        .from("profiles")
+        .select("id, username, display_name, avatar_url, role, is_admin, plan")
+        .in("id", missingIds);
+      profileRows = [...profileRows, ...((emailProfiles ?? []) as ProfileRow[])];
+    }
+  }
+
   const profileIds = profileRows.map((profile) => profile.id);
 
   const emailById = new Map<string, string | null>();

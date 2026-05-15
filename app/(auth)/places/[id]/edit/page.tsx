@@ -120,6 +120,17 @@ type PlacePhoto = {
   is_cover: boolean;
 };
 
+type AdminOwnerUser = {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  role: string | null;
+  is_admin: boolean | null;
+  plan: string | null;
+  email: string | null;
+};
+
 type ErrorLike = {
   code?: string;
   message?: string;
@@ -306,6 +317,23 @@ function hasExperienceDetails(placeData: Place): boolean {
   );
 }
 
+function ownerDisplayName(owner: AdminOwnerUser | null): string {
+  if (!owner) return "Unknown owner";
+  return owner.display_name || owner.username || owner.email || "Unnamed user";
+}
+
+function ownerSubtitle(owner: AdminOwnerUser | null): string {
+  if (!owner) return "";
+  return [owner.email, owner.plan || owner.role].filter(Boolean).join(" • ");
+}
+
+function ownerInitials(owner: AdminOwnerUser | null): string {
+  const label = ownerDisplayName(owner);
+  const parts = label.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return label[0]?.toUpperCase() || "U";
+}
+
 type PageProps = { params: Promise<{ id: string }> };
 
 export default function PlaceEditorHub(props: PageProps) {
@@ -331,6 +359,14 @@ export default function PlaceEditorHub(props: PageProps) {
   const [commentsEnabled, setCommentsEnabled] = useState(true); // Default to enabled
   const [togglingComments, setTogglingComments] = useState(false);
   const [togglingAccess, setTogglingAccess] = useState(false);
+  const [currentOwner, setCurrentOwner] = useState<AdminOwnerUser | null>(null);
+  const [ownerSearchQuery, setOwnerSearchQuery] = useState("");
+  const [ownerSearchResults, setOwnerSearchResults] = useState<AdminOwnerUser[]>([]);
+  const [ownerSearchLoading, setOwnerSearchLoading] = useState(false);
+  const [ownerTransferLoading, setOwnerTransferLoading] = useState(false);
+  const [ownerTransferReason, setOwnerTransferReason] = useState("");
+  const [ownerTransferError, setOwnerTransferError] = useState<string | null>(null);
+  const [ownerTransferNotice, setOwnerTransferNotice] = useState<string | null>(null);
   const isUpdatingRef = useRef(false); // Track if we're currently updating to prevent reload
 
   useEffect(() => {
@@ -463,6 +499,82 @@ export default function PlaceEditorHub(props: PageProps) {
     };
   }, [placeId, user, router, access, accessLoading]);
 
+  useEffect(() => {
+    if (!isAdmin || !place?.created_by) {
+      setCurrentOwner(null);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) return;
+
+      const res = await fetch(
+        `/api/admin/users/search?ids=${encodeURIComponent(place.created_by)}&limit=1`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok || cancelled) return;
+      const data = (await res.json().catch(() => ({}))) as { users?: AdminOwnerUser[] };
+      if (!cancelled) setCurrentOwner(data.users?.[0] ?? null);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, place?.created_by]);
+
+  useEffect(() => {
+    if (!isAdmin || ownerSearchQuery.trim().length < 2) {
+      setOwnerSearchResults([]);
+      setOwnerSearchLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timeoutId = window.setTimeout(async () => {
+      setOwnerSearchLoading(true);
+      setOwnerTransferError(null);
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        if (!cancelled) {
+          setOwnerSearchLoading(false);
+          setOwnerTransferError("Admin session is missing. Please sign in again.");
+        }
+        return;
+      }
+
+      const params = new URLSearchParams({
+        q: ownerSearchQuery.trim(),
+        limit: "8",
+      });
+      const res = await fetch(`/api/admin/users/search?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        users?: AdminOwnerUser[];
+        error?: string;
+      };
+
+      if (cancelled) return;
+      if (!res.ok) {
+        setOwnerSearchResults([]);
+        setOwnerTransferError(data.error || "Could not search users.");
+      } else {
+        setOwnerSearchResults(data.users ?? []);
+      }
+      setOwnerSearchLoading(false);
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [isAdmin, ownerSearchQuery]);
+
   // Reload data when page becomes visible (returning from editor)
   useEffect(() => {
     if (!placeId || !user) return;
@@ -492,6 +604,72 @@ export default function PlaceEditorHub(props: PageProps) {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [placeId, user]);
+
+  async function handleTransferOwner(targetOwner: AdminOwnerUser) {
+    if (!isAdmin || !placeId || !place) return;
+    if (targetOwner.id === place.created_by) {
+      setOwnerTransferNotice("This user already owns the listing.");
+      setOwnerTransferError(null);
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Transfer "${place.title || "this listing"}" to ${ownerDisplayName(targetOwner)}?`,
+    );
+    if (!confirmed) return;
+
+    setOwnerTransferLoading(true);
+    setOwnerTransferError(null);
+    setOwnerTransferNotice(null);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setOwnerTransferLoading(false);
+      setOwnerTransferError("Admin session is missing. Please sign in again.");
+      return;
+    }
+
+    const res = await fetch(`/api/admin/places/${encodeURIComponent(placeId)}/owner`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        targetUserId: targetOwner.id,
+        reason: ownerTransferReason,
+      }),
+    });
+
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      place?: { created_by?: string | null };
+      owner?: AdminOwnerUser;
+      auditWarning?: string | null;
+    };
+
+    setOwnerTransferLoading(false);
+
+    if (!res.ok) {
+      setOwnerTransferError(data.error || "Could not transfer owner.");
+      return;
+    }
+
+    const nextOwner = data.owner ?? targetOwner;
+    setCurrentOwner(nextOwner);
+    setPlace((prev) =>
+      prev ? { ...prev, created_by: data.place?.created_by ?? targetOwner.id } : prev,
+    );
+    setOwnerSearchQuery("");
+    setOwnerSearchResults([]);
+    setOwnerTransferReason("");
+    setOwnerTransferNotice(
+      data.auditWarning
+        ? `Owner changed. Audit warning: ${data.auditWarning}`
+        : `Owner changed to ${ownerDisplayName(nextOwner)}.`,
+    );
+  }
 
   async function handleToggleVisibility() {
     if (!placeId || !user) {
@@ -1236,6 +1414,107 @@ export default function PlaceEditorHub(props: PageProps) {
             {/* Import from Google Maps — самостоятельный блок перед Progress */}
             {user && placeId && (
               <GoogleImportField userId={user.id} targetPlaceId={placeId} redirectToPreview />
+            )}
+
+            {isAdmin && (
+              <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                      Admin owner
+                    </div>
+                    <div className="mt-3 flex items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#FAFAF7] text-sm font-semibold text-[#8F9E4F] ring-1 ring-[#ECEEE4]">
+                        {currentOwner?.avatar_url ? (
+                          <Image
+                            src={currentOwner.avatar_url}
+                            alt=""
+                            width={40}
+                            height={40}
+                            sizes="40px"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          ownerInitials(currentOwner)
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-[#1F2A1F]">
+                          {ownerDisplayName(currentOwner)}
+                        </div>
+                        <div className="truncate text-xs text-[#6F7A5A]">
+                          {ownerSubtitle(currentOwner) || place.created_by || "No owner id"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="w-full space-y-3 lg:max-w-md">
+                    <input
+                      value={ownerSearchQuery}
+                      onChange={(e) => setOwnerSearchQuery(e.target.value)}
+                      className="h-11 w-full rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:border-[#8F9E4F] focus:bg-white"
+                      placeholder="Search registered users"
+                    />
+                    <input
+                      value={ownerTransferReason}
+                      onChange={(e) => setOwnerTransferReason(e.target.value)}
+                      className="h-10 w-full rounded-xl border border-[#ECEEE4] bg-white px-3 text-xs text-[#1F2A1F] outline-none transition focus:border-[#8F9E4F]"
+                      placeholder="Reason (optional)"
+                    />
+
+                    {ownerTransferError && (
+                      <div className="rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 px-3 py-2 text-xs text-[#C96A5B]">
+                        {ownerTransferError}
+                      </div>
+                    )}
+                    {ownerTransferNotice && (
+                      <div className="rounded-xl border border-[#8F9E4F]/30 bg-[#F4F7EA] px-3 py-2 text-xs text-[#556036]">
+                        {ownerTransferNotice}
+                      </div>
+                    )}
+
+                    {ownerSearchLoading ? (
+                      <div className="text-xs text-[#6F7A5A]">Searching...</div>
+                    ) : ownerSearchResults.length > 0 ? (
+                      <div className="overflow-hidden rounded-xl border border-[#ECEEE4]">
+                        {ownerSearchResults.map((candidate) => {
+                          const isCurrentOwner = candidate.id === place.created_by;
+                          return (
+                            <button
+                              key={candidate.id}
+                              type="button"
+                              onClick={() => handleTransferOwner(candidate)}
+                              disabled={ownerTransferLoading || isCurrentOwner}
+                              className={cx(
+                                "flex w-full items-center justify-between gap-3 border-b border-[#ECEEE4] bg-white px-3 py-2 text-left last:border-b-0 transition",
+                                isCurrentOwner
+                                  ? "cursor-default opacity-60"
+                                  : "hover:bg-[#FAFAF7]",
+                                ownerTransferLoading && "cursor-wait opacity-70",
+                              )}
+                            >
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-medium text-[#1F2A1F]">
+                                  {ownerDisplayName(candidate)}
+                                </span>
+                                <span className="block truncate text-xs text-[#6F7A5A]">
+                                  {ownerSubtitle(candidate) || candidate.id}
+                                </span>
+                              </span>
+                              <span className="shrink-0 text-xs font-medium text-[#8F9E4F]">
+                                {isCurrentOwner ? "Current" : "Transfer"}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : ownerSearchQuery.trim().length >= 2 ? (
+                      <div className="text-xs text-[#6F7A5A]">No users found</div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Next best step */}
