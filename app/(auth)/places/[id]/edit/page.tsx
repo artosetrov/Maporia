@@ -120,6 +120,63 @@ type PlacePhoto = {
   is_cover: boolean;
 };
 
+type ErrorLike = {
+  code?: string;
+  message?: string;
+};
+
+type PlaceLoadResult = {
+  data: Place | null;
+  error: unknown | null;
+};
+
+const PLACE_SELECT_BASE =
+  "id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, is_hidden, manually_hidden, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items";
+
+const PLACE_SELECT_WITH_PRICE_OPTIONS =
+  "id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, is_hidden, manually_hidden, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, price_options, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items";
+
+function isMissingPriceOptionsColumn(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as ErrorLike;
+  return (
+    err.code === "42703" &&
+    (err.message?.includes("places.price_options") === true ||
+      err.message?.includes("price_options") === true)
+  );
+}
+
+async function loadEditablePlace(placeId: string): Promise<PlaceLoadResult> {
+  const primary = (await supabase
+    .from("places")
+    .select(PLACE_SELECT_WITH_PRICE_OPTIONS)
+    .eq("id", placeId)
+    .single()) as PlaceLoadResult;
+
+  if (!primary.error) {
+    return { data: primary.data as Place, error: null };
+  }
+
+  if (!isMissingPriceOptionsColumn(primary.error)) {
+    return { data: null, error: primary.error };
+  }
+
+  const fallback = (await supabase
+    .from("places")
+    .select(PLACE_SELECT_BASE)
+    .eq("id", placeId)
+    .single()) as PlaceLoadResult;
+
+  if (fallback.error || !fallback.data) {
+    return { data: null, error: fallback.error ?? primary.error };
+  }
+
+  return {
+    data: { ...(fallback.data as Place), price_options: null },
+    error: null,
+  };
+}
+
 type RequiredStep = {
   id: string;
   label: string;
@@ -298,11 +355,7 @@ export default function PlaceEditorHub(props: PageProps) {
       // for place to resolve before kicking off photos was wasting one
       // round-trip on every editor open.
       const [placeRes, photosRes] = await Promise.all([
-        supabase
-          .from("places")
-          .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, is_hidden, manually_hidden, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, price_options, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
-          .eq("id", placeId)
-          .single(),
+        loadEditablePlace(placeId),
         supabase
           .from("place_photos")
           .select("url, sort, is_cover")
@@ -418,11 +471,7 @@ export default function PlaceEditorHub(props: PageProps) {
       if (document.visibilityState === 'visible' && !isUpdatingRef.current) {
         // Reload data when page becomes visible (but not if we're currently updating)
         (async () => {
-          const { data: rawPlace } = await supabase
-            .from("places")
-            .select("id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, is_hidden, manually_hidden, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, price_options, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items")
-            .eq("id", placeId)
-            .single();
+          const { data: rawPlace } = await loadEditablePlace(placeId);
 
           const placeData = rawPlace as Place | null;
           if (placeData) {

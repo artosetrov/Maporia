@@ -1,6 +1,6 @@
 # Operations And Risks
 
-Последнее обновление: 2026-05-13.
+Последнее обновление: 2026-05-15.
 
 ## Production Deployment Target
 
@@ -10,6 +10,20 @@ Live production traffic for Maporia is served by the Vercel project `maporia_ful
 - Vercel project: `maporia_full`.
 - Project id for clean temp deploys: `prj_7h0OXlw5rrbQuREEIso0NGkkLsxp`.
 - Deployment rule: when asked to deploy the live site, run production deploy against `maporia_full`. Deploying only to `maporia` / `https://maporia.vercel.app` will not update the customer-facing site.
+
+## 2026-05-15 Places Price Options Schema Drift
+
+Production/edit clients can hit `column places.price_options does not exist` if `scripts/sql/add-price-unit-per-month.sql` has not been applied to the active Supabase database. This surfaced as a misleading `Place not found` state on `/places/[id]/edit` because the editor selected `price_options` alongside core place fields.
+
+Actions taken:
+
+- `/places/[id]/edit` now falls back to a base `places` select without `price_options` and treats missing price options as `null`, matching the public `/id/[id]` fallback.
+- `/places/[id]/edit/price` now falls back to compact price fields when `price_options` is missing and blocks pricing-menu saves until the schema is applied.
+- Added `scripts/sql/fix-place-editor-admin-and-price-options.sql` to add `places.price_options` and admin RLS policies for editing any listing plus related photos/links.
+
+Follow-up:
+
+- Apply `scripts/sql/fix-place-editor-admin-and-price-options.sql` in Supabase SQL Editor before relying on pricing-menu editing or admin editing of non-owned hidden/private listings.
 
 ## 2026-05-14 Stripe Price Env Repair
 

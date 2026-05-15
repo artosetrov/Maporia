@@ -26,6 +26,70 @@ type PlacePriceRow = Pick<
 >;
 type PriceOptionRow = NonNullable<Database["public"]["Tables"]["places"]["Row"]["price_options"]>[number];
 
+type ErrorLike = {
+  code?: string;
+  message?: string;
+};
+
+type PlacePriceLoadResult = {
+  data: PlacePriceRow | null;
+  error: unknown | null;
+  supportsPriceOptions: boolean;
+};
+
+function isMissingPriceOptionsColumn(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as ErrorLike;
+  return (
+    err.code === "42703" &&
+    (err.message?.includes("places.price_options") === true ||
+      err.message?.includes("price_options") === true)
+  );
+}
+
+async function loadPlacePrice(placeId: string): Promise<PlacePriceLoadResult> {
+  const primary = (await supabase
+    .from("places")
+    .select("created_by, kind, price_amount, price_currency, price_unit, price_options")
+    .eq("id", placeId)
+    .single()) as { data: PlacePriceRow | null; error: unknown | null };
+
+  if (!primary.error) {
+    return {
+      data: primary.data as PlacePriceRow,
+      error: null,
+      supportsPriceOptions: true,
+    };
+  }
+
+  if (!isMissingPriceOptionsColumn(primary.error)) {
+    return { data: null, error: primary.error, supportsPriceOptions: true };
+  }
+
+  const fallback = (await supabase
+    .from("places")
+    .select("created_by, kind, price_amount, price_currency, price_unit")
+    .eq("id", placeId)
+    .single()) as {
+      data: Omit<PlacePriceRow, "price_options"> | null;
+      error: unknown | null;
+    };
+
+  if (fallback.error || !fallback.data) {
+    return {
+      data: null,
+      error: fallback.error ?? primary.error,
+      supportsPriceOptions: false,
+    };
+  }
+
+  return {
+    data: { ...fallback.data, price_options: null },
+    error: null,
+    supportsPriceOptions: false,
+  };
+}
+
 const CURRENCIES = ["USD", "EUR", "RUB", "GBP"] as const;
 type Currency = (typeof CURRENCIES)[number];
 
@@ -168,6 +232,7 @@ function PriceEditorPageContent(props: PageProps) {
   const [currency, setCurrency] = useState<Currency>("USD");
   const [unit, setUnit] = useState<PriceUnit>("fixed");
   const [priceOptions, setPriceOptions] = useState<PriceOptionDraft[]>([]);
+  const [supportsPriceOptions, setSupportsPriceOptions] = useState(true);
 
   const [originalAmount, setOriginalAmount] = useState<string>("");
   const [originalCurrency, setOriginalCurrency] = useState<Currency>("USD");
@@ -180,11 +245,9 @@ function PriceEditorPageContent(props: PageProps) {
 
     (async () => {
       setLoading(true);
-      const { data: rawData, error: placeError } = await supabase
-        .from("places")
-        .select("created_by, kind, price_amount, price_currency, price_unit, price_options")
-        .eq("id", placeId)
-        .single();
+      const { data: rawData, error: placeError, supportsPriceOptions } =
+        await loadPlacePrice(placeId);
+      setSupportsPriceOptions(supportsPriceOptions);
 
       const data = rawData as PlacePriceRow | null;
       if (placeError || !data) {
@@ -308,17 +371,25 @@ function PriceEditorPageContent(props: PageProps) {
     setSaving(true);
     setError(null);
 
+    if (!supportsPriceOptions && normalizedOptions.length > 0) {
+      setSaving(false);
+      setError("Pricing menu needs the places.price_options database column. Apply scripts/sql/fix-place-editor-admin-and-price-options.sql first.");
+      return;
+    }
+
     const payload: {
       price_amount: number | null;
       price_currency: string | null;
       price_unit: string | null;
-      price_options: PriceOptionRow[] | null;
+      price_options?: PriceOptionRow[] | null;
     } = {
       price_amount: parsedAmount,
       price_currency: parsedAmount === null ? null : currency,
       price_unit: parsedAmount === null ? null : unit,
-      price_options: normalizedOptions.length > 0 ? normalizedOptions : null,
     };
+    if (supportsPriceOptions) {
+      payload.price_options = normalizedOptions.length > 0 ? normalizedOptions : null;
+    }
 
     const updateQuery = supabase
       .from("places")

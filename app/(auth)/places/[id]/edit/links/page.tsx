@@ -24,6 +24,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "../../../../../lib/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
+import { isUserAdmin } from "../../../../../lib/access";
 import {
   approveLink,
   rejectLink,
@@ -82,7 +83,7 @@ export default function EditLinksPage({
   const [error, setError] = useState<string | null>(null);
   const [linkToRemoveId, setLinkToRemoveId] = useState<string | null>(null);
 
-  const isAdmin = access?.isAdmin === true;
+  const isAdmin = isUserAdmin(access);
   const isOwner = !!user && place?.created_by === user.id;
   const canManage = isOwner || isAdmin;
 
