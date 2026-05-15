@@ -25,6 +25,14 @@ Follow-up:
 
 - Apply `scripts/sql/fix-place-editor-admin-and-price-options.sql` in Supabase SQL Editor before relying on pricing-menu editing or admin editing of non-owned hidden/private listings.
 
+## 2026-05-15 Admin Place Owner Transfer
+
+Admin place editors now include an owner-transfer panel backed by `/api/admin/users/search` and `/api/admin/places/[id]/owner`. The transfer endpoint uses the service-role client, verifies the caller is admin, updates `places.created_by`, and attempts to write an audit row.
+
+Follow-up:
+
+- Apply `scripts/sql/admin-place-owner-transfers.sql` in Supabase SQL Editor to create the optional owner-transfer audit table and RLS policies.
+
 ## 2026-05-14 Stripe Price Env Repair
 
 Production checkout was returning `MISSING_PLAN_PRICE` for Pro Location because `maporia_full` production env did not include `STRIPE_PRICE_CREATOR_LOCATION_MONTH/YEAR`. The v3 `creator_pro` env keys were also missing from docs/env examples.
