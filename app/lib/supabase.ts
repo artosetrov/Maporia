@@ -79,7 +79,7 @@ export const supabase = createClient<Database>(safeUrl, safeKey, {
 // Главный клиент использует flowType: 'pkce' (необходим для Google OAuth, security).
 // Но в PKCE-режиме `signInWithOtp` шлёт OTP с code_challenge, и сырой 6-значный
 // код через `verifyOtp` без `code_verifier` сервер отклоняет ("Invalid or expired").
-// Поэтому для AuthModal заводим отдельный implicit-flow клиент: он генерирует OTP
+// Поэтому для passwordless auth UI заводим отдельный implicit-flow клиент: он генерирует OTP
 // без PKCE-обёртки, и `verifyOtp({ token, email, type: 'email' })` работает напрямую.
 // Сессия после verifyOtp создаётся в storage этого клиента, но onAuthStateChange
 // в основном `supabase` тоже её увидит — оба клиента используют один localStorage

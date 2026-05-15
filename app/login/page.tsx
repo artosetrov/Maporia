@@ -4,8 +4,8 @@ import LoginPageContent from "./LoginPageContent";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 
 export const metadata: Metadata = {
-  title: "Sign in — Maporia",
-  description: "Sign in to your Maporia account.",
+  title: "Log in or sign up — Maporia",
+  description: "Log in or sign up for Maporia.",
 };
 
 export default function LoginPage() {

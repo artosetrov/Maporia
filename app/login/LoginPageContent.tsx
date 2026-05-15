@@ -7,5 +7,6 @@ import { getSafeRedirectFrom } from "@/app/lib/authRedirect";
 export default function LoginPageContent() {
   const searchParams = useSearchParams();
   const from = getSafeRedirectFrom(searchParams.get("from")) ?? "/";
-  return <AuthForm mode="login" redirectAfter={from} />;
+  const method = searchParams.get("method") === "password" ? "password" : "passwordless";
+  return <AuthForm mode="login" redirectAfter={from} initialMethod={method} />;
 }

@@ -3,8 +3,9 @@
  * Use getAuthUrl(from) (alias getLoginUrl) или useAuthRedirect() so ?from=
  * is consistent and safe.
  *
- * Note: после миграции на email+пароль /auth превращён в редирект → /login,
- * поэтому getAuthUrl теперь возвращает /login?from=… Сами защищённые
+ * Note: /auth is now only a backwards-compatible bridge. The canonical auth
+ * screen is /login, which starts with passwordless Google/email-code auth and
+ * keeps password sign-in as a secondary legacy path. Сами защищённые
  * страницы используют getAuthUrl, поэтому правка одной функции
  * автоматически перенаправляет всё, что должно было идти на /auth.
  */
@@ -52,7 +53,7 @@ export function getSafeRedirectFrom(from: string | null): string | null {
  * Use for router.push(getAuthUrl(pathname)) or links href={getAuthUrl(pathname)}.
  *
  * Imя getAuthUrl сохранено для обратной совместимости со всеми существующими
- * вызовами в коде — они автоматически начинают вести на /login.
+ * вызовами в коде.
  */
 export function getAuthUrl(from?: string | null): string {
   const safe = getSafeRedirectFrom(from ?? null);

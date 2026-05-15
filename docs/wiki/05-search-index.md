@@ -1,12 +1,12 @@
 # Search Index
 
-Последнее обновление: 2026-05-13.
+Последнее обновление: 2026-05-15.
 
 ## По Доменам
 
 | Термин | Что искать | Где обычно живет |
 | --- | --- | --- |
-| Auth | `auth`, `signIn`, `signUp`, `magicLink`, `reset` | `app/lib/auth/`, `app/components/auth/`, `app/auth/**` |
+| Auth | `auth`, `PasswordlessAuthPanel`, `signInWithOtp`, `verifyOtp`, `method=password`, `reset` | `app/lib/auth/`, `app/components/auth/`, `app/auth/**` |
 | Profile | `profiles`, `display_name`, `username`, `avatar_url`, `updateOwnProfile` | `app/(auth)/profile/**`, `app/api/profile/route.ts`, `app/lib/profileUpdate.ts`, `app/types.ts` |
 | Access | `getUserAccess`, `canUserViewPlace`, `isPlacePremium` | `app/lib/access.ts` |
 | Premium | `premium_viewer`, `PremiumUpsellModal`, `LockedPlaceOverlay` | `app/lib/plans.ts`, `app/components/` |

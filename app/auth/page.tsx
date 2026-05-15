@@ -9,7 +9,7 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
  * /auth — bridge для обратной совместимости.
  *
  * Раньше это была единственная страница входа (magic link + Google).
- * После миграции на email+пароль:
+ * После миграции на canonical /login:
  * 1. Если в URL есть auth-токен (PKCE `?code=` или старый implicit `#access_token=…`),
  *    кидаем на /auth/callback, сохраняя query + hash. Это нужно, потому что
  *    в существующих письмах magic link `emailRedirectTo` указывал на /auth.

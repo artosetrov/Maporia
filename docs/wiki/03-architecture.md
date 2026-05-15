@@ -127,6 +127,8 @@ Legacy env `STRIPE_PRICE_ID` остаётся только как fallback дл�
 
 Client-side singleton в `app/lib/supabase.ts` делает defensive init, не валит browser полностью при missing env и вручную стартует auth auto-refresh после session validation.
 
+User-facing auth is centralized around the shared `PasswordlessAuthPanel`: `/login`, `/signup`, and `AuthModal` all begin with Google OAuth or email 6-digit code. Password sign-in is preserved only as a secondary legacy path on `/login?method=password`; reset/update-password routes still use the password helpers in `app/lib/auth/**`.
+
 Service-role operations должны жить только в API routes/server utils. Health-check уже проверяет, что service keys не попали в client files.
 
 Current-user profile edits for safe fields (`avatar_url`, `display_name`, `bio`, `username`, `favorite_categories`, `favorite_tags`) go through `PATCH /api/profile`, which verifies the user's Bearer session and updates only that user's `profiles` row via service role. This avoids the recursive `profiles` UPDATE RLS policy while keeping client writes allowlisted.

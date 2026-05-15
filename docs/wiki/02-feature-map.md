@@ -1,6 +1,6 @@
 # Feature Map
 
-Последнее обновление: 2026-05-13.
+Последнее обновление: 2026-05-15.
 
 ## Public Routes
 
@@ -14,7 +14,7 @@
 | `/collections` | Список коллекций | `app/collections/page.tsx` |
 | `/collections/[id]` | Детали коллекции и места внутри нее | `app/collections/[id]/page.tsx` |
 | `/pricing` | Тарифы и checkout entry | `app/pricing/page.tsx`, `app/lib/plans.ts` |
-| `/auth`, `/login`, `/signup`, `/auth/reset`, `/auth/update-password`, `/auth/callback` | Auth flows | `app/components/auth/**`, `app/lib/auth/**` |
+| `/auth`, `/login`, `/signup`, `/auth/reset`, `/auth/update-password`, `/auth/callback` | Unified auth flows: `/login` and `/signup` start with Google/email-code auth; password sign-in remains a secondary legacy path via `method=password` | `app/components/auth/**`, `app/lib/auth/**` |
 | `/brand-guide` | Визуальный бренд-гайд внутри приложения | `app/brand-guide/page.tsx`, `docs/BRAND-GUIDE.md` |
 
 ## Authenticated Routes
