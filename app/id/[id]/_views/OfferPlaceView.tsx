@@ -31,6 +31,7 @@ import ParentLocationCard from "./ParentLocationCard";
 import StarRating from "../../../components/StarRating";
 import PlaceContacts from "../../../components/PlaceContacts";
 import { isPlacePremium } from "../../../lib/access";
+import { navigateBackOrFallback } from "../../../lib/navigation";
 
 type OfferPlace = {
   id: string;
@@ -317,6 +318,7 @@ export default function OfferPlaceView({
   photos,
 }: Props) {
   const router = useRouter();
+  const handleBackClick = () => navigateBackOrFallback(router, "/map");
   const { isLoaded: mapsLoaded, loadError: mapsLoadError } = useGoogleMaps();
 
   const isService = kind === "service";
@@ -480,7 +482,7 @@ export default function OfferPlaceView({
       <div className="hidden lg:block">
         <TopBar
           showBackButton
-          onBackClick={() => router.back()}
+          onBackClick={handleBackClick}
           userAvatar={userAvatar}
           userDisplayName={userDisplayName}
           userEmail={userEmail}
@@ -500,7 +502,7 @@ export default function OfferPlaceView({
           {/* Mobile back button */}
           <button
             type="button"
-            onClick={() => router.back()}
+            onClick={handleBackClick}
             className="absolute left-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur shadow"
             aria-label="Back"
           >

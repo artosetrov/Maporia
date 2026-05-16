@@ -41,6 +41,7 @@ import PlaceContacts from "../../components/PlaceContacts";
 import TransientNotice from "../../components/TransientNotice";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import ErrorPage from "../../components/ErrorPage";
+import { navigateBackOrFallback } from "../../lib/navigation";
 
 type Place = {
   id: string;
@@ -231,6 +232,7 @@ export default function PlacePage(props: PageProps) {
   const router = useRouter();
   const { id } = use(props.params);
   const { redirectToAuth } = useAuthRedirect();
+  const handleBackClick = () => navigateBackOrFallback(router, "/map");
 
   const [, setActiveSection] = useState<"overview" | "photos" | "map" | "comments">("overview");
   const [place, setPlace] = useState<Place | null>(null);
@@ -1226,7 +1228,7 @@ export default function PlacePage(props: PageProps) {
         <main className="min-h-screen bg-white">
           <TopBar
             showBackButton={true}
-            onBackClick={() => router.back()}
+            onBackClick={handleBackClick}
             userAvatar={userAvatar}
             userDisplayName={userDisplayName}
             userEmail={userEmail}
@@ -1335,7 +1337,7 @@ export default function PlacePage(props: PageProps) {
           userDisplayName={userDisplayName}
           userEmail={userEmail}
           showBackButton={true}
-          onBackClick={() => router.back()}
+          onBackClick={handleBackClick}
           onShareClick={handleShare}
           onFavoriteClick={toggleFavorite}
           isFavorite={isFavorite}
@@ -1517,7 +1519,7 @@ export default function PlacePage(props: PageProps) {
         {/* Mobile App Bar - Back, Share, Heart */}
         <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-4 pt-safe-top">
           <button
-            onClick={() => router.back()}
+            onClick={handleBackClick}
             className="h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#1F2A1F] hover:bg-white transition-colors"
             aria-label="Back"
           >
