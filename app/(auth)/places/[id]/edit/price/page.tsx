@@ -11,7 +11,7 @@
  * единой цены, они либо «бесплатные» (парк, спот), либо «зависит» (бар).
  */
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../../../lib/supabase";
 import type { Database } from "../../../../../types/supabase";
@@ -120,6 +120,106 @@ type PriceOptionDraft = {
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
+}
+
+const CURRENCY_SYMBOLS: Record<Currency, string> = {
+  USD: "$",
+  EUR: "€",
+  RUB: "₽",
+  GBP: "£",
+};
+
+const PRICE_UNIT_SUFFIX: Record<PriceUnit, string> = {
+  fixed: "",
+  from: "from",
+  per_hour: "/ hr",
+  per_person: "/ person",
+  per_day: "/ day",
+  per_month: "/ month",
+  per_session: "/ session",
+};
+
+type PriceOptionValidation = {
+  amountValid: boolean;
+  compareAtAmountValid: boolean;
+  durationValid: boolean;
+  valid: boolean;
+};
+
+function formatMoney(amount: number | string | null | undefined, currency: Currency | string | null | undefined): string | null {
+  if (amount === null || amount === undefined || amount === "") return null;
+  const parsed = typeof amount === "number" ? amount : Number(amount);
+  if (!Number.isFinite(parsed)) return null;
+  const cur = ((currency || "USD").toUpperCase() as Currency);
+  const symbol = CURRENCY_SYMBOLS[cur] ?? "";
+  const formatted = parsed % 1 === 0 ? Math.round(parsed).toString() : parsed.toFixed(2);
+  return symbol ? `${symbol}${formatted}` : `${formatted} ${cur}`;
+}
+
+function formatPriceWithUnit(
+  amount: number | string | null | undefined,
+  currency: Currency | string | null | undefined,
+  unit: PriceUnit | string | null | undefined
+): string | null {
+  const money = formatMoney(amount, currency);
+  if (!money) return null;
+  const priceUnit = unit as PriceUnit | null | undefined;
+  const suffix = priceUnit ? PRICE_UNIT_SUFFIX[priceUnit] ?? "" : "";
+  if (priceUnit === "from") return `from ${money}`;
+  return suffix ? `${money} ${suffix}` : money;
+}
+
+function getPriceUnitLabel(unit: PriceUnit | string | null | undefined): string {
+  return PRICE_UNITS.find((item) => item.value === unit)?.label ?? "Fixed price";
+}
+
+function getOptionValidation(option: PriceOptionDraft): PriceOptionValidation {
+  const parsedAmount = option.amount.trim() === "" ? null : Number(option.amount);
+  const parsedCompareAtAmount =
+    option.compareAtAmount.trim() === "" ? null : Number(option.compareAtAmount);
+  const parsedDuration =
+    option.durationMinutes.trim() === "" ? null : Number(option.durationMinutes);
+
+  const amountValid =
+    parsedAmount !== null &&
+    Number.isFinite(parsedAmount) &&
+    parsedAmount >= 0 &&
+    parsedAmount < 1_000_000;
+  const compareAtAmountValid =
+    parsedCompareAtAmount === null ||
+    (Number.isFinite(parsedCompareAtAmount) &&
+      parsedCompareAtAmount >= 0 &&
+      parsedCompareAtAmount < 1_000_000);
+  const durationValid =
+    parsedDuration === null ||
+    (Number.isFinite(parsedDuration) && parsedDuration > 0 && parsedDuration <= 24 * 60);
+
+  return {
+    amountValid,
+    compareAtAmountValid,
+    durationValid,
+    valid: amountValid && compareAtAmountValid && durationValid,
+  };
+}
+
+function getOptionTitle(option: PriceOptionDraft, index: number): string {
+  return option.groupLabel.trim() || option.label.trim() || `Option ${index + 1}`;
+}
+
+function getOptionSubtitle(option: PriceOptionDraft): string {
+  const parts = [
+    option.label.trim(),
+    getPriceUnitLabel(option.unit),
+    option.durationMinutes.trim() ? `${option.durationMinutes.trim()} min` : "",
+    option.note.trim(),
+  ].filter(Boolean);
+  return parts.join(" · ") || "Fill in amount and details";
+}
+
+function getRailLabel(option: PriceOptionDraft, index: number): string {
+  const title = getOptionTitle(option, index).replace("Monthly Membership", "Monthly");
+  const price = formatMoney(option.amount, option.currency) ?? "empty";
+  return `${title} · ${price}`;
 }
 
 function newPriceOptionDraft(preset?: Partial<Omit<PriceOptionDraft, "id">>): PriceOptionDraft {
@@ -232,6 +332,7 @@ function PriceEditorPageContent(props: PageProps) {
   const [currency, setCurrency] = useState<Currency>("USD");
   const [unit, setUnit] = useState<PriceUnit>("fixed");
   const [priceOptions, setPriceOptions] = useState<PriceOptionDraft[]>([]);
+  const [openOptionId, setOpenOptionId] = useState<string | null>(null);
   const [supportsPriceOptions, setSupportsPriceOptions] = useState(true);
 
   const [originalAmount, setOriginalAmount] = useState<string>("");
@@ -281,6 +382,7 @@ function PriceEditorPageContent(props: PageProps) {
       setCurrency(initCurrency);
       setUnit(initUnit);
       setPriceOptions(initOptions);
+      setOpenOptionId(null);
 
       setOriginalAmount(initAmount);
       setOriginalCurrency(initCurrency);
@@ -297,23 +399,7 @@ function PriceEditorPageContent(props: PageProps) {
     (parsedAmount !== null && Number.isFinite(parsedAmount) && parsedAmount >= 0 && parsedAmount < 1_000_000);
   const normalizedOptions = normalizePriceOptions(priceOptions);
   const optionsJson = JSON.stringify(normalizedOptions);
-  const areOptionsValid = priceOptions.every((option) => {
-    if (option.amount.trim() === "") return false;
-    const parsed = Number(option.amount);
-    const compareAtAmount =
-      option.compareAtAmount.trim() === "" ? null : Number(option.compareAtAmount);
-    const durationMinutes =
-      option.durationMinutes.trim() === "" ? null : Number(option.durationMinutes);
-    return (
-      Number.isFinite(parsed) &&
-      parsed >= 0 &&
-      parsed < 1_000_000 &&
-      (compareAtAmount === null ||
-        (Number.isFinite(compareAtAmount) && compareAtAmount >= 0 && compareAtAmount < 1_000_000)) &&
-      (durationMinutes === null ||
-        (Number.isFinite(durationMinutes) && durationMinutes > 0 && durationMinutes <= 24 * 60))
-    );
-  });
+  const areOptionsValid = priceOptions.every((option) => getOptionValidation(option).valid);
 
   const hasChanges =
     amount.trim() !== originalAmount.trim() ||
@@ -321,6 +407,13 @@ function PriceEditorPageContent(props: PageProps) {
     unit !== originalUnit ||
     optionsJson !== originalOptionsJson;
   const canSave = hasChanges && isAmountValid && areOptionsValid && !saving;
+  const basePriceText = formatPriceWithUnit(amount, currency, unit);
+  const featuredOption = useMemo(
+    () => priceOptions.find((option) => option.isFeatured) ?? priceOptions[0] ?? null,
+    [priceOptions]
+  );
+  const previewPriceText =
+    featuredOption ? formatPriceWithUnit(featuredOption.amount, featuredOption.currency, featuredOption.unit) : basePriceText;
 
   function updatePriceOption(id: string, patch: Partial<PriceOptionDraft>) {
     setPriceOptions((prev) => prev.map((option) => option.id === id ? { ...option, ...patch } : option));
@@ -328,40 +421,41 @@ function PriceEditorPageContent(props: PageProps) {
   }
 
   function addPriceOption() {
-    setPriceOptions((prev) => [...prev, newPriceOptionDraft()]);
+    const draft = newPriceOptionDraft();
+    setPriceOptions((prev) => [...prev, draft]);
+    setOpenOptionId(draft.id);
     setError(null);
   }
 
   function addTrialOption() {
-    setPriceOptions((prev) => [
-      ...prev,
-      newPriceOptionDraft({
-        groupLabel: "Trial Lesson",
-        label: "45 minutes",
-        durationMinutes: "45",
-        badge: "New student promo",
-        unit: "fixed",
-      }),
-    ]);
+    const draft = newPriceOptionDraft({
+      groupLabel: "Trial Lesson",
+      label: "45 minutes",
+      durationMinutes: "45",
+      badge: "New student promo",
+      unit: "fixed",
+    });
+    setPriceOptions((prev) => [...prev, draft]);
+    setOpenOptionId(draft.id);
     setError(null);
   }
 
   function addMembershipOption() {
-    setPriceOptions((prev) => [
-      ...prev,
-      newPriceOptionDraft({
-        groupLabel: "Monthly Membership",
-        label: "45 min / week",
-        badge: "Most popular",
-        unit: "per_month",
-        isFeatured: true,
-      }),
-    ]);
+    const draft = newPriceOptionDraft({
+      groupLabel: "Monthly Membership",
+      label: "45 min / week",
+      badge: "Most popular",
+      unit: "per_month",
+      isFeatured: true,
+    });
+    setPriceOptions((prev) => [...prev, draft]);
+    setOpenOptionId(draft.id);
     setError(null);
   }
 
   function removePriceOption(id: string) {
     setPriceOptions((prev) => prev.filter((option) => option.id !== id));
+    setOpenOptionId((current) => current === id ? null : current);
     setError(null);
   }
 
@@ -433,43 +527,59 @@ function PriceEditorPageContent(props: PageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-white flex flex-col">
-      {/* Header */}
-      <div className="sticky top-0 z-30 bg-white border-b border-[#ECEEE4]">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between h-16">
+    <main className="min-h-screen bg-[#FAFAF7] flex flex-col">
+      <div className="sticky top-0 z-30 border-b border-[#ECEEE4] bg-white/95 backdrop-blur">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="flex h-16 items-center justify-between">
             <button
               onClick={handleCancel}
-              className="p-2 -ml-2 text-[#1F2A1F] hover:bg-[#FAFAF7] rounded-lg transition"
+              className="rounded-lg p-2 -ml-2 text-[#1F2A1F] transition hover:bg-[#FAFAF7]"
               aria-label="Close"
             >
               <Icon name="close" size={20} />
             </button>
-            <h1 className="font-semibold font-fraunces text-[#1F2A1F]" style={{ fontSize: "24px" }}>
+            <h1 className="font-fraunces text-2xl font-semibold text-[#1F2A1F]">
               Price
             </h1>
-            <div className="w-9" />
+            <div className="hidden w-9 items-center justify-end text-[#6F7A5A] lg:flex">
+              <Icon name="eye" size={18} />
+            </div>
+            <div className="w-9 lg:hidden" />
           </div>
         </div>
       </div>
 
-      {/* Body */}
-      <div className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-8">
-        {error && (
-          <div className="mb-4 rounded-xl border border-[#C96A5B]/30 bg-[#C96A5B]/10 p-3 text-sm text-[#C96A5B]">
-            {error}
-          </div>
-        )}
+      <div className="mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 gap-6 px-4 py-6 pb-28 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:py-8">
+        <div className="min-w-0 space-y-7">
+          {error && (
+            <div className="rounded-lg border border-[#C96A5B]/30 bg-[#C96A5B]/10 p-3 text-sm text-[#C96A5B]">
+              {error}
+            </div>
+          )}
 
-        <div className="space-y-6">
-          {/* Amount + currency */}
-          <div>
-            <label className="block text-sm font-medium text-[#1F2A1F] mb-2">
-              Amount
-            </label>
-            <div className="flex gap-3">
-              <div className="flex-1">
+          {!supportsPriceOptions && (
+            <div className="rounded-lg border border-[#D6B25E]/40 bg-[#D6B25E]/10 p-3 text-sm text-[#6F5A23]">
+              Pricing menu needs the places.price_options database column before menu prices can be saved.
+            </div>
+          )}
+
+          <section className="space-y-4">
+            <div>
+              <h2 className="font-fraunces text-3xl font-semibold leading-tight text-[#1F2A1F]">
+                Main price
+              </h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6F7A5A]">
+                Keep this as the headline price, or leave it empty when the offer is by request.
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-[#ECEEE4] bg-white p-4 shadow-sm">
+              <label className="block text-sm font-semibold text-[#1F2A1F]" htmlFor="price-amount">
+                Amount
+              </label>
+              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_128px]">
                 <input
+                  id="price-amount"
                   type="number"
                   inputMode="decimal"
                   step="0.01"
@@ -481,290 +591,414 @@ function PriceEditorPageContent(props: PageProps) {
                   }}
                   placeholder="0.00"
                   className={cx(
-                    "w-full rounded-xl border px-4 py-4 text-lg font-medium text-[#1F2A1F] placeholder:text-[#A8B096] outline-none transition",
+                    "min-h-12 w-full min-w-0 rounded-lg border px-4 text-xl font-semibold text-[#1F2A1F] placeholder:text-[#A8B096] outline-none transition",
                     isAmountValid
-                      ? "border-[#ECEEE4] bg-[#FAFAF7] focus:bg-white focus:border-[#8F9E4F]"
-                      : "border-[#C96A5B]/50 bg-[#C96A5B]/10 focus:bg-white focus:border-[#C96A5B]"
+                      ? "border-[#ECEEE4] bg-[#FAFAF7] focus:border-[#8F9E4F] focus:bg-white"
+                      : "border-[#C96A5B]/50 bg-[#C96A5B]/10 focus:border-[#C96A5B] focus:bg-white"
                   )}
                   autoFocus
                 />
+                <select
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value as Currency)}
+                  disabled={parsedAmount === null}
+                  className={cx(
+                    "min-h-12 w-full rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-4 text-base font-semibold text-[#1F2A1F] outline-none transition focus:border-[#8F9E4F] focus:bg-white",
+                    parsedAmount === null && "cursor-not-allowed opacity-50"
+                  )}
+                >
+                  {CURRENCIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <select
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value as Currency)}
-                disabled={parsedAmount === null}
-                className={cx(
-                  "rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] px-4 py-4 text-lg font-medium text-[#1F2A1F] outline-none transition",
-                  "focus:bg-white focus:border-[#8F9E4F]",
-                  parsedAmount === null && "opacity-50 cursor-not-allowed"
-                )}
-              >
-                {CURRENCIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+              <p className={cx("mt-2 text-xs", isAmountValid ? "text-[#6F7A5A]" : "text-[#C96A5B]")}>
+                {!isAmountValid
+                  ? "Enter a non-negative number under 1,000,000"
+                  : parsedAmount === null
+                    ? "Buyers will see Price on request until you enter an amount."
+                    : "Shown on the offer card and listing page."}
+              </p>
             </div>
-            <p className={cx("mt-2 text-xs", isAmountValid ? "text-[#6F7A5A]" : "text-[#C96A5B]")}>
-              {!isAmountValid
-                ? "Enter a non-negative number under 1,000,000"
-                : parsedAmount === null
-                  ? "Leave empty for «By request». Enter an amount to choose currency and how it is charged."
-                  : "Buyers see this in the offer card and on the listing"}
-            </p>
-          </div>
 
-          {/* Unit */}
-          <div>
-            <label className="block text-sm font-medium text-[#1F2A1F] mb-2">
-              How is this charged?
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {PRICE_UNITS.map((u) => {
-                const active = unit === u.value;
-                return (
-                  <button
-                    key={u.value}
-                    type="button"
-                    onClick={() => setUnit(u.value)}
-                    disabled={parsedAmount === null}
-                    className={cx(
-                      "text-left rounded-xl border px-4 py-3 transition",
-                      parsedAmount === null && "opacity-50 cursor-not-allowed",
-                      active
-                        ? "border-[#8F9E4F] bg-[#8F9E4F]/10"
-                        : "border-[#ECEEE4] bg-white hover:bg-[#FAFAF7]"
-                    )}
-                  >
-                    <div className="text-sm font-medium text-[#1F2A1F]">{u.label}</div>
-                    <div className="text-xs text-[#6F7A5A] mt-0.5">{u.hint}</div>
-                  </button>
-                );
-              })}
+            <div className="rounded-lg border border-[#ECEEE4] bg-white p-4 shadow-sm">
+              <div className="mb-3 text-sm font-semibold text-[#1F2A1F]">
+                How is this charged?
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                {PRICE_UNITS.map((u) => {
+                  const active = unit === u.value;
+                  return (
+                    <button
+                      key={u.value}
+                      type="button"
+                      onClick={() => setUnit(u.value)}
+                      disabled={parsedAmount === null}
+                      className={cx(
+                        "min-h-[64px] rounded-lg border px-3 py-3 text-left transition",
+                        parsedAmount === null && "cursor-not-allowed opacity-50",
+                        active
+                          ? "border-[#8F9E4F] bg-[#8F9E4F]/10"
+                          : "border-[#ECEEE4] bg-white hover:bg-[#FAFAF7]"
+                      )}
+                    >
+                      <div className="text-sm font-semibold text-[#1F2A1F]">{u.label}</div>
+                      <div className="mt-0.5 text-xs leading-snug text-[#6F7A5A]">{u.hint}</div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          </section>
 
-          {/* Additional options */}
-          <div className="rounded-2xl border border-[#ECEEE4] bg-[#FAFAF7] p-4">
-            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <section className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-[#1F2A1F]">Pricing menu</h2>
-                <p className="mt-1 text-xs text-[#6F7A5A]">
+                <h2 className="font-fraunces text-3xl font-semibold leading-tight text-[#1F2A1F]">
+                  Pricing menu
+                </h2>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6F7A5A]">
                   Add packages, trial lessons, memberships, discounts, and highlighted options.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={addPriceOption}
-                  className="shrink-0 rounded-xl border border-[#8F9E4F] bg-white px-3 py-2 text-xs font-medium text-[#1F2A1F] hover:bg-[#F4F7EA] transition"
-                >
-                  Add price
-                </button>
-                <button
-                  type="button"
-                  onClick={addTrialOption}
-                  className="shrink-0 rounded-xl border border-[#ECEEE4] bg-white px-3 py-2 text-xs font-medium text-[#1F2A1F] hover:bg-[#F4F7EA] transition"
-                >
-                  Trial
-                </button>
-                <button
-                  type="button"
-                  onClick={addMembershipOption}
-                  className="shrink-0 rounded-xl border border-[#ECEEE4] bg-white px-3 py-2 text-xs font-medium text-[#1F2A1F] hover:bg-[#F4F7EA] transition"
-                >
-                  Membership
-                </button>
+            </div>
+
+            <div className="sticky top-16 z-20 -mx-4 border-y border-[#ECEEE4]/70 bg-[#FAFAF7]/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+                  <button
+                    type="button"
+                    onClick={addPriceOption}
+                    className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-[#8F9E4F] bg-white px-3 text-sm font-semibold text-[#1F2A1F] transition hover:bg-[#F4F7EA]"
+                  >
+                    <Icon name="add" size={14} />
+                    Price
+                  </button>
+                  <button
+                    type="button"
+                    onClick={addTrialOption}
+                    className="min-h-10 rounded-lg border border-[#ECEEE4] bg-white px-3 text-sm font-semibold text-[#1F2A1F] transition hover:bg-[#F4F7EA]"
+                  >
+                    Trial
+                  </button>
+                  <button
+                    type="button"
+                    onClick={addMembershipOption}
+                    className="min-h-10 rounded-lg border border-[#ECEEE4] bg-white px-3 text-sm font-semibold text-[#1F2A1F] transition hover:bg-[#F4F7EA]"
+                  >
+                    Membership
+                  </button>
+                </div>
+                {priceOptions.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setOpenOptionId(null)}
+                    className="min-h-10 rounded-lg border border-[#ECEEE4] bg-white px-3 text-sm font-semibold text-[#1F2A1F] transition hover:bg-[#F4F7EA]"
+                  >
+                    Collapse all
+                  </button>
+                )}
               </div>
             </div>
 
+            {priceOptions.length > 0 && (
+              <div className="-mx-4 flex gap-2 overflow-x-auto border-b border-[#ECEEE4] px-4 pb-3 sm:hidden">
+                {priceOptions.map((option, index) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setOpenOptionId(option.id)}
+                    className={cx(
+                      "shrink-0 rounded-full border px-3 py-2 text-xs font-semibold",
+                      openOptionId === option.id
+                        ? "border-[#8F9E4F] bg-[#8F9E4F]/10 text-[#1F2A1F]"
+                        : "border-[#ECEEE4] bg-white text-[#1F2A1F]"
+                    )}
+                  >
+                    {getRailLabel(option, index)}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {priceOptions.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-[#DADDD0] bg-white p-4 text-sm text-[#6F7A5A]">
+              <div className="rounded-lg border border-dashed border-[#DADDD0] bg-white p-5 text-sm text-[#6F7A5A]">
                 No pricing menu yet.
               </div>
             ) : (
               <div className="space-y-3">
                 {priceOptions.map((option, index) => {
-                  const parsedOptionAmount = option.amount.trim() === "" ? null : Number(option.amount);
-                  const optionAmountValid =
-                    parsedOptionAmount !== null &&
-                    Number.isFinite(parsedOptionAmount) &&
-                    parsedOptionAmount >= 0 &&
-                    parsedOptionAmount < 1_000_000;
-                  const parsedCompareAtAmount =
-                    option.compareAtAmount.trim() === "" ? null : Number(option.compareAtAmount);
-                  const compareAtAmountValid =
-                    parsedCompareAtAmount === null ||
-                    (Number.isFinite(parsedCompareAtAmount) &&
-                      parsedCompareAtAmount >= 0 &&
-                      parsedCompareAtAmount < 1_000_000);
-                  const parsedDuration =
-                    option.durationMinutes.trim() === "" ? null : Number(option.durationMinutes);
-                  const durationValid =
-                    parsedDuration === null ||
-                    (Number.isFinite(parsedDuration) && parsedDuration > 0 && parsedDuration <= 24 * 60);
+                  const validation = getOptionValidation(option);
+                  const isOpen = openOptionId === option.id;
+                  const title = getOptionTitle(option, index);
+                  const subtitle = getOptionSubtitle(option);
+                  const optionPriceText = formatPriceWithUnit(option.amount, option.currency, option.unit);
+                  const compareAtText = formatMoney(option.compareAtAmount, option.currency);
+
                   return (
-                    <div
+                    <article
                       key={option.id}
                       className={cx(
-                        "rounded-xl border bg-white p-3",
-                        option.isFeatured ? "border-[#8F9E4F]" : "border-[#ECEEE4]",
+                        "overflow-hidden rounded-lg border bg-white shadow-sm transition",
+                        !validation.valid && "border-[#C96A5B]/50",
+                        validation.valid && option.isFeatured && "border-[#8F9E4F] shadow-[0_0_0_3px_rgba(143,158,79,0.08)]",
+                        validation.valid && !option.isFeatured && "border-[#ECEEE4]"
                       )}
                     >
-                      <div className="mb-3 flex items-center justify-between gap-3">
-                        <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
-                          Option {index + 1}
+                      <button
+                        type="button"
+                        onClick={() => setOpenOptionId(isOpen ? null : option.id)}
+                        className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-4 py-4 text-left transition hover:bg-[#FAFAF7]"
+                        aria-expanded={isOpen}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="grid h-7 w-5 shrink-0 place-items-center text-[#A8B096]">
+                              <Icon name="more-vertical" size={16} />
+                            </span>
+                            <span className="truncate text-base font-semibold text-[#1F2A1F]">
+                              {title}
+                            </span>
+                          </div>
+                          <div className="mt-1 truncate pl-7 text-xs text-[#6F7A5A]">
+                            {subtitle}
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-1.5 pl-7 max-sm:hidden">
+                            {option.isFeatured && (
+                              <span className="rounded-full bg-[#8F9E4F]/10 px-2 py-1 text-[11px] font-semibold text-[#556036]">
+                                Highlighted
+                              </span>
+                            )}
+                            {option.badge.trim() && (
+                              <span className="rounded-full bg-[#D6B25E]/25 px-2 py-1 text-[11px] font-semibold text-[#6F5A23]">
+                                {option.badge.trim()}
+                              </span>
+                            )}
+                            {!validation.valid && (
+                              <span className="rounded-full bg-[#C96A5B]/10 px-2 py-1 text-[11px] font-semibold text-[#C96A5B]">
+                                Needs amount
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => removePriceOption(option.id)}
-                          className="rounded-lg px-2 py-1 text-xs font-medium text-[#C96A5B] hover:bg-[#C96A5B]/10 transition"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <label className="block">
-                          <span className="mb-1 block text-xs font-medium text-[#1F2A1F]">Group</span>
-                          <input
-                            value={option.groupLabel}
-                            onChange={(e) => updatePriceOption(option.id, { groupLabel: e.target.value })}
-                            placeholder="Trial Lesson"
-                            className="w-full rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-3 text-sm text-[#1F2A1F] outline-none transition focus:bg-white focus:border-[#8F9E4F]"
-                          />
-                        </label>
-                        <label className="block">
-                          <span className="mb-1 block text-xs font-medium text-[#1F2A1F]">Label</span>
-                          <input
-                            value={option.label}
-                            onChange={(e) => updatePriceOption(option.id, { label: e.target.value })}
-                            placeholder="45 minutes"
-                            className="w-full rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-3 text-sm text-[#1F2A1F] outline-none transition focus:bg-white focus:border-[#8F9E4F]"
-                          />
-                        </label>
-                        <label className="block">
-                          <span className="mb-1 block text-xs font-medium text-[#1F2A1F]">Amount</span>
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            step="0.01"
-                            min="0"
-                            value={option.amount}
-                            onChange={(e) => updatePriceOption(option.id, { amount: e.target.value })}
-                            placeholder="300"
-                            className={cx(
-                              "w-full rounded-xl border bg-[#FAFAF7] px-3 py-3 text-sm text-[#1F2A1F] outline-none transition focus:bg-white",
-                              optionAmountValid
-                                ? "border-[#ECEEE4] focus:border-[#8F9E4F]"
-                                : "border-[#C96A5B]/50 focus:border-[#C96A5B]"
-                            )}
-                          />
-                        </label>
-                        <label className="block">
-                          <span className="mb-1 block text-xs font-medium text-[#1F2A1F]">Old price</span>
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            step="0.01"
-                            min="0"
-                            value={option.compareAtAmount}
-                            onChange={(e) => updatePriceOption(option.id, { compareAtAmount: e.target.value })}
-                            placeholder="75"
-                            className={cx(
-                              "w-full rounded-xl border bg-[#FAFAF7] px-3 py-3 text-sm text-[#1F2A1F] outline-none transition focus:bg-white",
-                              compareAtAmountValid
-                                ? "border-[#ECEEE4] focus:border-[#8F9E4F]"
-                                : "border-[#C96A5B]/50 focus:border-[#C96A5B]"
-                            )}
-                          />
-                        </label>
-                        <label className="block">
-                          <span className="mb-1 block text-xs font-medium text-[#1F2A1F]">Currency</span>
-                          <select
-                            value={option.currency}
-                            onChange={(e) => updatePriceOption(option.id, { currency: e.target.value as Currency })}
-                            className="w-full rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-3 text-sm text-[#1F2A1F] outline-none transition focus:bg-white focus:border-[#8F9E4F]"
-                          >
-                            {CURRENCIES.map((c) => (
-                              <option key={c} value={c}>{c}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="block">
-                          <span className="mb-1 block text-xs font-medium text-[#1F2A1F]">Duration</span>
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            min="1"
-                            max={24 * 60}
-                            value={option.durationMinutes}
-                            onChange={(e) => updatePriceOption(option.id, { durationMinutes: e.target.value })}
-                            placeholder="45"
-                            className={cx(
-                              "w-full rounded-xl border bg-[#FAFAF7] px-3 py-3 text-sm text-[#1F2A1F] outline-none transition focus:bg-white",
-                              durationValid
-                                ? "border-[#ECEEE4] focus:border-[#8F9E4F]"
-                                : "border-[#C96A5B]/50 focus:border-[#C96A5B]"
-                            )}
-                          />
-                        </label>
-                        <label className="block">
-                          <span className="mb-1 block text-xs font-medium text-[#1F2A1F]">Charged</span>
-                          <select
-                            value={option.unit}
-                            onChange={(e) => updatePriceOption(option.id, { unit: e.target.value as PriceUnit })}
-                            className="w-full rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-3 text-sm text-[#1F2A1F] outline-none transition focus:bg-white focus:border-[#8F9E4F]"
-                          >
-                            {PRICE_UNITS.map((u) => (
-                              <option key={u.value} value={u.value}>{u.label}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="block">
-                          <span className="mb-1 block text-xs font-medium text-[#1F2A1F]">Badge</span>
-                          <input
-                            value={option.badge}
-                            onChange={(e) => updatePriceOption(option.id, { badge: e.target.value })}
-                            placeholder="Save 20%"
-                            className="w-full rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-3 text-sm text-[#1F2A1F] outline-none transition focus:bg-white focus:border-[#8F9E4F]"
-                          />
-                        </label>
-                      </div>
-                      <label className="mt-3 flex items-center gap-2 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-3 text-sm text-[#1F2A1F]">
-                        <input
-                          type="checkbox"
-                          checked={option.isFeatured}
-                          onChange={(e) => updatePriceOption(option.id, { isFeatured: e.target.checked })}
-                          className="h-4 w-4 accent-[#8F9E4F]"
-                        />
-                        Highlight this option
-                      </label>
-                      <label className="mt-3 block">
-                        <span className="mb-1 block text-xs font-medium text-[#1F2A1F]">Note</span>
-                        <input
-                          value={option.note}
-                          onChange={(e) => updatePriceOption(option.id, { note: e.target.value })}
-                          placeholder="For monthly members, includes private events"
-                          className="w-full rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-3 text-sm text-[#1F2A1F] outline-none transition focus:bg-white focus:border-[#8F9E4F]"
-                        />
-                      </label>
-                    </div>
+                        <div className="shrink-0 text-right">
+                          <div className="font-fraunces text-xl font-semibold leading-none text-[#1F2A1F]">
+                            {optionPriceText ?? "Empty"}
+                          </div>
+                          {compareAtText && (
+                            <div className="mt-1 text-xs text-[#6F7A5A]">
+                              old {compareAtText}
+                            </div>
+                          )}
+                        </div>
+                        <span className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#FAFAF7] text-[#6F7A5A] sm:flex">
+                          <Icon name={isOpen ? "chevron-up" : "chevron-down"} size={16} />
+                        </span>
+                      </button>
+
+                      {isOpen && (
+                        <div className="border-t border-[#ECEEE4] px-4 py-4">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <label className="block">
+                              <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Group</span>
+                              <input
+                                value={option.groupLabel}
+                                onChange={(e) => updatePriceOption(option.id, { groupLabel: e.target.value })}
+                                placeholder="Trial Lesson"
+                                className="min-h-12 w-full rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:border-[#8F9E4F] focus:bg-white"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Label</span>
+                              <input
+                                value={option.label}
+                                onChange={(e) => updatePriceOption(option.id, { label: e.target.value })}
+                                placeholder="45 minutes"
+                                className="min-h-12 w-full rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:border-[#8F9E4F] focus:bg-white"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Amount</span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                step="0.01"
+                                min="0"
+                                value={option.amount}
+                                onChange={(e) => updatePriceOption(option.id, { amount: e.target.value })}
+                                placeholder="300"
+                                className={cx(
+                                  "min-h-12 w-full rounded-lg border bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:bg-white",
+                                  validation.amountValid
+                                    ? "border-[#ECEEE4] focus:border-[#8F9E4F]"
+                                    : "border-[#C96A5B]/50 focus:border-[#C96A5B]"
+                                )}
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Old price</span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                step="0.01"
+                                min="0"
+                                value={option.compareAtAmount}
+                                onChange={(e) => updatePriceOption(option.id, { compareAtAmount: e.target.value })}
+                                placeholder="75"
+                                className={cx(
+                                  "min-h-12 w-full rounded-lg border bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:bg-white",
+                                  validation.compareAtAmountValid
+                                    ? "border-[#ECEEE4] focus:border-[#8F9E4F]"
+                                    : "border-[#C96A5B]/50 focus:border-[#C96A5B]"
+                                )}
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Currency</span>
+                              <select
+                                value={option.currency}
+                                onChange={(e) => updatePriceOption(option.id, { currency: e.target.value as Currency })}
+                                className="min-h-12 w-full rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:border-[#8F9E4F] focus:bg-white"
+                              >
+                                {CURRENCIES.map((c) => (
+                                  <option key={c} value={c}>{c}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Duration</span>
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min="1"
+                                max={24 * 60}
+                                value={option.durationMinutes}
+                                onChange={(e) => updatePriceOption(option.id, { durationMinutes: e.target.value })}
+                                placeholder="45"
+                                className={cx(
+                                  "min-h-12 w-full rounded-lg border bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:bg-white",
+                                  validation.durationValid
+                                    ? "border-[#ECEEE4] focus:border-[#8F9E4F]"
+                                    : "border-[#C96A5B]/50 focus:border-[#C96A5B]"
+                                )}
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Charged</span>
+                              <select
+                                value={option.unit}
+                                onChange={(e) => updatePriceOption(option.id, { unit: e.target.value as PriceUnit })}
+                                className="min-h-12 w-full rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:border-[#8F9E4F] focus:bg-white"
+                              >
+                                {PRICE_UNITS.map((u) => (
+                                  <option key={u.value} value={u.value}>{u.label}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Badge</span>
+                              <input
+                                value={option.badge}
+                                onChange={(e) => updatePriceOption(option.id, { badge: e.target.value })}
+                                placeholder="Save 20%"
+                                className="min-h-12 w-full rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:border-[#8F9E4F] focus:bg-white"
+                              />
+                            </label>
+                            <label className="flex min-h-12 items-center gap-2 rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 text-sm font-medium text-[#1F2A1F] sm:col-span-2">
+                              <input
+                                type="checkbox"
+                                checked={option.isFeatured}
+                                onChange={(e) => updatePriceOption(option.id, { isFeatured: e.target.checked })}
+                                className="h-4 w-4 accent-[#8F9E4F]"
+                              />
+                              Highlight this option
+                            </label>
+                            <label className="block sm:col-span-2">
+                              <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Note</span>
+                              <input
+                                value={option.note}
+                                onChange={(e) => updatePriceOption(option.id, { note: e.target.value })}
+                                placeholder="For monthly members, includes private events"
+                                className="min-h-12 w-full rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:border-[#8F9E4F] focus:bg-white"
+                              />
+                            </label>
+                          </div>
+                          <div className="mt-4 grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => removePriceOption(option.id)}
+                              className="min-h-11 rounded-lg px-3 text-sm font-semibold text-[#C96A5B] transition hover:bg-[#C96A5B]/10"
+                            >
+                              Remove
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setOpenOptionId(null)}
+                              className="min-h-11 rounded-lg border border-[#ECEEE4] bg-white px-3 text-sm font-semibold text-[#1F2A1F] transition hover:bg-[#FAFAF7]"
+                            >
+                              Done
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </article>
                   );
                 })}
               </div>
             )}
-          </div>
+          </section>
         </div>
+
+        <aside className="sticky top-24 hidden space-y-3 lg:block">
+          <div className="rounded-lg border border-[#ECEEE4] bg-white p-4 shadow-sm">
+            <h2 className="font-fraunces text-2xl font-semibold text-[#1F2A1F]">Buyer preview</h2>
+            <div className="mt-3 rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] p-4">
+              {previewPriceText ? (
+                <div className="font-fraunces text-3xl font-semibold text-[#1F2A1F]">
+                  {previewPriceText}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-[#ECEEE4] bg-white px-3 py-2 text-sm font-medium text-[#6F7A5A]">
+                  Price on request
+                </div>
+              )}
+              {featuredOption && (
+                <div className="mt-2 text-sm font-medium text-[#6F7A5A]">
+                  {getOptionTitle(featuredOption, priceOptions.indexOf(featuredOption))}
+                </div>
+              )}
+              {priceOptions.length > 0 && (
+                <div className="mt-4 space-y-2 border-t border-[#ECEEE4] pt-3">
+                  {priceOptions.slice(0, 4).map((option, index) => (
+                    <div key={option.id} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="min-w-0 truncate text-[#1F2A1F]">
+                        {getOptionTitle(option, index)}
+                      </span>
+                      <span className="shrink-0 font-semibold text-[#1F2A1F]">
+                        {formatPriceWithUnit(option.amount, option.currency, option.unit) ?? "Empty"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </aside>
       </div>
 
-      {/* Sticky Footer */}
-      <div className="sticky bottom-0 bg-white border-t border-[#ECEEE4]">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex gap-3">
+      <div className="sticky bottom-0 z-30 border-t border-[#ECEEE4] bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="text-center text-xs text-[#6F7A5A] lg:text-left">
+            {priceOptions.length} {priceOptions.length === 1 ? "menu price" : "menu prices"}
+            {priceOptions.some((option) => option.isFeatured) ? " · highlighted option" : ""}
+            {hasChanges ? " · unsaved changes" : ""}
+          </div>
+          <div className="grid grid-cols-2 gap-3 lg:flex lg:min-w-[320px]">
             <button
               onClick={handleCancel}
-              className="flex-1 rounded-xl border border-[#ECEEE4] bg-white px-4 py-3 text-sm font-medium text-[#1F2A1F] hover:bg-[#FAFAF7] transition"
+              className="min-h-12 rounded-lg border border-[#ECEEE4] bg-white px-4 text-sm font-semibold text-[#1F2A1F] transition hover:bg-[#FAFAF7] lg:flex-1"
             >
               Cancel
             </button>
@@ -772,10 +1006,10 @@ function PriceEditorPageContent(props: PageProps) {
               onClick={handleSave}
               disabled={!canSave}
               className={cx(
-                "flex-1 rounded-xl px-4 py-3 text-sm font-medium transition",
+                "min-h-12 rounded-lg px-4 text-sm font-semibold transition lg:flex-1",
                 canSave
                   ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
-                  : "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
+                  : "cursor-not-allowed bg-[#DADDD0] text-[#6F7A5A]"
               )}
             >
               {saving ? "Saving…" : "Save"}
