@@ -4730,7 +4730,7 @@ function PremiumSection() {
           <div
             role="tablist"
             aria-label="Billing cycle"
-            className="inline-flex items-center gap-1 rounded-full border border-[#ECEEE4] bg-white p-0.5 shadow-sm"
+            className="inline-flex items-center gap-1 rounded-full border border-[#ECEEE4] bg-white p-1 shadow-sm"
           >
             <button
               type="button"
@@ -4738,10 +4738,10 @@ function PremiumSection() {
               aria-selected={cycleToggle === "month"}
               onClick={() => setCycleToggle("month")}
               className={cx(
-                "h-7 px-3 rounded-full text-xs font-medium transition",
+                "h-8 px-3.5 rounded-full text-sm font-medium transition",
                 cycleToggle === "month"
                   ? "bg-[#1F2A1F] text-white"
-                  : "text-[#6F7A5A]",
+                  : "text-[#6F7A5A] hover:text-[#1F2A1F]",
               )}
             >
               Monthly
@@ -4752,14 +4752,21 @@ function PremiumSection() {
               aria-selected={cycleToggle === "year"}
               onClick={() => setCycleToggle("year")}
               className={cx(
-                "h-7 px-3 rounded-full text-xs font-medium transition flex items-center gap-1.5",
+                "h-8 px-3.5 rounded-full text-sm font-medium transition flex items-center gap-2",
                 cycleToggle === "year"
                   ? "bg-[#1F2A1F] text-white"
-                  : "text-[#6F7A5A]",
+                  : "text-[#6F7A5A] hover:text-[#1F2A1F]",
               )}
             >
               Yearly
-              <span className="inline-flex items-center rounded-full px-1.5 py-0 text-[9px] font-semibold bg-[#A4B968]/30 text-[#3F4A35]">
+              <span
+                className={cx(
+                  "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold leading-none",
+                  cycleToggle === "year"
+                    ? "bg-[#D6E7A0] text-[#1F2A1F] ring-1 ring-[#A4B968]"
+                    : "bg-[#A4B968]/20 text-[#556036]",
+                )}
+              >
                 −{Math.round(ANNUAL_DISCOUNT * 100)}%
               </span>
             </button>
