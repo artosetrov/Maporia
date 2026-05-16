@@ -879,38 +879,47 @@ export default function OfferPlaceView({
                         (option.is_featured || !badgeKey || (badgeCounts.get(badgeKey) ?? 0) === 1)
                       );
                       return (
-                        <div
+                        <article
                           key={option.id || `${option.label || "price"}-${groupIndex}-${index}`}
                           className={cx(
-                            "relative rounded-lg border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md",
+                            "relative flex h-full min-h-[224px] overflow-hidden rounded-lg border p-4 text-[#1F2A1F] transition duration-200 hover:-translate-y-1",
                             option.is_featured
-                              ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#1F2A1F] shadow-md ring-1 ring-[#8F9E4F]/30"
-                              : "border-[#ECEEE4] bg-white text-[#1F2A1F]",
+                              ? "border-[#8F9E4F] bg-[linear-gradient(180deg,rgba(244,247,234,0.95)_0%,rgba(255,255,255,0.98)_72%)] shadow-[0_18px_42px_rgba(143,158,79,0.18)] ring-1 ring-[#8F9E4F]/25"
+                              : "border-[#ECEEE4] bg-white shadow-[0_14px_32px_rgba(31,42,31,0.07)] hover:border-[#DCE4C6] hover:shadow-[0_20px_44px_rgba(31,42,31,0.10)]",
                           )}
                         >
+                          <div
+                            className={cx(
+                              "pointer-events-none absolute inset-x-0 top-0 h-1",
+                              option.is_featured ? "bg-[#8F9E4F]" : "bg-[#ECEEE4]",
+                            )}
+                          />
+                          <div className="flex min-w-0 flex-1 flex-col pt-1">
                           <div className={cx(
-                            "mb-3 flex min-h-5 items-start justify-between gap-2 text-xs font-semibold uppercase tracking-[0.08em]",
+                            "mb-4 flex min-h-10 items-start justify-between gap-2 text-xs font-semibold uppercase tracking-[0.08em]",
                             "text-[#6F7A5A]",
                           )}>
-                            <span>{option.label || `Option ${index + 1}`}</span>
+                            <span className="min-w-0 flex-1 text-balance leading-5">
+                              {option.label || `Option ${index + 1}`}
+                            </span>
                             {showBadge && option.badge && (
                               <span className={cx(
-                                "rounded-full border px-2 py-0.5 text-[10px] leading-4",
+                                "inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-2.5 py-1.5 text-[9px] leading-none tracking-[0.12em] shadow-[0_8px_16px_rgba(31,42,31,0.08)]",
                                 option.is_featured
-                                  ? "border-[#8F9E4F]/30 bg-[#8F9E4F] text-white"
-                                  : "border-[#C96A5B]/30 text-[#B63D32]",
+                                  ? "border-[#8F9E4F] bg-[#8F9E4F] text-white"
+                                  : "border-[#C96A5B]/25 bg-[#C96A5B]/10 text-[#B63D32]",
                               )}>
                                 {option.badge}
                               </span>
                             )}
                           </div>
-                          <div className="flex items-baseline gap-2">
-                            <div className="font-fraunces text-3xl font-semibold">
+                          <div className="flex flex-wrap items-end gap-x-2 gap-y-1">
+                            <div className="font-fraunces text-[32px] font-semibold leading-[0.98] text-[#1F2A1F]">
                               {formatPriceOption(option)}
                             </div>
                             {oldPrice && (
                               <div className={cx(
-                                "text-sm line-through",
+                                "mb-0.5 text-sm line-through",
                                 "text-[#8A9281]",
                               )}>
                                 {oldPrice}
@@ -918,22 +927,21 @@ export default function OfferPlaceView({
                             )}
                           </div>
                           {duration && (
-                            <div className={cx(
-                              "mt-2 text-sm",
-                              "text-[#6F7A5A]",
-                            )}>
-                              {duration}
+                            <div className="mt-4 inline-flex w-fit items-center gap-1.5 rounded-full border border-[#E1E7CB] bg-white/85 px-2.5 py-1 text-xs font-medium text-[#556036]">
+                              <Icon name="clock" size={12} />
+                              <span>{duration}</span>
                             </div>
                           )}
                           {option.note && (
                             <div className={cx(
-                              "mt-3 text-sm leading-relaxed",
+                              "mt-4 border-t border-[#ECEEE4] pt-3 text-sm leading-relaxed",
                               "text-[#6F7A5A]",
                             )}>
                               {option.note}
                             </div>
                           )}
-                        </div>
+                          </div>
+                        </article>
                       );
                     })}
                   </div>
