@@ -14,6 +14,7 @@ import { MarkerClusterer } from "@googlemaps/markerclusterer";
 import { MaporiaClusterRenderer } from "../lib/clusterRenderer";
 import TopBar from "../components/TopBar";
 import PlaceCard from "../components/PlaceCard";
+import HomeTabsSegmented from "../components/HomeTabsSegmented";
 import nextDynamic from "next/dynamic";
 import { ActiveFilters } from "../components/FiltersModal";
 
@@ -1332,6 +1333,32 @@ function MapPageContent() {
     return map;
   }, [places, defaultUserAccess, userId]);
 
+  const activeMapKind = useMemo<HomeKind>(() => {
+    const kinds = normalizeMapKinds(activeFilters.kinds);
+    return kinds.length === 1 ? kinds[0] : MAP_DEFAULT_KIND;
+  }, [activeFilters.kinds]);
+
+  const handleMapKindChange = useCallback((kind: HomeKind) => {
+    setMapCenter(null);
+    setMapZoom(null);
+    setActiveFilters((prev) => ({
+      ...prev,
+      kinds: [kind],
+      categories: [],
+      tags: [],
+    }));
+    setSelectedTag("");
+    setSelectedTags([]);
+    setFiltersVersion((prev) => prev + 1);
+  }, []);
+
+  const renderKindSwitcher = () => (
+    <HomeTabsSegmented
+      active={activeMapKind}
+      onChange={handleMapKindChange}
+    />
+  );
+
   // Формируем title для header списка с учетом количества результатов
   // Показываем реальное количество отфильтрованных мест (с учетом всех клиентских фильтров)
   const listTitle = useMemo(() => {
@@ -1623,6 +1650,9 @@ function MapPageContent() {
           <div className="flex-shrink-0 overflow-y-auto scrollbar-hide pr-4 md:pr-6" style={{ maxWidth: '1100px', width: '60%' }}>
             {/* Header in List Column */}
             <div className="sticky top-0 z-30 bg-[#FAFAF7] pb-3 border-b border-[#ECEEE4] mb-4">
+              <div className="mb-4 max-w-[560px]">
+                {renderKindSwitcher()}
+              </div>
               <div className="flex items-center gap-3 mb-2">
                 <div className="flex-1 min-w-0">
                   <h2 className="text-lg lg:text-xl font-semibold font-fraunces text-[#1F2A1F] truncate">{listTitle}</h2>
@@ -1879,6 +1909,9 @@ function MapPageContent() {
               >
                 {/* Header */}
                 <div className="mb-4">
+                  <div className="mb-4">
+                    {renderKindSwitcher()}
+                  </div>
                   <h2 className="text-lg lg:text-xl font-semibold font-fraunces text-[#1F2A1F] mb-2">{listTitle}</h2>
                   {listSubtitle && (
                     <div className="text-sm text-[#6F7A5A]">{listSubtitle}</div>
@@ -2040,6 +2073,11 @@ function MapPageContent() {
                 top: '80px', // начинается под TopBar
               }}
             >
+              <div className="pointer-events-none absolute left-0 right-0 top-3 z-20 px-4">
+                <div className="pointer-events-auto mx-auto max-w-[520px] rounded-full border border-[#ECEEE4] bg-white/95 px-2 py-2 shadow-sm backdrop-blur">
+                  {renderKindSwitcher()}
+                </div>
+              </div>
               <div className="h-full w-full">
                 <MapView
                   places={filteredPlaces}
