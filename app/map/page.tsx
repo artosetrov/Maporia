@@ -69,6 +69,16 @@ type ErrorLike = {
 };
 type PlaceMarker = google.maps.Marker & { __placeId: string };
 
+const MAP_DEFAULT_KIND: HomeKind = "location";
+const MAP_DEFAULT_KINDS: HomeKind[] = [MAP_DEFAULT_KIND];
+const VALID_MAP_KINDS = new Set<HomeKind>(["location", "service", "experience"]);
+
+const isDefaultMapKindSelection = (kinds?: HomeKind[] | null): boolean =>
+  kinds?.length === 1 && kinds[0] === MAP_DEFAULT_KIND;
+
+const normalizeMapKinds = (kinds?: HomeKind[] | null): HomeKind[] =>
+  kinds && kinds.length > 0 ? kinds : MAP_DEFAULT_KINDS;
+
 const toErrorLike = (error: unknown): ErrorLike => {
   if (error && typeof error === "object") return error as ErrorLike;
   return { message: String(error) };
@@ -161,7 +171,7 @@ function MapPageContent() {
           initialQ: "",
           initialCategories: [] as string[],
           initialTags: [] as string[],
-          initialKinds: [] as ('location' | 'service' | 'experience')[],
+          initialKinds: [] as HomeKind[],
           hasCityInUrl: false,
         };
       }
@@ -213,9 +223,8 @@ function MapPageContent() {
 
       // ?kinds=service,experience — приходит с главной (singleKindMode → один элемент,
       // но парсим как массив на случай ручного URL'а или будущей multi-select функции).
-      const VALID_KINDS = new Set(['location', 'service', 'experience']);
       const initialKinds = kindsParam && kindsParam.trim()
-        ? kindsParam.split(',').map(k => k.trim()).filter(k => VALID_KINDS.has(k)) as ('location' | 'service' | 'experience')[]
+        ? kindsParam.split(',').map(k => k.trim()).filter((k): k is HomeKind => VALID_MAP_KINDS.has(k as HomeKind))
         : [];
 
       return { initialCity, initialQ, initialCategories, initialTags, initialKinds, hasCityInUrl };
@@ -227,7 +236,7 @@ function MapPageContent() {
           initialQ: "",
           initialCategories: [] as string[],
           initialTags: [] as string[],
-          initialKinds: [] as ('location' | 'service' | 'experience')[],
+          initialKinds: [] as HomeKind[],
           hasCityInUrl: false,
         };
     }
@@ -242,7 +251,7 @@ function MapPageContent() {
     categories: initialCategories,
     sort: null,
     tags: initialTags,
-    kinds: initialKinds.length > 0 ? initialKinds : undefined,
+    kinds: initialKinds.length > 0 ? initialKinds : MAP_DEFAULT_KINDS,
     premium: false,
     hidden: false,
     vibe: false,
@@ -289,6 +298,7 @@ function MapPageContent() {
       const categoriesParam = searchParams.get('categories');
       const tagsParam = searchParams.get('tags');
       const qParam = searchParams.get('q');
+      const kindsParam = searchParams.get('kinds');
       
       // Устанавливаем applied filters из URL
       if (city && city.trim()) {
@@ -369,6 +379,18 @@ function MapPageContent() {
         setActiveFilters(prev => ({ ...prev, tags: [] }));
         setFiltersVersion(prev => prev + 1);
       }
+
+      if (kindsParam && kindsParam.trim()) {
+        const kinds = kindsParam
+          .split(',')
+          .map((k) => k.trim())
+          .filter((k): k is HomeKind => VALID_MAP_KINDS.has(k as HomeKind));
+        setActiveFilters(prev => ({ ...prev, kinds: kinds.length > 0 ? kinds : MAP_DEFAULT_KINDS }));
+        setFiltersVersion(prev => prev + 1);
+      } else {
+        setActiveFilters(prev => ({ ...prev, kinds: MAP_DEFAULT_KINDS }));
+        setFiltersVersion(prev => prev + 1);
+      }
     } catch (error) {
       console.error("Error parsing search params:", error);
     }
@@ -393,7 +415,8 @@ function MapPageContent() {
     const expectedQ = appliedQ.trim() || null;
     const expectedCategories = appliedCategories.length > 0 ? appliedCategories : null;
     const expectedTags = (activeFilters.tags ?? []).length > 0 ? (activeFilters.tags ?? []) : null;
-    const expectedKinds = (activeFilters.kinds ?? []).length > 0 ? (activeFilters.kinds ?? []) : null;
+    const normalizedKinds = normalizeMapKinds(activeFilters.kinds);
+    const expectedKinds = isDefaultMapKindSelection(normalizedKinds) ? null : normalizedKinds;
     const expectedSort = activeFilters.sort || null;
     
     const currentCityDecoded = currentCity ? (() => {
@@ -493,7 +516,7 @@ function MapPageContent() {
   const [refreshKey, setRefreshKey] = useState(0);
   const placesDataLength = placesData?.length ?? 0;
   const serverKindsKey = useMemo(() => {
-    const sorted = [...(activeFilters.kinds ?? [])].sort();
+    const sorted = [...normalizeMapKinds(activeFilters.kinds)].sort();
     return JSON.stringify(sorted);
   }, [activeFilters.kinds]);
   const serverKindsForQuery = useMemo(
@@ -597,6 +620,8 @@ function MapPageContent() {
           if (selectedTag) {
             fallbackQuery = fallbackQuery.contains("tags", [selectedTag]);
           }
+
+          fallbackQuery = fallbackQuery.in("kind", serverKindsForQuery);
           
           fallbackQuery = fallbackQuery.order("created_at", { ascending: false });
           
@@ -1089,6 +1114,7 @@ function MapPageContent() {
     const newFilters = {
       ...filters,
       categories: [...filters.categories], // Создаем новый массив
+      kinds: normalizeMapKinds(filters.kinds),
     };
     
     if (process.env.NODE_ENV === 'development') {
@@ -1216,7 +1242,8 @@ function MapPageContent() {
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (appliedCategories.length > 0) count += appliedCategories.length;
-    if ((activeFilters.kinds ?? []).length > 0) count += activeFilters.kinds?.length ?? 0;
+    const activeKinds = normalizeMapKinds(activeFilters.kinds);
+    if (!isDefaultMapKindSelection(activeKinds)) count += activeKinds.length;
     // Учитываем город как активный фильтр, если он явно выбран (даже если это DEFAULT_CITY)
     if (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) count += 1;
     if (appliedQ.trim()) count += 1;
@@ -1226,11 +1253,12 @@ function MapPageContent() {
 
   // Проверяем, есть ли активные фильтры (для показа кнопки "назад")
   const hasActiveFilters = useMemo(() => {
+    const activeKinds = normalizeMapKinds(activeFilters.kinds);
     return (
       (appliedCity && (hasExplicitCityInUrlState || appliedCity !== DEFAULT_CITY)) ||
       appliedCategories.length > 0 ||
       (activeFilters.tags ?? []).length > 0 ||
-      (activeFilters.kinds ?? []).length > 0 ||
+      !isDefaultMapKindSelection(activeKinds) ||
       appliedQ.trim().length > 0 ||
       selectedTag.length > 0
     );
@@ -1257,6 +1285,7 @@ function MapPageContent() {
       categories: [],
       sort: null,
       tags: [],
+      kinds: MAP_DEFAULT_KINDS,
       premium: false,
       hidden: false,
       vibe: false,
@@ -1320,10 +1349,21 @@ function MapPageContent() {
     if (activeFilters.categories.length > 0 || (activeFilters.tags ?? []).length > 0 || appliedQ.trim() || selectedTag) {
       return countText;
     }
+
+    const activeKinds = normalizeMapKinds(activeFilters.kinds);
+    if (activeKinds.length === 1 && activeKinds[0] === "service") {
+      return "All services";
+    }
+    if (activeKinds.length === 1 && activeKinds[0] === "experience") {
+      return "All experiences";
+    }
+    if (!isDefaultMapKindSelection(activeKinds)) {
+      return countText;
+    }
     
     // Нет фильтров - показываем "All places"
     return "All places";
-  }, [filteredPlaces.length, appliedCity, hasExplicitCityInUrlState, activeFilters.categories, activeFilters.tags, appliedQ, selectedTag]);
+  }, [filteredPlaces.length, appliedCity, hasExplicitCityInUrlState, activeFilters.categories, activeFilters.tags, activeFilters.kinds, appliedQ, selectedTag]);
 
   // Subtitle для заголовка (показываем только когда нет фильтров)
   const listSubtitle = useMemo(() => {
@@ -1438,6 +1478,7 @@ function MapPageContent() {
         appliedCities={appliedCities.filter(city => hasExplicitCityInUrlState || city !== DEFAULT_CITY)}
         cityCoordsMap={cityCoordsMap}
         userAccess={access}
+        singleKindMode
         getAvailableTags={async (categories: string[]) => {
           if (!categories || categories.length === 0) return [];
           const result = await supabase

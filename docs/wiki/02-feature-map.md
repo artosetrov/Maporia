@@ -7,7 +7,7 @@
 | Route | Назначение | Основные зависимости |
 | --- | --- | --- |
 | `/` | Главная discovery-страница с tabs `location/service/experience`, home sections, search/filter | `app/page.tsx`, `HOME_SECTIONS`, `HomeSection`, `SearchModal`, `FiltersModal` |
-| `/map` | Каталог: list/map view, filters, Google Map, markers, premium gating | `app/map/page.tsx`, `GoogleMapsProvider`, `MarkerClusterer` |
+| `/map` | Каталог: list/map view, filters, Google Map, markers, premium gating; default listing is `kind=location`, services/experiences require explicit TYPE/`?kinds=` selection | `app/map/page.tsx`, `GoogleMapsProvider`, `MarkerClusterer` |
 | `/explore` | Альтернативный discovery экран с list/map, city/category query params | `app/explore/page.tsx` |
 | `/feed` | Лента places | `app/feed/page.tsx` |
 | `/id/[id]` | Детальная карточка place/service/experience, comments, photos, favorite, map | `app/id/[id]/page.tsx` |
