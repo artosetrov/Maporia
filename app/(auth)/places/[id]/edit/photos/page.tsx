@@ -24,6 +24,11 @@ type Photo = {
   error?: string;
 };
 
+type SavePhotosResponse = {
+  error?: string;
+  code?: string;
+};
+
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
 }
@@ -242,6 +247,8 @@ export default function PhotosEditorPage(props: PageProps) {
 
     setError(null);
     const newFiles = Array.from(files);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+
     if (photos.length + newFiles.length > MAX_PLACE_PHOTOS) {
       setError(`You can upload up to ${MAX_PLACE_PHOTOS} photos.`);
       return;
@@ -391,51 +398,6 @@ export default function PhotosEditorPage(props: PageProps) {
       return;
     }
 
-    // Find the cover photo (photo with is_cover: true)
-    const coverPhoto = uniquePhotos.find((p) => p.is_cover);
-    const coverUrl = coverPhoto?.url || photoUrls[0]; // Fallback to first photo if no cover set
-
-    // Update cover_url and video_url in places table
-    // Admin can update any place, owner can update their own
-    const currentIsAdmin = isUserAdmin(access);
-    const updateQuery = supabase
-      .from("places")
-      // @ts-expect-error Supabase generated types infer update payload as never
-      .update({ 
-        cover_url: coverUrl,
-        video_url: videoUrl.trim() || null
-      })
-      .eq("id", placeId);
-    
-    // If not admin, add ownership check
-    if (!currentIsAdmin) {
-      updateQuery.eq("created_by", user.id);
-    }
-    
-    const { error: coverError } = await updateQuery.select();
-    
-    if (coverError) {
-      console.error("Cover update error:", coverError);
-      setSaving(false);
-      setError(coverError.message || "Failed to update cover photo");
-      return;
-    }
-
-    // Delete existing photos
-    const { error: deleteError } = await supabase
-      .from("place_photos")
-      .delete()
-      .eq("place_id", placeId);
-
-    if (deleteError) {
-      console.error("Delete photos error:", deleteError);
-      setSaving(false);
-      setError(deleteError.message || "Failed to delete old photos");
-      return;
-    }
-
-    // Insert new photos - preserve cover selection from state
-    // First, ensure only one photo is marked as cover
     const photosWithSingleCover = uniquePhotos.map((p, idx) => ({
       ...p,
       is_cover: p.is_cover && idx === uniquePhotos.findIndex(photo => photo.is_cover),
@@ -466,31 +428,33 @@ export default function PhotosEditorPage(props: PageProps) {
       is_cover: photo.is_cover, // Use the cover flag from state
     }));
 
-    const { data: insertData, error: photosError } = await supabase
-      .from("place_photos")
-      // @ts-expect-error Supabase generated types infer insert payload as never
-      .insert(rows)
-      .select();
-
-
-    setSaving(false);
-
-    if (photosError) {
-      console.error("Insert photos error:", photosError);
-      setError(photosError.message || "Failed to save photos");
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (sessionError || !token) {
+      setSaving(false);
+      setError("Your session expired. Please sign in again.");
       return;
     }
 
-    // If no data returned but no error, the insert likely succeeded
-    // This can happen with RLS policies that allow INSERT but restrict SELECT
-    if (!insertData || insertData.length === 0) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn("No data returned from photos insert, but no error occurred. Insert likely succeeded.");
-      }
-      // Don't show error - just proceed with navigation
-      // The data will be reloaded when we navigate back to the hub
+    const response = await fetch(`/api/places/${placeId}/photos`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        photos: rows.map(({ url, sort, is_cover }) => ({ url, sort, is_cover })),
+        video_url: videoUrl.trim() || null,
+      }),
+    });
+    const result = (await response.json().catch(() => ({}))) as SavePhotosResponse;
+    if (!response.ok) {
+      setSaving(false);
+      setError(result.error || "Failed to save photos");
+      return;
     }
 
+    setSaving(false);
     if (navigator.vibrate) navigator.vibrate(10);
     router.push(`/places/${placeId}/edit`);
   }

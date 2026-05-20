@@ -1,6 +1,6 @@
 # Feature Map
 
-Последнее обновление: 2026-05-15.
+Последнее обновление: 2026-05-20.
 
 ## Public Routes
 
@@ -77,6 +77,7 @@
 | `/api/google/photo` | Google photo image proxy; streams Places photos without exposing Google API key |
 | `/api/google-import/search` | Google import search |
 | `/api/google-import/import` | Google import commit |
+| `PATCH /api/places/[id]/photos` | Save place photo order/cover/video through service-role API after owner/admin Bearer verification |
 | `/api/places/resolve-place-id` | Resolve internal/external place id |
 | `PATCH /api/profile` | Current-user profile field updates through service-role API |
 | `/api/stripe/checkout` | Создание checkout session |

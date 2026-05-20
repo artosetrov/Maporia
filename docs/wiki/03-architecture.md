@@ -1,6 +1,6 @@
 # Architecture
 
-Последнее обновление: 2026-05-15.
+Последнее обновление: 2026-05-20.
 
 ## Stack
 
@@ -133,6 +133,8 @@ User-facing auth is centralized around the shared `PasswordlessAuthPanel`: `/log
 Service-role operations должны жить только в API routes/server utils. Health-check уже проверяет, что service keys не попали в client files.
 
 Current-user profile edits for safe fields (`avatar_url`, `display_name`, `bio`, `username`, `favorite_categories`, `favorite_tags`) go through `PATCH /api/profile`, which verifies the user's Bearer session and updates only that user's `profiles` row via service role. This avoids the recursive `profiles` UPDATE RLS policy while keeping client writes allowlisted.
+
+Place photo menu saves go through `PATCH /api/places/[id]/photos`, which verifies the caller's Bearer session, allows only the listing owner or admin, deduplicates photo URLs, updates `places.cover_url/video_url`, and rewrites `place_photos` with the service-role client. The browser editor still uploads images to Storage first, but database save/delete no longer depends on client-side `place_photos` RLS.
 
 Admin role/plan assignment goes through `/api/admin/users/[id]/role` with a service-role Supabase client after verifying the caller's Bearer session and `profiles.is_admin`/`role='admin'`. The profile page should not update role, plan, or `is_admin` directly from the browser client because those writes depend on `profiles` RLS. Admin auth-management (`/api/admin/users/[id]/auth`) uses the same configured app-origin resolver as Stripe redirects for reset/magic-link emails, ignores client-supplied redirect URLs, and rate-limits credential/email actions per admin/action. Admin place owner transfer goes through `/api/admin/places/[id]/owner`, updates `places.created_by` with the service role, and writes `admin_place_owner_transfers` when the audit table exists. Admin user lookup for this flow uses `/api/admin/users/search`. Admin impersonation start is also rate-limited per admin/IP before generating Supabase magic links.
 
