@@ -80,6 +80,31 @@ const isDefaultMapKindSelection = (kinds?: HomeKind[] | null): boolean =>
 const normalizeMapKinds = (kinds?: HomeKind[] | null): HomeKind[] =>
   kinds && kinds.length > 0 ? kinds : MAP_DEFAULT_KINDS;
 
+const parseMapKindsParam = (
+  kindsParam: string | null,
+  kindParam: string | null,
+  tabParam: string | null,
+): HomeKind[] => {
+  const rawKinds = kindsParam && kindsParam.trim()
+    ? kindsParam
+    : kindParam && kindParam.trim()
+      ? kindParam
+      : null;
+
+  if (rawKinds) {
+    return rawKinds
+      .split(',')
+      .map((k) => k.trim())
+      .filter((k): k is HomeKind => VALID_MAP_KINDS.has(k as HomeKind));
+  }
+
+  if (tabParam === "services") return ["service"];
+  if (tabParam === "experiences") return ["experience"];
+  if (tabParam === "locations") return ["location"];
+
+  return [];
+};
+
 const toErrorLike = (error: unknown): ErrorLike => {
   if (error && typeof error === "object") return error as ErrorLike;
   return { message: String(error) };
@@ -182,6 +207,8 @@ function MapPageContent() {
       const categoriesParam = searchParams.get('categories');
       const tagsParam = searchParams.get('tags');
       const kindsParam = searchParams.get('kinds');
+      const kindParam = searchParams.get('kind');
+      const tabParam = searchParams.get('tab');
       
       let initialCity: string | null = null; // По умолчанию null для "Anywhere"
       let hasCityInUrl = false;
@@ -224,9 +251,7 @@ function MapPageContent() {
 
       // ?kinds=service,experience — приходит с главной (singleKindMode → один элемент,
       // но парсим как массив на случай ручного URL'а или будущей multi-select функции).
-      const initialKinds = kindsParam && kindsParam.trim()
-        ? kindsParam.split(',').map(k => k.trim()).filter((k): k is HomeKind => VALID_MAP_KINDS.has(k as HomeKind))
-        : [];
+      const initialKinds = parseMapKindsParam(kindsParam, kindParam, tabParam);
 
       return { initialCity, initialQ, initialCategories, initialTags, initialKinds, hasCityInUrl };
     } catch (e) {
@@ -300,6 +325,8 @@ function MapPageContent() {
       const tagsParam = searchParams.get('tags');
       const qParam = searchParams.get('q');
       const kindsParam = searchParams.get('kinds');
+      const kindParam = searchParams.get('kind');
+      const tabParam = searchParams.get('tab');
       
       // Устанавливаем applied filters из URL
       if (city && city.trim()) {
@@ -381,11 +408,8 @@ function MapPageContent() {
         setFiltersVersion(prev => prev + 1);
       }
 
-      if (kindsParam && kindsParam.trim()) {
-        const kinds = kindsParam
-          .split(',')
-          .map((k) => k.trim())
-          .filter((k): k is HomeKind => VALID_MAP_KINDS.has(k as HomeKind));
+      const kinds = parseMapKindsParam(kindsParam, kindParam, tabParam);
+      if (kinds.length > 0) {
         setActiveFilters(prev => ({ ...prev, kinds: kinds.length > 0 ? kinds : MAP_DEFAULT_KINDS }));
         setFiltersVersion(prev => prev + 1);
       } else {

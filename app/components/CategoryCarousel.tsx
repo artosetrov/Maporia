@@ -5,7 +5,7 @@
  * на главной странице. Каждая карточка показывает emoji + label + count активных
  * карточек этой категории.
  *
- * Клик ведёт на /map?kind=…&categories=…  — там уже работает kind+category фильтр.
+ * Клик ведёт на /map?kinds=…&categories=…  — там уже работает kind+category фильтр.
  *
  * Counts грузятся одной выборкой `select categories from places where kind=$1`,
  * потом aggregate на клиенте. Для < 1000 records быстрее одного запроса
@@ -95,9 +95,11 @@ export default function CategoryCarousel({ kind }: CategoryCarouselProps) {
 
   function openCategory(cat: string) {
     const tab = kind === "service" ? "services" : "experiences";
-    router.push(
-      `/map?kind=${kind}&categories=${encodeURIComponent(cat)}&tab=${tab}`
-    );
+    const params = new URLSearchParams();
+    params.set("kinds", kind);
+    params.set("categories", cat);
+    params.set("tab", tab);
+    router.push(`/map?${params.toString()}`);
   }
 
   // Стрелки показываем только если карточек хватает на переполнение по
