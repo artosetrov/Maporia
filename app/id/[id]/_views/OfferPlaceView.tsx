@@ -122,11 +122,6 @@ type PriceOption = {
   sort_order?: number | null;
 };
 
-type PriceOptionGroup = {
-  label: string | null;
-  options: PriceOption[];
-};
-
 const SERVICE_MODE_LABELS: Record<string, string> = {
   at_provider: "At provider's place",
   at_client:   "At your place",
@@ -239,18 +234,14 @@ function getPrimaryPriceOption(options: PriceOption[]): PriceOption | null {
   return options.find((option) => option.is_featured) ?? options[0];
 }
 
-function groupPriceOptions(options: PriceOption[]): PriceOptionGroup[] {
-  const groups: PriceOptionGroup[] = [];
-  for (const option of options) {
-    const label = option.group_label?.trim() || null;
-    const existing = groups.find((group) => group.label === label);
-    if (existing) {
-      existing.options.push(option);
-    } else {
-      groups.push({ label, options: [option] });
-    }
-  }
-  return groups;
+function getPriceOptionTitle(option: PriceOption, index: number): string {
+  return option.group_label?.trim() || option.label?.trim() || `Option ${index + 1}`;
+}
+
+function getPriceOptionMetaLabel(option: PriceOption, title: string): string | null {
+  const label = option.label?.trim();
+  if (!label || label.toLowerCase() === title.toLowerCase()) return null;
+  return label;
 }
 
 function formatDuration(minutes: number | null | undefined): string | null {
@@ -332,7 +323,6 @@ export default function OfferPlaceView({
   const priceOptions = useMemo(() => normalizePriceOptions(place.price_options), [place.price_options]);
   const primaryPriceOption = useMemo(() => getPrimaryPriceOption(priceOptions), [priceOptions]);
   const primaryPriceOptionText = primaryPriceOption ? formatPriceOption(primaryPriceOption) : null;
-  const priceOptionGroups = useMemo(() => groupPriceOptions(priceOptions), [priceOptions]);
   const badgeCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const option of priceOptions) {
@@ -859,94 +849,84 @@ export default function OfferPlaceView({
                 {priceOptions.length} option{priceOptions.length === 1 ? "" : "s"}
               </div>
             </div>
-            <div className="space-y-7">
-              {priceOptionGroups.map((group, groupIndex) => (
-                <div key={group.label || `group-${groupIndex}`}>
-                  {group.label && (
-                    <h3 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
-                      {group.label}
-                    </h3>
-                  )}
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                    {group.options.map((option, index) => {
-                      const oldPrice = option.compare_at_amount != null
-                        ? formatPrice(option.compare_at_amount, option.currency)
-                        : null;
-                      const duration = formatDuration(option.duration_minutes);
-                      const badgeKey = option.badge?.trim().toLowerCase();
-                      const showBadge = Boolean(
-                        option.badge &&
-                        (option.is_featured || !badgeKey || (badgeCounts.get(badgeKey) ?? 0) === 1)
-                      );
-                      return (
-                        <article
-                          key={option.id || `${option.label || "price"}-${groupIndex}-${index}`}
-                          className={cx(
-                            "relative flex h-full min-h-[224px] overflow-hidden rounded-lg border p-4 text-[#1F2A1F] transition duration-200 hover:-translate-y-1",
-                            option.is_featured
-                              ? "border-[#8F9E4F] bg-[linear-gradient(180deg,rgba(244,247,234,0.95)_0%,rgba(255,255,255,0.98)_72%)] shadow-[0_18px_42px_rgba(143,158,79,0.18)] ring-1 ring-[#8F9E4F]/25"
-                              : "border-[#ECEEE4] bg-white shadow-[0_14px_32px_rgba(31,42,31,0.07)] hover:border-[#DCE4C6] hover:shadow-[0_20px_44px_rgba(31,42,31,0.10)]",
-                          )}
-                        >
-                          <div
-                            className={cx(
-                              "pointer-events-none absolute inset-x-0 top-0 h-1",
-                              option.is_featured ? "bg-[#8F9E4F]" : "bg-[#ECEEE4]",
-                            )}
-                          />
-                          <div className="flex min-w-0 flex-1 flex-col pt-1">
-                          <div className={cx(
-                            "mb-4 flex min-h-10 items-start justify-between gap-2 text-xs font-semibold uppercase tracking-[0.08em]",
-                            "text-[#6F7A5A]",
-                          )}>
-                            <span className="min-w-0 flex-1 text-balance leading-5">
-                              {option.label || `Option ${index + 1}`}
+            <div className="space-y-3">
+              {priceOptions.map((option, index) => {
+                const title = getPriceOptionTitle(option, index);
+                const metaLabel = getPriceOptionMetaLabel(option, title);
+                const oldPrice = option.compare_at_amount != null
+                  ? formatPrice(option.compare_at_amount, option.currency)
+                  : null;
+                const duration = formatDuration(option.duration_minutes);
+                const badgeKey = option.badge?.trim().toLowerCase();
+                const showBadge = Boolean(
+                  option.badge &&
+                  (option.is_featured || !badgeKey || (badgeCounts.get(badgeKey) ?? 0) === 1)
+                );
+
+                return (
+                  <article
+                    key={option.id || `${title}-${index}`}
+                    className={cx(
+                      "relative overflow-hidden rounded-lg border p-4 text-[#1F2A1F] transition duration-200 hover:-translate-y-0.5 sm:p-5",
+                      option.is_featured
+                        ? "border-[#8F9E4F] bg-[linear-gradient(180deg,rgba(244,247,234,0.95)_0%,rgba(255,255,255,0.98)_72%)] shadow-[0_16px_36px_rgba(143,158,79,0.16)] ring-1 ring-[#8F9E4F]/25"
+                        : "border-[#ECEEE4] bg-white shadow-[0_12px_28px_rgba(31,42,31,0.06)] hover:border-[#DCE4C6] hover:shadow-[0_16px_34px_rgba(31,42,31,0.09)]",
+                    )}
+                  >
+                    <div
+                      className={cx(
+                        "pointer-events-none absolute inset-y-0 left-0 w-1",
+                        option.is_featured ? "bg-[#8F9E4F]" : "bg-[#ECEEE4]",
+                      )}
+                    />
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0 flex-1 pl-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {metaLabel && (
+                            <span className="inline-flex rounded-full border border-[#E1E7CB] bg-white/85 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#556036]">
+                              {metaLabel}
                             </span>
-                            {showBadge && option.badge && (
-                              <span className={cx(
-                                "inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-2.5 py-1.5 text-[9px] leading-none tracking-[0.12em] shadow-[0_8px_16px_rgba(31,42,31,0.08)]",
-                                option.is_featured
-                                  ? "border-[#8F9E4F] bg-[#8F9E4F] text-white"
-                                  : "border-[#C96A5B]/25 bg-[#C96A5B]/10 text-[#B63D32]",
-                              )}>
-                                {option.badge}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex flex-wrap items-end gap-x-2 gap-y-1">
-                            <div className="font-fraunces text-[32px] font-semibold leading-[0.98] text-[#1F2A1F]">
-                              {formatPriceOption(option)}
-                            </div>
-                            {oldPrice && (
-                              <div className={cx(
-                                "mb-0.5 text-sm line-through",
-                                "text-[#8A9281]",
-                              )}>
-                                {oldPrice}
-                              </div>
-                            )}
-                          </div>
+                          )}
                           {duration && (
-                            <div className="mt-4 inline-flex w-fit items-center gap-1.5 rounded-full border border-[#E1E7CB] bg-white/85 px-2.5 py-1 text-xs font-medium text-[#556036]">
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#E1E7CB] bg-white/85 px-2.5 py-1 text-xs font-medium text-[#556036]">
                               <Icon name="clock" size={12} />
                               <span>{duration}</span>
-                            </div>
+                            </span>
                           )}
-                          {option.note && (
-                            <div className={cx(
-                              "mt-4 border-t border-[#ECEEE4] pt-3 text-sm leading-relaxed",
-                              "text-[#6F7A5A]",
+                          {showBadge && option.badge && (
+                            <span className={cx(
+                              "inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase leading-none tracking-[0.1em]",
+                              option.is_featured
+                                ? "border-[#8F9E4F] bg-[#8F9E4F] text-white"
+                                : "border-[#C96A5B]/25 bg-[#C96A5B]/10 text-[#B63D32]",
                             )}>
-                              {option.note}
-                            </div>
+                              {option.badge}
+                            </span>
                           )}
+                        </div>
+                        <h3 className="mt-3 font-fraunces text-xl font-semibold leading-tight text-[#1F2A1F] sm:text-2xl">
+                          {title}
+                        </h3>
+                        {option.note && (
+                          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#6F7A5A]">
+                            {option.note}
+                          </p>
+                        )}
+                      </div>
+                      <div className="shrink-0 pl-1 text-left sm:min-w-[148px] sm:text-right">
+                        <div className="font-fraunces text-[30px] font-semibold leading-none text-[#1F2A1F]">
+                          {formatPriceOption(option)}
+                        </div>
+                        {oldPrice && (
+                          <div className="mt-1 text-sm text-[#8A9281] line-through">
+                            {oldPrice}
                           </div>
-                        </article>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           </section>
         )}
