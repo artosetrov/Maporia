@@ -946,6 +946,9 @@ export default function OfferPlaceView({
                         )}
                       </div>
                       <div className="shrink-0 pl-1 text-left sm:min-w-[148px] sm:text-right">
+                        <div className="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                          {showFromPrefix ? "Starts at" : "Price"}
+                        </div>
                         <div className="flex items-baseline gap-1.5 font-fraunces text-[30px] font-semibold leading-none text-[#1F2A1F] sm:justify-end">
                           {showFromPrefix && (
                             <span className="font-sans text-sm font-semibold leading-none text-[#8A9281]">
