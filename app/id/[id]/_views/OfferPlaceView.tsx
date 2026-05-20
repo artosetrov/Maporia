@@ -244,6 +244,13 @@ function getPriceOptionMetaLabel(option: PriceOption, title: string): string | n
   return label;
 }
 
+function getPriceOptionAmountText(option: PriceOption): string {
+  const text = formatPrice(option.amount, option.currency) ?? "";
+  const unit = option.unit ? PRICE_UNIT_LABEL[option.unit] ?? "" : "";
+  const suffix = unit && option.unit !== "from" ? ` ${unit}` : "";
+  return `${text}${suffix}`;
+}
+
 function formatDuration(minutes: number | null | undefined): string | null {
   if (!minutes || minutes <= 0) return null;
   if (minutes < 60) return `${minutes} min`;
@@ -856,6 +863,8 @@ export default function OfferPlaceView({
                 const oldPrice = option.compare_at_amount != null
                   ? formatPrice(option.compare_at_amount, option.currency)
                   : null;
+                const amountText = getPriceOptionAmountText(option);
+                const showFromPrefix = option.unit === "from";
                 const duration = formatDuration(option.duration_minutes);
                 const badgeKey = option.badge?.trim().toLowerCase();
                 const showBadge = Boolean(
@@ -914,8 +923,13 @@ export default function OfferPlaceView({
                         )}
                       </div>
                       <div className="shrink-0 pl-1 text-left sm:min-w-[148px] sm:text-right">
-                        <div className="font-fraunces text-[30px] font-semibold leading-none text-[#1F2A1F]">
-                          {formatPriceOption(option)}
+                        <div className="flex items-baseline gap-1.5 font-fraunces text-[30px] font-semibold leading-none text-[#1F2A1F] sm:justify-end">
+                          {showFromPrefix && (
+                            <span className="font-sans text-sm font-semibold leading-none text-[#8A9281]">
+                              from
+                            </span>
+                          )}
+                          <span>{amountText}</span>
                         </div>
                         {oldPrice && (
                           <div className="mt-1 text-sm text-[#8A9281] line-through">
