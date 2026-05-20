@@ -77,6 +77,9 @@
 | `/api/google/photo` | Google photo image proxy; streams Places photos without exposing Google API key |
 | `/api/google-import/search` | Google import search |
 | `/api/google-import/import` | Google import commit |
+| `POST /api/place-links` | Create location ↔ service/experience links through service-role API after Bearer ownership/admin verification |
+| `PATCH /api/place-links/[id]` | Approve or reject pending place links as location owner/admin |
+| `DELETE /api/place-links/[id]` | Remove a place link as either listing owner/admin |
 | `PATCH /api/places/[id]/photos` | Save place photo order/cover/video through service-role API after owner/admin Bearer verification |
 | `/api/places/resolve-place-id` | Resolve internal/external place id |
 | `PATCH /api/profile` | Current-user profile field updates through service-role API |

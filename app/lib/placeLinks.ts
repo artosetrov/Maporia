@@ -1,8 +1,9 @@
 /**
  * place_links — host pattern (location ↔ experience/service).
  *
- * Pure async wrappers вокруг supabase-js. RLS делает security: same-owner →
- * INSERT status='active'; cross-owner → INSERT status='pending', нужна approval.
+ * Pure async wrappers around reads plus server-backed writes. The API routes
+ * verify the caller, then use the service-role client so browser flows do not
+ * depend on fragile direct-write RLS behavior.
  *
  * См. docs/PLACE_LINKS_PLAN.md.
  */
@@ -29,6 +30,31 @@ export type PlaceLink = {
 
 const PLACE_LINK_SELECT =
   "id,parent_place_id,child_place_id,relation,status,sort_order,created_at,approved_at,created_by";
+
+type PlaceLinkApiResponse = {
+  ok?: boolean;
+  link?: PlaceLink;
+  error?: string;
+};
+
+async function getAccessToken(action: string): Promise<string> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) throw new Error(`${action}: not authenticated`);
+  return token;
+}
+
+async function readJsonResponse(response: Response): Promise<PlaceLinkApiResponse | null> {
+  return (await response.json().catch(() => null)) as PlaceLinkApiResponse | null;
+}
+
+async function readLinkResponse(response: Response, action: string): Promise<PlaceLink> {
+  const payload = await readJsonResponse(response);
+  if (!response.ok || !payload?.link) {
+    throw new Error(`${action} failed: ${payload?.error || response.statusText}`);
+  }
+  return payload.link;
+}
 
 /**
  * Получить список service/experience-карточек, прицеплённых к данной location.
@@ -104,11 +130,11 @@ export async function getParentsOfChild(
 }
 
 /**
- * Создать link. Status автоматически детектится из ownership:
+ * Создать link. Server API детектит status из ownership:
  *   - юзер владеет parent → 'active' (same-owner branch).
  *   - юзер НЕ владеет parent → 'pending' (cross-owner branch).
  *
- * RLS additionally enforces, что юзер ВЛАДЕЕТ child (нельзя за чужой experience прицепить).
+ * API additionally enforces, что юзер ВЛАДЕЕТ child (нельзя за чужой experience прицепить).
  *
  * Возвращает созданный PlaceLink или кидает ошибку.
  */
@@ -117,73 +143,54 @@ export async function createLink(args: {
   childId: string;
   relation?: PlaceLinkRelation;
 }): Promise<PlaceLink> {
-  // Резолвим owner'ов чтобы предсказать status (RLS будет двойной check)
-  const { data: parents, error: parentErr } = await supabase
-    .from("places")
-    .select("id, created_by")
-    .eq("id", args.parentId)
-    .single();
-  if (parentErr || !parents) {
-    throw new Error(`createLink: parent place not found (${args.parentId})`);
-  }
-
-  const { data: sessionData } = await supabase.auth.getSession();
-  const userId = sessionData.session?.user?.id;
-  if (!userId) {
-    throw new Error("createLink: not authenticated");
-  }
-
-  const parentPlace = parents as { created_by: string | null };
-  const status: PlaceLinkStatus =
-    parentPlace.created_by === userId ? "active" : "pending";
-
-  const { data, error } = await supabase
-    .from("place_links")
-    .insert({
-      parent_place_id: args.parentId,
-      child_place_id: args.childId,
+  const token = await getAccessToken("createLink");
+  const response = await fetch("/api/place-links", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      parentId: args.parentId,
+      childId: args.childId,
       relation: args.relation ?? "happens_at",
-      status,
-      created_by: userId,
-    } as never)
-    .select(PLACE_LINK_SELECT)
-    .single();
+    }),
+  });
 
-  if (error) {
-    throw new Error(`createLink failed: ${error.message}`);
-  }
-  return data as PlaceLink;
+  return readLinkResponse(response, "createLink");
 }
 
 /**
- * Approve a pending link. Только parent owner — RLS отрежет если кто другой.
+ * Approve a pending link. Только parent owner/admin — API отрежет если кто другой.
  * Trigger автоматически проставит approved_at = now().
  */
 export async function approveLink(linkId: string): Promise<PlaceLink> {
-  const { data, error } = await supabase
-    .from("place_links")
-    .update({ status: "active" } as never)
-    .eq("id", linkId)
-    .eq("status", "pending")
-    .select(PLACE_LINK_SELECT)
-    .single();
+  const token = await getAccessToken("approveLink");
+  const response = await fetch(`/api/place-links/${encodeURIComponent(linkId)}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ status: "active" }),
+  });
 
-  if (error) throw new Error(`approveLink failed: ${error.message}`);
-  return data as PlaceLink;
+  return readLinkResponse(response, "approveLink");
 }
 
 /** Reject a pending link. */
 export async function rejectLink(linkId: string): Promise<PlaceLink> {
-  const { data, error } = await supabase
-    .from("place_links")
-    .update({ status: "rejected" } as never)
-    .eq("id", linkId)
-    .eq("status", "pending")
-    .select(PLACE_LINK_SELECT)
-    .single();
+  const token = await getAccessToken("rejectLink");
+  const response = await fetch(`/api/place-links/${encodeURIComponent(linkId)}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ status: "rejected" }),
+  });
 
-  if (error) throw new Error(`rejectLink failed: ${error.message}`);
-  return data as PlaceLink;
+  return readLinkResponse(response, "rejectLink");
 }
 
 /**
@@ -246,10 +253,17 @@ export async function getPendingRequestsForOwner(): Promise<
     .filter((r): r is NonNullable<typeof r> => r != null);
 }
 
-/** Удалить link. RLS: либо parent owner, либо child owner. */
+/** Удалить link. API: либо parent owner, либо child owner, либо admin. */
 export async function removeLink(linkId: string): Promise<void> {
-  const { error } = await supabase.from("place_links").delete().eq("id", linkId);
-  if (error) throw new Error(`removeLink failed: ${error.message}`);
+  const token = await getAccessToken("removeLink");
+  const response = await fetch(`/api/place-links/${encodeURIComponent(linkId)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const payload = await readJsonResponse(response);
+    throw new Error(`removeLink failed: ${payload?.error || response.statusText}`);
+  }
 }
 
 /** Подсчёт pending requests для UI badge на /profile. */
