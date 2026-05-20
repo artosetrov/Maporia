@@ -184,10 +184,22 @@ export const isValidPhotoUrl = (url: string | null | undefined): boolean => {
 };
 
 /**
- * Filters an array of photo URLs, removing empty/null values.
+ * Filters an array of photo URLs, removing empty/null values and duplicates.
  */
-export const filterValidPhotos = (urls: (string | null | undefined)[]): string[] =>
-  urls.filter((url): url is string => isValidPhotoUrl(url));
+export const filterValidPhotos = (urls: (string | null | undefined)[]): string[] => {
+  const seen = new Set<string>();
+  const filtered: string[] = [];
+
+  for (const rawUrl of urls) {
+    if (typeof rawUrl !== "string" || !isValidPhotoUrl(rawUrl)) continue;
+    const url = rawUrl.trim();
+    if (seen.has(url)) continue;
+    seen.add(url);
+    filtered.push(url);
+  }
+
+  return filtered;
+};
 
 /**
  * Converts an Instagram Reel URL to embed format

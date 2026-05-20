@@ -63,6 +63,27 @@ function revokeLocalObjectUrl(url: string) {
   if (url.startsWith("blob:")) URL.revokeObjectURL(url);
 }
 
+function dedupePhotosByUrl(items: Photo[]): Photo[] {
+  const seen = new Map<string, Photo>();
+
+  for (const photo of items) {
+    const url = photo.url.trim();
+    if (!url) continue;
+
+    const existing = seen.get(url);
+    if (!existing) {
+      seen.set(url, { ...photo, url });
+      continue;
+    }
+
+    if (photo.is_cover) existing.is_cover = true;
+    existing.sort = Math.min(existing.sort, photo.sort);
+  }
+
+  const deduped = Array.from(seen.values()).sort((a, b) => a.sort - b.sort);
+  return deduped.map((photo, index) => ({ ...photo, sort: index }));
+}
+
 type PageProps = { params: Promise<{ id: string }> };
 
 export default function PhotosEditorPage(props: PageProps) {
@@ -146,12 +167,13 @@ export default function PhotosEditorPage(props: PageProps) {
 
       const photosData = rawPhotos as PlacePhotoSelectRow[] | null;
       let loadedPhotos: Photo[] = [];
+      let originalPhotoSnapshot: Photo[] | null = null;
 
       if (photosData && photosData.length > 0) {
         // Find if any photo is marked as cover
         const hasCover = photosData.some(photo => photo.is_cover === true);
         
-        loadedPhotos = photosData
+        originalPhotoSnapshot = photosData
           .map((p, idx) => ({
             id: p.id || `photo-${idx}`,
             url: p.url || "",
@@ -160,6 +182,8 @@ export default function PhotosEditorPage(props: PageProps) {
             is_cover: p.is_cover ?? (!hasCover && idx === 0),
           }))
           .filter((p) => p.url);
+
+        loadedPhotos = dedupePhotosByUrl(originalPhotoSnapshot);
         
         // Ensure at least one photo is marked as cover
         if (loadedPhotos.length > 0 && !loadedPhotos.some(p => p.is_cover)) {
@@ -171,7 +195,7 @@ export default function PhotosEditorPage(props: PageProps) {
       }
 
       setPhotos(loadedPhotos);
-      setOriginalPhotos(loadedPhotos.map((p) => ({ ...p })));
+      setOriginalPhotos((originalPhotoSnapshot ?? loadedPhotos).map((p) => ({ ...p })));
       
       // Load video_url
       const videoUrlValue = placeData.video_url || "";
@@ -359,7 +383,8 @@ export default function PhotosEditorPage(props: PageProps) {
       return;
     }
 
-    const photoUrls = photos.map((p) => p.url).filter(Boolean) as string[];
+    const uniquePhotos = dedupePhotosByUrl(photos);
+    const photoUrls = uniquePhotos.map((p) => p.url).filter(Boolean) as string[];
     if (photoUrls.length === 0) {
       setError("At least one photo is required");
       setSaving(false);
@@ -367,7 +392,7 @@ export default function PhotosEditorPage(props: PageProps) {
     }
 
     // Find the cover photo (photo with is_cover: true)
-    const coverPhoto = photos.find((p) => p.is_cover);
+    const coverPhoto = uniquePhotos.find((p) => p.is_cover);
     const coverUrl = coverPhoto?.url || photoUrls[0]; // Fallback to first photo if no cover set
 
     // Update cover_url and video_url in places table
@@ -411,9 +436,9 @@ export default function PhotosEditorPage(props: PageProps) {
 
     // Insert new photos - preserve cover selection from state
     // First, ensure only one photo is marked as cover
-    const photosWithSingleCover = photos.map((p, idx) => ({
+    const photosWithSingleCover = uniquePhotos.map((p, idx) => ({
       ...p,
-      is_cover: p.is_cover && idx === photos.findIndex(photo => photo.is_cover),
+      is_cover: p.is_cover && idx === uniquePhotos.findIndex(photo => photo.is_cover),
     }));
 
     // If no cover is set, make the first one the cover
