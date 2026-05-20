@@ -211,9 +211,8 @@ function normalizePriceOptions(raw: unknown): PriceOption[] {
 function formatPriceOption(option: PriceOption): string {
   const text = formatPrice(option.amount, option.currency) ?? "";
   const unit = option.unit ? PRICE_UNIT_LABEL[option.unit] ?? "" : "";
-  const fromPrefix = option.unit === "from" ? "from " : "";
   const suffix = unit && option.unit !== "from" ? ` ${unit}` : "";
-  return `${fromPrefix}${text}${suffix}`;
+  return `${text}${suffix}`;
 }
 
 function formatBasePrice(
@@ -224,9 +223,8 @@ function formatBasePrice(
   const text = formatPrice(amount, currency);
   if (!text) return null;
   const unitLabel = unit ? PRICE_UNIT_LABEL[unit] ?? "" : "";
-  const fromPrefix = unit === "from" ? "from " : "";
   const suffix = unitLabel && unit !== "from" ? ` ${unitLabel}` : "";
-  return `${fromPrefix}${text}${suffix}`;
+  return `${text}${suffix}`;
 }
 
 function formatBasePriceAmount(
@@ -475,9 +473,6 @@ export default function OfferPlaceView({
   const leadPriceAmountText = primaryPriceOption
     ? getPriceOptionAmountText(primaryPriceOption)
     : formatBasePriceAmount(place.price_amount, place.price_currency, place.price_unit);
-  const leadPriceHasFromPrefix = primaryPriceOption
-    ? primaryPriceOption.unit === "from"
-    : place.price_unit === "from";
   const leadOfferTitle =
     primaryPriceOption?.label?.trim() ||
     (priceOptions.length > 0 ? (isService ? "Featured service" : "Featured experience") : kindLabel);
@@ -820,11 +815,6 @@ export default function OfferPlaceView({
                       {priceOptions.length > 0 ? "Starts at" : "Price"}
                     </div>
                     <div className="flex items-baseline gap-1.5 font-fraunces text-3xl font-semibold leading-none text-[#1F2A1F] sm:justify-end">
-                      {leadPriceHasFromPrefix && (
-                        <span className="font-sans text-sm font-semibold leading-none text-[#8A9281]">
-                          from
-                        </span>
-                      )}
                       <span>{leadPriceAmountText || leadPriceText}</span>
                     </div>
                   </>
@@ -950,11 +940,6 @@ export default function OfferPlaceView({
                           {showFromPrefix ? "Starts at" : "Price"}
                         </div>
                         <div className="flex items-baseline gap-1.5 font-fraunces text-[30px] font-semibold leading-none text-[#1F2A1F] sm:justify-end">
-                          {showFromPrefix && (
-                            <span className="font-sans text-sm font-semibold leading-none text-[#8A9281]">
-                              from
-                            </span>
-                          )}
                           <span>{amountText}</span>
                         </div>
                         {oldPrice && (
