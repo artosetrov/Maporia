@@ -229,6 +229,18 @@ function formatBasePrice(
   return `${fromPrefix}${text}${suffix}`;
 }
 
+function formatBasePriceAmount(
+  amount: number | null | undefined,
+  currency: string | null | undefined,
+  unit: string | null | undefined
+): string | null {
+  const text = formatPrice(amount, currency);
+  if (!text) return null;
+  const unitLabel = unit ? PRICE_UNIT_LABEL[unit] ?? "" : "";
+  const suffix = unitLabel && unit !== "from" ? ` ${unitLabel}` : "";
+  return `${text}${suffix}`;
+}
+
 function getPrimaryPriceOption(options: PriceOption[]): PriceOption | null {
   if (options.length === 0) return null;
   return options.find((option) => option.is_featured) ?? options[0];
@@ -460,6 +472,12 @@ export default function OfferPlaceView({
   const hasBring = (place.bring_items?.length ?? 0) > 0;
   const hasLogistics = guestsText || place.meeting_point || place.cancellation_policy;
   const leadPriceText = primaryPriceOptionText || basePriceText;
+  const leadPriceAmountText = primaryPriceOption
+    ? getPriceOptionAmountText(primaryPriceOption)
+    : formatBasePriceAmount(place.price_amount, place.price_currency, place.price_unit);
+  const leadPriceHasFromPrefix = primaryPriceOption
+    ? primaryPriceOption.unit === "from"
+    : place.price_unit === "from";
   const leadOfferTitle =
     primaryPriceOption?.label?.trim() ||
     (priceOptions.length > 0 ? (isService ? "Featured service" : "Featured experience") : kindLabel);
@@ -801,8 +819,13 @@ export default function OfferPlaceView({
                     <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
                       {priceOptions.length > 0 ? "Starts at" : "Price"}
                     </div>
-                    <div className="font-fraunces text-3xl font-semibold leading-none text-[#1F2A1F]">
-                      {leadPriceText}
+                    <div className="flex items-baseline gap-1.5 font-fraunces text-3xl font-semibold leading-none text-[#1F2A1F] sm:justify-end">
+                      {leadPriceHasFromPrefix && (
+                        <span className="font-sans text-sm font-semibold leading-none text-[#8A9281]">
+                          from
+                        </span>
+                      )}
+                      <span>{leadPriceAmountText || leadPriceText}</span>
                     </div>
                   </>
                 ) : (
