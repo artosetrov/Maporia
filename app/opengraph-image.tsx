@@ -19,8 +19,8 @@ export default function Image() {
           display: "flex",
           position: "relative",
           overflow: "hidden",
-          background: "#FAFAF7",
-          color: "#16190F",
+          background: "#879846",
+          color: "#FFFFFF",
           fontFamily: "Arial, Helvetica, sans-serif",
         }}
       >
@@ -29,33 +29,42 @@ export default function Image() {
             position: "absolute",
             inset: 0,
             background:
-              "radial-gradient(circle at 82% 18%, rgba(143,158,79,0.36) 0, rgba(143,158,79,0) 280px), radial-gradient(circle at 8% 86%, rgba(241,214,150,0.46) 0, rgba(241,214,150,0) 300px), linear-gradient(135deg, #FAFAF7 0%, #F1ECE0 55%, #E8EDD7 100%)",
+              "linear-gradient(135deg, #7B8D35 0%, #8F9E4F 52%, #6F8030 100%)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "radial-gradient(circle at 82% 16%, rgba(255,255,255,0.20) 0, rgba(255,255,255,0) 280px), radial-gradient(circle at 12% 88%, rgba(255,255,255,0.12) 0, rgba(255,255,255,0) 320px)",
           }}
         />
 
         <div
           style={{
             position: "absolute",
-            right: 72,
-            top: 70,
-            width: 430,
-            height: 430,
-            borderRadius: 52,
+            right: 54,
+            top: 58,
+            width: 500,
+            height: 500,
+            borderRadius: 54,
             overflow: "hidden",
-            border: "1px solid rgba(31,42,31,0.12)",
+            border: "2px solid rgba(255,255,255,0.30)",
+            boxShadow: "0 28px 70px rgba(31,42,31,0.30)",
             display: "flex",
           }}
         >
           <img
             src="https://www.maporia.co/florida-map.png"
             alt=""
-            width={430}
-            height={430}
+            width={500}
+            height={500}
             style={{
               objectFit: "cover",
               width: "100%",
               height: "100%",
-              opacity: 0.86,
+              opacity: 0.92,
             }}
           />
           <div
@@ -63,7 +72,7 @@ export default function Image() {
               position: "absolute",
               inset: 0,
               background:
-                "linear-gradient(180deg, rgba(250,250,247,0.08), rgba(250,250,247,0.28))",
+                "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(31,42,31,0.10))",
             }}
           />
         </div>
@@ -71,38 +80,38 @@ export default function Image() {
         <div
           style={{
             position: "relative",
-            zIndex: 1,
             display: "flex",
             flexDirection: "column",
-            padding: "74px 80px",
-            width: "720px",
+            justifyContent: "center",
+            padding: "72px 80px",
+            width: "620px",
           }}
         >
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 18,
-              marginBottom: 58,
+              gap: 16,
+              marginBottom: 42,
             }}
           >
             <div
               style={{
-                width: 62,
-                height: 62,
+                width: 56,
+                height: 56,
                 borderRadius: "50%",
-                background: "#81904C",
+                background: "#FFFFFF",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#FAFAF7",
-                fontSize: 34,
+                color: "#879846",
+                fontSize: 30,
                 fontWeight: 800,
               }}
             >
               M
             </div>
-            <div style={{ display: "flex", fontSize: 42, fontWeight: 800 }}>
+            <div style={{ display: "flex", fontSize: 36, fontWeight: 700 }}>
               Maporia
             </div>
           </div>
@@ -110,71 +119,27 @@ export default function Image() {
           <div
             style={{
               display: "flex",
-              fontSize: 76,
-              lineHeight: 0.95,
+              fontSize: 108,
+              lineHeight: 0.92,
               fontWeight: 900,
-              maxWidth: 650,
+              letterSpacing: 0,
+              maxWidth: 560,
             }}
           >
-            Discover local gems across Florida.
+            Places locals love.
           </div>
 
           <div
             style={{
               display: "flex",
-              marginTop: 30,
-              fontSize: 28,
-              lineHeight: 1.35,
-              color: "#4A4F3D",
-              maxWidth: 610,
+              marginTop: 34,
+              fontSize: 34,
+              lineHeight: 1.22,
+              color: "rgba(255,255,255,0.88)",
+              maxWidth: 560,
             }}
           >
-            Places, experiences, and services handpicked by locals.
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: 14,
-              marginTop: 46,
-              color: "#38401E",
-              fontSize: 21,
-              fontWeight: 700,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                padding: "13px 18px",
-                borderRadius: 999,
-                background: "#FFFFFF",
-                border: "1px solid #E2E6D6",
-              }}
-            >
-              Locations
-            </div>
-            <div
-              style={{
-                display: "flex",
-                padding: "13px 18px",
-                borderRadius: 999,
-                background: "#FFFFFF",
-                border: "1px solid #E2E6D6",
-              }}
-            >
-              Experiences
-            </div>
-            <div
-              style={{
-                display: "flex",
-                padding: "13px 18px",
-                borderRadius: 999,
-                background: "#FFFFFF",
-                border: "1px solid #E2E6D6",
-              }}
-            >
-              Services
-            </div>
+            Local places, experiences, and services across Florida.
           </div>
         </div>
       </div>

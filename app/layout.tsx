@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Maporia",
     description: "Places locals love",
-    images: ["/maporia-social-preview.jpg"],
+    images: ["/opengraph-image"],
   },
 };
 
