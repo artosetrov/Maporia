@@ -152,7 +152,8 @@ function HomePageInner() {
     return hasCategories || hasTags;
   }, [profile]);
 
-  const localCity = selectedCity || DEFAULT_CITY;
+  const localCity = selectedCity;
+  const localScopeLabel = selectedCity || "Florida";
 
   // Build sections list with conditional Recommended section
   const sectionsToRender = useMemo(() => {
@@ -161,13 +162,13 @@ function HomePageInner() {
       const kindLabel = activeKind === "service" ? "services" : "experiences";
       return [
         {
-          title: `All ${kindLabel} in ${localCity}`,
-          city: localCity,
+          title: `All ${kindLabel} in ${localScopeLabel}`,
+          city: localCity ?? undefined,
           allListings: true,
         },
         ...categories.map((category) => ({
           title: stripTagEmoji(category),
-          city: localCity,
+          city: localCity ?? undefined,
           categories: [category],
         })),
       ];
@@ -184,7 +185,7 @@ function HomePageInner() {
     }
     
     return sections;
-  }, [activeKind, hasInterests, localCity]);
+  }, [activeKind, hasInterests, localCity, localScopeLabel]);
 
   // Check Supabase configuration
   useEffect(() => {

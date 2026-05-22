@@ -21,7 +21,7 @@ import Icon from "./Icon";
 
 type CategoryCarouselProps = {
   kind: "service" | "experience";
-  city: string;
+  city?: string | null;
 };
 
 type CategoryPreview = {
@@ -38,7 +38,7 @@ export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) 
   const [previews, setPreviews] = useState<Map<string, CategoryPreview>>(new Map());
   const [loading, setLoading] = useState(true);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const title = `${kind === "service" ? "Services" : "Experiences"} in ${city}`;
+  const title = `${kind === "service" ? "Services" : "Experiences"} in ${city || "Florida"}`;
 
   // Прокрутка стрелками — синхронно с HomeSection: 2 карточки + 2 gap.
   // Карточки замеряются через [data-card], gap — из CSS-переменной
@@ -118,7 +118,7 @@ export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) 
     params.set("kinds", kind);
     params.set("categories", cat);
     params.set("tab", tab);
-    params.set("city", city);
+    if (city) params.set("city", city);
     router.push(`/map?${params.toString()}`);
   }
 
