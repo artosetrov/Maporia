@@ -143,18 +143,19 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
             .from("places")
             .select("id,title,description,city,country,address,cover_url,categories,tags,created_by,created_at,lat,lng,access_level,visibility,kind,schedule,service_mode")
             .eq("is_hidden", false);
+          if (section.city) {
+            const coords = await getCityCoords(section.city);
+            allQuery = allQuery.or(buildCityRadiusFilter(section.city, coords.lat, coords.lng));
+          }
           if (kindFilter) {
             allQuery = allQuery.eq("kind", kindFilter);
-            if (kindFilter !== "location") {
-              allQuery = applyHomeOfferReadyFilter(allQuery);
-            }
           }
-          allQuery = allQuery.order("created_at", { ascending: false }).limit(10);
+          allQuery = allQuery.order("created_at", { ascending: false }).limit(kindFilter === "location" ? 10 : 40);
 
           const { data, error } = await allQuery;
           if (error) throw error;
           if (!cancelled) {
-            setPlaces(((data || []) as Place[]).filter(isHomeOfferReady));
+            setPlaces(((data || []) as Place[]).filter(isHomeOfferReady).slice(0, 10));
             setLoading(false);
           }
           return;
@@ -394,8 +395,12 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
 
   // Формируем URL для "See all"
   const getSeeAllUrl = () => {
-    if (section.allListings && kindFilter) {
-      return `/map?kinds=${kindFilter}`;
+    if (section.allListings) {
+      const params = new URLSearchParams();
+      if (section.city) params.set("city", section.city);
+      if (kindFilter) params.set("kinds", kindFilter);
+      const query = params.toString();
+      return query ? `/map?${query}` : "/map";
     }
 
     // For "Recently viewed", just go to map page

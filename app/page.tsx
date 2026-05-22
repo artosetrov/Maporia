@@ -26,7 +26,12 @@ import { HOME_SECTIONS } from "./constants/homeSections";
 import { supabase, hasValidSupabaseConfig } from "./lib/supabase";
 import type { Database } from "./types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
-import { DEFAULT_CITY } from "./constants";
+import {
+  DEFAULT_CITY,
+  EXPERIENCE_CATEGORIES,
+  SERVICE_CATEGORIES,
+  stripTagEmoji,
+} from "./constants";
 
 type ReactionPlaceId = Pick<Database["public"]["Tables"]["reactions"]["Row"], "place_id">;
 type ReactionsPlaceIdResult = { data: ReactionPlaceId[] | null; error: PostgrestError | null };
@@ -147,14 +152,24 @@ function HomePageInner() {
     return hasCategories || hasTags;
   }, [profile]);
 
+  const localCity = selectedCity || DEFAULT_CITY;
+
   // Build sections list with conditional Recommended section
   const sectionsToRender = useMemo(() => {
     if (activeKind === "service" || activeKind === "experience") {
+      const categories = activeKind === "service" ? SERVICE_CATEGORIES : EXPERIENCE_CATEGORIES;
+      const kindLabel = activeKind === "service" ? "services" : "experiences";
       return [
         {
-          title: activeKind === "service" ? "All services" : "All experiences",
+          title: `All ${kindLabel} in ${localCity}`,
+          city: localCity,
           allListings: true,
         },
+        ...categories.map((category) => ({
+          title: stripTagEmoji(category),
+          city: localCity,
+          categories: [category],
+        })),
       ];
     }
 
@@ -169,7 +184,7 @@ function HomePageInner() {
     }
     
     return sections;
-  }, [activeKind, hasInterests]);
+  }, [activeKind, hasInterests, localCity]);
 
   // Check Supabase configuration
   useEffect(() => {
@@ -844,7 +859,7 @@ function HomePageInner() {
 
           {/* Category carousel — только для service/experience табов */}
           {activeKind !== "location" && kindIsEmpty !== true && (
-            <CategoryCarousel kind={activeKind} />
+            <CategoryCarousel kind={activeKind} city={localCity} />
           )}
 
           {kindIsEmpty === true ? (

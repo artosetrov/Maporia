@@ -2,42 +2,43 @@
 
 /**
  * CategoryCarousel — горизонтальная лента категорий для Services / Experiences табов
- * на главной странице. Каждая карточка показывает emoji + label + count активных
- * карточек этой категории.
+ * на главной странице. Каждая карточка показывает image + label + count активных
+ * карточек этой категории в выбранном городе.
  *
  * Клик ведёт на /map?kinds=…&categories=…  — там уже работает kind+category фильтр.
  *
- * Counts грузятся одной выборкой `select categories from places where kind=$1`,
- * потом aggregate на клиенте. Для < 1000 records быстрее одного запроса
- * с N RPC-вызовами.
+ * Counts грузятся одной выборкой по kind/city, потом aggregate на клиенте.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabase } from "../lib/supabase";
-import { applyHomeOfferReadyFilter } from "../lib/homeOfferReadiness";
-import { SERVICE_CATEGORIES, EXPERIENCE_CATEGORIES } from "../constants";
+import { buildCityRadiusFilter, getCityCoords } from "../lib/cityRadius";
+import { isHomeOfferReady } from "../lib/homeOfferReadiness";
+import { SERVICE_CATEGORIES, EXPERIENCE_CATEGORIES, stripTagEmoji } from "../constants";
+import Icon from "./Icon";
 
 type CategoryCarouselProps = {
   kind: "service" | "experience";
+  city: string;
 };
 
-function splitCategoryString(category: string): { emoji: string; label: string } {
-  const parts = category.split(" ");
-  const emoji = parts[0] || "📍";
-  const label = parts.slice(1).join(" ") || category;
-  return { emoji, label };
-}
+type CategoryPreview = {
+  count: number;
+  coverUrl: string | null;
+};
 
-export default function CategoryCarousel({ kind }: CategoryCarouselProps) {
+export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) {
   const router = useRouter();
   const allCategories = useMemo<readonly string[]>(
     () => (kind === "service" ? SERVICE_CATEGORIES : EXPERIENCE_CATEGORIES),
     [kind]
   );
-  const [counts, setCounts] = useState<Map<string, number>>(new Map());
+  const [previews, setPreviews] = useState<Map<string, CategoryPreview>>(new Map());
   const [loading, setLoading] = useState(true);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const title = `${kind === "service" ? "Services" : "Experiences"} in ${city}`;
 
   // Прокрутка стрелками — синхронно с HomeSection: 2 карточки + 2 gap.
   // Карточки замеряются через [data-card], gap — из CSS-переменной
@@ -63,25 +64,43 @@ export default function CategoryCarousel({ kind }: CategoryCarouselProps) {
     setLoading(true);
     (async () => {
       try {
-        const { data, error } = await applyHomeOfferReadyFilter(
-          supabase
-            .from("places")
-            .select("categories")
-            .eq("kind", kind)
-            .eq("is_hidden", false),
-        );
+        let query = supabase
+          .from("places")
+          .select("categories,cover_url,kind,schedule,service_mode")
+          .eq("kind", kind)
+          .eq("is_hidden", false);
+
+        if (city) {
+          const coords = await getCityCoords(city);
+          // buildCityRadiusFilter calls sanitizePostgrestValue before composing the .or() filter.
+          query = query.or(buildCityRadiusFilter(city, coords.lat, coords.lng));
+        }
+
+        const { data, error } = await query;
         if (cancelled || error) {
           setLoading(false);
           return;
         }
-        const map = new Map<string, number>();
-        for (const row of (data ?? []) as { categories: string[] | null }[]) {
+        const map = new Map<string, CategoryPreview>();
+        for (const row of (data ?? []) as {
+          categories: string[] | null;
+          cover_url: string | null;
+          kind: "service" | "experience" | "location" | null;
+          schedule: unknown | null;
+          service_mode: string | null;
+        }[]) {
+          if (!isHomeOfferReady(row)) continue;
           for (const cat of row.categories ?? []) {
-            map.set(cat, (map.get(cat) ?? 0) + 1);
+            const preview = map.get(cat) ?? { count: 0, coverUrl: null };
+            preview.count += 1;
+            if (!preview.coverUrl && row.cover_url) {
+              preview.coverUrl = row.cover_url;
+            }
+            map.set(cat, preview);
           }
         }
         if (!cancelled) {
-          setCounts(map);
+          setPreviews(map);
           setLoading(false);
         }
       } catch {
@@ -91,7 +110,7 @@ export default function CategoryCarousel({ kind }: CategoryCarouselProps) {
     return () => {
       cancelled = true;
     };
-  }, [kind]);
+  }, [kind, city]);
 
   function openCategory(cat: string) {
     const tab = kind === "service" ? "services" : "experiences";
@@ -99,6 +118,7 @@ export default function CategoryCarousel({ kind }: CategoryCarouselProps) {
     params.set("kinds", kind);
     params.set("categories", cat);
     params.set("tab", tab);
+    params.set("city", city);
     router.push(`/map?${params.toString()}`);
   }
 
@@ -108,12 +128,12 @@ export default function CategoryCarousel({ kind }: CategoryCarouselProps) {
   const showArrows = allCategories.length >= 7;
 
   return (
-    <section aria-label="Browse by category" className="mb-6 lg:mb-8">
+    <section aria-label={title} className="mb-6 lg:mb-8">
       {/* Header: заголовок + стрелки прокрутки (desktop only) — повторяет
           паттерн из HomeSection, чтобы все ленты главной выглядели одинаково. */}
       <div className="flex items-center justify-between mb-3 lg:mb-4 h-10 lg:h-12">
         <h2 className="font-fraunces text-lg lg:text-xl font-semibold text-[#1F2A1F]">
-          Browse by category
+          {title}
         </h2>
         {showArrows && (
           <div className="hidden lg:flex items-center gap-2">
@@ -161,8 +181,9 @@ export default function CategoryCarousel({ kind }: CategoryCarouselProps) {
           }}
         >
           {allCategories.map((cat) => {
-            const { emoji, label } = splitCategoryString(cat);
-            const count = counts.get(cat) ?? 0;
+            const label = stripTagEmoji(cat);
+            const preview = previews.get(cat);
+            const count = preview?.count ?? 0;
             const empty = !loading && count === 0;
             return (
               <button
@@ -172,21 +193,33 @@ export default function CategoryCarousel({ kind }: CategoryCarouselProps) {
                 onClick={() => openCategory(cat)}
                 style={{ scrollSnapAlign: "start" }}
                 className={
-                  "shrink-0 w-[160px] sm:w-[180px] rounded-2xl border bg-white p-4 text-left transition " +
+                  "group shrink-0 w-[160px] sm:w-[180px] text-left transition " +
                   (empty
-                    ? "border-[#ECEEE4] opacity-60 hover:opacity-90"
-                    : "border-[#ECEEE4] hover:border-[#8F9E4F] hover:shadow-sm")
+                    ? "opacity-60 hover:opacity-90"
+                    : "hover:-translate-y-0.5")
                 }
                 aria-label={`${label} (${count} listings)`}
               >
-                <div className="text-3xl mb-2" aria-hidden>
-                  {emoji}
+                <div className="relative mb-2 aspect-[1.33] overflow-hidden rounded-2xl bg-[#ECEEE4]">
+                  {preview?.coverUrl ? (
+                    <Image
+                      src={preview.coverUrl}
+                      alt=""
+                      fill
+                      sizes="180px"
+                      className="object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <Icon name={kind === "service" ? "wrench" : "sparkles"} size={24} className="text-[#A8B096]" />
+                    </div>
+                  )}
                 </div>
-                <div className="text-sm font-medium text-[#1F2A1F] mb-1 line-clamp-2 leading-tight">
+                <div className="text-sm font-semibold text-[#1F2A1F] mb-0.5 line-clamp-2 leading-tight">
                   {label}
                 </div>
                 <div className="text-xs text-[#6F7A5A]">
-                  {loading ? "—" : count === 0 ? "Coming soon" : `${count} ${count === 1 ? "listing" : "listings"}`}
+                  {loading ? "Loading" : count === 0 ? "Coming soon" : `${count} available`}
                 </div>
               </button>
             );
