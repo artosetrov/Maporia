@@ -12,7 +12,29 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
+import {
+  Brush,
+  Building2,
+  Camera,
+  ChefHat,
+  CookingPot,
+  Dumbbell,
+  Flower2,
+  Footprints,
+  HandHeart,
+  Map as MapIcon,
+  Music,
+  Palette,
+  PawPrint,
+  Sailboat,
+  Scissors,
+  School,
+  Sparkles,
+  Utensils,
+  Wine,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { buildCityRadiusFilter, getCityCoords } from "../lib/cityRadius";
 import { isHomeOfferReady } from "../lib/homeOfferReadiness";
@@ -21,7 +43,6 @@ import {
   HOME_SERVICE_CATEGORY_SECTIONS,
   type HomeOfferCategorySection,
 } from "../constants/homeSections";
-import Icon from "./Icon";
 
 type CategoryCarouselProps = {
   kind: "service" | "experience";
@@ -30,7 +51,6 @@ type CategoryCarouselProps = {
 
 type CategoryPreview = {
   count: number;
-  coverUrl: string | null;
 };
 
 type OfferCategoryRow = {
@@ -38,10 +58,160 @@ type OfferCategoryRow = {
   description: string | null;
   categories: string[] | null;
   tags: string[] | null;
-  cover_url: string | null;
   kind: "service" | "experience" | "location" | null;
   schedule: unknown | null;
   service_mode: string | null;
+};
+
+type CategoryVisual = {
+  Icon: LucideIcon;
+  bg: string;
+  icon: string;
+  accent: string;
+};
+
+const DEFAULT_SERVICE_VISUAL: CategoryVisual = {
+  Icon: Wrench,
+  bg: "bg-[#F3F5ED]",
+  icon: "text-[#7F8F3F]",
+  accent: "bg-[#DDE6BF]",
+};
+
+const DEFAULT_EXPERIENCE_VISUAL: CategoryVisual = {
+  Icon: Sparkles,
+  bg: "bg-[#F4F1EA]",
+  icon: "text-[#A8684A]",
+  accent: "bg-[#E8D4C4]",
+};
+
+const CATEGORY_VISUALS: Record<string, CategoryVisual> = {
+  Photography: {
+    Icon: Camera,
+    bg: "bg-[#F0F4F2]",
+    icon: "text-[#55786E]",
+    accent: "bg-[#CFE0DB]",
+  },
+  "Chefs & Catering": {
+    Icon: ChefHat,
+    bg: "bg-[#F6F1EA]",
+    icon: "text-[#9A6544]",
+    accent: "bg-[#EAD4BF]",
+  },
+  Massage: {
+    Icon: HandHeart,
+    bg: "bg-[#F2F5EC]",
+    icon: "text-[#72823D]",
+    accent: "bg-[#DCE7B9]",
+  },
+  "Prepared Meals": {
+    Icon: CookingPot,
+    bg: "bg-[#F7F3E8]",
+    icon: "text-[#9A7A2D]",
+    accent: "bg-[#EADFAE]",
+  },
+  "Training & Fitness": {
+    Icon: Dumbbell,
+    bg: "bg-[#EEF4F5]",
+    icon: "text-[#4D7882]",
+    accent: "bg-[#C8E0E5]",
+  },
+  Makeup: {
+    Icon: Brush,
+    bg: "bg-[#F6EEF1]",
+    icon: "text-[#A65C72]",
+    accent: "bg-[#E9C8D2]",
+  },
+  Hair: {
+    Icon: Scissors,
+    bg: "bg-[#F5F1EC]",
+    icon: "text-[#8D6A4B]",
+    accent: "bg-[#E7D5C1]",
+  },
+  "Spa & Wellness": {
+    Icon: Flower2,
+    bg: "bg-[#EEF4ED]",
+    icon: "text-[#5E8A58]",
+    accent: "bg-[#CDE1C7]",
+  },
+  "Creative Services": {
+    Icon: Palette,
+    bg: "bg-[#F3EFF5]",
+    icon: "text-[#7B6093]",
+    accent: "bg-[#D9CBE5]",
+  },
+  "Other Services": DEFAULT_SERVICE_VISUAL,
+  "Water Sports": {
+    Icon: Sailboat,
+    bg: "bg-[#EDF5F7]",
+    icon: "text-[#4C7C89]",
+    accent: "bg-[#C8E1E7]",
+  },
+  Adventures: {
+    Icon: Footprints,
+    bg: "bg-[#F1F5ED]",
+    icon: "text-[#668049]",
+    accent: "bg-[#D5E4C5]",
+  },
+  "Cooking Classes": {
+    Icon: Utensils,
+    bg: "bg-[#F6F1EA]",
+    icon: "text-[#9A6544]",
+    accent: "bg-[#EAD4BF]",
+  },
+  "Tours & Walks": {
+    Icon: MapIcon,
+    bg: "bg-[#F3F2EC]",
+    icon: "text-[#7E7345]",
+    accent: "bg-[#E2D9B8]",
+  },
+  Workshops: {
+    Icon: Palette,
+    bg: "bg-[#F3EFF5]",
+    icon: "text-[#7B6093]",
+    accent: "bg-[#D9CBE5]",
+  },
+  "Music School": {
+    Icon: School,
+    bg: "bg-[#F1F0E8]",
+    icon: "text-[#7E763B]",
+    accent: "bg-[#DFD8A8]",
+  },
+  "Business Club": {
+    Icon: Building2,
+    bg: "bg-[#EEF2F1]",
+    icon: "text-[#5C776F]",
+    accent: "bg-[#CBDDD8]",
+  },
+  "Wellness & Retreats": {
+    Icon: Flower2,
+    bg: "bg-[#EEF4ED]",
+    icon: "text-[#5E8A58]",
+    accent: "bg-[#CDE1C7]",
+  },
+  "Music & Nightlife": {
+    Icon: Music,
+    bg: "bg-[#F4F0EC]",
+    icon: "text-[#9A6048]",
+    accent: "bg-[#E7CDBF]",
+  },
+  "Photo Walks": {
+    Icon: Camera,
+    bg: "bg-[#F0F4F2]",
+    icon: "text-[#55786E]",
+    accent: "bg-[#CFE0DB]",
+  },
+  "Wildlife & Nature": {
+    Icon: PawPrint,
+    bg: "bg-[#EFF5EC]",
+    icon: "text-[#5E8447]",
+    accent: "bg-[#D2E5C2]",
+  },
+  Tastings: {
+    Icon: Wine,
+    bg: "bg-[#F6EEF0]",
+    icon: "text-[#995668]",
+    accent: "bg-[#E7C5CE]",
+  },
 };
 
 function rowMatchesSection(row: OfferCategoryRow, section: HomeOfferCategorySection): boolean {
@@ -103,7 +273,7 @@ export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) 
       try {
         let query = supabase
           .from("places")
-          .select("title,description,categories,tags,cover_url,kind,schedule,service_mode")
+          .select("title,description,categories,tags,kind,schedule,service_mode")
           .eq("kind", kind)
           .eq("is_hidden", false);
 
@@ -123,11 +293,8 @@ export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) 
           if (!isHomeOfferReady(row)) continue;
           for (const section of allCategories) {
             if (!rowMatchesSection(row, section)) continue;
-            const preview = map.get(section.title) ?? { count: 0, coverUrl: null };
+            const preview = map.get(section.title) ?? { count: 0 };
             preview.count += 1;
-            if (!preview.coverUrl && row.cover_url) {
-              preview.coverUrl = row.cover_url;
-            }
             map.set(section.title, preview);
           }
         }
@@ -222,6 +389,10 @@ export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) 
             const preview = previews.get(section.title);
             const count = preview?.count ?? 0;
             const empty = !loading && count === 0;
+            const visual =
+              CATEGORY_VISUALS[section.title] ??
+              (kind === "service" ? DEFAULT_SERVICE_VISUAL : DEFAULT_EXPERIENCE_VISUAL);
+            const VisualIcon = visual.Icon;
             return (
               <button
                 key={section.title}
@@ -237,20 +408,24 @@ export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) 
                 }
                 aria-label={`${label} (${count} listings)`}
               >
-                <div className="relative mb-2 aspect-[1.33] overflow-hidden rounded-2xl bg-[#ECEEE4]">
-                  {preview?.coverUrl ? (
-                    <Image
-                      src={preview.coverUrl}
-                      alt=""
-                      fill
-                      sizes="180px"
-                      className="object-cover transition-transform duration-300 group-hover:scale-105"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                      <Icon name={kind === "service" ? "wrench" : "sparkles"} size={24} className="text-[#A8B096]" />
+                <div
+                  className={`relative mb-2 aspect-[1.33] overflow-hidden rounded-2xl ${visual.bg}`}
+                >
+                  <div
+                    className={`absolute left-5 top-5 h-14 w-14 rounded-full ${visual.accent} opacity-70 transition-transform duration-300 group-hover:scale-110`}
+                  />
+                  <div
+                    className={`absolute right-4 bottom-4 h-8 w-8 rounded-full ${visual.accent} opacity-40`}
+                  />
+                  <div className="relative flex h-full w-full items-center justify-center">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/70 shadow-sm ring-1 ring-white/70">
+                      <VisualIcon
+                        aria-hidden="true"
+                        className={`h-7 w-7 ${visual.icon} transition-transform duration-300 group-hover:scale-110`}
+                        strokeWidth={1.8}
+                      />
                     </div>
-                  )}
+                  </div>
                 </div>
                 <div className="text-sm font-semibold text-[#1F2A1F] mb-0.5 line-clamp-2 leading-tight">
                   {label}
