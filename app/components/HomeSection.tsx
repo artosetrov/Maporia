@@ -14,7 +14,7 @@ import { HomeSectionSkeleton } from "./Skeleton";
 import { getRecentlyViewedPlaceIds, sanitizePostgrestValue } from "../utils";
 import type { PlaceListItem as Place } from "../types";
 import { buildCityRadiusFilter, getCityCoords } from "../lib/cityRadius";
-import { applyHomeOfferReadyFilter, isHomeOfferReady } from "../lib/homeOfferReadiness";
+import { isHomeOfferReady } from "../lib/homeOfferReadiness";
 import { useBatchPlaceData } from "../hooks/useBatchPlaceData";
 
 function HomeSectionCollageImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
@@ -50,6 +50,32 @@ type ProfileInterests = Pick<Database["public"]["Tables"]["profiles"]["Row"], "f
 
 const EMPTY_CATEGORIES: string[] = [];
 const HOME_SECTION_STALE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function normalizeMatchText(value: unknown): string {
+  if (Array.isArray(value)) return value.join(" ");
+  if (typeof value === "string") return value;
+  return "";
+}
+
+function sectionMatchesText(place: Place, section: HomeSectionFilter): boolean {
+  const terms = section.matchText?.map((term) => term.trim().toLowerCase()).filter(Boolean) ?? [];
+  if (terms.length === 0) return true;
+
+  const haystack = [
+    place.title,
+    place.description,
+    place.city,
+    place.country,
+    normalizeMatchText(place.categories),
+    normalizeMatchText(place.tags),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return section.matchMode === "all"
+    ? terms.every((term) => haystack.includes(term))
+    : terms.some((term) => haystack.includes(term));
+}
 
 type HomeSectionProps = {
   section: HomeSectionFilter;
@@ -306,12 +332,17 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
           dateThreshold.setDate(dateThreshold.getDate() - section.daysAgo);
           query = query.gte("created_at", dateThreshold.toISOString());
         }
-        query = query.order("created_at", { ascending: false }).limit(10);
+        query = query.order("created_at", { ascending: false }).limit(section.matchText?.length ? 80 : 10);
 
         const { data, error } = await query;
         if (error) throw error;
         if (!cancelled) {
-          setPlaces(((data || []) as Place[]).filter(isHomeOfferReady));
+          setPlaces(
+            ((data || []) as Place[])
+              .filter(isHomeOfferReady)
+              .filter((place) => sectionMatchesText(place, section))
+              .slice(0, 10)
+          );
           setLoading(false);
         }
       } catch (err) {
@@ -324,7 +355,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
     })();
 
     return () => { cancelled = true; };
-  }, [section.title, section.city, section.tag, sectionCategories, categoriesKey, section.daysAgo, section.sort, section.recentlyViewed, section.recommended, section.allListings, userId, userAccess, defaultUserAccess, refreshKey, kindFilter]);
+  }, [section, section.title, section.city, section.tag, sectionCategories, categoriesKey, section.daysAgo, section.sort, section.recentlyViewed, section.recommended, section.allListings, userId, userAccess, defaultUserAccess, refreshKey, kindFilter]);
 
   // Helper function to calculate relevance score
   function calculateRelevanceScore(place: Place, favoriteCategories: string[], favoriteTags: string[]): number {
@@ -415,6 +446,10 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
     if (sectionCategories.length > 0) {
       // Используем categories (CSV) для поддержки нескольких категорий
       params.set("categories", sectionCategories.join(','));
+      params.set("ref", "home");
+    }
+    if (section.searchQuery) {
+      params.set("q", section.searchQuery);
       params.set("ref", "home");
     }
     if (kindFilter) {

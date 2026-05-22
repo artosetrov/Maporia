@@ -16,7 +16,11 @@ import Image from "next/image";
 import { supabase } from "../lib/supabase";
 import { buildCityRadiusFilter, getCityCoords } from "../lib/cityRadius";
 import { isHomeOfferReady } from "../lib/homeOfferReadiness";
-import { SERVICE_CATEGORIES, EXPERIENCE_CATEGORIES, stripTagEmoji } from "../constants";
+import {
+  HOME_EXPERIENCE_CATEGORY_SECTIONS,
+  HOME_SERVICE_CATEGORY_SECTIONS,
+  type HomeOfferCategorySection,
+} from "../constants/homeSections";
 import Icon from "./Icon";
 
 type CategoryCarouselProps = {
@@ -29,10 +33,43 @@ type CategoryPreview = {
   coverUrl: string | null;
 };
 
+type OfferCategoryRow = {
+  title: string | null;
+  description: string | null;
+  categories: string[] | null;
+  tags: string[] | null;
+  cover_url: string | null;
+  kind: "service" | "experience" | "location" | null;
+  schedule: unknown | null;
+  service_mode: string | null;
+};
+
+function rowMatchesSection(row: OfferCategoryRow, section: HomeOfferCategorySection): boolean {
+  if (section.categories?.some((category) => row.categories?.includes(category))) {
+    return true;
+  }
+
+  const terms = section.matchText?.map((term) => term.trim().toLowerCase()).filter(Boolean) ?? [];
+  if (terms.length === 0) return false;
+
+  const haystack = [
+    row.title,
+    row.description,
+    ...(row.categories ?? []),
+    ...(row.tags ?? []),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return section.matchMode === "all"
+    ? terms.every((term) => haystack.includes(term))
+    : terms.some((term) => haystack.includes(term));
+}
+
 export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) {
   const router = useRouter();
-  const allCategories = useMemo<readonly string[]>(
-    () => (kind === "service" ? SERVICE_CATEGORIES : EXPERIENCE_CATEGORIES),
+  const allCategories = useMemo<readonly HomeOfferCategorySection[]>(
+    () => (kind === "service" ? HOME_SERVICE_CATEGORY_SECTIONS : HOME_EXPERIENCE_CATEGORY_SECTIONS),
     [kind]
   );
   const [previews, setPreviews] = useState<Map<string, CategoryPreview>>(new Map());
@@ -66,7 +103,7 @@ export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) 
       try {
         let query = supabase
           .from("places")
-          .select("categories,cover_url,kind,schedule,service_mode")
+          .select("title,description,categories,tags,cover_url,kind,schedule,service_mode")
           .eq("kind", kind)
           .eq("is_hidden", false);
 
@@ -82,21 +119,16 @@ export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) 
           return;
         }
         const map = new Map<string, CategoryPreview>();
-        for (const row of (data ?? []) as {
-          categories: string[] | null;
-          cover_url: string | null;
-          kind: "service" | "experience" | "location" | null;
-          schedule: unknown | null;
-          service_mode: string | null;
-        }[]) {
+        for (const row of (data ?? []) as OfferCategoryRow[]) {
           if (!isHomeOfferReady(row)) continue;
-          for (const cat of row.categories ?? []) {
-            const preview = map.get(cat) ?? { count: 0, coverUrl: null };
+          for (const section of allCategories) {
+            if (!rowMatchesSection(row, section)) continue;
+            const preview = map.get(section.title) ?? { count: 0, coverUrl: null };
             preview.count += 1;
             if (!preview.coverUrl && row.cover_url) {
               preview.coverUrl = row.cover_url;
             }
-            map.set(cat, preview);
+            map.set(section.title, preview);
           }
         }
         if (!cancelled) {
@@ -110,13 +142,18 @@ export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) 
     return () => {
       cancelled = true;
     };
-  }, [kind, city]);
+  }, [allCategories, kind, city]);
 
-  function openCategory(cat: string) {
+  function openCategory(section: HomeOfferCategorySection) {
     const tab = kind === "service" ? "services" : "experiences";
     const params = new URLSearchParams();
     params.set("kinds", kind);
-    params.set("categories", cat);
+    if (section.categories?.length) {
+      params.set("categories", section.categories.join(","));
+    }
+    if (section.searchQuery) {
+      params.set("q", section.searchQuery);
+    }
     params.set("tab", tab);
     if (city) params.set("city", city);
     router.push(`/map?${params.toString()}`);
@@ -180,17 +217,17 @@ export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) 
             gap: "var(--home-carousel-gap, 12px)",
           }}
         >
-          {allCategories.map((cat) => {
-            const label = stripTagEmoji(cat);
-            const preview = previews.get(cat);
+          {allCategories.map((section) => {
+            const label = section.title;
+            const preview = previews.get(section.title);
             const count = preview?.count ?? 0;
             const empty = !loading && count === 0;
             return (
               <button
-                key={cat}
+                key={section.title}
                 type="button"
                 data-card
-                onClick={() => openCategory(cat)}
+                onClick={() => openCategory(section)}
                 style={{ scrollSnapAlign: "start" }}
                 className={
                   "group shrink-0 w-[160px] sm:w-[180px] text-left transition " +

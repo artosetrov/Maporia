@@ -22,16 +22,15 @@ import { ActiveFilters } from "./components/FiltersModal";
 import nextDynamic from "next/dynamic";
 const SearchModal = nextDynamic(() => import("./components/SearchModal"), { ssr: false });
 const FiltersModal = nextDynamic(() => import("./components/FiltersModal"), { ssr: false });
-import { HOME_SECTIONS } from "./constants/homeSections";
+import {
+  HOME_EXPERIENCE_CATEGORY_SECTIONS,
+  HOME_SECTIONS,
+  HOME_SERVICE_CATEGORY_SECTIONS,
+} from "./constants/homeSections";
 import { supabase, hasValidSupabaseConfig } from "./lib/supabase";
 import type { Database } from "./types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
-import {
-  DEFAULT_CITY,
-  EXPERIENCE_CATEGORIES,
-  SERVICE_CATEGORIES,
-  stripTagEmoji,
-} from "./constants";
+import { DEFAULT_CITY } from "./constants";
 
 type ReactionPlaceId = Pick<Database["public"]["Tables"]["reactions"]["Row"], "place_id">;
 type ReactionsPlaceIdResult = { data: ReactionPlaceId[] | null; error: PostgrestError | null };
@@ -158,7 +157,10 @@ function HomePageInner() {
   // Build sections list with conditional Recommended section
   const sectionsToRender = useMemo(() => {
     if (activeKind === "service" || activeKind === "experience") {
-      const categories = activeKind === "service" ? SERVICE_CATEGORIES : EXPERIENCE_CATEGORIES;
+      const categorySections =
+        activeKind === "service"
+          ? HOME_SERVICE_CATEGORY_SECTIONS
+          : HOME_EXPERIENCE_CATEGORY_SECTIONS;
       const kindLabel = activeKind === "service" ? "services" : "experiences";
       return [
         {
@@ -166,10 +168,9 @@ function HomePageInner() {
           city: localCity ?? undefined,
           allListings: true,
         },
-        ...categories.map((category) => ({
-          title: stripTagEmoji(category),
+        ...categorySections.map((section) => ({
+          ...section,
           city: localCity ?? undefined,
-          categories: [category],
         })),
       ];
     }
