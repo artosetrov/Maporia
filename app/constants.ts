@@ -39,6 +39,7 @@ export const CATEGORIES = [
     "🍳 Cooking Classes",
     "🗺 Tours & Walks",
     "🎨 Workshops",
+    "💼 Business Club",
     "🧘 Wellness & Retreats",
     "🎶 Music & Nightlife",
     "📷 Photo Walks",

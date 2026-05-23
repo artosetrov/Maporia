@@ -43,6 +43,7 @@ export const HOME_EXPERIENCE_CATEGORY_SECTIONS: HomeOfferCategorySection[] = [
   },
   {
     title: "Business Club",
+    categories: ["💼 Business Club"],
     matchText: ["business", "club"],
     matchMode: "all",
     searchQuery: "business club",

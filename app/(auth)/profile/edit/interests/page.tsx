@@ -8,10 +8,17 @@ import { supabase } from "../../../../lib/supabase";
 import type { Database } from "../../../../types/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
 import { updateOwnProfile } from "../../../../lib/profileUpdate";
+import { isUserAdmin } from "../../../../lib/access";
 
 type ProfileInterestsRow = Pick<Database["public"]["Tables"]["profiles"]["Row"], "favorite_categories" | "favorite_tags">;
 import Icon from "../../../../components/Icon";
-import { CATEGORIES, getTagEmoji, stripTagEmoji } from "../../../../constants";
+import {
+  CATEGORIES,
+  EXPERIENCE_CATEGORIES,
+  SERVICE_CATEGORIES,
+  getTagEmoji,
+  stripTagEmoji,
+} from "../../../../constants";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 function cx(...a: Array<string | false | undefined | null>) {
@@ -20,7 +27,8 @@ function cx(...a: Array<string | false | undefined | null>) {
 
 export default function InterestsEditorPage() {
   const router = useRouter();
-  const { loading: accessLoading, user } = useUserAccessContext();
+  const { loading: accessLoading, user, access } = useUserAccessContext();
+  const isAdmin = isUserAdmin(access);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +40,13 @@ export default function InterestsEditorPage() {
   const [originalTags, setOriginalTags] = useState<string[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [tagsLoading, setTagsLoading] = useState(true);
+  const categoryGroups = isAdmin
+    ? [
+        { title: "Locations", categories: CATEGORIES },
+        { title: "Services", categories: SERVICE_CATEGORIES },
+        { title: "Experiences", categories: EXPERIENCE_CATEGORIES },
+      ]
+    : [{ title: "Categories", categories: CATEGORIES }];
 
   // Load profile interests
   useEffect(() => {
@@ -97,8 +112,8 @@ export default function InterestsEditorPage() {
   };
 
   const hasChanges =
-    JSON.stringify(selectedCategories.sort()) !== JSON.stringify(originalCategories.sort()) ||
-    JSON.stringify(selectedTags.sort()) !== JSON.stringify(originalTags.sort());
+    JSON.stringify([...selectedCategories].sort()) !== JSON.stringify([...originalCategories].sort()) ||
+    JSON.stringify([...selectedTags].sort()) !== JSON.stringify([...originalTags].sort());
 
   const canSave = hasChanges && !saving;
 
@@ -205,24 +220,35 @@ export default function InterestsEditorPage() {
             <p className="text-sm text-[#6F7A5A] mb-4">
               Select categories you're interested in to get personalized recommendations
             </p>
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map((category) => {
-                const isSelected = selectedCategories.includes(category);
-                return (
-                  <button
-                    key={category}
-                    onClick={() => toggleCategory(category)}
-                    className={cx(
-                      "px-4 py-2 rounded-full text-sm font-medium transition-all",
-                      isSelected
-                        ? "bg-[#8F9E4F] text-white border border-[#8F9E4F]"
-                        : "bg-[#FAFAF7] text-[#1F2A1F] border border-[#ECEEE4] hover:border-[#8F9E4F]"
-                    )}
-                  >
-                    {category}
-                  </button>
-                );
-              })}
+            <div className="space-y-5">
+              {categoryGroups.map((group) => (
+                <div key={group.title}>
+                  {isAdmin && (
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6F7A5A]">
+                      {group.title}
+                    </h3>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {group.categories.map((category) => {
+                      const isSelected = selectedCategories.includes(category);
+                      return (
+                        <button
+                          key={category}
+                          onClick={() => toggleCategory(category)}
+                          className={cx(
+                            "px-4 py-2 rounded-full text-sm font-medium transition-all",
+                            isSelected
+                              ? "bg-[#8F9E4F] text-white border border-[#8F9E4F]"
+                              : "bg-[#FAFAF7] text-[#1F2A1F] border border-[#ECEEE4] hover:border-[#8F9E4F]"
+                          )}
+                        >
+                          {category}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
