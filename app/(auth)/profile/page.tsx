@@ -35,6 +35,7 @@ import {
   type Cycle,
 } from "../../lib/pricing";
 import { DEFAULT_CITY, getTagEmoji, stripTagEmoji } from "../../constants";
+import { CategoryVisualIcon, getCategoryLabel } from "../../lib/categoryVisuals";
 import PremiumBadge from "../../components/PremiumBadge";
 import { getRecentlyViewedPlaceIds } from "../../utils";
 import { ProfileSkeleton, SkeletonBase } from "../../components/Skeleton";
@@ -1404,9 +1405,10 @@ function ProfileInner() {
                             {profile.favorite_categories.map((cat) => (
                               <span
                                 key={cat}
-                                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#FAFAF7] text-[#1F2A1F] border border-[#ECEEE4]"
+                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#FAFAF7] text-[#1F2A1F] border border-[#ECEEE4]"
                               >
-                                {cat}
+                                <CategoryVisualIcon category={cat} className="h-3.5 w-3.5" />
+                                {getCategoryLabel(cat)}
                               </span>
                             ))}
                           </div>
@@ -1840,9 +1842,10 @@ function AboutSection({
                 {profile.favorite_categories.map((cat) => (
                   <span
                     key={cat}
-                    className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#FAFAF7] text-[#1F2A1F] border border-[#ECEEE4]"
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#FAFAF7] text-[#1F2A1F] border border-[#ECEEE4]"
                   >
-                    {cat}
+                    <CategoryVisualIcon category={cat} className="h-3.5 w-3.5" />
+                    {getCategoryLabel(cat)}
                   </span>
                 ))}
               </div>

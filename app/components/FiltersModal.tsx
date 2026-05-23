@@ -14,6 +14,7 @@ import {
 } from "../constants";
 import Icon from "./Icon";
 import { type UserAccess } from "../lib/access";
+import { CategoryVisualIcon, getCategoryLabel } from "../lib/categoryVisuals";
 import { computeFilterCounts } from "../lib/filterCounts";
 import type { FilterablePlace } from "../lib/filterPlaces";
 
@@ -653,14 +654,6 @@ export default function FiltersModal({
     appliedFiltersList.push({ type: "tag", label: tag, value: tag });
   });
 
-  // Get category emoji
-  const getCategoryEmoji = (category: string) => {
-    // Match any emoji at the start (including ✨, 🤫, etc.)
-    const emojiMatch = category.match(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u);
-    return emojiMatch ? emojiMatch[0] : "📍";
-  };
-  
-
   const modalEl = (
     <div className="fixed inset-0 z-[9999] flex items-end lg:items-center justify-center" aria-modal="true" role="dialog">
       {/* Overlay */}
@@ -751,9 +744,9 @@ export default function FiltersModal({
             <h3 className="text-xs font-semibold text-[#6F7A5A] uppercase tracking-wide mb-4">TYPE</h3>
             <div className="grid grid-cols-3 gap-3">
               {([
-                { value: "location",   emoji: "📍", label: "Locations" },
-                { value: "experience", emoji: "✨", label: "Experiences" },
-                { value: "service",    emoji: "🛠", label: "Services" },
+                { value: "location", icon: "location", label: "Locations" },
+                { value: "experience", icon: "sparkles", label: "Experiences" },
+                { value: "service", icon: "wrench", label: "Services" },
               ] as const).map((opt) => {
                 const isSelected = (draftFilters.kinds ?? []).includes(opt.value);
                 const count = kindCounts[opt.value];
@@ -796,7 +789,7 @@ export default function FiltersModal({
                         {count}
                       </span>
                     )}
-                    <span className="text-2xl mb-1.5" aria-hidden="true">{opt.emoji}</span>
+                    <Icon name={opt.icon} size={24} className="mb-1.5 text-[#6F7A5A]" />
                     <span className="text-sm font-medium text-[#1F2A1F] text-center leading-tight">{opt.label}</span>
                   </button>
                 );
@@ -823,8 +816,7 @@ export default function FiltersModal({
                   const isSelected = draftFilters.categories.includes(category);
                   const count = categoryCounts[category];
                   const isDisabled = !isSelected && count === 0;
-                  const emoji = getCategoryEmoji(category);
-                  const label = category.replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]+\s*/u, "").trim();
+                  const label = getCategoryLabel(category);
                   return (
                     <button
                       key={category}
@@ -848,7 +840,7 @@ export default function FiltersModal({
                           {count}
                         </span>
                       )}
-                      <span className="text-2xl mb-1.5" aria-hidden="true">{emoji}</span>
+                      <CategoryVisualIcon category={category} className="mb-1.5 h-6 w-6" />
                       <span className="text-sm font-medium text-[#1F2A1F] text-center leading-tight">{label}</span>
                     </button>
                   );

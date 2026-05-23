@@ -32,6 +32,7 @@ import StarRating from "../../../components/StarRating";
 import PlaceContacts from "../../../components/PlaceContacts";
 import { isPlacePremium } from "../../../lib/access";
 import { navigateBackOrFallback } from "../../../lib/navigation";
+import { CategoryVisualIcon, getCategoryLabel } from "../../../lib/categoryVisuals";
 
 type OfferPlace = {
   id: string;
@@ -976,9 +977,10 @@ export default function OfferPlaceView({
               {place.categories?.map((c) => (
                 <span
                   key={`c-${c}`}
-                  className="rounded-full border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-1.5 text-sm text-[#1F2A1F]"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-1.5 text-sm text-[#1F2A1F]"
                 >
-                  {c}
+                  <CategoryVisualIcon category={c} className="h-4 w-4" />
+                  {getCategoryLabel(c)}
                 </span>
               ))}
               {place.tags?.map((t) => (

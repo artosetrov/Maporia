@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { DEFAULT_CITY, getCategoriesByKind } from "../constants";
+import { CategoryVisualIcon, getCategoryLabel } from "../lib/categoryVisuals";
 import { HOME_TABS, type HomeKind } from "../types/home";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { getCitiesWithPlaces, type City } from "../lib/cities";
@@ -1291,8 +1292,7 @@ export default function SearchModal({
             <div className="px-6 space-y-0">
               {currentCategories.map((category, idx) => {
                 const isSelected = tempSelectedTags.includes(category);
-                const emoji = category.match(/^[^\s]+/)?.[0] || "✨";
-                const label = category.replace(/^[^\s]+\s/, "");
+                const label = getCategoryLabel(category);
 
                 return (
                   <button
@@ -1309,7 +1309,9 @@ export default function SearchModal({
                     <div className="flex items-center justify-between">
                       {/* Left: Emoji + Label + Count */}
                       <div className="flex items-center gap-4 flex-1 min-w-0">
-                        <span className="text-2xl flex-shrink-0">{emoji}</span>
+                        <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#FAFAF7] border border-[#ECEEE4]">
+                          <CategoryVisualIcon category={category} className="h-5 w-5" />
+                        </span>
                         <div className="flex-1 min-w-0">
                           <div className="text-base font-medium text-[#1F2A1F]">
                             {label}

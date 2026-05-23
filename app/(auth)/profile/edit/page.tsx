@@ -11,6 +11,7 @@ import { useUserAccessContext } from "../../../contexts/UserAccessContext";
 import Icon from "../../../components/Icon";
 import type { Profile } from "../../../types";
 import { getTagEmoji, stripTagEmoji } from "../../../constants";
+import { CategoryVisualIcon, getCategoryLabel } from "../../../lib/categoryVisuals";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 export default function ProfileEditorHub() {
@@ -248,9 +249,10 @@ export default function ProfileEditorHub() {
                         {profile.favorite_categories.map((cat) => (
                           <span
                             key={cat}
-                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#FAFAF7] text-[#1F2A1F] border border-[#ECEEE4]"
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#FAFAF7] text-[#1F2A1F] border border-[#ECEEE4]"
                           >
-                            {cat}
+                            <CategoryVisualIcon category={cat} className="h-3.5 w-3.5" />
+                            {getCategoryLabel(cat)}
                           </span>
                         ))}
                       </div>

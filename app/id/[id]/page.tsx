@@ -42,6 +42,7 @@ import TransientNotice from "../../components/TransientNotice";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import ErrorPage from "../../components/ErrorPage";
 import { navigateBackOrFallback } from "../../lib/navigation";
+import { CategoryVisualIcon, getCategoryLabel } from "../../lib/categoryVisuals";
 
 type Place = {
   id: string;
@@ -1520,7 +1521,7 @@ export default function PlacePage(props: PageProps) {
         <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-4 pt-safe-top">
           <button
             onClick={handleBackClick}
-            className="h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#1F2A1F] hover:bg-white transition-colors"
+            className="h-11 w-11 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#1F2A1F] hover:bg-white transition-colors"
             aria-label="Back"
           >
             <Icon name="back" size={20} />
@@ -1530,7 +1531,7 @@ export default function PlacePage(props: PageProps) {
             {canEdit && (
               <button
                 onClick={() => router.push(`/places/${id}/edit`)}
-                className="h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#1F2A1F] hover:bg-white transition-colors"
+                className="h-11 w-11 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#1F2A1F] hover:bg-white transition-colors"
                 aria-label="Edit place"
               >
                 <Icon name="edit" size={20} />
@@ -1541,7 +1542,7 @@ export default function PlacePage(props: PageProps) {
                 onClick={toggleFavorite}
                 disabled={favoriteLoading}
                 className={cx(
-                  "h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center transition-colors",
+                  "h-11 w-11 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center transition-colors",
                   favoriteLoading && "opacity-50"
                 )}
                 aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
@@ -1554,7 +1555,7 @@ export default function PlacePage(props: PageProps) {
             )}
             <button
               onClick={handleShare}
-              className="h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#1F2A1F] hover:bg-white transition-colors"
+              className="h-11 w-11 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#1F2A1F] hover:bg-white transition-colors"
               aria-label="Share"
             >
               <Icon name="share" size={20} />
@@ -1601,7 +1602,7 @@ export default function PlacePage(props: PageProps) {
                 onClick={handleOpenGoogleMaps}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-base text-[#8F9E4F]/70 hover:text-[#8F9E4F] hover:underline transition cursor-pointer"
+                className="inline-flex min-h-11 items-center text-base text-[#8F9E4F]/70 hover:text-[#8F9E4F] hover:underline transition cursor-pointer"
                 aria-label="Open address in Google Maps"
                 tabIndex={0}
               >
@@ -1677,9 +1678,10 @@ export default function PlacePage(props: PageProps) {
                 <Link
                   key={cat}
                   href={`/?category=${encodeURIComponent(cat)}`}
-                  className="px-3 py-1.5 rounded-full text-sm font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition"
+                  className="inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition"
                 >
-                  {cat}
+                  <CategoryVisualIcon category={cat} className="h-4 w-4" />
+                  {getCategoryLabel(cat)}
                 </Link>
               ))}
             </div>
@@ -2153,7 +2155,7 @@ export default function PlacePage(props: PageProps) {
                   onClick={handleOpenGoogleMaps}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-base text-[#8F9E4F]/70 hover:text-[#8F9E4F] hover:underline transition cursor-pointer"
+                  className="inline-flex min-h-11 items-center text-base text-[#8F9E4F]/70 hover:text-[#8F9E4F] hover:underline transition cursor-pointer"
                   aria-label="Open address in Google Maps"
                   tabIndex={0}
                 >
@@ -2227,9 +2229,10 @@ export default function PlacePage(props: PageProps) {
                   <Link
                     key={cat}
                     href={`/?category=${encodeURIComponent(cat)}`}
-                    className="px-3 py-1.5 rounded-full text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#6b7d47]/20 hover:bg-[#FAFAF7] transition"
+                    className="inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#6b7d47]/20 hover:bg-[#FAFAF7] transition"
                   >
-                    {cat}
+                    <CategoryVisualIcon category={cat} className="h-3.5 w-3.5" />
+                    {getCategoryLabel(cat)}
                   </Link>
                 ))}
               </div>

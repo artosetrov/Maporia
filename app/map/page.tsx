@@ -27,7 +27,14 @@ import { createMarkerIcon, getMarkerEmoji } from "../lib/mapMarkers";
 import { supabase } from "../lib/supabase";
 import type { Database } from "../types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
-import { DEFAULT_CITY, CITIES, getTagEmoji, stripTagEmoji } from "../constants";
+import {
+  DEFAULT_CITY,
+  CITIES,
+  getTagEmoji,
+  splitCategoryParamValues,
+  stripTagEmoji,
+} from "../constants";
+import { CategoryVisualIcon, getCategoryLabel } from "../lib/categoryVisuals";
 import type { HomeKind } from "../types/home";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
 import { useAuthRedirect } from "../hooks/useAuthRedirect";
@@ -103,6 +110,33 @@ const parseMapKindsParam = (
   if (tabParam === "locations") return ["location"];
 
   return [];
+};
+
+const decodeQueryParam = (value: string): string => {
+  try {
+    return decodeURIComponent(value.trim());
+  } catch {
+    return value.trim();
+  }
+};
+
+const decodeQueryList = (value: string | null): string[] =>
+  value
+    ? value.split(",").map(decodeQueryParam).filter(Boolean)
+    : [];
+
+const uniqueList = (values: string[]): string[] =>
+  values.filter((value, index, arr) => value && arr.indexOf(value) === index);
+
+const parseCategoriesAndTagsParams = (
+  categoriesParam: string | null,
+  tagsParam: string | null,
+): { categories: string[]; tags: string[] } => {
+  const categoryParts = splitCategoryParamValues(decodeQueryList(categoriesParam));
+  return {
+    categories: categoryParts.categories,
+    tags: uniqueList([...categoryParts.unmatched, ...decodeQueryList(tagsParam)]),
+  };
 };
 
 const toErrorLike = (error: unknown): ErrorLike => {
@@ -229,25 +263,8 @@ function MapPageContent() {
         }
       })() : "";
       
-      const initialCategories = categoriesParam && categoriesParam.trim() 
-        ? categoriesParam.split(',').map(c => {
-            try {
-              return decodeURIComponent(c.trim());
-            } catch {
-              return c.trim();
-            }
-          }).filter(Boolean)
-        : [];
-      
-      const initialTags = tagsParam && tagsParam.trim()
-        ? tagsParam.split(',').map(t => {
-            try {
-              return decodeURIComponent(t.trim());
-            } catch {
-              return t.trim();
-            }
-          }).filter(Boolean)
-        : [];
+      const { categories: initialCategories, tags: initialTags } =
+        parseCategoriesAndTagsParams(categoriesParam, tagsParam);
 
       // ?kinds=service,experience — приходит с главной (singleKindMode → один элемент,
       // но парсим как массив на случай ручного URL'а или будущей multi-select функции).
@@ -367,46 +384,13 @@ function MapPageContent() {
         setSearchDraft("");
       }
       
-      if (categoriesParam && categoriesParam.trim()) {
-        try {
-          const categories = categoriesParam.split(',').map(c => {
-            try {
-              return decodeURIComponent(c.trim());
-            } catch {
-              return c.trim();
-            }
-          }).filter(Boolean);
-          setActiveFilters(prev => ({ ...prev, categories }));
-          setFiltersVersion(prev => prev + 1);
-        } catch {
-          setActiveFilters(prev => ({ ...prev, categories: [] }));
-          setFiltersVersion(prev => prev + 1);
-        }
-      } else {
-        // Если параметр categories отсутствует, очищаем категории
-        setActiveFilters(prev => ({ ...prev, categories: [] }));
-        setFiltersVersion(prev => prev + 1);
-      }
-      
-      if (tagsParam && tagsParam.trim()) {
-        try {
-          const tags = tagsParam.split(',').map(t => {
-            try {
-              return decodeURIComponent(t.trim());
-            } catch {
-              return t.trim();
-            }
-          }).filter(Boolean);
-          setActiveFilters(prev => ({ ...prev, tags }));
-          setFiltersVersion(prev => prev + 1);
-        } catch {
-          setActiveFilters(prev => ({ ...prev, tags: [] }));
-          setFiltersVersion(prev => prev + 1);
-        }
-      } else {
-        setActiveFilters(prev => ({ ...prev, tags: [] }));
-        setFiltersVersion(prev => prev + 1);
-      }
+      const parsedFilters = parseCategoriesAndTagsParams(categoriesParam, tagsParam);
+      setActiveFilters(prev => ({
+        ...prev,
+        categories: parsedFilters.categories,
+        tags: parsedFilters.tags,
+      }));
+      setFiltersVersion(prev => prev + 1);
 
       const kinds = parseMapKindsParam(kindsParam, kindParam, tabParam);
       if (kinds.length > 0) {
@@ -458,24 +442,13 @@ function MapPageContent() {
         return currentQ;
       }
     })() : null;
-    const currentCategoriesDecoded = currentCategories 
-      ? currentCategories.split(',').map(c => {
-          try {
-            return decodeURIComponent(c.trim());
-          } catch {
-            return c.trim();
-          }
-        }).filter(Boolean).sort()
+    const currentParsedFilters = parseCategoriesAndTagsParams(currentCategories, currentTags);
+    const currentCategoriesDecoded = currentParsedFilters.categories.length > 0
+      ? [...currentParsedFilters.categories].sort()
       : null;
     const expectedCategoriesSorted = expectedCategories ? [...expectedCategories].sort() : null;
-    const currentTagsDecoded = currentTags
-      ? currentTags.split(',').map(t => {
-          try {
-            return decodeURIComponent(t.trim());
-          } catch {
-            return t.trim();
-          }
-        }).filter(Boolean).sort()
+    const currentTagsDecoded = currentParsedFilters.tags.length > 0
+      ? [...currentParsedFilters.tags].sort()
       : null;
     const expectedTagsSorted = expectedTags ? [...expectedTags].sort() : null;
     const currentKindsDecoded = currentKinds
@@ -1730,7 +1703,8 @@ function MapPageContent() {
                       }}
                       className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
                     >
-                      {cat.replace(/^[^\s]+\s/, "")}
+                      <CategoryVisualIcon category={cat} className="h-3.5 w-3.5" />
+                      {getCategoryLabel(cat)}
                       <svg
                         className="w-3.5 h-3.5 text-[#8F9E4F] flex-shrink-0"
                         fill="none"
@@ -1983,7 +1957,8 @@ function MapPageContent() {
                           }}
                           className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition whitespace-nowrap"
                         >
-                          {cat.replace(/^[^\s]+\s/, "")}
+                          <CategoryVisualIcon category={cat} className="h-3.5 w-3.5" />
+                          {getCategoryLabel(cat)}
                           <svg
                             className="w-3.5 h-3.5 text-[#8F9E4F] flex-shrink-0"
                             fill="none"

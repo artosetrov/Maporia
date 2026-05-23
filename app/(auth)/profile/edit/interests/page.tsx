@@ -19,6 +19,7 @@ import {
   getTagEmoji,
   stripTagEmoji,
 } from "../../../../constants";
+import { CategoryVisualIcon, getCategoryLabel } from "../../../../lib/categoryVisuals";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 function cx(...a: Array<string | false | undefined | null>) {
@@ -231,18 +232,23 @@ export default function InterestsEditorPage() {
                   <div className="flex flex-wrap gap-2">
                     {group.categories.map((category) => {
                       const isSelected = selectedCategories.includes(category);
+                      const label = getCategoryLabel(category);
                       return (
                         <button
                           key={category}
                           onClick={() => toggleCategory(category)}
                           className={cx(
-                            "px-4 py-2 rounded-full text-sm font-medium transition-all",
+                            "inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all",
                             isSelected
                               ? "bg-[#8F9E4F] text-white border border-[#8F9E4F]"
                               : "bg-[#FAFAF7] text-[#1F2A1F] border border-[#ECEEE4] hover:border-[#8F9E4F]"
                           )}
                         >
-                          {category}
+                          <CategoryVisualIcon
+                            category={category}
+                            className={cx("h-4 w-4", isSelected && "text-white")}
+                          />
+                          <span>{label}</span>
                         </button>
                       );
                     })}

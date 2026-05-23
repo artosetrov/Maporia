@@ -9,6 +9,7 @@ import { useGoogleMaps } from "../providers/GoogleMapsProvider";
 import { MarkerClusterer } from "@googlemaps/markerclusterer";
 import { MaporiaClusterRenderer } from "../lib/clusterRenderer";
 import { CATEGORIES } from "../constants";
+import { CategoryVisualIcon, getCategoryLabel } from "../lib/categoryVisuals";
 import TopBar from "../components/TopBar";
 import PlaceCard from "../components/PlaceCard";
 import FavoriteIcon from "../components/FavoriteIcon";
@@ -543,7 +544,8 @@ export default function ExplorePage() {
                       }}
                       className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#8F9E4F] bg-[#FAFAF7] border border-[#ECEEE4] hover:bg-[#ECEEE4] transition"
                     >
-                      {cat}
+                      <CategoryVisualIcon category={cat} className="h-3.5 w-3.5" />
+                      {getCategoryLabel(cat)}
                       <Icon name="close" size={16} />
                     </button>
                   ))}
@@ -1243,13 +1245,14 @@ export default function ExplorePage() {
                         key={cat}
                         onClick={() => toggleCategory(cat)}
                         className={cx(
-                          "px-3 py-2 rounded-full text-sm border transition",
+                          "inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-sm border transition",
                           selectedCategories.includes(cat)
                             ? "bg-[#6b7d47] text-white border-[#6b7d47]"
                             : "bg-white border-[#6b7d47]/20 text-[#2d2d2d] hover:bg-[#f5f4f2]"
                         )}
                       >
-                        {cat}
+                        <CategoryVisualIcon category={cat} className="h-4 w-4" />
+                        {getCategoryLabel(cat)}
                       </button>
                     ))}
                   </div>

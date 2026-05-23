@@ -12,6 +12,7 @@ import { isUserAdmin } from "../../../../../lib/access";
 type PlaceCategoriesRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "categories" | "tags" | "kind">;
 import { getCategoriesByKind, getTagEmoji, stripTagEmoji } from "../../../../../constants";
 import Icon from "../../../../../components/Icon";
+import { CategoryVisualIcon, getCategoryLabel } from "../../../../../lib/categoryVisuals";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 
 function cx(...a: Array<string | false | undefined | null>) {
@@ -346,9 +347,7 @@ export default function CategoriesEditorPage(props: PageProps) {
             <div className="grid grid-cols-3 gap-3">
               {getCategoriesByKind(placeKind).map((cat) => {
                 const isSelected = categories.includes(cat);
-                const emojiMatch = cat.match(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u);
-                const emoji = emojiMatch ? emojiMatch[0] : "📍";
-                const label = cat.replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]+\s*/u, "").trim();
+                const label = getCategoryLabel(cat);
                 return (
                   <button
                     key={cat}
@@ -366,7 +365,7 @@ export default function CategoriesEditorPage(props: PageProps) {
                         : "border-[#ECEEE4] bg-white hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
                     )}
                   >
-                    <span className="text-2xl mb-1.5">{emoji}</span>
+                    <CategoryVisualIcon category={cat} className="mb-1.5 h-6 w-6" />
                     <span className="text-sm font-medium text-[#1F2A1F] text-center leading-tight">{label}</span>
                   </button>
                 );

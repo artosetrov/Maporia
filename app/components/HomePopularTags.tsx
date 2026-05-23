@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { HomeKind } from "../types/home";
+import { CategoryVisualIcon, getCategoryLabel } from "../lib/categoryVisuals";
 
 /**
  * HomePopularTags (v2) — curated category chips below the hero search.
@@ -52,14 +53,6 @@ const POPULAR_BY_KIND: Record<HomeKind, string[]> = {
   ],
 };
 
-/** Splits an emoji prefix from a category label, e.g. "🌅 Scenic & Views". */
-function splitEmoji(label: string): { emoji: string | null; text: string } {
-  // Categories in constants.ts always start with an emoji + space.
-  const m = label.match(/^(\p{Extended_Pictographic}+)\s+(.*)$/u);
-  if (!m) return { emoji: null, text: label };
-  return { emoji: m[1], text: m[2] };
-}
-
 export default function HomePopularTags({
   activeKind,
   onCategoryClick,
@@ -73,7 +66,7 @@ export default function HomePopularTags({
     <div className="mt-4 flex items-center flex-wrap gap-2.5 text-[14px] text-[#16190f]">
       <span className="font-bold mr-1">Popular:</span>
       {tags.map((tag) => {
-        const { emoji, text } = splitEmoji(tag);
+        const text = getCategoryLabel(tag);
         return (
           <button
             key={tag}
@@ -88,7 +81,7 @@ export default function HomePopularTags({
               "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-1",
             ].join(" ")}
           >
-            {emoji && <span aria-hidden>{emoji}</span>}
+            <CategoryVisualIcon category={tag} className="h-3.5 w-3.5" />
             <span>{text}</span>
           </button>
         );
