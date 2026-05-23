@@ -196,6 +196,53 @@ export const CATEGORIES = [
     return tag.replace(/^[\p{Extended_Pictographic}\uFE0F\u200D]+\s*/u, "").trim();
   }
 
+  const ALL_CATEGORIES = [
+    ...LOCATION_CATEGORIES,
+    ...SERVICE_CATEGORIES,
+    ...EXPERIENCE_CATEGORIES,
+  ] as const;
+
+  function normalizeCategoryLookupValue(value: string): string {
+    return stripTagEmoji(value)
+      .toLowerCase()
+      .replace(/&/g, "and")
+      .replace(/[^\p{Letter}\p{Number}]+/gu, " ")
+      .trim()
+      .replace(/\s+/g, " ");
+  }
+
+  export function resolveCategoryAlias(value: string): string | null {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    const exact = ALL_CATEGORIES.find((category) => category === trimmed);
+    if (exact) return exact;
+
+    const normalized = normalizeCategoryLookupValue(trimmed);
+    return (
+      ALL_CATEGORIES.find(
+        (category) => normalizeCategoryLookupValue(category) === normalized
+      ) ?? null
+    );
+  }
+
+  export function splitCategoryParamValues(values: string[]): {
+    categories: string[];
+    unmatched: string[];
+  } {
+    const categories: string[] = [];
+    const unmatched: string[] = [];
+
+    values.forEach((value) => {
+      const resolved = resolveCategoryAlias(value);
+      const bucket = resolved ? categories : unmatched;
+      const next = resolved ?? value.trim();
+      if (next && !bucket.includes(next)) bucket.push(next);
+    });
+
+    return { categories, unmatched };
+  }
+
   /** Returns emoji for tag: customEmoji if provided and non-empty, else extracted from tag name, from TAG_EMOJI_MAP, or default. */
   export function getTagEmoji(tag: string, customEmoji?: string | null): string {
     if (typeof customEmoji === "string" && customEmoji.trim()) return customEmoji.trim();
