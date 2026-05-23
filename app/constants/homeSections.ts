@@ -30,30 +30,11 @@ export const HOME_SERVICE_CATEGORY_SECTIONS: HomeOfferCategorySection[] =
     categories: [category],
   }));
 
-export const HOME_EXPERIENCE_CATEGORY_SECTIONS: HomeOfferCategorySection[] = [
-  { title: "Water Sports", categories: ["🏊 Water Sports"] },
-  { title: "Adventures", categories: ["🥾 Adventures"] },
-  { title: "Cooking Classes", categories: ["🍳 Cooking Classes"] },
-  { title: "Tours & Walks", categories: ["🗺 Tours & Walks"] },
-  { title: "Workshops", categories: ["🎨 Workshops"] },
-  {
-    title: "Music School",
-    matchText: ["music"],
-    searchQuery: "music",
-  },
-  {
-    title: "Business Club",
-    categories: ["💼 Business Club"],
-    matchText: ["business", "club"],
-    matchMode: "all",
-    searchQuery: "business club",
-  },
-  { title: "Wellness & Retreats", categories: ["🧘 Wellness & Retreats"] },
-  { title: "Music & Nightlife", categories: ["🎶 Music & Nightlife"] },
-  { title: "Photo Walks", categories: ["📷 Photo Walks"] },
-  { title: "Wildlife & Nature", categories: ["🦊 Wildlife & Nature"] },
-  { title: "Tastings", categories: ["🍷 Tastings"] },
-];
+export const HOME_EXPERIENCE_CATEGORY_SECTIONS: HomeOfferCategorySection[] =
+  EXPERIENCE_CATEGORIES.map((category) => ({
+    title: stripTagEmoji(category),
+    categories: [category],
+  }));
 
 export const HOME_SECTIONS: HomeSectionFilter[] = [
   {

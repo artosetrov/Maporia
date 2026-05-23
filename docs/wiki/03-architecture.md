@@ -1,6 +1,6 @@
 # Architecture
 
-Последнее обновление: 2026-05-20.
+Последнее обновление: 2026-05-23.
 
 ## Stack
 
@@ -51,6 +51,8 @@ Storage buckets из README:
 - `place-photos` - public place photos.
 
 Offer pricing for service/experience cards uses `places.price_amount`, `places.price_currency`, and `places.price_unit` as the compact summary price. Detailed pricing menus live in `places.price_options` as a JSON array. Each option supports the legacy fields `label`, `amount`, `currency`, `unit`, and `note`, plus `group_label`, `compare_at_amount`, `duration_minutes`, `badge`, `is_featured`, and `sort_order` for grouped packages, trial lessons, memberships, discounts, and highlighted options. Supported `price_unit` values are `fixed`, `from`, `per_hour`, `per_person`, `per_day`, `per_month`, and `per_session`; the database check constraint is updated by `scripts/sql/add-price-unit-per-month.sql`.
+
+Category source of truth is `app/constants.ts` (`LOCATION_CATEGORIES`, `SERVICE_CATEGORIES`, `EXPERIENCE_CATEGORIES`). The `places.categories` database check constraint must be kept in sync when categories change; `scripts/sql/update-places-categories-check-business-club.sql` updates the current constraint for `💼 Business Club`.
 
 ## Access Model
 

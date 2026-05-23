@@ -28,7 +28,6 @@ import {
   PawPrint,
   Sailboat,
   Scissors,
-  School,
   Sparkles,
   Utensils,
   Wine,
@@ -169,12 +168,6 @@ const CATEGORY_VISUALS: Record<string, CategoryVisual> = {
     bg: "bg-[#F3EFF5]",
     icon: "text-[#7B6093]",
     accent: "bg-[#D9CBE5]",
-  },
-  "Music School": {
-    Icon: School,
-    bg: "bg-[#F1F0E8]",
-    icon: "text-[#7E763B]",
-    accent: "bg-[#DFD8A8]",
   },
   "Business Club": {
     Icon: Building2,
