@@ -18,6 +18,9 @@ function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
 }
 
+const BUSINESS_CLUB_CATEGORY = "💼 Business Club";
+const BUSINESS_CLUB_TAG = stripTagEmoji(BUSINESS_CLUB_CATEGORY);
+
 type PageProps = { params: Promise<{ id: string }> };
 
 export default function CategoriesEditorPage(props: PageProps) {
@@ -95,12 +98,13 @@ export default function CategoriesEditorPage(props: PageProps) {
   }, [placeId, user, router, access, accessLoading]);
 
   const hasChanges =
-    categories.sort().join(",") !== originalCategories.sort().join(",") ||
-    tags.sort().join(",") !== originalTags.sort().join(",");
+    [...categories].sort().join(",") !== [...originalCategories].sort().join(",") ||
+    [...tags].sort().join(",") !== [...originalTags].sort().join(",");
   const canSave = hasChanges && !saving;
 
   async function handleSave() {
     if (!canSave || !user || !placeId) return;
+    const userId = user.id;
 
     setSaving(true);
     setError(null);
@@ -113,7 +117,7 @@ export default function CategoriesEditorPage(props: PageProps) {
 
     console.log("Saving categories and tags:", { 
       placeId, 
-      userId: user.id, 
+      userId,
       categories: validCategories,
       tags: validTags,
       originalTags,
@@ -150,22 +154,39 @@ export default function CategoriesEditorPage(props: PageProps) {
       }
     }
 
-    // Admin can update any place, owner can update their own
-    const updateQuery = supabase
-      .from("places")
-      // @ts-expect-error Supabase generated types infer update payload as never
-      .update({ 
-        categories: validCategories.length > 0 ? validCategories : null,
-        tags: validTags.length > 0 ? validTags : null,
-      })
-      .eq("id", placeId);
-    
-    // If not admin, add ownership check
-    if (!currentIsAdmin) {
-      updateQuery.eq("created_by", user.id);
+    async function updatePlaceCategories(nextCategories: string[], nextTags: string[]) {
+      // Admin can update any place, owner can update their own
+      const updateQuery = supabase
+        .from("places")
+        // @ts-expect-error Supabase generated types infer update payload as never
+        .update({
+          categories: nextCategories.length > 0 ? nextCategories : null,
+          tags: nextTags.length > 0 ? nextTags : null,
+        })
+        .eq("id", placeId);
+
+      // If not admin, add ownership check
+      if (!currentIsAdmin) {
+        updateQuery.eq("created_by", userId);
+      }
+
+      return updateQuery.select();
     }
-    
-    const { data, error: updateError } = await updateQuery.select();
+
+    let savedCategories = validCategories;
+    let savedTags = validTags;
+    let { data, error: updateError } = await updatePlaceCategories(savedCategories, savedTags);
+
+    const hitCategoryConstraint =
+      updateError &&
+      (updateError.code === "23514" ||
+        updateError.message?.includes("places_categories_check"));
+
+    if (hitCategoryConstraint && savedCategories.includes(BUSINESS_CLUB_CATEGORY)) {
+      savedCategories = savedCategories.filter((category) => category !== BUSINESS_CLUB_CATEGORY);
+      savedTags = Array.from(new Set([...savedTags, BUSINESS_CLUB_TAG]));
+      ({ data, error: updateError } = await updatePlaceCategories(savedCategories, savedTags));
+    }
 
     console.log("Update result:", { data, error: updateError });
 
@@ -185,8 +206,8 @@ export default function CategoriesEditorPage(props: PageProps) {
       });
       
       // Update original state to reflect saved values
-      setOriginalCategories(validCategories);
-      setOriginalTags(validTags);
+      setOriginalCategories(savedCategories);
+      setOriginalTags(savedTags);
     } else {
       console.warn("No data returned from update, but no error occurred. Update likely succeeded.");
     }
