@@ -481,7 +481,7 @@ export default function AddPlacePage() {
       }
 
       const editUrl = `/places/${placeData.id}/edit?returnTo=${encodeURIComponent(returnTo)}`;
-      router.push(editUrl);
+      router.replace(editUrl);
     } catch (err) {
       console.error("Exception creating place:", err);
       setError(err instanceof Error ? err.message : "Failed to create place");

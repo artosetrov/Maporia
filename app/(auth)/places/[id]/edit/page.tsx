@@ -54,6 +54,7 @@ import type { Database } from "../../../../types/supabase";
 import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
 import { isUserAdmin, canUserCreatePremiumPlace, type AccessLevel } from "../../../../lib/access";
 import { getPublicStoragePath, PLACE_PHOTOS_BUCKET } from "../../../../lib/storagePaths";
+import { getPlaceCatalogHref } from "../../../../lib/navigation";
 
 type PlacePhotoUrlRow = Pick<Database["public"]["Tables"]["place_photos"]["Row"], "url">;
 import Icon from "../../../../components/Icon";
@@ -1300,6 +1301,10 @@ export default function PlaceEditorHub(props: PageProps) {
     }
 
     if (navigator.vibrate) navigator.vibrate(10);
+    const catalogHref = getPlaceCatalogHref(place.kind);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", catalogHref);
+    }
     router.push(`/id/${placeId}`);
   }
 

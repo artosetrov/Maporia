@@ -31,7 +31,7 @@ import ParentLocationCard from "./ParentLocationCard";
 import StarRating from "../../../components/StarRating";
 import PlaceContacts from "../../../components/PlaceContacts";
 import { isPlacePremium } from "../../../lib/access";
-import { navigateBackOrFallback } from "../../../lib/navigation";
+import { getPlaceCatalogHref } from "../../../lib/navigation";
 import { CategoryVisualIcon, getCategoryLabel } from "../../../lib/categoryVisuals";
 
 type OfferPlace = {
@@ -327,7 +327,7 @@ export default function OfferPlaceView({
   photos,
 }: Props) {
   const router = useRouter();
-  const handleBackClick = () => navigateBackOrFallback(router, "/map");
+  const handleBackClick = () => router.push(getPlaceCatalogHref(kind));
   const { isLoaded: mapsLoaded, loadError: mapsLoadError } = useGoogleMaps();
 
   const isService = kind === "service";

@@ -3,6 +3,14 @@ type BackFallbackRouter = {
   push: (href: string) => void;
 };
 
+type PlaceCatalogKind = "location" | "service" | "experience" | null | undefined;
+
+export function getPlaceCatalogHref(kind: PlaceCatalogKind): string {
+  if (kind === "service") return "/map?kinds=service";
+  if (kind === "experience") return "/map?kinds=experience";
+  return "/map";
+}
+
 export function navigateBackOrFallback(router: BackFallbackRouter, fallbackHref = "/map") {
   if (typeof window === "undefined") return;
 
