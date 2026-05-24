@@ -154,6 +154,7 @@ export default function TopBar({
   const isMap = pathname === "/map";
   const shouldShowBackButton = showBackButton !== undefined ? showBackButton : !(isHome || isMap);
   const shouldShowAddPlace = showAddPlaceButton !== undefined ? showAddPlaceButton : isAuthenticated;
+  const shouldShowGetStarted = isHome && !isAuthenticated;
 
   return (
     <>
@@ -334,8 +335,8 @@ export default function TopBar({
                         )}
                       </button>
                     )}
-                    {/* Get Started — mobile, unauthenticated */}
-                    {(pathname === "/" || pathname === "/map") && !isAuthenticated && (
+                    {/* Get Started — mobile, homepage only, unauthenticated */}
+                    {shouldShowGetStarted && (
                       <button
                         type="button"
                         onClick={() => redirectToAuth("topbar_mobile_login")}
@@ -430,8 +431,8 @@ export default function TopBar({
                   </button>
                 )}
 
-                {/* Get Started — для неавторизованных. Переход на страницу логина */}
-                {!isAuthenticated && (
+                {/* Get Started — homepage only, unauthenticated */}
+                {shouldShowGetStarted && (
                   <button
                     type="button"
                     onClick={() => redirectToAuth("topbar_login")}
