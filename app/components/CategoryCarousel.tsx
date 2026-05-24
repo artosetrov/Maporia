@@ -74,9 +74,13 @@ export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) 
     [kind]
   );
   const [previews, setPreviews] = useState<Map<string, CategoryPreview>>(new Map());
-  const [loading, setLoading] = useState(true);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const title = `${kind === "service" ? "Services" : "Experiences"} in ${city || "Florida"}`;
+  const visibleCategories = useMemo(
+    () =>
+      allCategories.filter((section) => (previews.get(section.title)?.count ?? 0) > 0),
+    [allCategories, previews]
+  );
 
   // Прокрутка стрелками — синхронно с HomeSection: 2 карточки + 2 gap.
   // Карточки замеряются через [data-card], gap — из CSS-переменной
@@ -99,7 +103,7 @@ export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) 
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    setPreviews(new Map());
     (async () => {
       try {
         let query = supabase
@@ -116,7 +120,6 @@ export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) 
 
         const { data, error } = await query;
         if (cancelled || error) {
-          setLoading(false);
           return;
         }
         const map = new Map<string, CategoryPreview>();
@@ -131,10 +134,9 @@ export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) 
         }
         if (!cancelled) {
           setPreviews(map);
-          setLoading(false);
         }
       } catch {
-        if (!cancelled) setLoading(false);
+        return;
       }
     })();
     return () => {
@@ -160,7 +162,11 @@ export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) 
   // Стрелки показываем только если карточек хватает на переполнение по
   // ширине — чтобы не плодить «декоративные» стрелки в углу. На мобилке
   // стрелок нет вообще: там работает обычный свайп.
-  const showArrows = allCategories.length >= 7;
+  const showArrows = visibleCategories.length >= 7;
+
+  if (visibleCategories.length === 0) {
+    return null;
+  }
 
   return (
     <section aria-label={title} className="mb-6 lg:mb-8">
@@ -215,11 +221,10 @@ export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) 
             gap: "var(--home-carousel-gap, 12px)",
           }}
         >
-          {allCategories.map((section) => {
+          {visibleCategories.map((section) => {
             const label = section.title;
             const preview = previews.get(section.title);
             const count = preview?.count ?? 0;
-            const empty = !loading && count === 0;
             const visual = getCategoryVisual(
               section.title,
               kind === "service" ? DEFAULT_SERVICE_VISUAL : DEFAULT_EXPERIENCE_VISUAL
@@ -232,12 +237,7 @@ export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) 
                 data-card
                 onClick={() => openCategory(section)}
                 style={{ scrollSnapAlign: "start" }}
-                className={
-                  "group shrink-0 w-[160px] sm:w-[180px] text-left transition " +
-                  (empty
-                    ? "opacity-60 hover:opacity-90"
-                    : "hover:-translate-y-0.5")
-                }
+                className="group shrink-0 w-[160px] sm:w-[180px] text-left transition hover:-translate-y-0.5"
                 aria-label={`${label} (${count} listings)`}
               >
                 <div
@@ -263,7 +263,7 @@ export default function CategoryCarousel({ kind, city }: CategoryCarouselProps) 
                   {label}
                 </div>
                 <div className="text-xs text-[#6F7A5A]">
-                  {loading ? "Loading" : count === 0 ? "Coming soon" : `${count} available`}
+                  {`${count} available`}
                 </div>
               </button>
             );
