@@ -6,7 +6,18 @@ import type { Place, Profile } from "@/app/types";
 
 type ResolvePlaceRow = Pick<
   Place,
-  "id" | "lat" | "lng" | "google_place_id" | "title" | "created_by" | "access_level" | "visibility"
+  | "id"
+  | "lat"
+  | "lng"
+  | "google_place_id"
+  | "title"
+  | "address"
+  | "city"
+  | "city_name_cached"
+  | "country"
+  | "created_by"
+  | "access_level"
+  | "visibility"
 >;
 type ResolveProfileRow = Pick<
   Profile,
@@ -99,7 +110,7 @@ export async function POST(request: NextRequest) {
     // Load place
     const { data: place, error: placeError } = await supabaseAdmin
       .from("places")
-      .select("id, lat, lng, google_place_id, title, created_by, access_level, visibility")
+      .select("id, lat, lng, google_place_id, title, address, city, city_name_cached, country, created_by, access_level, visibility")
       .eq("id", placeId)
       .single();
 
@@ -143,6 +154,9 @@ export async function POST(request: NextRequest) {
       resolvedPlace.lat,
       resolvedPlace.lng,
       resolvedPlace.title,
+      resolvedPlace.address,
+      resolvedPlace.city_name_cached ?? resolvedPlace.city,
+      resolvedPlace.country,
       googleApiKey,
     );
 
@@ -179,11 +193,19 @@ async function findGooglePlaceId(
   lat: number,
   lng: number,
   title: string,
+  address: string | null | undefined,
+  city: string | null | undefined,
+  country: string | null | undefined,
   apiKey: string,
 ): Promise<string | null> {
   // Strategy 1: Find Place from Text (most accurate when we have the name)
   try {
-    const input = encodeURIComponent(title);
+    const input = encodeURIComponent(
+      [title, address, city, country]
+        .map((part) => part?.trim())
+        .filter(Boolean)
+        .join(", "),
+    );
     const locationBias = `point:${lat},${lng}`;
     const findPlaceUrl =
       `https://maps.googleapis.com/maps/api/place/findplacefromtext/json` +

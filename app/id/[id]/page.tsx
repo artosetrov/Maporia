@@ -41,7 +41,8 @@ import PlaceContacts from "../../components/PlaceContacts";
 import TransientNotice from "../../components/TransientNotice";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import ErrorPage from "../../components/ErrorPage";
-import { navigateBackOrFallback } from "../../lib/navigation";
+import { getGoogleMapsPlaceUrl } from "../../lib/googleMapsUrls";
+import { getPlaceCatalogHref } from "../../lib/navigation";
 import { CategoryVisualIcon, getCategoryLabel } from "../../lib/categoryVisuals";
 
 type Place = {
@@ -49,6 +50,8 @@ type Place = {
   title: string;
   description: string | null;
   city: string | null;
+  city_id?: string | null;
+  city_name_cached?: string | null;
   country: string | null;
   address: string | null;
   link: string | null;
@@ -233,10 +236,10 @@ export default function PlacePage(props: PageProps) {
   const router = useRouter();
   const { id } = use(props.params);
   const { redirectToAuth } = useAuthRedirect();
-  const handleBackClick = () => navigateBackOrFallback(router, "/map");
 
   const [, setActiveSection] = useState<"overview" | "photos" | "map" | "comments">("overview");
   const [place, setPlace] = useState<Place | null>(null);
+  const handleBackClick = () => router.push(getPlaceCatalogHref(place?.kind));
   const [placeNotFound, setPlaceNotFound] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState("");
@@ -899,13 +902,7 @@ export default function PlacePage(props: PageProps) {
   const [resolvingPlaceId, setResolvingPlaceId] = useState(false);
 
   const getGoogleMapsFallbackUrl = (targetPlace: Place) => {
-    if (targetPlace.lat && targetPlace.lng) {
-      return `https://www.google.com/maps/search/?api=1&query=${targetPlace.lat},${targetPlace.lng}`;
-    }
-    if (targetPlace.address) {
-      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(targetPlace.address)}`;
-    }
-    return null;
+    return getGoogleMapsPlaceUrl(targetPlace);
   };
 
   const handleOpenGoogleMaps = async (e?: React.MouseEvent) => {
@@ -916,11 +913,7 @@ export default function PlacePage(props: PageProps) {
 
     // Already have google_place_id — open immediately
     if (place.google_place_id) {
-      window.open(
-        `https://www.google.com/maps/place/?q=place_id:${place.google_place_id}`,
-        "_blank",
-        "noopener,noreferrer",
-      );
+      if (fallbackUrl) window.open(fallbackUrl, "_blank", "noopener,noreferrer");
       return;
     }
 
@@ -958,8 +951,14 @@ export default function PlacePage(props: PageProps) {
         setPlace((prev) =>
           prev ? { ...prev, google_place_id: data.google_place_id } : prev,
         );
+        const googleMapsUrl = getGoogleMapsPlaceUrl({
+          ...place,
+          google_place_id: data.google_place_id,
+        });
         window.open(
-          `https://www.google.com/maps/place/?q=place_id:${data.google_place_id}`,
+          googleMapsUrl ??
+            fallbackUrl ??
+            `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.google_place_id)}&query_place_id=${encodeURIComponent(data.google_place_id)}`,
           "_blank",
           "noopener,noreferrer",
         );

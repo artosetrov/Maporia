@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { logger } from "@/app/lib/logger";
+import { buildGoogleMapsSearchUrl } from "@/app/lib/googleMapsUrls";
 import type { Place } from "@/app/types";
 
 type GoogleImportSearchResponse = {
@@ -527,7 +528,13 @@ function normalizePlaceData(
   const placeId = placeData.place_id || null;
   const googleMapsUrl = isUrl
     ? originalQuery
-    : (placeId ? `https://www.google.com/maps/place/?q=place_id:${placeId}` : null);
+    : buildGoogleMapsSearchUrl({
+        title: displayName,
+        address: formattedAddress,
+        lat: lat ? Number(lat) : null,
+        lng: lng ? Number(lng) : null,
+        google_place_id: placeId,
+      });
 
   return {
     title: displayName,

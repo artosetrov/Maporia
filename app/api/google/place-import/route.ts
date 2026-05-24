@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { logger } from "@/app/lib/logger";
+import { buildGoogleMapsSearchUrl } from "@/app/lib/googleMapsUrls";
 import type { Place } from "@/app/types";
 
 type ImportedPlacePreview = {
@@ -836,7 +837,12 @@ function normalizeGeocodeData(geocodeResult: GeocodeResult, originalQuery: strin
     categories: geocodeResult.types || [], // Alias
     place_id: null, // No place_id from Geocoding API
     google_place_id: null,
-    google_maps_url: lat && lng ? `https://www.google.com/maps/place/?q=${lat},${lng}` : null,
+    google_maps_url: buildGoogleMapsSearchUrl({
+      title: name,
+      address: formattedAddress,
+      lat: lat ? Number(lat) : null,
+      lng: lng ? Number(lng) : null,
+    }),
     lat: lat ? Number(lat) : null,
     lng: lng ? Number(lng) : null,
     latitude: lat ? Number(lat) : null, // Alias
@@ -941,7 +947,15 @@ function normalizePlaceData(
     categories: placeData.types || [],
     place_id: placeId,
     google_place_id: placeId,
-    google_maps_url: isUrl ? originalQuery : (placeId ? `https://www.google.com/maps/place/?q=place_id:${placeId}` : null),
+    google_maps_url: isUrl ? originalQuery : buildGoogleMapsSearchUrl({
+      title: displayName,
+      address: placeData.formatted_address || null,
+      city,
+      country,
+      lat: lat ? Number(lat) : null,
+      lng: lng ? Number(lng) : null,
+      google_place_id: placeId,
+    }),
     lat: lat ? Number(lat) : null,
     lng: lng ? Number(lng) : null,
     latitude: lat ? Number(lat) : null,
