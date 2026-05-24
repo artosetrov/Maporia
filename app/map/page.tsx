@@ -55,9 +55,14 @@ type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
 type ReactionsRow = Database["public"]["Tables"]["reactions"]["Row"];
 type CommentsRow = Database["public"]["Tables"]["comments"]["Row"];
 type PlacePhotosRow = Database["public"]["Tables"]["place_photos"]["Row"];
+type PlaceLinksRow = Database["public"]["Tables"]["place_links"]["Row"];
 
 type PlacesSelectRow = Pick<PlacesRow, "id" | "title" | "description" | "address" | "city" | "city_name_cached" | "lat" | "lng" | "cover_url" | "categories" | "tags" | "created_at" | "created_by" | "access_level" | "country" | "kind" | "is_hidden" | "visibility">;
 type PlacesResult = { data: PlacesSelectRow[] | null; error: PostgrestError | null; count?: number | null };
+type LinkedHostLocation = Pick<PlacesRow, "id" | "address" | "city" | "city_name_cached" | "country" | "lat" | "lng">;
+type PlaceLinkHostRow = Pick<PlaceLinksRow, "child_place_id"> & {
+  parent: LinkedHostLocation | LinkedHostLocation[] | null;
+};
 
 type ReactionPlaceId = Pick<ReactionsRow, "place_id">;
 type ReactionsPlaceIdResult = { data: ReactionPlaceId[] | null; error: PostgrestError | null };
@@ -160,6 +165,45 @@ function getUsableMapPosition(place: Pick<Place, "lat" | "lng">): { lat: number;
   if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
   if (Math.abs(lat) < 0.000001 && Math.abs(lng) < 0.000001) return null;
   return { lat, lng };
+}
+
+function firstJoinedRow<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
+function withLinkedHostCoordinates(places: Place[], links: PlaceLinkHostRow[]): Place[] {
+  if (links.length === 0) return places;
+
+  const hostByChildId = new Map<string, LinkedHostLocation>();
+  for (const link of links) {
+    const parent = firstJoinedRow(link.parent);
+    if (!parent || !getUsableMapPosition(parent)) continue;
+    if (!hostByChildId.has(link.child_place_id)) {
+      hostByChildId.set(link.child_place_id, parent);
+    }
+  }
+
+  if (hostByChildId.size === 0) return places;
+
+  return places.map((place) => {
+    const isOffer = place.kind === "service" || place.kind === "experience";
+    if (!isOffer || getUsableMapPosition(place)) return place;
+
+    const host = hostByChildId.get(place.id);
+    const hostPosition = host ? getUsableMapPosition(host) : null;
+    if (!host || !hostPosition) return place;
+
+    return {
+      ...place,
+      lat: hostPosition.lat,
+      lng: hostPosition.lng,
+      address: place.address ?? host.address ?? null,
+      city: place.city ?? host.city ?? null,
+      city_name_cached: place.city_name_cached ?? host.city_name_cached ?? null,
+      country: place.country ?? host.country ?? null,
+    };
+  });
 }
 
 function MapPageContent() {
@@ -744,7 +788,40 @@ function MapPageContent() {
         }
       }
 
-      return placesWithCounts.map((p) => ({
+      const offersMissingCoordinates = placesWithCounts.filter(
+        (p) =>
+          (p.kind === "service" || p.kind === "experience") &&
+          getUsableMapPosition(p) === null,
+      );
+
+      let placesForMap = placesWithCounts;
+      if (offersMissingCoordinates.length > 0) {
+        const { data: hostLinks, error: hostLinksError } = await supabase
+          .from("place_links")
+          .select(
+            "child_place_id,parent:places!place_links_parent_place_id_fkey(id,address,city,city_name_cached,country,lat,lng)",
+          )
+          .eq("status", "active")
+          .in(
+            "child_place_id",
+            offersMissingCoordinates.map((p) => p.id),
+          );
+
+        if (hostLinksError) {
+          console.warn("[MapPage] Error loading linked host coordinates:", {
+            message: hostLinksError.message,
+            code: hostLinksError.code,
+            details: hostLinksError.details,
+          });
+        } else {
+          placesForMap = withLinkedHostCoordinates(
+            placesWithCounts,
+            (hostLinks ?? []) as PlaceLinkHostRow[],
+          );
+        }
+      }
+
+      return placesForMap.map((p) => ({
         ...p,
         lat: p.lat ?? null,
         lng: p.lng ?? null,
