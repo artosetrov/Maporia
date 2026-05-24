@@ -2387,7 +2387,8 @@ function MapView({
 
   const selectedPlaceId = externalSelectedPlaceId ?? internalSelectedPlaceId;
 
-  // Filter premium places for non-premium users on map (but keep them in list)
+  // Keep map markers aligned with the filtered result set. Premium places can
+  // appear as markers, while their details remain gated in the InfoWindow.
   const defaultUserAccess: UserAccess = useMemo(
     () =>
       userAccess ?? {
@@ -2400,24 +2401,8 @@ function MapView({
   );
 
   const placesWithCoords = useMemo(
-    () => {
-      const withCoords = places.filter((p) => getUsableMapPosition(p) !== null);
-      
-      // Filter out premium places for non-premium users on the map
-      // They will still appear in the list view with locked content
-      return withCoords.filter((p) => {
-        const pIsPremium = isPlacePremium(p);
-        const pCanView = canUserViewPlace(defaultUserAccess, p);
-        const pIsOwner = userId && p.created_by === userId;
-        
-        // Show on map if:
-        // 1. Not premium, OR
-        // 2. Premium but user can view it, OR
-        // 3. Premium but user is the owner
-        return !pIsPremium || pCanView || pIsOwner;
-      });
-    },
-    [places, defaultUserAccess, userId]
+    () => places.filter((p) => getUsableMapPosition(p) !== null),
+    [places]
   );
   const placesWithCoordsKey = useMemo(
     () => placesWithCoords.map((p) => p.id).join(","),
