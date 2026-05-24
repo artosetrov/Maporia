@@ -146,6 +146,16 @@ body, p, .body {
   line-height: 1.5;
 }
 
+/* Prevent iOS Safari from zooming the page when text fields receive focus. */
+@media (max-width: 767px) {
+  input:not([type="button"]):not([type="checkbox"]):not([type="color"]):not([type="file"]):not([type="image"]):not([type="radio"]):not([type="range"]):not([type="reset"]):not([type="submit"]),
+  textarea,
+  select,
+  [contenteditable="true"] {
+    font-size: 16px;
+  }
+}
+
 /* Branded form controls: radio & checkbox (Brand Guide — olive-primary, border-light) */
 input[type="checkbox"] {
   appearance: none;
