@@ -82,7 +82,9 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, hauntedGemIndex,
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
+  const touchEndY = useRef<number | null>(null);
   const cardRef = useRef<HTMLAnchorElement>(null);
   const [isSmallCard, setIsSmallCard] = useState(false);
   const [isInView, setIsInView] = useState(false);
@@ -426,32 +428,65 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, hauntedGemIndex,
   // Обработка свайпов на мобильных устройствах
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    touchEndX.current = null;
+    touchEndY.current = null;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     touchEndX.current = e.touches[0].clientX;
+    touchEndY.current = e.touches[0].clientY;
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (isLocked || !touchStartX.current || !touchEndX.current || !hasMultiplePhotos) return;
+    const startX = touchStartX.current;
+    const startY = touchStartY.current;
+    const endX = touchEndX.current;
+    const endY = touchEndY.current;
+
+    touchStartX.current = null;
+    touchStartY.current = null;
+    touchEndX.current = null;
+    touchEndY.current = null;
+
+    if (
+      isLocked ||
+      startX === null ||
+      startY === null ||
+      endX === null ||
+      endY === null ||
+      !hasMultiplePhotos
+    ) {
+      return;
+    }
     
-    const distance = touchStartX.current - touchEndX.current;
+    const distance = startX - endX;
+    const verticalDistance = Math.abs(startY - endY);
+    const horizontalDistance = Math.abs(distance);
     const minSwipeDistance = 50;
 
-    if (distance > minSwipeDistance) {
+    if (horizontalDistance < minSwipeDistance || horizontalDistance <= verticalDistance) {
+      return;
+    }
+
+    if (distance > 0) {
       // Swipe left - next photo
       e.preventDefault();
       e.stopPropagation();
       setCurrentPhotoIndex((prev) => (prev < photos.length - 1 ? prev + 1 : 0));
-    } else if (distance < -minSwipeDistance) {
+    } else {
       // Swipe right - previous photo
       e.preventDefault();
       e.stopPropagation();
       setCurrentPhotoIndex((prev) => (prev > 0 ? prev - 1 : photos.length - 1));
     }
+  };
 
+  const handleTouchCancel = () => {
     touchStartX.current = null;
+    touchStartY.current = null;
     touchEndX.current = null;
+    touchEndY.current = null;
   };
 
   const rawCurrentPhoto = photos[currentPhotoIndex] || place.cover_url;
@@ -581,12 +616,13 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, hauntedGemIndex,
       {/* Photo with rounded corners */}
       <div 
         className="relative w-full flex-shrink-0 place-card-image mb-2" 
-        style={{ paddingBottom: '100%' }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchCancel}
+        style={{ paddingBottom: '100%', touchAction: hasMultiplePhotos ? 'pan-y' : 'auto' }}
       >
         {currentPhoto ? (
           <div
