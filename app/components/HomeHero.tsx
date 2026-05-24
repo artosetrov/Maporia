@@ -238,7 +238,7 @@ export default function HomeHero({
                   onClick={() => setCityOpen((v) => !v)}
                   aria-haspopup="listbox"
                   aria-expanded={cityOpen}
-                  className="font-extrabold border-b-[3px] border-[#8F9E4F] pb-0.5 text-[#16190f] hover:text-[#8F9E4F] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-1 rounded-sm"
+                  className="inline-flex min-h-11 items-center font-extrabold border-b-[3px] border-[#8F9E4F] pb-0.5 text-[#16190f] hover:text-[#8F9E4F] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-1 rounded-sm"
                 >
                   {cityLabel}.
                 </button>

@@ -639,18 +639,23 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, hauntedGemIndex,
 
             {/* Pagination dots - показываем только если есть несколько фото и карточка не заблокирована */}
             {hasMultiplePhotos && !isLocked && (
-              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
+              <div className="absolute bottom-0 left-1/2 z-20 flex max-w-[calc(100%-1rem)] -translate-x-1/2 flex-wrap justify-center">
                 {photos.map((_, index) => (
                   <button
                     key={index}
                     onClick={(e) => handleDotClick(e, index)}
-                    className={`h-1.5 rounded-full transition-all duration-200 ${
-                      index === currentPhotoIndex
-                        ? 'w-6 bg-white'
-                        : 'w-1.5 bg-white/60 hover:bg-white/80'
-                    }`}
+                    className="group flex h-11 w-11 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black/40"
                     aria-label={`Go to photo ${index + 1}`}
-                  />
+                  >
+                    <span
+                      className={`h-1.5 rounded-full transition-all duration-200 ${
+                        index === currentPhotoIndex
+                          ? 'w-6 bg-white'
+                          : 'w-1.5 bg-white/60 group-hover:bg-white/80'
+                      }`}
+                      aria-hidden
+                    />
+                  </button>
                 ))}
               </div>
             )}

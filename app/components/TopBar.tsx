@@ -192,7 +192,7 @@ export default function TopBar({
               ) : (
                 <Link
                   href="/"
-                  className="flex-shrink-0"
+                  className="-ml-2 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full hover:bg-[#FAFAF7] transition-colors"
                   aria-label="Go to Home"
                   tabIndex={0}
                 >
@@ -339,7 +339,7 @@ export default function TopBar({
                       <button
                         type="button"
                         onClick={() => redirectToAuth("topbar_mobile_login")}
-                        className="flex items-center justify-center text-xs font-medium transition-all rounded-full px-4 py-2 h-10 bg-[#8F9E4F] text-white hover:brightness-110 active:brightness-90 flex-shrink-0"
+                        className="flex items-center justify-center text-xs font-medium transition-all rounded-full px-4 py-2 h-11 bg-[#8F9E4F] text-white hover:brightness-110 active:brightness-90 flex-shrink-0"
                         aria-label="Get Started"
                         tabIndex={0}
                       >

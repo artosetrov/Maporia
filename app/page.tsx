@@ -30,7 +30,7 @@ import {
 import { supabase, hasValidSupabaseConfig } from "./lib/supabase";
 import type { Database } from "./types/supabase";
 import type { PostgrestError } from "@supabase/supabase-js";
-import { DEFAULT_CITY } from "./constants";
+import { DEFAULT_CITY, splitCategoryParamValues } from "./constants";
 
 type ReactionPlaceId = Pick<Database["public"]["Tables"]["reactions"]["Row"], "place_id">;
 type ReactionsPlaceIdResult = { data: ReactionPlaceId[] | null; error: PostgrestError | null };
@@ -46,6 +46,20 @@ const toErrorLike = (error: unknown): ErrorLike => {
   if (error && typeof error === "object") return error as ErrorLike;
   return { message: String(error) };
 };
+
+function decodeQueryParam(value: string): string {
+  try {
+    return decodeURIComponent(value.trim());
+  } catch {
+    return value.trim();
+  }
+}
+
+function decodeQueryList(value: string | null): string[] {
+  return value
+    ? value.split(",").map(decodeQueryParam).filter(Boolean)
+    : [];
+}
 
 const isAbortLikeError = (error: unknown): boolean => {
   const err = toErrorLike(error);
@@ -87,6 +101,19 @@ function HomePageInner() {
   const searchParams = useSearchParams();
   const { redirectToAuth } = useAuthRedirect();
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const initialCity = searchParams?.get("city")
+    ? decodeQueryParam(searchParams.get("city") ?? "")
+    : null;
+  const initialSearchValue = searchParams?.get("q")
+    ? decodeQueryParam(searchParams.get("q") ?? "")
+    : "";
+  const initialCategoryParts = splitCategoryParamValues(
+    decodeQueryList(searchParams?.get("categories") ?? null)
+  );
+  const initialTags = [
+    ...initialCategoryParts.unmatched,
+    ...decodeQueryList(searchParams?.get("tags") ?? null),
+  ].filter((tag, index, arr) => tag && arr.indexOf(tag) === index);
 
   // Active home tab — управляется через ?tab=services|experiences|locations
   const tabParam = searchParams?.get("tab");
@@ -111,19 +138,44 @@ function HomePageInner() {
   }
   
   // Search and filter state
-  const [searchValue, setSearchValue] = useState("");
-  const [selectedCity, setSelectedCity] = useState<string | null>(null);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [searchValue, setSearchValue] = useState(initialSearchValue);
+  const [selectedCity, setSelectedCity] = useState<string | null>(initialCity);
+  const [selectedTags, setSelectedTags] = useState<string[]>(initialTags);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
-    categories: [],
+    categories: initialCategoryParts.categories,
     sort: null,
-    tags: [],
+    tags: initialTags,
   });
   const [filterOpen, setFilterOpen] = useState(false);
   // Places with tags & categories for filter modal
   const [placesForTags, setPlacesForTags] = useState<{ id: string; tags: string[] | null; categories: string[] | null; access_level: string | null }[]>([]);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
+
+  useEffect(() => {
+    const city = searchParams?.get("city")
+      ? decodeQueryParam(searchParams.get("city") ?? "")
+      : null;
+    const query = searchParams?.get("q")
+      ? decodeQueryParam(searchParams.get("q") ?? "")
+      : "";
+    const categoryParts = splitCategoryParamValues(
+      decodeQueryList(searchParams?.get("categories") ?? null)
+    );
+    const tags = [
+      ...categoryParts.unmatched,
+      ...decodeQueryList(searchParams?.get("tags") ?? null),
+    ].filter((tag, index, arr) => tag && arr.indexOf(tag) === index);
+
+    setSelectedCity(city);
+    setSearchValue(query);
+    setSelectedTags(tags);
+    setActiveFilters((prev) => ({
+      ...prev,
+      categories: categoryParts.categories,
+      tags,
+    }));
+  }, [searchParams]);
 
   // User access and profile data (from context — single session/profile request)
   const { access, user, profile } = useUserAccessContext();
@@ -501,7 +553,7 @@ function HomePageInner() {
   function handleCategoryClick(category: string) {
     const params = new URLSearchParams();
     if (selectedCity) params.set("city", selectedCity);
-    params.set("categories", encodeURIComponent(category));
+    params.set("categories", category);
     if (activeKind && activeKind !== "location") {
       params.set("kinds", activeKind);
     }

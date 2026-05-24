@@ -19,6 +19,7 @@
 import { isPlacePremium } from "./access";
 import { isPlaceWithinCityRadius } from "./cityRadius";
 import { normalizeCity } from "../utils";
+import { stripTagEmoji } from "../constants";
 
 export type PlaceKind = 'location' | 'service' | 'experience';
 
@@ -51,6 +52,15 @@ export type PlaceFilters = {
   cityCoordsMap?: Map<string, { lat: number | null; lng: number | null }>;
 };
 
+function normalizeCategoryMatch(value: string): string {
+  return stripTagEmoji(value)
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^\p{Letter}\p{Number}]+/gu, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
 export function filterPlaces<P extends FilterablePlace>(places: P[], filters: PlaceFilters): P[] {
   let filtered = places;
   const wantPremium = !!(filters.premium || filters.premiumOnly);
@@ -78,10 +88,11 @@ export function filterPlaces<P extends FilterablePlace>(places: P[], filters: Pl
 
   // Категории — OR
   if (filters.categories && filters.categories.length > 0) {
-    const wantedCats = filters.categories;
+    const wantedCats = filters.categories.map(normalizeCategoryMatch);
     filtered = filtered.filter(place => {
       if (!place.categories || place.categories.length === 0) return false;
-      return wantedCats.some(cat => place.categories!.includes(cat));
+      const placeCategories = place.categories.map(normalizeCategoryMatch);
+      return wantedCats.some(cat => placeCategories.includes(cat));
     });
   }
 
@@ -96,10 +107,11 @@ export function filterPlaces<P extends FilterablePlace>(places: P[], filters: Pl
 
   // Теги — OR
   if (filters.tags && filters.tags.length > 0) {
-    const wantedTags = filters.tags;
+    const wantedTags = filters.tags.map(normalizeCategoryMatch);
     filtered = filtered.filter(place => {
       if (!place.tags || place.tags.length === 0) return false;
-      return wantedTags.some(tag => place.tags!.includes(tag));
+      const placeTags = place.tags.map(normalizeCategoryMatch);
+      return wantedTags.some(tag => placeTags.includes(tag));
     });
   }
 

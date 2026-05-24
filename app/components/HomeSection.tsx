@@ -500,12 +500,12 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
   return (
     <div className={`mb-6 lg:mb-8 lg:mb-9 ${isFirst ? 'pt-6 lg:pt-8' : ''}`}>
       {/* Header: Title + See all arrow + Scroll arrows (desktop only) */}
-      <div className="flex items-center justify-between mb-3 lg:mb-4 h-10 lg:h-12">
+      <div className="flex min-h-11 items-center justify-between mb-3 lg:mb-4 lg:h-12">
         {/* Left: Title + See all arrow (desktop) or just Title (mobile) */}
         <div className="flex items-center gap-2">
           <Link
             href={getSeeAllUrl()}
-            className="font-fraunces text-lg lg:text-xl font-semibold text-[#1F2A1F] hover:text-[#8F9E4F] transition-colors cursor-pointer"
+            className="font-fraunces text-lg lg:text-xl font-semibold text-[#1F2A1F] hover:text-[#8F9E4F] transition-colors cursor-pointer min-h-11 inline-flex items-center"
           >
             <h2>{section.title}</h2>
           </Link>
@@ -546,7 +546,7 @@ export default function HomeSection({ section, userId, favorites, userAccess, on
           {/* See all arrow - only on mobile, on the right */}
           <Link
             href={getSeeAllUrl()}
-            className="lg:hidden w-8 h-8 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] flex items-center justify-center transition-colors"
+            className="lg:hidden w-11 h-11 rounded-full bg-white border border-[#ECEEE4] hover:bg-[#FAFAF7] flex items-center justify-center transition-colors"
             aria-label="See all"
           >
             <Icon name="forward" size={16} className="text-[#1F2A1F]" />

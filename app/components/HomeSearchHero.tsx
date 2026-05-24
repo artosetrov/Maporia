@@ -23,10 +23,8 @@ import Icon from "./Icon";
  *     opens FiltersModal instead of SearchModal.
  *
  * A11y:
- *   • Pill is a real <button>; placeholder reads as the button's name.
- *   • Filter and magnifier are nested buttons — keyboard tab order is
- *     pill → filter → magnifier; Enter/Space on each does the right
- *     thing.
+ *   • The pill is a grouped surface with separate real buttons, avoiding
+ *     nested interactive elements.
  *
  * Cross-link: docs/HOME_REDESIGN_V2_INTEGRATION.md (Phase D revision).
  */
@@ -65,10 +63,8 @@ export default function HomeSearchHero({
   const label = summary(selectedCity, searchValue);
 
   return (
-    <button
-      type="button"
-      onClick={onSearchBarClick}
-      aria-label={hasContent ? `Search: ${label}` : "Open search"}
+    <div
+      role="search"
       className={[
         "w-full max-w-full min-w-0",
         "flex items-center gap-2 sm:gap-3",
@@ -76,13 +72,16 @@ export default function HomeSearchHero({
         "h-14 sm:h-16 pl-5 sm:pl-6 pr-1.5",
         "border border-transparent transition-colors",
         "hover:border-[#ebe7d8]",
-        "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-1",
         "text-left",
       ].join(" ")}
     >
-      <span
+      <button
+        type="button"
+        onClick={onSearchBarClick}
+        aria-label={hasContent ? `Search: ${label}` : "Open search"}
         className={[
-          "flex-1 min-w-0 truncate",
+          "flex h-full flex-1 min-w-0 items-center text-left truncate",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-1 rounded-full",
           // 16px on mobile prevents iOS auto-zoom if/when this ever
           // becomes a real input again.
           "text-[16px] font-medium",
@@ -90,32 +89,18 @@ export default function HomeSearchHero({
         ].join(" ")}
       >
         {label}
-      </span>
+      </button>
 
-      {/* Filters trigger — small, neutral, sits inside the pill.
-          stopPropagation so the parent button's onClick doesn't also
-          fire and open SearchModal on top of FiltersModal. */}
-      <span
-        role="button"
-        tabIndex={0}
-        onClick={(e) => {
-          e.stopPropagation();
-          onFiltersClick();
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            e.stopPropagation();
-            onFiltersClick();
-          }
-        }}
+      <button
+        type="button"
+        onClick={onFiltersClick}
         aria-label={
           activeFiltersCount > 0
             ? `Filters (${activeFiltersCount} applied)`
             : "Filters"
         }
         className={[
-          "relative flex-shrink-0 size-9 rounded-full",
+          "relative flex-shrink-0 size-11 rounded-full",
           "bg-white/0 hover:bg-white text-[#4a4f3d] border border-transparent hover:border-[#ebe7d8]",
           "inline-flex items-center justify-center transition-colors",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-1",
@@ -130,11 +115,13 @@ export default function HomeSearchHero({
             {activeFiltersCount > 9 ? "9+" : activeFiltersCount}
           </span>
         )}
-      </span>
+      </button>
 
       {/* Primary CTA — opens SearchModal (same as the pill itself). */}
-      <span
-        aria-hidden
+      <button
+        type="button"
+        onClick={onSearchBarClick}
+        aria-label="Open search"
         className={[
           "flex-shrink-0 size-12 sm:size-13 rounded-full",
           "bg-[#8F9E4F] text-white",
@@ -146,7 +133,7 @@ export default function HomeSearchHero({
         }}
       >
         <Icon name="search" size={20} />
-      </span>
-    </button>
+      </button>
+    </div>
   );
 }

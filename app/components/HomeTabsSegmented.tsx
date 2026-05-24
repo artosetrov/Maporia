@@ -158,7 +158,7 @@ export default function HomeTabsSegmented({
               className={[
                 "rounded-full font-semibold",
                 "flex items-center justify-center",
-                "max-sm:flex-1 max-sm:min-h-[2.5rem] max-sm:h-auto max-sm:min-w-0 max-sm:px-2 max-sm:py-1.5 max-sm:whitespace-normal",
+                "max-sm:flex-1 max-sm:min-h-11 max-sm:h-auto max-sm:min-w-0 max-sm:px-2 max-sm:py-1.5 max-sm:whitespace-normal",
                 "sm:inline-flex sm:h-11 sm:shrink-0 sm:whitespace-nowrap sm:px-4 sm:text-[14px] sm:gap-2",
                 "transition-colors focus:outline-none",
                 "focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-1",
