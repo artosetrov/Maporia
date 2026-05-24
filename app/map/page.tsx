@@ -461,6 +461,7 @@ function MapPageContent() {
       const currentTags = searchParams.get('tags');
       const currentKinds = searchParams.get('kinds');
       const currentSort = searchParams.get('sort');
+      const currentView = searchParams.get('view');
     
     // Сравниваем текущие значения в URL с applied filters
     // Включаем город в URL, если он явно выбран (даже если это DEFAULT_CITY)
@@ -471,6 +472,7 @@ function MapPageContent() {
     const normalizedKinds = normalizeMapKinds(activeFilters.kinds);
     const expectedKinds = isDefaultMapKindSelection(normalizedKinds) ? null : normalizedKinds;
     const expectedSort = activeFilters.sort || null;
+    const expectedView = view === "map" ? "map" : null;
     
     const currentCityDecoded = currentCity ? (() => {
       try {
@@ -507,9 +509,10 @@ function MapPageContent() {
     const tagsChanged = JSON.stringify(expectedTagsSorted) !== JSON.stringify(currentTagsDecoded);
     const kindsChanged = JSON.stringify(expectedKindsSorted) !== JSON.stringify(currentKindsDecoded);
     const sortChanged = expectedSort !== currentSort;
+    const viewChanged = expectedView !== currentView;
     
     // Если ничего не изменилось, не обновляем URL
-    if (!cityChanged && !qChanged && !categoriesChanged && !tagsChanged && !kindsChanged && !sortChanged) {
+    if (!cityChanged && !qChanged && !categoriesChanged && !tagsChanged && !kindsChanged && !sortChanged && !viewChanged) {
       return;
     }
     
@@ -539,6 +542,10 @@ function MapPageContent() {
     if (expectedSort) {
       params.set('sort', expectedSort);
     }
+
+    if (expectedView) {
+      params.set('view', expectedView);
+    }
     
     const newUrl = params.toString()
       ? `${window.location.pathname}?${params.toString()}`
@@ -548,7 +555,7 @@ function MapPageContent() {
     } catch (error) {
       console.error("Error updating URL:", error);
     }
-  }, [appliedCity, appliedQ, appliedCategories, activeFilters.tags, activeFilters.kinds, activeFilters.sort, searchParams, hasExplicitCityInUrlState]);
+  }, [appliedCity, appliedQ, appliedCategories, activeFilters.tags, activeFilters.kinds, activeFilters.sort, searchParams, hasExplicitCityInUrlState, view]);
 
   // Cities are now fixed from constants, no need to compute from places
 
@@ -2265,6 +2272,7 @@ function MapView({
   const lastReportedStateRef = useRef<{ center: { lat: number; lng: number }; zoom: number } | null>(null);
   const onMapStateChangeRef = useRef(onMapStateChange);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const programmaticViewportTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Ref for tracking places set changes (fitBounds)
   const prevPlacesIdsRef = useRef<string>("");
@@ -2277,6 +2285,35 @@ function MapView({
   useEffect(() => {
     onMapStateChangeRef.current = onMapStateChange;
   }, [onMapStateChange]);
+
+  const finishProgrammaticViewportChange = useCallback((reportState = true) => {
+    if (programmaticViewportTimerRef.current) {
+      clearTimeout(programmaticViewportTimerRef.current);
+      programmaticViewportTimerRef.current = null;
+    }
+
+    programmaticViewportTimerRef.current = setTimeout(() => {
+      isUpdatingFromPropsRef.current = false;
+
+      if (!reportState) return;
+
+      const center = mapInstance?.getCenter();
+      const zoom = mapInstance?.getZoom();
+      if (!center || zoom === undefined) return;
+
+      const nextState = { lat: center.lat(), lng: center.lng() };
+      lastReportedStateRef.current = { center: nextState, zoom };
+      onMapStateChangeRef.current?.(nextState, zoom);
+    }, 120);
+  }, [mapInstance]);
+
+  useEffect(() => {
+    return () => {
+      if (programmaticViewportTimerRef.current) {
+        clearTimeout(programmaticViewportTimerRef.current);
+      }
+    };
+  }, []);
 
   // Функции управления картой
   const handleZoomIn = () => {
@@ -2467,13 +2504,10 @@ function MapView({
       mapInstance.panTo(externalMapCenter);
       mapInstance.setZoom(externalMapZoom);
       lastReportedStateRef.current = { center: externalMapCenter, zoom: externalMapZoom };
-      // Сбрасываем флаг после небольшой задержки
-      setTimeout(() => {
-        isUpdatingFromPropsRef.current = false;
-      }, 100);
+      finishProgrammaticViewportChange(false);
     }
      
-  }, [externalMapCenter, externalMapZoom, mapInstance]);
+  }, [externalMapCenter, externalMapZoom, mapInstance, finishProgrammaticViewportChange]);
 
   // Auto-fit карты при изменении набора мест (после фильтрации)
   useEffect(() => {
@@ -2489,8 +2523,10 @@ function MapView({
     if (placesWithCoords.length === 1) {
       const position = getUsableMapPosition(placesWithCoords[0]);
       if (!position) return;
+      isUpdatingFromPropsRef.current = true;
       mapInstance.panTo(position);
       mapInstance.setZoom(15);
+      finishProgrammaticViewportChange();
       return;
     }
 
@@ -2499,8 +2535,10 @@ function MapView({
       const position = getUsableMapPosition(p);
       if (position) bounds.extend(position);
     });
+    isUpdatingFromPropsRef.current = true;
     mapInstance.fitBounds(bounds, { top: 80, bottom: 80, left: 40, right: 40 });
-  }, [mapInstance, isLoaded, placesWithCoords]);
+    finishProgrammaticViewportChange();
+  }, [mapInstance, isLoaded, placesWithCoords, finishProgrammaticViewportChange]);
 
   // --- Marker Clustering ---
   // Создаём императивные маркеры и передаём их в MarkerClusterer.
