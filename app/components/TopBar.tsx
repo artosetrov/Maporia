@@ -27,6 +27,7 @@ type TopBarProps = {
   activeFiltersSummary?: string;
   // Callback when search bar is clicked (for mobile to open modal)
   onSearchBarClick?: () => void;
+  showMobileSearchBar?: boolean;
   /**
    * Если поиск рендерится отдельной зоной ниже TopBar (Airbnb-style на /),
    * выставляем true — тогда мобильный TopBar не показывает дублирующий
@@ -78,6 +79,7 @@ export default function TopBar({
   activeFiltersCount = 0,
   activeFiltersSummary,
   onSearchBarClick,
+  showMobileSearchBar = false,
   hideMobileSearchPill = false,
   userAvatar,
   userDisplayName,
@@ -154,7 +156,9 @@ export default function TopBar({
   const isMap = pathname === "/map";
   const shouldShowBackButton = showBackButton !== undefined ? showBackButton : !(isHome || isMap);
   const shouldShowAddPlace = showAddPlaceButton !== undefined ? showAddPlaceButton : isAuthenticated;
-  const shouldShowGetStarted = isHome && !isAuthenticated;
+  const shouldShowMobileSearchBar = showSearchBar || showMobileSearchBar;
+  const shouldShowGetStarted = isHome && !isAuthenticated && !shouldShowMobileSearchBar;
+  const shouldShowHeaderBorder = pathname !== "/map" && (pathname !== "/" || showMobileSearchBar);
 
   return (
     <>
@@ -170,7 +174,7 @@ export default function TopBar({
         selectedCity={selectedCity}
       />
 
-      <div className={`fixed top-0 left-0 right-0 z-[60] bg-white pointer-events-auto ${pathname === "/map" || pathname === "/" ? "" : "border-b border-[#ECEEE4]"}`}>
+      <div className={`fixed top-0 left-0 right-0 z-[60] bg-white pointer-events-auto ${shouldShowHeaderBorder ? "border-b border-[#ECEEE4]" : ""}`}>
         {/* Mobile TopBar (default, < lg) */}
         <div className="lg:hidden relative">
           <div className="px-4 pt-safe-top pt-3 pb-3">
@@ -233,7 +237,7 @@ export default function TopBar({
               ) : (
                 <>
                   {/* Center: Search - flex-1, растягивается между Back и Filters */}
-                  {showSearchBar ? (
+                  {shouldShowMobileSearchBar ? (
                     <div className="flex-1 min-w-0">
                       <SearchBar
                         selectedCity={selectedCity}

@@ -69,6 +69,7 @@ const isAbortLikeError = (error: unknown): boolean => {
     err.code === "ECONNABORTED"
   );
 };
+const HOME_MOBILE_HEADER_SEARCH_THRESHOLD = 96;
 import { useUserAccessContext } from "./contexts/UserAccessContext";
 import { SectionErrorBoundary } from "./components/SectionErrorBoundary";
 import { sanitizePostgrestValueForLike } from "./utils";
@@ -151,6 +152,34 @@ function HomePageInner() {
   const [placesForTags, setPlacesForTags] = useState<{ id: string; tags: string[] | null; categories: string[] | null; access_level: string | null }[]>([]);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
+  const [showMobileHeaderSearch, setShowMobileHeaderSearch] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const mobileQuery = window.matchMedia("(max-width: 1023px)");
+    let frame = 0;
+
+    const update = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        setShowMobileHeaderSearch(
+          mobileQuery.matches &&
+          window.scrollY > HOME_MOBILE_HEADER_SEARCH_THRESHOLD
+        );
+      });
+    };
+
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    mobileQuery.addEventListener("change", update);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", update);
+      mobileQuery.removeEventListener("change", update);
+    };
+  }, []);
 
   useEffect(() => {
     const city = searchParams?.get("city")
@@ -621,6 +650,7 @@ function HomePageInner() {
       */}
       <TopBar
         showSearchBar={false}
+        showMobileSearchBar={showMobileHeaderSearch}
         hideMobileSearchPill={true}
         searchValue={searchValue}
         onSearchChange={handleSearchChange}
