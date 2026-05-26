@@ -742,7 +742,7 @@ export default function FiltersModal({
           {!hideKindFilter && (
           <div>
             <h3 className="text-xs font-semibold text-[#6F7A5A] uppercase tracking-wide mb-4">TYPE</h3>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {([
                 { value: "location", icon: "location", label: "Locations" },
                 { value: "experience", icon: "sparkles", label: "Experiences" },
@@ -776,7 +776,7 @@ export default function FiltersModal({
                         };
                       });
                     }}
-                    className={`relative flex flex-col items-center justify-center px-2 py-4 rounded-xl border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-2 ${
+                    className={`relative flex min-h-[96px] min-w-0 flex-col items-center justify-center px-2 py-4 rounded-xl border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-2 ${
                       isSelected
                         ? "border-[#8F9E4F] bg-[#F4F6EF]"
                         : isDisabled
@@ -790,7 +790,7 @@ export default function FiltersModal({
                       </span>
                     )}
                     <Icon name={opt.icon} size={24} className="mb-1.5 text-[#6F7A5A]" />
-                    <span className="text-sm font-medium text-[#1F2A1F] text-center leading-tight">{opt.label}</span>
+                    <span className="min-w-0 text-sm font-medium text-[#1F2A1F] text-center leading-tight">{opt.label}</span>
                   </button>
                 );
               })}
@@ -811,7 +811,7 @@ export default function FiltersModal({
               <h3 className="text-xs font-semibold text-[#6F7A5A] uppercase tracking-wide mb-4">
                 {visibleCategorySections.length > 1 ? `${section.heading} · CATEGORY` : 'CATEGORY'}
               </h3>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {section.categories.map((category) => {
                   const isSelected = draftFilters.categories.includes(category);
                   const count = categoryCounts[category];
@@ -827,7 +827,7 @@ export default function FiltersModal({
                         if (isDisabled) return;
                         handleToggleCategory(category);
                       }}
-                      className={`relative flex flex-col items-center justify-center px-2 py-4 rounded-xl border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-2 ${
+                      className={`relative flex min-h-[104px] min-w-0 flex-col items-center justify-center px-2 py-4 rounded-xl border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-2 ${
                         isSelected
                           ? "border-[#8F9E4F] bg-[#F4F6EF]"
                           : isDisabled
@@ -841,7 +841,7 @@ export default function FiltersModal({
                         </span>
                       )}
                       <CategoryVisualIcon category={category} className="mb-1.5 h-6 w-6" />
-                      <span className="text-sm font-medium text-[#1F2A1F] text-center leading-tight">{label}</span>
+                      <span className="min-w-0 text-sm font-medium text-[#1F2A1F] text-center leading-tight">{label}</span>
                     </button>
                   );
                 })}
@@ -931,9 +931,7 @@ export default function FiltersModal({
                 }`}
               >
                 {draftFilters.premium && (
-                  <svg className="w-4 h-4 text-white flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
+                  <Icon name="star" size={16} className="text-white flex-shrink-0" filled />
                 )}
                 {countLoading
                   ? "Loading..."

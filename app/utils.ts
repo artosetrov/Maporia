@@ -84,6 +84,29 @@ export const buildTokenSearchExpr = (
   return parts.join(",");
 };
 
+const GENERIC_SEARCH_TOKENS = new Set([
+  "place",
+  "places",
+  "location",
+  "locations",
+  "spot",
+  "spots",
+  "near",
+  "nearby",
+  "around",
+]);
+
+/**
+ * Drops generic discovery words from multi-word searches while preserving
+ * single generic queries as-is. Example: "impossible place" should search
+ * for "impossible", but "places" alone still remains searchable.
+ */
+export const getMeaningfulSearchTokens = (raw: string): string[] => {
+  const tokens = tokenizeQuery(raw);
+  const meaningful = tokens.filter((token) => !GENERIC_SEARCH_TOKENS.has(token));
+  return meaningful.length > 0 ? meaningful : tokens;
+};
+
 /**
  * Combines class names, filtering out falsy values
  */

@@ -12,7 +12,7 @@ import { getCitiesWithPlaces, type City } from "../lib/cities";
 import { supabase } from "../lib/supabase";
 import { fetchTopCities, topCityNames, type TopCity } from "../lib/topCities";
 import Icon, { type IconName } from "./Icon";
-import { sanitizePostgrestValueForLike, tokenizeQuery, buildTokenSearchExpr } from "../utils";
+import { sanitizePostgrestValueForLike, buildTokenSearchExpr, getMeaningfulSearchTokens } from "../utils";
 import {
   CITY_RADIUS_MILES,
   buildCityRadiusFilter,
@@ -32,24 +32,6 @@ const PLACE_SEARCH_FIELDS = [
   "address",
   "kind",
 ] as const;
-
-const GENERIC_SEARCH_TOKENS = new Set([
-  "place",
-  "places",
-  "location",
-  "locations",
-  "spot",
-  "spots",
-  "near",
-  "nearby",
-  "around",
-]);
-
-const getMeaningfulSearchTokens = (raw: string): string[] => {
-  const tokens = tokenizeQuery(raw);
-  const meaningful = tokens.filter((token) => !GENERIC_SEARCH_TOKENS.has(token));
-  return meaningful.length > 0 ? meaningful : tokens;
-};
 
 type ErrorLike = {
   name?: string;

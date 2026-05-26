@@ -42,7 +42,12 @@ import { usePremiumGate } from "../hooks/usePremiumGate";
 import { isPlacePremium, canUserViewPlace, type UserAccess } from "../lib/access";
 import Icon from "../components/Icon";
 import { PlaceCardGridSkeleton, MapSkeleton, Empty } from "../components/Skeleton";
-import { sanitizePostgrestValueForLike, isValidPhotoUrl } from "../utils";
+import {
+  sanitizePostgrestValueForLike,
+  buildTokenSearchExpr,
+  getMeaningfulSearchTokens,
+  isValidPhotoUrl,
+} from "../utils";
 import type { PlaceListItem as Place } from "../types";
 import { buildCityRadiusFilter, getCityCoords } from "../lib/cityRadius";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
@@ -79,6 +84,34 @@ type ErrorLike = {
   details?: string;
   hint?: string;
   stack?: string;
+};
+
+const MAP_SEARCH_FIELDS = [
+  "title",
+  "description",
+  "country",
+  "city",
+  "city_name_cached",
+  "address",
+] as const;
+
+const normalizeSearchValue = (value: string): string =>
+  value.toLowerCase().replace(/[''`‘’]/g, "_");
+
+const placeMatchesSearchTokens = (place: Place, rawQuery: string): boolean => {
+  const tokens = getMeaningfulSearchTokens(rawQuery);
+  const fallbackNeedle = normalizeSearchValue(rawQuery.trim());
+  const haystack = MAP_SEARCH_FIELDS
+    .map((field) => place[field])
+    .filter((value) => typeof value === "string" && value.length > 0)
+    .map((value) => normalizeSearchValue(String(value)))
+    .join(" || ");
+
+  if (tokens.length > 0) {
+    return tokens.some((token) => haystack.includes(token));
+  }
+
+  return fallbackNeedle.length > 0 && haystack.includes(fallbackNeedle);
 };
 type PlaceMarker = google.maps.Marker & { __placeId: string };
 
@@ -600,8 +633,13 @@ function MapPageContent() {
 
       // Фильтрация по поисковому запросу
       if (appliedQ.trim()) {
-        const s = sanitizePostgrestValueForLike(appliedQ.trim());
-        query = query.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
+        const expr = buildTokenSearchExpr(getMeaningfulSearchTokens(appliedQ), [...MAP_SEARCH_FIELDS]);
+        if (expr) {
+          query = query.or(expr);
+        } else {
+          const s = sanitizePostgrestValueForLike(appliedQ.trim());
+          query = query.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
+        }
       }
 
       // Фильтрация по тегам
@@ -662,8 +700,13 @@ function MapPageContent() {
           // Применяем только поисковый запрос и теги на сервере
           // Города и категории фильтруются на клиенте для скорости
           if (appliedQ.trim()) {
-            const s = sanitizePostgrestValueForLike(appliedQ.trim());
-            fallbackQuery = fallbackQuery.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
+            const expr = buildTokenSearchExpr(getMeaningfulSearchTokens(appliedQ), [...MAP_SEARCH_FIELDS]);
+            if (expr) {
+              fallbackQuery = fallbackQuery.or(expr);
+            } else {
+              const s = sanitizePostgrestValueForLike(appliedQ.trim());
+              fallbackQuery = fallbackQuery.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
+            }
           }
           
           if (selectedTag) {
@@ -944,13 +987,7 @@ function MapPageContent() {
         // Сначала применяем поиск (если есть)
         let result = [...placesData];
         if (appliedQ.trim()) {
-          const searchLower = appliedQ.trim().toLowerCase();
-          result = result.filter(place => 
-            place.title?.toLowerCase().includes(searchLower) ||
-            place.description?.toLowerCase().includes(searchLower) ||
-            place.country?.toLowerCase().includes(searchLower) ||
-            place.city?.toLowerCase().includes(searchLower)
-          );
+          result = result.filter((place) => placeMatchesSearchTokens(place, appliedQ));
         }
         
         // Определяем города для фильтрации только если пользователь явно задал город (URL или фильтры)
@@ -1646,8 +1683,13 @@ function MapPageContent() {
               .select("id,title,description,address,city,city_name_cached,categories,tags,access_level,country,kind,lat,lng,is_hidden,visibility")
               .eq("is_hidden", false);
             if (appliedQ.trim()) {
-              const s = sanitizePostgrestValueForLike(appliedQ.trim());
-              countQuery = countQuery.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
+              const expr = buildTokenSearchExpr(getMeaningfulSearchTokens(appliedQ), [...MAP_SEARCH_FIELDS]);
+              if (expr) {
+                countQuery = countQuery.or(expr);
+              } else {
+                const s = sanitizePostgrestValueForLike(appliedQ.trim());
+                countQuery = countQuery.or(`title.ilike.%${s}%,description.ilike.%${s}%,country.ilike.%${s}%`);
+              }
             }
             if (selectedTag) {
               countQuery = countQuery.contains("tags", [selectedTag]);
