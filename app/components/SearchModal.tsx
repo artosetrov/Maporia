@@ -247,6 +247,15 @@ export default function SearchModal({
     () => getCategoriesByKind(tempSelectedKind),
     [tempSelectedKind],
   );
+  const visibleCategories = useMemo(
+    () =>
+      currentCategories.filter((category) => {
+        if (tempSelectedTags.includes(category)) return true;
+        const count = tagCounts[category];
+        return count === undefined || count > 0;
+      }),
+    [currentCategories, tagCounts, tempSelectedTags],
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const [dynamicHeight, setDynamicHeight] = useState<string>("100dvh");
@@ -1290,7 +1299,11 @@ export default function SearchModal({
 
             {/* Tag Selection Rows (Airbnb-style) */}
             <div className="px-6 space-y-0">
-              {currentCategories.map((category, idx) => {
+              {visibleCategories.length === 0 ? (
+                <div className="py-10 text-center text-sm text-[#6F7A5A]">
+                  No matching vibes yet. Try a different type or city.
+                </div>
+              ) : visibleCategories.map((category, idx) => {
                 const isSelected = tempSelectedTags.includes(category);
                 const label = getCategoryLabel(category);
 
@@ -1299,7 +1312,7 @@ export default function SearchModal({
                     key={category}
                     onClick={() => handleTagToggle(category)}
                     className={`w-full text-left px-0 py-4 transition-colors ${
-                      idx < currentCategories.length - 1 ? "border-b border-[#ECEEE4]" : ""
+                      idx < visibleCategories.length - 1 ? "border-b border-[#ECEEE4]" : ""
                     } ${
                       isSelected
                         ? "bg-[#FAFAF7]"
