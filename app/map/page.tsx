@@ -2203,7 +2203,7 @@ function MapPageContent() {
               }}
             >
               <div className="pointer-events-none absolute left-0 right-0 top-3 z-20 px-4">
-                <div className="pointer-events-auto mx-auto max-w-[520px] rounded-full border border-[#ECEEE4] bg-white/95 px-2 py-2 shadow-sm backdrop-blur">
+                <div className="pointer-events-auto mx-auto w-fit max-w-[calc(100vw-2rem)] rounded-full border border-[#ECEEE4] bg-white/95 px-2 py-2 shadow-sm backdrop-blur">
                   {renderKindSwitcher()}
                 </div>
               </div>
