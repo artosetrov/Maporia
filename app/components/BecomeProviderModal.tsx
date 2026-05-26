@@ -33,10 +33,11 @@ import {
   priceDisplay,
   type PlanId,
 } from "../lib/pricing";
+import Icon, { type IconName } from "./Icon";
 
 type KindOption = {
   kind: PlaceKind;
-  emoji: string;
+  icon: IconName;
   title: string;
   subtitle: string;
   examples: string;
@@ -46,21 +47,21 @@ type KindOption = {
 const KIND_OPTIONS: KindOption[] = [
   {
     kind: "location",
-    emoji: "📍",
+    icon: "location",
     title: "Location",
     subtitle: "A spot on the map — café, viewpoint, park, hidden gem.",
     examples: "Rooftop bar, secret beach, coffee shop",
   },
   {
     kind: "service",
-    emoji: "🛠",
+    icon: "wrench",
     title: "Service",
     subtitle: "Something someone does — with a price and hours.",
     examples: "Massage, photographer, surf instructor",
   },
   {
     kind: "experience",
-    emoji: "✨",
+    icon: "sparkles",
     title: "Experience",
     subtitle: "An event with a schedule and duration (Airbnb-style).",
     examples: "Food tour, workshop, guided trip",
@@ -222,19 +223,7 @@ export default function BecomeProviderModal({ isOpen, onClose }: Props) {
             className="w-8 h-8 rounded-full flex items-center justify-center text-[#6F7A5A] hover:bg-[#FAFAF7] hover:text-[#1F2A1F] transition-colors"
             aria-label="Close"
           >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            <Icon name="close" size={18} />
           </button>
         </div>
 
@@ -332,19 +321,7 @@ export default function BecomeProviderModal({ isOpen, onClose }: Props) {
                   {/* Covered-бейдж: текущий план юзера уже покрывает этот kind */}
                   {isCovered && (
                     <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full border border-[#D5DFB3] bg-white/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#556036] shadow-[0_8px_18px_rgba(31,42,31,0.05)]">
-                      <svg
-                        width="10"
-                        height="10"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden
-                      >
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
+                      <Icon name="check" size={12} />
                       Covered
                     </span>
                   )}
@@ -359,18 +336,7 @@ export default function BecomeProviderModal({ isOpen, onClose }: Props) {
                     aria-hidden
                   >
                     {isSelected && (
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="white"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
+                      <Icon name="check" size={12} className="text-white" strokeWidth={3} />
                     )}
                   </span>
 
@@ -384,13 +350,13 @@ export default function BecomeProviderModal({ isOpen, onClose }: Props) {
                     />
                     <div
                       className={[
-                        "relative flex h-12 w-12 items-center justify-center rounded-2xl border text-[24px] leading-none shadow-[0_12px_25px_rgba(31,42,31,0.06)]",
+                        "relative flex h-12 w-12 items-center justify-center rounded-2xl border text-[#6F7A5A] shadow-[0_12px_25px_rgba(31,42,31,0.06)]",
                         isSelected
                           ? "border-[#D7E0B8] bg-white/90"
                           : "border-[#F0F2E8] bg-[#FAFAF7]",
                       ].join(" ")}
                     >
-                      {opt.emoji}
+                      <Icon name={opt.icon} size={24} />
                     </div>
                   </div>
 

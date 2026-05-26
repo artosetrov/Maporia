@@ -19,6 +19,7 @@ import {
   EyeOff,
   Heart,
   Image as ImageIcon,
+  KeyRound,
   LayoutGrid,
   Link as LinkIcon,
   List,
@@ -93,6 +94,7 @@ export type IconName =
   | "remove"
   | "check"
   | "heart"
+  | "key"
   | "comment"
   | "calendar"
   | "clock"
@@ -169,6 +171,7 @@ const iconMap: Record<IconName, LucideIcon> = {
   remove: Minus,
   check: Check,
   heart: Heart,
+  key: KeyRound,
   comment: MessageCircle,
   calendar: Calendar,
   clock: Clock,

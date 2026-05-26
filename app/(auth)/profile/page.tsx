@@ -11,7 +11,7 @@ const FiltersModal = nextDynamic(() => import("../../components/FiltersModal"), 
 const SearchModal = nextDynamic(() => import("../../components/SearchModal"), { ssr: false });
 import { supabase } from "../../lib/supabase";
 import type { Database } from "../../types/supabase";
-import Icon from "../../components/Icon";
+import Icon, { type IconName } from "../../components/Icon";
 import { getPublicStoragePath, PLACE_PHOTOS_BUCKET } from "../../lib/storagePaths";
 
 type ProfileRow = Pick<Database["public"]["Tables"]["profiles"]["Row"], "id" | "username" | "display_name" | "avatar_url" | "role" | "is_admin" | "subscription_status" | "created_at">;
@@ -1220,8 +1220,8 @@ function ProfileInner() {
                               Current subscription
                             </div>
                             <div className="flex items-center gap-2">
-                              <span className="text-2xl" aria-hidden>
-                                {currentPlanDisplay.emoji}
+                              <span className="flex size-8 items-center justify-center rounded-xl bg-[#F3F5EA] text-[#6F7A5A]" aria-hidden>
+                                <Icon name={profilePlanIcon(currentPlan)} size={18} />
                               </span>
                               <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F]">
                                 {currentPlanDisplay.name}
@@ -1283,7 +1283,7 @@ function ProfileInner() {
                               className="rounded-2xl border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-3 min-w-0"
                             >
                               <div className="flex items-center gap-1.5 text-sm font-semibold text-[#1F2A1F] min-w-0">
-                                <span aria-hidden>{display?.emoji}</span>
+                                <Icon name={profilePlanIcon(id)} size={16} className="shrink-0 text-[#6F7A5A]" />
                                 <span className="truncate">{display?.name}</span>
                               </div>
                               {price && (
@@ -4439,6 +4439,14 @@ const PROFILE_BILLING_PLANS: PlanId[] = [
   "creator_all",
 ];
 
+function profilePlanIcon(plan: PlanId): IconName {
+  if (plan === "premium_viewer" || plan === "premium_grandfathered") return "key";
+  if (plan === "creator_location") return "location";
+  if (plan === "creator_pro" || plan === "creator_service" || plan === "creator_experience") return "sparkles";
+  if (plan === "creator_all") return "package";
+  return "star";
+}
+
 function planTier(plan: PlanId): number {
   if (plan === "free") return 0;
   if (plan === "premium_viewer" || plan === "premium_grandfathered") return 1;
@@ -4635,7 +4643,9 @@ function PremiumSection() {
         {currentDisplay ? (
           <>
             <div className="flex items-center gap-3 mb-4">
-              <div className="text-2xl" aria-hidden>{currentDisplay.emoji}</div>
+              <div className="flex size-9 items-center justify-center rounded-xl bg-[#F3F5EA] text-[#6F7A5A]" aria-hidden>
+                <Icon name={profilePlanIcon(currentPlan)} size={20} />
+              </div>
               <div className="flex-1 min-w-0">
                 <div className="font-fraunces text-xl font-semibold text-[#1F2A1F]">
                   {currentDisplay.name}
@@ -4811,7 +4821,9 @@ function PremiumSection() {
                 )}
               >
                 <div className="flex items-start gap-3 mb-3">
-                  <div className="text-2xl" aria-hidden>{display.emoji}</div>
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#F3F5EA] text-[#6F7A5A]" aria-hidden>
+                    <Icon name={profilePlanIcon(id)} size={20} />
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-fraunces text-lg font-semibold text-[#1F2A1F]">{display.name}</div>
                     <div className="text-xs text-[#6F7A5A]">{display.tagline}</div>

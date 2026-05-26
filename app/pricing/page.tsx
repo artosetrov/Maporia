@@ -19,8 +19,8 @@
  * См. docs/PRICING_V3_CREATOR_MERGE.md § 1.
  */
 
-import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { useUserAccessContext } from "../contexts/UserAccessContext";
@@ -36,13 +36,65 @@ import {
   type Cycle,
 } from "../lib/pricing";
 import TopBar from "../components/TopBar";
-import Icon from "../components/Icon";
+import Icon, { type IconName } from "../components/Icon";
 import ImpersonationDisclaimer from "../components/ImpersonationDisclaimer";
 import { useImpersonationStatus } from "../hooks/useImpersonationStatus";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
+}
+
+const PENDING_CHECKOUT_KEY = "maporia-pending-checkout";
+
+function planIcon(plan: PlanId): IconName {
+  if (plan === "premium_viewer" || plan === "premium_grandfathered") return "key";
+  if (plan === "creator_location") return "location";
+  if (plan === "creator_pro" || plan === "creator_service" || plan === "creator_experience") return "sparkles";
+  if (plan === "creator_all") return "package";
+  return "star";
+}
+
+function parseCycleParam(value: string | null): Cycle | null {
+  if (value === "month" || value === "year" || value === "lifetime") return value;
+  return null;
+}
+
+function getPendingCheckout(): { plan: PlanId; cycle: Cycle } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(PENDING_CHECKOUT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { plan?: string; cycle?: string };
+    if (!parsed.plan || !isPublicPricingPlan(parsed.plan)) return null;
+    const cycle = parseCycleParam(parsed.cycle ?? null);
+    if (!cycle) return null;
+    return { plan: parsed.plan, cycle };
+  } catch {
+    return null;
+  }
+}
+
+function setPendingCheckout(plan: PlanId, cycle: Cycle) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(PENDING_CHECKOUT_KEY, JSON.stringify({ plan, cycle }));
+  } catch {
+    // Private browsing/storage failures should not block auth redirect.
+  }
+}
+
+function clearPendingCheckout() {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(PENDING_CHECKOUT_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function isPublicPricingPlan(value: string): value is PlanId {
+  return PUBLIC_PLANS.includes(value as PlanId);
 }
 
 /**
@@ -127,13 +179,36 @@ function getIncludesBadge(current: PlanId, target: PlanId): string | null {
 }
 
 export default function PricingPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-[#FAFAF7]">
+          <div className="mx-auto max-w-7xl px-4 pt-[88px] sm:px-6 sm:pt-[112px]">
+            <div className="h-8 w-48 rounded-xl bg-[#ECEEE4]" />
+            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {[0, 1, 2, 3].map((idx) => (
+                <div key={idx} className="h-80 rounded-2xl border border-[#ECEEE4] bg-white" />
+              ))}
+            </div>
+          </div>
+        </main>
+      }
+    >
+      <PricingPageContent />
+    </Suspense>
+  );
+}
+
+function PricingPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, profile, access } = useUserAccessContext();
   const impersonation = useImpersonationStatus();
   const isImpersonating = !!impersonation?.active;
   const [checkoutPlan, setCheckoutPlan] = useState<PlanId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cycleToggle, setCycleToggle] = useState<"month" | "year">("year");
+  const resumedCheckoutRef = useRef(false);
 
   const currentPlan: PlanId = (access?.plan as PlanId | undefined) ?? "free";
   const currentPeriod = profile?.plan_period as Cycle | null | undefined;
@@ -153,8 +228,9 @@ export default function PricingPage() {
   );
   const hasPlans = orderedPlans.length > 0;
 
-  async function startCheckout(plan: PlanId) {
+  const startCheckout = useCallback(async (plan: PlanId, cycleOverride?: Cycle) => {
     setError(null);
+    const cycle = cycleOverride ?? effectiveCycle(plan, cycleToggle);
 
     if (isImpersonating) {
       setError("Stripe operations are disabled while impersonating.");
@@ -162,7 +238,10 @@ export default function PricingPage() {
     }
 
     if (!user) {
-      router.push(`/login?from=${encodeURIComponent("/pricing")}`);
+      setPendingCheckout(plan, cycle);
+      router.push(
+        `/login?from=${encodeURIComponent(`/pricing?checkout=${plan}&cycle=${cycle}`)}`,
+      );
       return;
     }
 
@@ -180,7 +259,6 @@ export default function PricingPage() {
         return;
       }
 
-      const cycle = effectiveCycle(plan, cycleToggle);
       const body: Record<string, string> = { access_token: accessToken, plan, cycle };
 
       const res = await fetch("/api/stripe/checkout", {
@@ -201,7 +279,25 @@ export default function PricingPage() {
       setError(err instanceof Error ? err.message : "Couldn't start checkout");
       setCheckoutPlan(null);
     }
-  }
+  }, [currentPlan, cycleToggle, isImpersonating, router, user]);
+
+  useEffect(() => {
+    const requestedPlan = searchParams.get("checkout");
+    if (!requestedPlan || !isPublicPricingPlan(requestedPlan)) return;
+
+    const pending = getPendingCheckout();
+    if (!pending || pending.plan !== requestedPlan) return;
+
+    const requestedCycle = parseCycleParam(searchParams.get("cycle")) ?? pending.cycle;
+    if (requestedCycle === "month" || requestedCycle === "year") {
+      setCycleToggle(requestedCycle);
+    }
+
+    if (!user || checkoutPlan || resumedCheckoutRef.current) return;
+    resumedCheckoutRef.current = true;
+    clearPendingCheckout();
+    void startCheckout(requestedPlan, requestedCycle);
+  }, [checkoutPlan, searchParams, startCheckout, user]);
 
   return (
     <ErrorBoundary>
@@ -345,8 +441,8 @@ export default function PricingPage() {
                   )}
 
                   <div className="mb-4">
-                    <div className="text-3xl mb-2" aria-hidden>
-                      {display.emoji}
+                    <div className="mb-2 flex size-11 items-center justify-center rounded-xl bg-[#F3F5EA] text-[#6F7A5A]" aria-hidden>
+                      <Icon name={planIcon(planId)} size={24} />
                     </div>
                     <div className="font-fraunces text-xl font-semibold text-[#1F2A1F]">
                       {display.name}
