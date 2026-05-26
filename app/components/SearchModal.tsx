@@ -1235,7 +1235,12 @@ export default function SearchModal({
                     {isLoading && (
                       <span className="absolute top-2 right-3 text-xs text-[#C4C9B6]">…</span>
                     )}
-                    <span className="text-3xl leading-none">{tab.emoji}</span>
+                    <Icon
+                      name={tab.icon}
+                      size={32}
+                      strokeWidth={1.8}
+                      className={isEmpty ? "text-[#C4C9B6]" : "text-[#8F9E4F]"}
+                    />
                     <span className="text-sm font-medium text-[#1F2A1F]">
                       {tab.label}
                     </span>

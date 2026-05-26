@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import { HOME_TABS, type HomeKind } from "../types/home";
 import type { HomeKindCounts } from "../hooks/useHomeKindCounts";
+import Icon from "./Icon";
 
 /**
  * HomeTabsSegmented (v2) — minimal Dribbble-style tab strip.
@@ -25,56 +26,6 @@ import type { HomeKindCounts } from "../hooks/useHomeKindCounts";
  *
  * Cross-link: docs/HOME_REDESIGN_V2_INTEGRATION.md (Phase B).
  */
-
-type IconKey = "pin" | "spark" | "wrench";
-
-const ICON_BY_KIND: Record<HomeKind, IconKey> = {
-  location: "pin",
-  experience: "spark",
-  service: "wrench",
-};
-
-function TabIcon({ kind }: { kind: IconKey }) {
-  // Inline SVG so we don't pay an Icon-facade lookup for three tabs that
-  // are always present. `currentColor` lets the active style colour the
-  // stroke automatically. Size controlled via Tailwind (compact on mobile).
-  const iconClass = "shrink-0 w-[14px] h-[14px] sm:w-[18px] sm:h-[18px]";
-  if (kind === "pin") {
-    return (
-      <svg className={iconClass} viewBox="0 0 24 24" fill="none" aria-hidden>
-        <path
-          d="M12 2c4 0 7 3 7 7 0 5.2-7 13-7 13S5 14.2 5 9c0-4 3-7 7-7Z"
-          stroke="currentColor"
-          strokeWidth="1.8"
-        />
-        <circle cx="12" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.8" />
-      </svg>
-    );
-  }
-  if (kind === "spark") {
-    return (
-      <svg className={iconClass} viewBox="0 0 24 24" fill="none" aria-hidden>
-        <path
-          d="M12 3l2 6h6l-5 4 2 7-5-4-5 4 2-7-5-4h6z"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinejoin="round"
-        />
-      </svg>
-    );
-  }
-  return (
-    <svg className={iconClass} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M14 7l3-3 3 3-4 4M9 10l-5 5v5h5l5-5"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 function countFor(kind: HomeKind, counts?: HomeKindCounts): number | null {
   if (!counts) return null;
@@ -168,7 +119,12 @@ export default function HomeTabsSegmented({
               ].join(" ")}
             >
               <span className="inline-flex min-w-0 max-w-full items-center justify-center gap-1.5 sm:gap-2">
-                <TabIcon kind={ICON_BY_KIND[tab.id]} />
+                <Icon
+                  name={tab.icon}
+                  size={18}
+                  strokeWidth={1.8}
+                  className="shrink-0"
+                />
                 <span
                   className={[
                     "min-w-0 text-center leading-tight",

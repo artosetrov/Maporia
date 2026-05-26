@@ -858,7 +858,7 @@ function HomePageInner() {
                         onClick={() => setActiveKind(tab.id)}
                       >
                         <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                          <span aria-hidden>{tab.emoji}</span>
+                          <Icon name={tab.icon} size={16} strokeWidth={1.8} />
                           <span>{tab.label}</span>
                         </span>
                       </Pill>

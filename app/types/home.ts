@@ -15,8 +15,10 @@ export type HomeKind = "location" | "service" | "experience";
  * inside page.tsx both consume this list. Editing the labels in one
  * place ensures both paths stay in sync during the redesign rollout.
  */
-export const HOME_TABS: { id: HomeKind; label: string; emoji: string }[] = [
-  { id: "location", label: "Locations", emoji: "📍" },
-  { id: "experience", label: "Experiences", emoji: "✨" },
-  { id: "service", label: "Services", emoji: "🛠" },
+export type HomeTabIconName = "location" | "sparkles" | "wrench";
+
+export const HOME_TABS: { id: HomeKind; label: string; icon: HomeTabIconName }[] = [
+  { id: "location", label: "Locations", icon: "location" },
+  { id: "experience", label: "Experiences", icon: "sparkles" },
+  { id: "service", label: "Services", icon: "wrench" },
 ];
