@@ -89,7 +89,7 @@ export default function HomeTabsSegmented({
         role="tablist"
         aria-label="Home content type"
         onKeyDown={handleKeyDown}
-        className="flex w-full max-sm:justify-between max-sm:gap-1 items-center gap-1.5 sm:inline-flex sm:w-auto sm:justify-start sm:gap-1.5"
+        className="flex w-full max-sm:justify-start max-sm:gap-1 items-center gap-1.5 sm:inline-flex sm:w-auto sm:justify-start sm:gap-1.5"
       >
         {HOME_TABS.map((tab) => {
           const isActive = active === tab.id;
@@ -109,7 +109,7 @@ export default function HomeTabsSegmented({
               className={[
                 "rounded-full font-semibold",
                 "flex items-center justify-center",
-                "max-sm:flex-1 max-sm:min-h-11 max-sm:h-auto max-sm:min-w-0 max-sm:px-2 max-sm:py-1.5 max-sm:whitespace-normal",
+                "max-sm:shrink-0 max-sm:min-h-11 max-sm:h-auto max-sm:min-w-fit max-sm:px-1.5 max-sm:py-1.5 max-sm:whitespace-nowrap",
                 "sm:inline-flex sm:h-11 sm:shrink-0 sm:whitespace-nowrap sm:px-4 sm:text-[14px] sm:gap-2",
                 "transition-colors focus:outline-none",
                 "focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-1",
@@ -118,17 +118,17 @@ export default function HomeTabsSegmented({
                   : "text-[#4A4F3D] hover:bg-[#16190f]/5",
               ].join(" ")}
             >
-              <span className="inline-flex min-w-0 max-w-full items-center justify-center gap-1.5 sm:gap-2">
+              <span className="inline-flex min-w-0 max-w-full items-center justify-center gap-1 sm:gap-2">
                 <Icon
                   name={tab.icon}
-                  size={18}
+                  size={16}
                   strokeWidth={1.8}
                   className="shrink-0"
                 />
                 <span
                   className={[
                     "min-w-0 text-center leading-tight",
-                    "max-sm:max-w-[min(7.25rem,26vw)] max-sm:line-clamp-2 max-sm:text-balance max-sm:text-[13px] max-sm:leading-snug",
+                    "max-sm:text-[11px] max-sm:leading-snug",
                     "sm:whitespace-nowrap sm:text-[14px]",
                   ].join(" ")}
                 >
