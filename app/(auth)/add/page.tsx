@@ -33,19 +33,20 @@ import {
   ORPHAN_ADD_DRAFT_SELECT,
   type OrphanAddDraftCandidate,
 } from "../../lib/placeDrafts";
-import Icon from "../../components/Icon";
+import Icon, { type IconName } from "../../components/Icon";
 import ImpersonationDisclaimer from "../../components/ImpersonationDisclaimer";
 import { useImpersonationStatus } from "../../hooks/useImpersonationStatus";
 import { sanitizePostgrestValue } from "../../utils";
 import { PageSkeleton } from "../../components/Skeleton";
 import { ErrorBoundary } from "../../components/ErrorBoundary";
+import CreatorPremiumGate from "../../components/CreatorPremiumGate";
 
 type PlacesRow = Database["public"]["Tables"]["places"]["Row"];
 type PlaceIdResult = { data: Pick<PlacesRow, "id"> | null; error: PostgrestError | null };
 
 type KindOption = {
   kind: PlaceKind;
-  emoji: string;
+  icon: IconName;
   title: string;
   subtitle: string;
   examples: string;
@@ -54,21 +55,21 @@ type KindOption = {
 const KIND_OPTIONS: KindOption[] = [
   {
     kind: "location",
-    emoji: "📍",
+    icon: "location",
     title: "Location",
     subtitle: "A spot on the map — café, viewpoint, park, hidden gem.",
     examples: "Rooftop bar, secret beach, coffee shop",
   },
   {
     kind: "service",
-    emoji: "🛠",
+    icon: "wrench",
     title: "Service",
     subtitle: "Something someone does — with a price and hours.",
     examples: "Massage, photographer, surf instructor",
   },
   {
     kind: "experience",
-    emoji: "✨",
+    icon: "sparkles",
     title: "Experience",
     subtitle: "An event with a schedule and duration (Airbnb-style).",
     examples: "Food tour, workshop, guided trip",
@@ -77,6 +78,12 @@ const KIND_OPTIONS: KindOption[] = [
 
 function isValidKind(value: string | null): value is PlaceKind {
   return value === "location" || value === "service" || value === "experience";
+}
+
+function getKindIcon(kind: PlaceKind): IconName {
+  if (kind === "service") return "wrench";
+  if (kind === "experience") return "sparkles";
+  return "location";
 }
 
 function placeContainsKindFilter(kind: "service" | "experience"): string {
@@ -503,20 +510,10 @@ export default function AddPlacePage() {
   if (!canAdd) {
     return (
       <ErrorBoundary>
-        <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
-          <div className="max-w-md mx-auto px-6 text-center">
-            <div className="text-lg font-semibold text-[#1F2A1F] mb-2">Premium Required</div>
-            <div className="text-sm text-[#6F7A5A] mb-4">
-              Only Premium users can create places. Please upgrade to Premium to add new entries.
-            </div>
-            <button
-              onClick={() => router.push("/")}
-              className="px-4 py-2 bg-[#1F2A1F] text-white rounded-lg hover:bg-[#2A3A2A] transition-colors"
-            >
-              Go Home
-            </button>
-          </div>
-        </main>
+        <CreatorPremiumGate
+          onPrimary={() => router.push("/pricing")}
+          onSecondary={() => router.push("/")}
+        />
       </ErrorBoundary>
     );
   }
@@ -547,9 +544,9 @@ export default function AddPlacePage() {
               <div className="flex items-start gap-4">
                 <div
                   aria-hidden
-                  className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-xl bg-[#FAFAF7] text-2xl sm:text-3xl"
+                  className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-xl bg-[#FAFAF7] text-[#6F7A5A]"
                 >
-                  {opt.emoji}
+                  <Icon name={opt.icon} size={24} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="font-fraunces font-semibold text-[#1F2A1F] text-lg mb-1">
@@ -677,8 +674,8 @@ function PaywallModal({
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-md rounded-2xl bg-white border border-[#ECEEE4] shadow-lg p-6"
       >
-        <div className="text-3xl mb-3" aria-hidden>
-          {planCfg.display.emoji}
+        <div className="mb-3 flex size-11 items-center justify-center rounded-xl bg-[#EEF0E0] text-[#556036]" aria-hidden>
+          <Icon name={getKindIcon(kind)} size={24} />
         </div>
         <h2
           id="paywall-title"

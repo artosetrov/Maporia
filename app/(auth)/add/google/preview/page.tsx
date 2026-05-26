@@ -155,6 +155,10 @@ export default function GoogleImportPreviewPage() {
   const handleImport = useCallback(
     async () => {
       if (!stored?.result || !user) return;
+      if (!canUserAddPlace(access)) {
+        setError("You need a creator plan to import and publish places on Maporia.");
+        return;
+      }
 
       const result = stored.result as GoogleImportSearchResult;
       const isCoordinateOnly =
@@ -257,7 +261,7 @@ export default function GoogleImportPreviewPage() {
           }
           if (response.status === 403 || data?.code === "PREMIUM_REQUIRED") {
             throw new Error(
-              "Premium required to create places. Please upgrade to Premium to import."
+              "Creator plan required to import and publish places."
             );
           }
           const msg =
@@ -293,6 +297,7 @@ export default function GoogleImportPreviewPage() {
       descriptionSelected,
       selectedPhotos,
       coverPhotoId,
+      access,
       router,
     ]
   );
@@ -305,7 +310,7 @@ export default function GoogleImportPreviewPage() {
     if (!user) return;
     if (!canUserAddPlace(access)) {
       setError(
-        "Only Premium users can create places. Please upgrade to Premium to add new places."
+        "You need a creator plan to import and publish places on Maporia."
       );
     }
   }, [user, access, accessLoading]);
@@ -337,6 +342,7 @@ export default function GoogleImportPreviewPage() {
     addressSelected ||
     descriptionSelected ||
     selectedPhotos.length > 0;
+  const canImport = canUserAddPlace(access);
   const fieldsFound = getImportFieldsFoundCount(result);
   const progressPercent = getImportProgressPercent(result);
 
@@ -701,15 +707,15 @@ export default function GoogleImportPreviewPage() {
             <button
               type="button"
               onClick={handleImport}
-              disabled={!hasSelectedFields || importing}
+              disabled={!hasSelectedFields || importing || !canImport}
               className={cx(
                 "flex-1 h-11 rounded-xl px-5 text-sm font-medium transition flex items-center justify-center",
-                hasSelectedFields && !importing
+                hasSelectedFields && !importing && canImport
                   ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
                   : "bg-[#DADDD0] text-[#6F7A5A] cursor-not-allowed"
               )}
             >
-              {importing ? "Importing..." : "Import Selected"}
+              {importing ? "Importing..." : canImport ? "Import Selected" : "Creator plan required"}
             </button>
           </div>
         </div>

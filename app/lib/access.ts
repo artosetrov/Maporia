@@ -182,14 +182,29 @@ export function canUserInteract(userAccess: UserAccess): boolean {
 }
 
 /**
- * Checks if user can add places of any kind.
+ * Checks if user can create at least one listing kind.
+ *
+ * `premium_viewer` is read-only for publishing: it can view premium content,
+ * but cannot create locations, services, or experiences.
+ */
+export function canUserCreateAny(userAccess: UserAccess): boolean {
+  if (userAccess.isAdmin) return true;
+  return (
+    canUserCreate(userAccess, "location") ||
+    canUserCreate(userAccess, "service") ||
+    canUserCreate(userAccess, "experience")
+  );
+}
+
+/**
+ * Checks if user can add places/listings of any kind.
  *
  * @deprecated Use canUserCreate(userAccess, kind) instead — даёт права по конкретному типу.
  *             Сохранено для обратной совместимости (используется в /add и местах,
  *             которые пока не различают kind).
  */
 export function canUserAddPlace(userAccess: UserAccess): boolean {
-  return userAccess.role === "premium" || userAccess.role === "admin";
+  return canUserCreateAny(userAccess);
 }
 
 /**

@@ -10,6 +10,7 @@ import GoogleImportField from "../../../components/GoogleImportField";
 import Icon from "../../../components/Icon";
 import { SectionErrorBoundary } from "@/app/components/SectionErrorBoundary";
 import { PageSkeleton } from "../../../components/Skeleton";
+import CreatorPremiumGate from "../../../components/CreatorPremiumGate";
 
 export default function GoogleImportPage() {
   const router = useRouter();
@@ -26,9 +27,9 @@ export default function GoogleImportPage() {
       // (см. feedback_useauthredirect_deps).
       if (!user) return;
 
-      // Check if user can add places (only Premium and Admin)
+      // Check if user can publish listings (creator plans and admins)
       if (!canUserAddPlace(access)) {
-        setError("Only Premium users can create places. Please upgrade to Premium to add new places.");
+        setError("You need a creator plan to import and publish places on Maporia.");
         return;
       }
     })();
@@ -44,18 +45,15 @@ export default function GoogleImportPage() {
 
   if (error && !canUserAddPlace(access)) {
     return (
-      <main className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
-        <div className="max-w-md mx-auto px-6 text-center">
-          <div className="text-lg font-semibold text-[#1F2A1F] mb-2">Premium Required</div>
-          <div className="text-sm text-[#6F7A5A] mb-4">{error}</div>
-          <button
-            onClick={() => router.push("/")}
-            className="px-4 py-2 bg-[#1F2A1F] text-white rounded-lg hover:bg-[#2A3A2A] transition-colors"
-          >
-            Go Home
-          </button>
-        </div>
-      </main>
+      <CreatorPremiumGate
+        eyebrow="Google import access"
+        title="Import a real-world place and make it shine on Maporia."
+        copy={error}
+        primaryLabel="See creator plans"
+        secondaryLabel="Go home"
+        onPrimary={() => router.push("/pricing")}
+        onSecondary={() => router.push("/")}
+      />
     );
   }
 
