@@ -33,6 +33,24 @@ const PLACE_SEARCH_FIELDS = [
   "kind",
 ] as const;
 
+const GENERIC_SEARCH_TOKENS = new Set([
+  "place",
+  "places",
+  "location",
+  "locations",
+  "spot",
+  "spots",
+  "near",
+  "nearby",
+  "around",
+]);
+
+const getMeaningfulSearchTokens = (raw: string): string[] => {
+  const tokens = tokenizeQuery(raw);
+  const meaningful = tokens.filter((token) => !GENERIC_SEARCH_TOKENS.has(token));
+  return meaningful.length > 0 ? meaningful : tokens;
+};
+
 type ErrorLike = {
   name?: string;
   message?: string;
@@ -384,7 +402,7 @@ export default function SearchModal({
       let rows = (data ?? []) as CountPlaceRow[];
 
       if (searchQuery.trim()) {
-        const tokens = tokenizeQuery(searchQuery);
+        const tokens = getMeaningfulSearchTokens(searchQuery);
         const normalizeForMatch = (s: string): string =>
           s.toLowerCase().replace(/[''`‘’]/g, "_");
         const fallbackNeedle = normalizeForMatch(searchQuery.trim());
@@ -539,7 +557,7 @@ export default function SearchModal({
       // Order matters: places (catalog matches) come first, cities after.
       const results: SearchResult[] = [];
 
-      const tokens = tokenizeQuery(searchQuery);
+      const tokens = getMeaningfulSearchTokens(searchQuery);
       const fullQ = searchQuery.trim().toLowerCase();
       // Normalize a string the same way the tokenizer normalizes the query,
       // so client-side substring matches stay consistent with what the DB
