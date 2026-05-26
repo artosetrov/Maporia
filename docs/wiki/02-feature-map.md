@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | `/` | Главная discovery-страница с tabs `location/service/experience`, home sections, search/filter; reflects `?city=`, `?q=`, `?categories=`, `?tags=` in the hero/search state | `app/page.tsx`, `HOME_SECTIONS`, `HomeSection`, `SearchModal`, `FiltersModal` |
 | `/map` | Каталог: list/map view, filters, Google Map, markers, premium gating; default listing is `kind=location`, services/experiences require explicit TYPE/`?kinds=` selection; offer cards without their own coordinates can use an active linked host location for map markers; `?categories=` accepts canonical emoji labels and plain category/tag aliases like `Coffee` | `app/map/page.tsx`, `GoogleMapsProvider`, `MarkerClusterer` |
+| `/search` | Legacy/search-entry redirect that preserves query params and sends users to `/map` | `app/search/page.tsx` |
 | `/explore` | Альтернативный discovery экран с list/map, city/category query params | `app/explore/page.tsx` |
 | `/feed` | Лента places | `app/feed/page.tsx` |
 | `/id/[id]` | Детальная карточка place/service/experience, comments, photos, favorite, map | `app/id/[id]/page.tsx` |
@@ -26,6 +27,7 @@
 | `/profile/edit/*` | Редактирование name, username, bio, avatar, interests |
 | `/profile/elements/tags` | Пользовательские/профильные tags |
 | `/saved` | Сохраненные/favorite places |
+| `/favorites` | Legacy favorites redirect to `/saved` |
 | `/settings`, `/settings/email` | Настройки аккаунта |
 | `/add` | Выбор и создание draft location/service/experience |
 | `/add/google`, `/add/google/preview` | Google import flow |

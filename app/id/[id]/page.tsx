@@ -633,7 +633,7 @@ export default function PlacePage(props: PageProps) {
           .order("created_at", { ascending: false }),
         supabase
           .from("reactions")
-          .select("id", { count: 'exact', head: true })
+          .select("place_id", { count: 'exact', head: true })
           .eq("place_id", id)
           .eq("reaction", "like"),
         supabase
@@ -828,7 +828,7 @@ export default function PlacePage(props: PageProps) {
       } else {
         const { data: existingData } = await supabase
           .from("reactions")
-          .select("id")
+          .select("place_id")
           .eq("place_id", id)
           .eq("user_id", userId)
           .eq("reaction", "like")
@@ -2061,7 +2061,13 @@ export default function PlacePage(props: PageProps) {
             <div className="space-y-4">
               {/* Write Comment */}
               <button
-                onClick={() => scrollToSection("comments")}
+                onClick={() => {
+                  if (!userId) {
+                    redirectToAuth("place_comment_sidebar");
+                    return;
+                  }
+                  scrollToSection("comments");
+                }}
                 className="w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-[#1F2A1F] font-medium"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2350,7 +2356,13 @@ export default function PlacePage(props: PageProps) {
               <div className="space-y-3">
                 {/* Write Comment */}
                 <button
-                  onClick={() => scrollToSection("comments")}
+                  onClick={() => {
+                    if (!userId) {
+                      redirectToAuth("place_comment_mobile_action");
+                      return;
+                    }
+                    scrollToSection("comments");
+                  }}
                   className="w-full h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-[#1F2A1F] font-medium"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

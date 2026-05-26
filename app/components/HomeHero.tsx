@@ -54,7 +54,7 @@ function MobileActiveUsersBadge() {
           <span className="text-[#16190f]">
             {new Intl.NumberFormat("en-US").format(value)}
           </span>{" "}
-          <span className="font-medium text-[#6F7A5A]">active {m.label}</span>
+          <span className="font-medium text-[#6F7A5A]">{m.label}</span>
         </span>
       </span>
     </div>

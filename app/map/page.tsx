@@ -1623,12 +1623,16 @@ function MapPageContent() {
               newCities: cities,
             });
           }
+          setMapCenter(null);
+          setMapZoom(null);
           setAppliedCities(cities);
           // Для обратной совместимости обновляем appliedCity
           if (cities.length > 0) {
             setAppliedCity(cities[0]);
+            setHasExplicitCityInUrlState(true);
           } else {
             setAppliedCity(DEFAULT_CITY);
+            setHasExplicitCityInUrlState(false);
           }
           // Увеличиваем версию фильтров для принудительного обновления списка
           setFiltersVersion(prev => prev + 1);
@@ -1841,7 +1845,7 @@ function MapPageContent() {
             {loading ? (
               <PlaceCardGridSkeleton count={6} columns={2} />
             ) : filteredPlaces.length === 0 ? (
-              <Empty text="No places match your filters." />
+              <Empty text={appliedQ.trim() ? `No results for "${appliedQ.trim()}". Try another search or clear filters.` : "No places match these filters. Try removing one."} />
             ) : (
               <>
                 {/* Desktop: 3 колонки при достаточной ширине, 2 колонки при меньшей */}
@@ -2096,7 +2100,7 @@ function MapPageContent() {
                 {loading ? (
                   <PlaceCardGridSkeleton count={3} columns={1} />
                 ) : filteredPlaces.length === 0 ? (
-                  <Empty text="No places match your filters." />
+                  <Empty text={appliedQ.trim() ? `No results for "${appliedQ.trim()}". Try another search or clear filters.` : "No places match these filters. Try removing one."} />
                 ) : (
                   <>
                     <div key={`places-grid-mobile-${filtersVersion}-${categoriesKey}-${citiesKey}`} className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
@@ -2273,6 +2277,7 @@ function MapView({
   const onMapStateChangeRef = useRef(onMapStateChange);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const programmaticViewportTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const visibleMapRef = useRef(false);
 
   // Ref for tracking places set changes (fitBounds)
   const prevPlacesIdsRef = useRef<string>("");
@@ -2389,17 +2394,6 @@ function MapView({
 
   // Keep map markers aligned with the filtered result set. Premium places can
   // appear as markers, while their details remain gated in the InfoWindow.
-  const defaultUserAccess: UserAccess = useMemo(
-    () =>
-      userAccess ?? {
-        role: "guest",
-        plan: "free",
-        hasPremium: false,
-        isAdmin: false,
-      },
-    [userAccess],
-  );
-
   const placesWithCoords = useMemo(
     () => places.filter((p) => getUsableMapPosition(p) !== null),
     [places]
@@ -2494,36 +2488,45 @@ function MapView({
      
   }, [externalMapCenter, externalMapZoom, mapInstance, finishProgrammaticViewportChange]);
 
-  // Auto-fit карты при изменении набора мест (после фильтрации)
+  // Auto-fit карты при изменении набора мест (после фильтрации).
+  // На мобильном stale viewport от прошлого открытия карты не должен
+  // блокировать показ нового набора маркеров.
   useEffect(() => {
-    if (!mapInstance || !isLoaded) return;
-    if (isUpdatingFromPropsRef.current) return;
+    const becameVisible = isMapView && !visibleMapRef.current;
+    visibleMapRef.current = isMapView;
+    if (!mapInstance || !isLoaded || !isMapView) return;
 
     const currentIds = placesWithCoords.map(p => p.id).sort().join(",");
-    if (currentIds === prevPlacesIdsRef.current) return;
+    if (!becameVisible && currentIds === prevPlacesIdsRef.current) return;
     prevPlacesIdsRef.current = currentIds;
 
     if (placesWithCoords.length === 0) return;
 
-    if (placesWithCoords.length === 1) {
-      const position = getUsableMapPosition(placesWithCoords[0]);
-      if (!position) return;
-      isUpdatingFromPropsRef.current = true;
-      mapInstance.panTo(position);
-      mapInstance.setZoom(15);
-      finishProgrammaticViewportChange();
-      return;
-    }
+    const refitTimer = window.setTimeout(() => {
+      google.maps.event.trigger(mapInstance, "resize");
 
-    const bounds = new google.maps.LatLngBounds();
-    placesWithCoords.forEach((p) => {
-      const position = getUsableMapPosition(p);
-      if (position) bounds.extend(position);
-    });
-    isUpdatingFromPropsRef.current = true;
-    mapInstance.fitBounds(bounds, { top: 80, bottom: 80, left: 40, right: 40 });
-    finishProgrammaticViewportChange();
-  }, [mapInstance, isLoaded, placesWithCoords, finishProgrammaticViewportChange]);
+      if (placesWithCoords.length === 1) {
+        const position = getUsableMapPosition(placesWithCoords[0]);
+        if (!position) return;
+        isUpdatingFromPropsRef.current = true;
+        mapInstance.panTo(position);
+        mapInstance.setZoom(15);
+        finishProgrammaticViewportChange();
+        return;
+      }
+
+      const bounds = new google.maps.LatLngBounds();
+      placesWithCoords.forEach((p) => {
+        const position = getUsableMapPosition(p);
+        if (position) bounds.extend(position);
+      });
+      isUpdatingFromPropsRef.current = true;
+      mapInstance.fitBounds(bounds, { top: 80, bottom: 80, left: 40, right: 40 });
+      finishProgrammaticViewportChange();
+    }, 0);
+
+    return () => window.clearTimeout(refitTimer);
+  }, [mapInstance, isLoaded, isMapView, placesWithCoords, finishProgrammaticViewportChange]);
 
   // --- Marker Clustering ---
   // Создаём императивные маркеры и передаём их в MarkerClusterer.
@@ -2634,9 +2637,13 @@ function MapView({
     return (
       <div className="h-full flex items-center justify-center px-4">
         <div className="text-center">
-          <div className="text-sm font-medium text-[#2d2d2d] mb-1">No places yet</div>
+          <div className="text-sm font-medium text-[#2d2d2d] mb-1">
+            {places.length === 0 ? "No map results" : "No mappable places"}
+          </div>
           <div className="text-xs text-[#6b7d47]/60">
-            Add places with coordinates to see them on the map.
+            {places.length === 0
+              ? "Try another search or clear filters to see places on the map."
+              : "These results are missing coordinates, so they cannot appear on the map yet."}
           </div>
         </div>
       </div>
