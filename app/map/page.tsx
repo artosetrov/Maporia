@@ -14,6 +14,7 @@ import { MarkerClusterer } from "@googlemaps/markerclusterer";
 import { MaporiaClusterRenderer } from "../lib/clusterRenderer";
 import TopBar from "../components/TopBar";
 import PlaceCard from "../components/PlaceCard";
+import PhotoPaginationDots from "../components/PhotoPaginationDots";
 import HomeTabsSegmented from "../components/HomeTabsSegmented";
 import nextDynamic from "next/dynamic";
 import { ActiveFilters } from "../components/FiltersModal";
@@ -2993,20 +2994,12 @@ function MapView({
                         
                         {/* Pagination Dots */}
                         {hasMultiplePhotos && (
-                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
-                            {photos.map((_, index) => (
-                              <button
-                                key={index}
-                                onClick={(e) => handleDotClick(e, index)}
-                                className={`h-1.5 rounded-full transition-all duration-200 ${
-                                  index === currentIndex
-                                    ? 'w-6 bg-white'
-                                    : 'w-1.5 bg-white/60 hover:bg-white/80'
-                                }`}
-                                aria-label={`Go to photo ${index + 1}`}
-                              />
-                            ))}
-                          </div>
+                          <PhotoPaginationDots
+                            total={photos.length}
+                            currentIndex={currentIndex}
+                            onDotClick={(index, event) => handleDotClick(event, index)}
+                            className="!z-10"
+                          />
                         )}
                       </div>
                     ) : (

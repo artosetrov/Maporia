@@ -14,6 +14,8 @@
 | Где живут данные, роли, платежи, карты и интеграции | [03-architecture.md](./03-architecture.md) |
 | Что проверять перед релизом и где главные риски | [04-operations-and-risks.md](./04-operations-and-risks.md) |
 | Быстро найти термин, таблицу, route или команду | [05-search-index.md](./05-search-index.md) |
+| Live-аудит пользовательских сценариев | [06-user-scenario-audit.md](./06-user-scenario-audit.md) |
+| Аудит категорий и тегов каталога | [07-catalog-taxonomy-audit.md](./07-catalog-taxonomy-audit.md) |
 | Старые документы, планы и архивные отчеты | [../README.md](../README.md) |
 
 ## TL;DR

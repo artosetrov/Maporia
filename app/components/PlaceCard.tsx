@@ -20,6 +20,7 @@ type PlacePhotosResult = { data: PlacePhotoSelect[] | null; error: PostgrestErro
 type ErrorLike = { name?: string; message?: string; code?: string };
 import PremiumBadge from "./PremiumBadge";
 import Icon from "./Icon";
+import PhotoPaginationDots from "./PhotoPaginationDots";
 import { usePremiumGate } from "../hooks/usePremiumGate";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { getAuthUrl } from "../lib/authRedirect";
@@ -675,25 +676,11 @@ function PlaceCard({ place, userAccess, userId, favoriteButton, hauntedGemIndex,
 
             {/* Pagination dots - показываем только если есть несколько фото и карточка не заблокирована */}
             {hasMultiplePhotos && !isLocked && (
-              <div className="absolute bottom-2 left-1/2 z-20 flex max-w-[calc(100%-1rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 rounded-full bg-black/20 px-2 py-1.5 backdrop-blur-sm">
-                {photos.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={(e) => handleDotClick(e, index)}
-                    className="group flex h-4 items-center justify-center rounded-full px-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black/40"
-                    aria-label={`Go to photo ${index + 1}`}
-                  >
-                    <span
-                      className={`h-1.5 rounded-full transition-all duration-200 ${
-                        index === currentPhotoIndex
-                          ? 'w-6 bg-white'
-                          : 'w-1.5 bg-white/60 group-hover:bg-white/80'
-                      }`}
-                      aria-hidden
-                    />
-                  </button>
-                ))}
-              </div>
+              <PhotoPaginationDots
+                total={photos.length}
+                currentIndex={currentPhotoIndex}
+                onDotClick={(index, event) => handleDotClick(event, index)}
+              />
             )}
 
             {/* Premium badge - top left */}
