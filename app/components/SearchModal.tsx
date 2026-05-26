@@ -233,6 +233,7 @@ export default function SearchModal({
   const [loading, setLoading] = useState(false);
   const [recentSearches, setRecentSearches] = useState<Array<{ city: string | null; query: string; tags?: string[] }>>([]);
   const [tagCounts, setTagCounts] = useState<Record<string, number>>({});
+  const [tagCountsLoading, setTagCountsLoading] = useState(false);
   const [suggestedCityCounts, setSuggestedCityCounts] = useState<Record<string, number>>({});
   // Счётчики на шаге Type. null = ещё не загружено.
   const [kindCounts, setKindCounts] = useState<Record<HomeKind, number | null>>({
@@ -252,7 +253,7 @@ export default function SearchModal({
       currentCategories.filter((category) => {
         if (tempSelectedTags.includes(category)) return true;
         const count = tagCounts[category];
-        return count === undefined || count > 0;
+        return count !== undefined && count > 0;
       }),
     [currentCategories, tagCounts, tempSelectedTags],
   );
@@ -435,20 +436,36 @@ export default function SearchModal({
   useEffect(() => {
     if (!isOpen || step !== "vibe" || !tempSelectedCity) {
       setTagCounts({});
+      setTagCountsLoading(false);
       return;
     }
 
+    let cancelled = false;
     const loadTagCounts = async () => {
+      setTagCountsLoading(true);
       const counts: Record<string, number> = {};
-      for (const category of currentCategories) {
-        const count = await getTagCount(tempSelectedCity, category, tempSelectedKind);
-        counts[category] = count;
+      try {
+        await Promise.all(
+          currentCategories.map(async (category) => {
+            const count = await getTagCount(tempSelectedCity, category, tempSelectedKind);
+            counts[category] = count;
+          }),
+        );
+        if (!cancelled) {
+          setTagCounts(counts);
+        }
+      } finally {
+        if (!cancelled) {
+          setTagCountsLoading(false);
+        }
       }
-      setTagCounts(counts);
     };
 
     const timeoutId = setTimeout(loadTagCounts, 300);
-    return () => clearTimeout(timeoutId);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, [isOpen, step, tempSelectedCity, tempSelectedKind, currentCategories, getTagCount]);
 
   // Load kind counts on the "kind" step.
@@ -1299,7 +1316,11 @@ export default function SearchModal({
 
             {/* Tag Selection Rows (Airbnb-style) */}
             <div className="px-6 space-y-0">
-              {visibleCategories.length === 0 ? (
+              {tagCountsLoading ? (
+                <div className="py-10 text-center text-sm text-[#6F7A5A]">
+                  Loading vibes...
+                </div>
+              ) : visibleCategories.length === 0 ? (
                 <div className="py-10 text-center text-sm text-[#6F7A5A]">
                   No matching vibes yet. Try a different type or city.
                 </div>
