@@ -1166,7 +1166,7 @@ export default function SearchModal({
         {step === "kind" && (
           <div
             className="flex-1 overflow-y-auto"
-            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+            style={{ paddingBottom: 'max(32px, env(safe-area-inset-bottom, 0px))' }}
           >
             {/* Selected City Info */}
             {tempSelectedCity && (
