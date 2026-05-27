@@ -1248,8 +1248,20 @@ export default function PlaceEditorHub(props: PageProps) {
   const incompleteSteps = publishSteps.filter((s) => !s.completed);
   const incompleteRecommendedSteps = recommendedSteps.filter((s) => !s.completed);
   const nextStep = incompleteSteps[0] ?? incompleteRecommendedSteps[0] ?? null;
+  const completedRequiredSteps = publishSteps.filter((s) => s.completed).length;
+  const completedRecommendedSteps = recommendedSteps.filter((s) => s.completed).length;
+  const nextRequiredStepNumber = Math.min(completedRequiredSteps + 1, Math.max(publishSteps.length, 1));
+  const nextRecommendedStepNumber = Math.min(completedRecommendedSteps + 1, Math.max(recommendedSteps.length, 1));
+  const nextStepProgressLabel = nextStep
+    ? nextStep.priority === "required"
+      ? `Required step ${nextRequiredStepNumber} of ${publishSteps.length}`
+      : `Optional step ${nextRecommendedStepNumber} of ${recommendedSteps.length}`
+    : "All required steps complete";
+  const optionalProgressLabel = recommendedSteps.length > 0
+    ? `${completedRecommendedSteps}/${recommendedSteps.length} optional`
+    : null;
   const completionPercentage = publishSteps.length > 0
-    ? Math.round((publishSteps.filter((s) => s.completed).length / publishSteps.length) * 100)
+    ? Math.round((completedRequiredSteps / publishSteps.length) * 100)
     : 100;
 
   // Check if all publish-required fields are filled.
@@ -1531,6 +1543,9 @@ export default function PlaceEditorHub(props: PageProps) {
                   <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
                     Next step
                   </div>
+                  <div className="mt-1 text-xs font-semibold text-[#8F9E4F]">
+                    {nextStepProgressLabel}
+                  </div>
                   <h2 className="mt-1 font-fraunces text-lg font-semibold text-[#1F2A1F]">
                     {nextStep ? nextStep.label : "Preview and publish"}
                   </h2>
@@ -1541,6 +1556,16 @@ export default function PlaceEditorHub(props: PageProps) {
                         : "This is optional, but it will make the listing easier to trust."
                       : "Everything required is ready. Check the listing preview before it goes public."}
                   </p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
+                    <span className="rounded-full bg-white/80 px-3 py-1 text-[#3F4A35] ring-1 ring-[#DDE5C2]">
+                      {completedRequiredSteps}/{publishSteps.length} required
+                    </span>
+                    {optionalProgressLabel && (
+                      <span className="rounded-full bg-white/70 px-3 py-1 text-[#6F7A5A] ring-1 ring-[#E5EAD2]">
+                        {optionalProgressLabel}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {nextStep ? (
                   <Link
@@ -1567,7 +1592,7 @@ export default function PlaceEditorHub(props: PageProps) {
                 <div className="flex items-center justify-between gap-3 mb-2">
                   <span className="text-sm font-medium text-[#1F2A1F]">Ready to publish</span>
                   <span className="text-sm font-semibold text-[#1F2A1F]">
-                    {publishSteps.filter((s) => s.completed).length}/{publishSteps.length}
+                    {completedRequiredSteps}/{publishSteps.length}
                   </span>
                 </div>
                 <div className="w-full h-2 bg-[#ECEEE4] rounded-full overflow-hidden">
