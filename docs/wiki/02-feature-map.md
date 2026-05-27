@@ -1,6 +1,6 @@
 # Feature Map
 
-Последнее обновление: 2026-05-24.
+Последнее обновление: 2026-05-27.
 
 ## Public Routes
 
@@ -11,7 +11,8 @@
 | `/search` | Legacy/search-entry redirect that preserves query params and sends users to `/map` | `app/search/page.tsx` |
 | `/explore` | Альтернативный discovery экран с list/map, city/category query params | `app/explore/page.tsx` |
 | `/feed` | Лента places | `app/feed/page.tsx` |
-| `/id/[id]` | Детальная карточка place/service/experience, comments, photos, favorite, map | `app/id/[id]/page.tsx` |
+| `/id/[id]` | Детальная карточка place/service/experience, comments, photos, favorite, map; locations can use `standard` or read/photo-led `story` layout via `places.place_page_layout` | `app/id/[id]/page.tsx`, `app/config/placeLayout.ts` |
+| `/[slug]` | Vanity-link alias for creator listings; resolves `places.slug` and redirects to `/id/[id]` | `app/[slug]/page.tsx`, `scripts/sql/add-place-slugs.sql` |
 | `/collections` | Список коллекций | `app/collections/page.tsx` |
 | `/collections/[id]` | Детали коллекции и места внутри нее | `app/collections/[id]/page.tsx` |
 | `/pricing` | Тарифы и checkout entry | `app/pricing/page.tsx`, `app/lib/plans.ts` |
@@ -31,7 +32,7 @@
 | `/settings`, `/settings/email` | Настройки аккаунта |
 | `/add` | Выбор и создание draft location/service/experience |
 | `/add/google`, `/add/google/preview` | Google import flow |
-| `/places/[id]/edit` | Главный редактор карточки: Google import, admin owner transfer, next-best-step guidance, type-aware checklist, preview, Save draft / explicit Publish |
+| `/places/[id]/edit` | Главный редактор карточки: Google import, admin owner transfer, next-best-step guidance, type-aware checklist, location page layout selector, preview, Save draft / explicit Publish |
 | `/places/[id]/edit/title` | Название |
 | `/places/[id]/edit/description` | Описание |
 | `/places/[id]/edit/location` | Адрес, координаты, карта |

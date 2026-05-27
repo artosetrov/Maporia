@@ -33,6 +33,7 @@ export type Json =
  *   Цена + длительность + расписание/даты.
  */
 export type PlaceKind = 'location' | 'service' | 'experience';
+export type PlacePageLayout = 'standard' | 'story';
 
 export const PLACE_KINDS: PlaceKind[] = ['location', 'service', 'experience'];
 
@@ -136,6 +137,7 @@ export interface Database {
       places: {
         Row: {
           id: string
+          slug: string | null
           title: string
           description: string | null
           address: string | null
@@ -171,6 +173,8 @@ export interface Database {
           kind: PlaceKind
           /** Дополнительные kind'ы; не пересекаются с primary `kind`. См. add_secondary_kinds_to_places. */
           secondary_kinds: PlaceKind[]
+          /** Public detail page layout. `story` is for photo/read-led locations. */
+          place_page_layout: PlacePageLayout
           price_amount: number | null
           price_currency: string | null
           price_unit: PriceUnit | null
@@ -188,6 +192,7 @@ export interface Database {
         }
         Insert: {
           id?: string
+          slug?: string | null
           title: string
           description?: string | null
           address?: string | null
@@ -221,6 +226,7 @@ export interface Database {
           manually_hidden?: boolean
           kind?: PlaceKind
           secondary_kinds?: PlaceKind[]
+          place_page_layout?: PlacePageLayout
           price_amount?: number | null
           price_currency?: string | null
           price_unit?: PriceUnit | null
@@ -238,6 +244,7 @@ export interface Database {
         }
         Update: {
           id?: string
+          slug?: string | null
           title?: string
           description?: string | null
           address?: string | null
@@ -271,6 +278,7 @@ export interface Database {
           manually_hidden?: boolean
           kind?: PlaceKind
           secondary_kinds?: PlaceKind[]
+          place_page_layout?: PlacePageLayout
           price_amount?: number | null
           price_currency?: string | null
           price_unit?: PriceUnit | null

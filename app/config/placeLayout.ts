@@ -10,6 +10,31 @@ export const PLACE_LAYOUT_BREAKPOINTS = {
   desktopXL: 1440,
 } as const;
 
+export type PlacePageLayout = "standard" | "story";
+
+export const DEFAULT_PLACE_PAGE_LAYOUT: PlacePageLayout = "standard";
+
+export const PLACE_PAGE_LAYOUT_OPTIONS: Array<{
+  value: PlacePageLayout;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "standard",
+    label: "Standard",
+    description: "Map-first detail page for regular locations, services, and experiences.",
+  },
+  {
+    value: "story",
+    label: "Story",
+    description: "Photo-and-description-first page for places people visit to read about.",
+  },
+];
+
+export function normalizePlacePageLayout(value: unknown): PlacePageLayout {
+  return value === "story" ? "story" : DEFAULT_PLACE_PAGE_LAYOUT;
+}
+
 export const PLACE_LAYOUT_CONFIG = {
   // Desktop XL (>= 1440px)
   desktopXL: {

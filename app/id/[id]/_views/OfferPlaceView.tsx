@@ -477,10 +477,10 @@ export default function OfferPlaceView({
     : formatBasePriceAmount(place.price_amount, place.price_currency, place.price_unit);
   const leadOfferTitle =
     primaryPriceOption?.label?.trim() ||
-    (priceOptions.length > 0 ? (isService ? "Featured service" : "Featured experience") : kindLabel);
+    (priceOptions.length > 0 ? (isService ? "Featured service" : "Featured experience") : "Quick details");
   const leadOfferBadge =
     primaryPriceOption?.badge?.trim() ||
-    (priceOptions.length > 1 ? `${priceOptions.length} options` : isPremium ? "Premium" : kindLabel);
+    (priceOptions.length > 1 ? `${priceOptions.length} options` : isPremium ? "Premium" : null);
   const snapshotFacts = [
     durationText ? { icon: "clock" as const, label: "Duration", value: durationText } : null,
     scheduleText ? { icon: "calendar" as const, label: isService ? "Hours" : "Dates", value: scheduleText } : null,
@@ -704,6 +704,19 @@ export default function OfferPlaceView({
               <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
                 <button
                   type="button"
+                  onClick={() => setContactModalOpen(true)}
+                  className={cx(
+                    "inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition-colors sm:flex-none lg:hidden",
+                    hasContactDetails
+                      ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
+                      : "bg-[#ECEEE4] text-[#6F7A5A] hover:bg-[#E2E5D8]"
+                  )}
+                >
+                  Contact
+                  <Icon name="forward" size={16} />
+                </button>
+                <button
+                  type="button"
                   onClick={onToggleFavorite}
                   disabled={favoriteLoading}
                   className={cx(
@@ -804,7 +817,7 @@ export default function OfferPlaceView({
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div className="min-w-0">
                 <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
-                  {priceOptions.length > 0 ? "Recommended pick" : "Experience details"}
+                  {priceOptions.length > 0 ? "Recommended pick" : `${kindLabel} details`}
                 </div>
                 <h2 className="mt-1 font-fraunces text-2xl font-semibold leading-tight text-[#1F2A1F]">
                   {leadOfferTitle}
@@ -972,7 +985,7 @@ export default function OfferPlaceView({
         {((place.categories && place.categories.length > 0) || (place.tags && place.tags.length > 0)) && (
           <section className="mb-8">
             <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F] mb-3">
-              {isService ? "What's included" : "What to expect"}
+              {isService ? "Good to know" : "What to expect"}
             </h2>
             <div className="flex flex-wrap gap-2">
               {place.categories?.map((c) => (

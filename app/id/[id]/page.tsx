@@ -22,7 +22,11 @@ const SearchModal = nextDynamic(() => import("../../components/SearchModal"), { 
 import FavoriteIcon from "../../components/FavoriteIcon";
 import { getMapOptions } from "../../config/googleMaps";
 import { supabase } from "../../lib/supabase";
-import { PLACE_LAYOUT_CONFIG } from "../../config/placeLayout";
+import {
+  PLACE_LAYOUT_CONFIG,
+  type PlacePageLayout,
+  normalizePlacePageLayout,
+} from "../../config/placeLayout";
 import { useUserAccessContext } from "../../contexts/UserAccessContext";
 import { usePremiumModalContext } from "../../contexts/PremiumModalContext";
 import { useAuthRedirect } from "../../hooks/useAuthRedirect";
@@ -73,6 +77,7 @@ type Place = {
   google_place_id?: string | null;
   // --- Новые поля для услуг и экспириенсов ---
   kind?: "location" | "service" | "experience" | null;
+  place_page_layout?: PlacePageLayout | null;
   price_amount?: number | null;
   price_currency?: string | null;
   price_unit?: string | null;
@@ -192,6 +197,12 @@ const PLACE_SELECT_BASE =
 const PLACE_SELECT_WITH_PRICE_OPTIONS =
   "id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, price_options, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items";
 
+const PLACE_SELECT_WITH_LAYOUT =
+  "id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, place_page_layout, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items";
+
+const PLACE_SELECT_WITH_OPTIONAL_COLUMNS =
+  "id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, google_place_id, comments_enabled, kind, place_page_layout, price_amount, price_currency, price_unit, price_options, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items";
+
 function isMissingPriceOptionsColumn(error: unknown): boolean {
   const err = toErrorLike(error);
   return (
@@ -201,10 +212,19 @@ function isMissingPriceOptionsColumn(error: unknown): boolean {
   );
 }
 
+function isMissingPlaceLayoutColumn(error: unknown): boolean {
+  const err = toErrorLike(error);
+  return (
+    err.code === "42703" &&
+    (err.message?.includes("places.place_page_layout") === true ||
+      err.message?.includes("place_page_layout") === true)
+  );
+}
+
 async function loadPlaceById(id: string): Promise<{ data: Place | null; error: unknown | null }> {
   const primary = (await supabase
     .from("places")
-    .select(PLACE_SELECT_WITH_PRICE_OPTIONS)
+    .select(PLACE_SELECT_WITH_OPTIONAL_COLUMNS)
     .eq("id", id)
     .single()) as PlaceLoadResult;
 
@@ -212,7 +232,41 @@ async function loadPlaceById(id: string): Promise<{ data: Place | null; error: u
     return { data: primary.data as Place, error: null };
   }
 
-  if (!isMissingPriceOptionsColumn(primary.error)) {
+  if (isMissingPlaceLayoutColumn(primary.error)) {
+    const priceOnly = (await supabase
+      .from("places")
+      .select(PLACE_SELECT_WITH_PRICE_OPTIONS)
+      .eq("id", id)
+      .single()) as PlaceLoadResult;
+
+    if (!priceOnly.error) {
+      return {
+        data: { ...(priceOnly.data as Place), place_page_layout: "standard" },
+        error: null,
+      };
+    }
+
+    if (!isMissingPriceOptionsColumn(priceOnly.error)) {
+      return { data: null, error: priceOnly.error };
+    }
+  } else if (isMissingPriceOptionsColumn(primary.error)) {
+    const layoutOnly = (await supabase
+      .from("places")
+      .select(PLACE_SELECT_WITH_LAYOUT)
+      .eq("id", id)
+      .single()) as PlaceLoadResult;
+
+    if (!layoutOnly.error) {
+      return {
+        data: { ...(layoutOnly.data as Place), price_options: null },
+        error: null,
+      };
+    }
+
+    if (!isMissingPlaceLayoutColumn(layoutOnly.error)) {
+      return { data: null, error: layoutOnly.error };
+    }
+  } else {
     return { data: null, error: primary.error };
   }
 
@@ -227,7 +281,7 @@ async function loadPlaceById(id: string): Promise<{ data: Place | null; error: u
   }
 
   return {
-    data: { ...(fallback.data as Place), price_options: null },
+    data: { ...(fallback.data as Place), price_options: null, place_page_layout: "standard" },
     error: null,
   };
 }
@@ -469,6 +523,8 @@ export default function PlacePage(props: PageProps) {
   const photosRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const commentsRef = useRef<HTMLDivElement>(null);
+  const desktopContactRef = useRef<HTMLDivElement>(null);
+  const mobileContactRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
 
   const tags = useMemo(() => place?.tags ?? [], [place?.tags]);
@@ -544,6 +600,14 @@ export default function PlacePage(props: PageProps) {
         });
       }
     }
+  };
+
+  const scrollToContact = () => {
+    const target =
+      typeof window !== "undefined" && window.innerWidth < 1024
+        ? mobileContactRef.current ?? desktopContactRef.current
+        : desktopContactRef.current ?? mobileContactRef.current;
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   // Was: a duplicate auth.getUser() + profiles.select() pair. Removed — both
@@ -1108,6 +1172,14 @@ export default function PlacePage(props: PageProps) {
   }
 
   const creatorName = creatorProfile?.display_name || creatorProfile?.username || "User";
+  const hasLocationContactDetails = Boolean(
+    place?.phone?.trim() ||
+    place?.website?.trim() ||
+    place?.instagram?.trim() ||
+    place?.youtube?.trim() ||
+    place?.telegram?.trim()
+  );
+  const hasMapTarget = Boolean(place && getGoogleMapsFallbackUrl(place));
 
   // Calculate active filters count
   const activeFiltersCount = useMemo(() => {
@@ -1281,6 +1353,757 @@ export default function PlacePage(props: PageProps) {
   }
   // ─────────────────────────────────────────────────────────────
 
+  const placePageLayout = normalizePlacePageLayout(place.place_page_layout);
+
+  if (place.kind === "location" && placePageLayout === "story") {
+    return (
+      <SectionErrorBoundary>
+        <main className="min-h-screen bg-[#FFFEFB] text-[#1F2A1F]">
+          <TransientNotice
+            message={notice?.message ?? null}
+            variant={notice?.variant}
+            onDismiss={() => setNotice(null)}
+          />
+          <ConfirmDialog
+            open={commentToDeleteId !== null}
+            title="Delete comment?"
+            description="This removes your comment from this place. This action cannot be undone."
+            confirmLabel="Delete"
+            loading={commentToDeleteId !== null && deletingCommentId === commentToDeleteId}
+            onClose={() => {
+              if (!deletingCommentId) setCommentToDeleteId(null);
+            }}
+            onConfirm={() => {
+              if (commentToDeleteId) void deleteComment(commentToDeleteId);
+            }}
+          />
+
+          <div className="hidden lg:block">
+            <TopBar
+              showSearchBar={true}
+              searchValue={searchValue}
+              onSearchChange={(value) => {
+                setSearchValue(value);
+                const params = new URLSearchParams();
+                if (selectedCity) params.set("city", selectedCity);
+                if (value.trim()) params.set("q", value.trim());
+                if (activeFilters.categories.length > 0) {
+                  params.set("categories", activeFilters.categories.join(','));
+                }
+                router.push(`/map?${params.toString()}`);
+              }}
+              selectedCity={selectedCity}
+              onCityChange={(city) => {
+                setSelectedCity(city);
+                const params = new URLSearchParams();
+                if (city && city.trim()) params.set("city", city.trim());
+                if (searchValue && searchValue.trim()) params.set("q", searchValue.trim());
+                if (activeFilters.categories.length > 0) {
+                  params.set("categories", activeFilters.categories.join(','));
+                }
+                router.push(`/map?${params.toString()}`);
+              }}
+              onFiltersClick={handleFiltersClick}
+              activeFiltersCount={activeFiltersCount}
+              userAvatar={userAvatar}
+              userDisplayName={userDisplayName}
+              userEmail={userEmail}
+              showBackButton={true}
+              onBackClick={handleBackClick}
+              onShareClick={handleShare}
+              onFavoriteClick={toggleFavorite}
+              isFavorite={isFavorite}
+              favoriteLoading={favoriteLoading}
+              onSearchBarClick={() => setSearchModalOpen(true)}
+            />
+          </div>
+
+          <SearchModal
+            isOpen={searchModalOpen}
+            onClose={() => setSearchModalOpen(false)}
+            onCitySelect={(city) => {
+              setSelectedCity(city);
+              const params = new URLSearchParams();
+              if (city && city.trim()) params.set("city", city.trim());
+              if (searchValue && searchValue.trim()) params.set("q", searchValue.trim());
+              if (activeFilters.categories.length > 0) {
+                params.set("categories", activeFilters.categories.join(','));
+              }
+              router.push(`/map?${params.toString()}`);
+            }}
+            onSearchSubmit={(city, query, tags, kind) => {
+              setSelectedCity(city);
+              setSearchValue(query);
+              if (tags) {
+                setSelectedTags(tags);
+                setActiveFilters(prev => ({ ...prev, categories: tags }));
+              }
+              const params = new URLSearchParams();
+              if (city && city.trim()) params.set("city", city.trim());
+              if (query.trim()) params.set("q", query.trim());
+              const categoriesToUse = tags || activeFilters.categories;
+              if (categoriesToUse.length > 0) {
+                params.set("categories", categoriesToUse.join(','));
+              }
+              if (kind) params.set("kinds", kind);
+              router.push(`/map?${params.toString()}`);
+            }}
+            selectedCity={selectedCity}
+            searchQuery={searchValue}
+            selectedTags={selectedTags}
+          />
+
+          <header className="relative overflow-hidden bg-[#F6F2EA]">
+            <div className="lg:hidden relative">
+              <MobileCarousel
+                photos={allPhotos}
+                title={place.title}
+                height="58vh"
+                onShowAll={() => {
+                  setGalleryPhotoIndex(0);
+                  setIsImageTransitioning(false);
+                  setPhotoGalleryOpen(true);
+                  setPhotoZoom(1);
+                  setPhotoPosition({ x: 0, y: 0 });
+                }}
+                onPhotoClick={(index) => {
+                  setGalleryPhotoIndex(index);
+                  setPhotoGalleryOpen(true);
+                  setPhotoZoom(1);
+                  setPhotoPosition({ x: 0, y: 0 });
+                }}
+              />
+              <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-4 pt-safe-top">
+                <button
+                  onClick={handleBackClick}
+                  className="h-11 w-11 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#1F2A1F] hover:bg-white transition-colors"
+                  aria-label="Back"
+                >
+                  <Icon name="back" size={20} />
+                </button>
+                <div className="flex items-center gap-2">
+                  {canEdit && (
+                    <button
+                      onClick={() => router.push(`/places/${id}/edit`)}
+                      className="h-11 w-11 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#1F2A1F] hover:bg-white transition-colors"
+                      aria-label="Edit place"
+                    >
+                      <Icon name="edit" size={20} />
+                    </button>
+                  )}
+                  {userId && (
+                    <button
+                      onClick={toggleFavorite}
+                      disabled={favoriteLoading}
+                      className={cx("h-11 w-11 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center", favoriteLoading && "opacity-50")}
+                      aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                    >
+                      <FavoriteIcon isActive={isFavorite} size={20} />
+                    </button>
+                  )}
+                  <button
+                    onClick={handleShare}
+                    className="h-11 w-11 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-[#1F2A1F] hover:bg-white transition-colors"
+                    aria-label="Share"
+                  >
+                    <Icon name="share" size={20} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="mx-auto grid max-w-[1280px] grid-cols-1 gap-8 px-6 pb-10 pt-8 lg:grid-cols-[0.42fr_0.58fr] lg:px-8 lg:pb-14 lg:pt-32">
+              <div className="flex flex-col justify-end lg:min-h-[560px]">
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {categories.slice(0, 3).map((cat) => (
+                    <Link
+                      key={cat}
+                      href={`/?category=${encodeURIComponent(cat)}`}
+                      className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-[#D9D0BD] bg-white/70 px-3 text-xs font-semibold text-[#6F7A5A] transition hover:bg-white"
+                    >
+                      <CategoryVisualIcon category={cat} className="h-3.5 w-3.5" />
+                      {getCategoryLabel(cat)}
+                    </Link>
+                  ))}
+                </div>
+                <h1 className="font-fraunces text-[42px] font-semibold leading-[1.03] text-[#1F2A1F] sm:text-5xl lg:text-6xl">
+                  {place.title}
+                </h1>
+                <div className="mt-5 space-y-2 text-base text-[#526047]">
+                  {(place.city || place.city_name_cached) && (
+                    <div className="font-medium">{place.city_name_cached || place.city}</div>
+                  )}
+                  {place.address && (
+                    <button
+                      onClick={handleOpenGoogleMaps}
+                      className="text-left text-[#7A8B4E] underline-offset-4 hover:underline"
+                    >
+                      {place.address}
+                    </button>
+                  )}
+                </div>
+                <div className="mt-7 flex flex-wrap gap-3">
+                  {canEdit && (
+                    <button
+                      onClick={() => router.push(`/places/${id}/edit`)}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#D9D0BD] bg-white px-4 text-sm font-medium text-[#1F2A1F] transition hover:bg-[#FFFEFB]"
+                    >
+                      <Icon name="edit" size={16} />
+                      Edit
+                    </button>
+                  )}
+                  {hasLocationContactDetails && (
+                    <button
+                      onClick={scrollToContact}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#8F9E4F] px-4 text-sm font-semibold text-white transition hover:bg-[#7E8C45]"
+                    >
+                      <Icon name="external-link" size={16} />
+                      Contact
+                    </button>
+                  )}
+                  {hasMapTarget && (
+                    <button
+                      onClick={handleOpenGoogleMaps}
+                      disabled={resolvingPlaceId}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#D9D0BD] bg-white px-4 text-sm font-medium text-[#1F2A1F] transition hover:bg-[#FFFEFB] disabled:opacity-50"
+                    >
+                      <Icon name="location" size={16} />
+                      {resolvingPlaceId ? "Opening..." : "Open in Maps"}
+                    </button>
+                  )}
+                  <button
+                    onClick={handleShare}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#D9D0BD] bg-white px-4 text-sm font-medium text-[#1F2A1F] transition hover:bg-[#FFFEFB]"
+                  >
+                    <Icon name="share" size={16} />
+                    Share
+                  </button>
+                  {userId ? (
+                    <button
+                      onClick={toggleFavorite}
+                      disabled={favoriteLoading}
+                      className={cx(
+                        "inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-medium transition",
+                        isFavorite
+                          ? "border-[#8F9E4F] bg-white text-[#8F9E4F]"
+                          : "border-[#D9D0BD] bg-white text-[#1F2A1F]",
+                        favoriteLoading && "opacity-50"
+                      )}
+                    >
+                      <FavoriteIcon isActive={isFavorite} size={16} />
+                      {isFavorite ? "Saved" : "Save"}
+                    </button>
+                  ) : (
+                    <AuthCTA
+                      variant="sign-in"
+                      appearance="secondary"
+                      trigger="place_story_favorites"
+                      className="gap-2"
+                    >
+                      <FavoriteIcon isActive={false} size={16} />
+                      Save
+                    </AuthCTA>
+                  )}
+                </div>
+              </div>
+
+              <div className="hidden lg:grid min-h-[560px] grid-cols-[1.25fr_0.75fr] grid-rows-2 gap-3">
+                {(allPhotos.length > 0 ? allPhotos.slice(0, 3) : [null]).map((photo, index) => (
+                  <button
+                    key={photo ?? "empty"}
+                    onClick={() => {
+                      if (!photo) return;
+                      setGalleryPhotoIndex(index);
+                      setIsImageTransitioning(false);
+                      setPhotoGalleryOpen(true);
+                      setPhotoZoom(1);
+                      setPhotoPosition({ x: 0, y: 0 });
+                    }}
+                    className={cx(
+                      "relative overflow-hidden bg-[#E8E0D1]",
+                      index === 0 ? "row-span-2 rounded-[28px]" : "rounded-[22px]"
+                    )}
+                  >
+                    {photo ? (
+                      <Image
+                        src={photo}
+                        alt={`${place.title} - Photo ${index + 1}`}
+                        fill
+                        sizes={index === 0 ? "50vw" : "25vw"}
+                        className="object-cover transition duration-300 hover:scale-[1.02]"
+                        priority={index === 0}
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-[#6F7A5A]">
+                        <Icon name="photo" size={32} />
+                      </div>
+                    )}
+                    {index === Math.min(allPhotos.length, 3) - 1 && allPhotos.length > 3 && (
+                      <span className="absolute bottom-4 right-4 rounded-xl bg-white/95 px-4 py-2 text-sm font-medium text-[#1F2A1F] shadow-sm">
+                        {allPhotos.length} photos
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </header>
+
+          <div className="mx-auto grid max-w-[1180px] grid-cols-1 gap-10 px-6 py-10 lg:grid-cols-[minmax(0,720px)_320px] lg:px-8 lg:py-14">
+            <article className="min-w-0">
+              {creatorProfile && (
+                <div className="mb-8 flex items-center gap-4 border-b border-[#E7E0D1] pb-6">
+                  {creatorProfile.avatar_url ? (
+                    <Image
+                      src={creatorProfile.avatar_url}
+                      alt={creatorName}
+                      width={56}
+                      height={56}
+                      className="h-14 w-14 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[#E7E0D1] bg-[#F6F2EA] text-lg font-semibold text-[#8F9E4F]">
+                      {initialsFromName(creatorProfile.display_name, creatorProfile.username)}
+                    </div>
+                  )}
+                  <div>
+                    <div className="text-base font-semibold text-[#1F2A1F]">Added by {creatorName}</div>
+                    <div className="text-sm text-[#6F7A5A]">{timeAgo(place.created_at)}</div>
+                  </div>
+                </div>
+              )}
+
+              <section ref={overviewRef} id="overview" className="mb-12">
+                <h2 className="mb-5 font-fraunces text-3xl font-semibold text-[#1F2A1F]">
+                  About this place
+                </h2>
+                {place.description ? (
+                  <div className="max-w-none whitespace-pre-wrap text-[19px] leading-8 text-[#2C3529]">
+                    {place.description}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-[#E7E0D1] bg-[#F8F4EC] p-6 text-[#6F7A5A]">
+                    No description yet
+                  </div>
+                )}
+              </section>
+
+              {tags.length > 0 && (
+                <section className="mb-12 border-y border-[#E7E0D1] py-6">
+                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                    Highlights
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {tags.slice(0, 10).map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-full border border-[#D9D0BD] bg-[#F8F4EC] px-3 py-1.5 text-sm text-[#526047]"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {place.kind === "location" && (
+                <div className="mb-12">
+                  <LocationChildrenSection parentId={place.id} canEdit={canEdit} />
+                </div>
+              )}
+
+              <section ref={photosRef} id="photos" className="mb-12">
+                <div className="mb-5 flex items-end justify-between gap-4">
+                  <h2 className="font-fraunces text-3xl font-semibold text-[#1F2A1F]">Photos</h2>
+                  {allPhotos.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setGalleryPhotoIndex(0);
+                        setPhotoGalleryOpen(true);
+                        setPhotoZoom(1);
+                        setPhotoPosition({ x: 0, y: 0 });
+                      }}
+                      className="text-sm font-medium text-[#7A8B4E] underline-offset-4 hover:underline"
+                    >
+                      View gallery
+                    </button>
+                  )}
+                </div>
+                {allPhotos.length === 0 ? (
+                  <div className="rounded-2xl border border-[#E7E0D1] bg-[#F8F4EC] p-10 text-center text-[#6F7A5A]">
+                    No photos available
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {(photosExpanded ? allPhotos : allPhotos.slice(0, 6)).map((photo, index) => (
+                      <button
+                        key={photo}
+                        onClick={() => {
+                          setGalleryPhotoIndex(index);
+                          setPhotoGalleryOpen(true);
+                          setPhotoZoom(1);
+                          setPhotoPosition({ x: 0, y: 0 });
+                        }}
+                        className={cx(
+                          "relative overflow-hidden rounded-[20px] bg-[#F6F2EA]",
+                          index === 0 ? "aspect-[4/3] sm:col-span-2" : "aspect-square"
+                        )}
+                      >
+                        <Image
+                          src={photo}
+                          alt={`${place.title} - Photo ${index + 1}`}
+                          fill
+                          sizes="(min-width: 1024px) 640px, 100vw"
+                          className="object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {allPhotos.length > 6 && !photosExpanded && (
+                  <button
+                    onClick={() => setPhotosExpanded(true)}
+                    className="mt-4 h-11 w-full rounded-xl border border-[#D9D0BD] bg-white text-sm font-medium text-[#1F2A1F] transition hover:bg-[#F8F4EC]"
+                  >
+                    Show all {allPhotos.length} photos
+                  </button>
+                )}
+              </section>
+
+              {place.video_url && (() => {
+                const embedUrl = convertInstagramReelToEmbed(place.video_url);
+                if (!embedUrl) return null;
+                return (
+                  <section className="mb-12">
+                    <h2 className="mb-5 font-fraunces text-3xl font-semibold text-[#1F2A1F]">Video</h2>
+                    <div className="relative max-w-md overflow-hidden rounded-[20px] border border-[#E7E0D1] bg-[#F8F4EC]" style={{ aspectRatio: "9/16" }}>
+                      <iframe
+                        src={embedUrl}
+                        title={`Instagram Reel for ${place.title}`}
+                        className="absolute inset-0 h-full w-full"
+                        frameBorder="0"
+                        scrolling="no"
+                        allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+                        allowFullScreen
+                        loading="lazy"
+                      />
+                    </div>
+                  </section>
+                );
+              })()}
+
+              {placeCollections.length > 0 && (
+                <section className="mb-12">
+                  <h2 className="mb-5 font-fraunces text-3xl font-semibold text-[#1F2A1F]">
+                    More to read
+                  </h2>
+                  <div className="space-y-4">
+                    {placeCollections.map((c) => (
+                      <Link
+                        key={c.id}
+                        href={`/collections/${c.id}`}
+                        className="group flex overflow-hidden rounded-[20px] border border-[#E7E0D1] bg-white transition hover:shadow-sm"
+                      >
+                        <div className="relative aspect-square w-28 shrink-0 bg-[#F6F2EA] sm:w-36">
+                          {c.cover_image ? (
+                            <Image
+                              src={c.cover_image}
+                              alt=""
+                              fill
+                              sizes="144px"
+                              className="object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-[#A8B096]">
+                              <Icon name="photo" size={24} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1 p-4">
+                          <div className="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#8F9E4F]">
+                            {c.access_type === "premium" ? "Premium collection" : "Collection"}
+                          </div>
+                          <h3 className="font-fraunces text-lg font-semibold text-[#1F2A1F] group-hover:text-[#7A8B4E]">
+                            {c.title}
+                          </h3>
+                          {c.description && (
+                            <p className="mt-1 line-clamp-2 text-sm leading-6 text-[#6F7A5A]">{c.description}</p>
+                          )}
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              <section ref={commentsRef} id="comments" className="mb-16">
+                <h2 className="mb-2 font-fraunces text-3xl font-semibold text-[#1F2A1F]">Reviews</h2>
+                {placeRating.count > 0 && (
+                  <div className="mb-5 flex items-center gap-2 text-sm text-[#1F2A1F]">
+                    <StarRating value={placeRating.avg} size={16} />
+                    <span className="font-semibold">{placeRating.avg.toFixed(2)}</span>
+                    <span className="text-[#6F7A5A]">·</span>
+                    <span className="text-[#6F7A5A]">{placeRating.count} review{placeRating.count === 1 ? "" : "s"}</span>
+                  </div>
+                )}
+                {place.comments_enabled === false ? (
+                  <div className="rounded-2xl border border-[#E7E0D1] bg-[#F8F4EC] p-8 text-center text-[#6F7A5A]">
+                    Reviews are disabled for this place
+                  </div>
+                ) : (
+                  <>
+                    {userId ? (
+                      <div className="mb-6 rounded-2xl border border-[#E7E0D1] bg-white p-4">
+                        <div className="mb-3">
+                          <div className="mb-1.5 text-xs uppercase tracking-wide text-[#6F7A5A]">Your rating</div>
+                          <StarRating value={commentRating} size={28} onChange={setCommentRating} />
+                        </div>
+                        <textarea
+                          className="mb-3 w-full resize-none bg-transparent text-sm text-[#1F2A1F] outline-none placeholder:text-[#8F9E4F]/40"
+                          placeholder="Share your thoughts..."
+                          rows={3}
+                          value={commentText}
+                          onChange={(e) => {
+                            setCommentText(e.target.value);
+                            setCommentError(null);
+                          }}
+                        />
+                        {commentError && <div className="mb-3 text-xs text-[#C96A5B]">{commentError}</div>}
+                        <div className="flex justify-end">
+                          <button
+                            onClick={addComment}
+                            disabled={!commentText.trim() || sending}
+                            className="h-11 rounded-xl bg-[#8F9E4F] px-5 text-sm font-medium text-white transition hover:brightness-110 disabled:bg-[#DADDD0] disabled:opacity-50"
+                          >
+                            {sending ? "Posting…" : "Post"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => requestAuthForComment("place_story_comments")}
+                        className="mb-6 block w-full rounded-2xl border border-[#E7E0D1] bg-white p-4 text-left transition hover:bg-[#F8F4EC]"
+                      >
+                        <div className="mb-3">
+                          <div className="mb-1.5 text-xs uppercase tracking-wide text-[#6F7A5A]">Your rating</div>
+                          <StarRating value={0} size={28} />
+                        </div>
+                        <div className="min-h-[82px] rounded-xl border border-[#E7E0D1] bg-[#F8F4EC] px-3 py-2 text-sm text-[#8F9E4F]/40">
+                          Share your thoughts...
+                        </div>
+                      </button>
+                    )}
+
+                    {commentsLoading ? (
+                      <div className="space-y-4">
+                        {Array.from({ length: 3 }).map((_, i) => (
+                          <div key={i} className="flex gap-3">
+                            <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-[#E7E0D1]" />
+                            <div className="flex-1 space-y-2">
+                              <div className="h-4 w-24 animate-pulse rounded bg-[#E7E0D1]" />
+                              <div className="h-4 w-full animate-pulse rounded bg-[#E7E0D1]" />
+                              <div className="h-4 w-3/4 animate-pulse rounded bg-[#E7E0D1]" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : comments.length === 0 ? (
+                      <div className="rounded-2xl border border-[#E7E0D1] bg-[#F8F4EC] p-8 text-center text-[#6F7A5A]">
+                        No comments yet
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {comments.map((c) => {
+                          const isMyComment = userId && c.user_id === userId;
+                          const userName = c.user_display_name || c.user_username || "User";
+                          const userInitials = initialsFromName(c.user_display_name, c.user_username);
+
+                          return (
+                            <div key={c.id} className="rounded-2xl border border-[#E7E0D1] bg-white p-4">
+                              <div className="flex items-start gap-3">
+                                {c.user_avatar_url ? (
+                                  <Image
+                                    src={c.user_avatar_url}
+                                    alt={userName}
+                                    width={40}
+                                    height={40}
+                                    className="h-10 w-10 shrink-0 rounded-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#E7E0D1] bg-[#F8F4EC] text-sm font-semibold text-[#8F9E4F]">
+                                    {userInitials}
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="mb-1 flex items-start justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                      <div className="text-sm font-semibold text-[#1F2A1F]">{userName}</div>
+                                      <div className="text-xs text-[#8F9E4F]/70">{timeAgo(c.created_at)}</div>
+                                    </div>
+                                    {isMyComment && (
+                                      <button
+                                        onClick={() => setCommentToDeleteId(c.id)}
+                                        disabled={deletingCommentId === c.id}
+                                        className="shrink-0 text-xs text-[#C96A5B] transition hover:text-[#B85A4B] disabled:opacity-50"
+                                      >
+                                        {deletingCommentId === c.id ? "Deleting..." : "Delete"}
+                                      </button>
+                                    )}
+                                  </div>
+                                  {typeof c.rating === "number" && (
+                                    <div className="mb-1">
+                                      <StarRating value={c.rating} size={14} />
+                                    </div>
+                                  )}
+                                  <div className="text-sm leading-relaxed text-[#1F2A1F]">{c.text}</div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
+              </section>
+            </article>
+
+            <aside className="lg:sticky lg:top-24 lg:self-start">
+              <div className="space-y-4 rounded-[22px] border border-[#E7E0D1] bg-white p-5 shadow-sm">
+                <div className="grid grid-cols-2 gap-3 border-b border-[#E7E0D1] pb-4">
+                  <div>
+                    <div className="text-2xl font-semibold text-[#1F2A1F]">{favoritesCount}</div>
+                    <div className="text-xs text-[#6F7A5A]">Favorites</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-semibold text-[#1F2A1F]">{commentsCount}</div>
+                    <div className="text-xs text-[#6F7A5A]">Comments</div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (!userId) {
+                      redirectToAuth("place_story_comment_sidebar");
+                      return;
+                    }
+                    scrollToSection("comments");
+                  }}
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#E7E0D1] bg-white text-sm font-medium text-[#1F2A1F] transition hover:bg-[#F8F4EC]"
+                >
+                  <Icon name="comment" size={18} />
+                  Write a comment
+                </button>
+                {hasMapTarget && (
+                  <button
+                    onClick={handleOpenGoogleMaps}
+                    disabled={resolvingPlaceId}
+                    className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#E7E0D1] bg-white text-sm font-medium text-[#1F2A1F] transition hover:bg-[#F8F4EC] disabled:opacity-50"
+                  >
+                    <Icon name="location" size={18} />
+                    {resolvingPlaceId ? "Opening..." : "Open in Maps"}
+                  </button>
+                )}
+                {hasLocationContactDetails && (
+                  <div ref={desktopContactRef}>
+                    <PlaceContacts
+                      phone={place.phone}
+                      website={place.website}
+                      instagram={place.instagram}
+                      youtube={place.youtube}
+                      telegram={place.telegram}
+                      title="Contact"
+                      variant="card"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <section ref={mapRef} id="map" className="mt-6">
+                <h2 className="mb-3 text-base font-semibold text-[#1F2A1F]">Location</h2>
+                {place.lat && place.lng ? (
+                  <div className="h-[320px] overflow-hidden rounded-[20px] bg-[#F8F4EC]">
+                    <PlaceMapView place={place} onMarkerClick={() => handleOpenGoogleMaps()} />
+                  </div>
+                ) : (
+                  <div className="rounded-[20px] border border-[#E7E0D1] bg-[#F8F4EC] p-8 text-center text-sm text-[#6F7A5A]">
+                    Location not available
+                  </div>
+                )}
+              </section>
+            </aside>
+          </div>
+
+          {photoGalleryOpen && (
+            <PhotoGalleryModal
+              photos={allPhotos}
+              title={place.title}
+              currentIndex={galleryPhotoIndex}
+              isTransitioning={isImageTransitioning}
+              zoom={photoZoom}
+              position={photoPosition}
+              onClose={closePhotoGallery}
+              onNext={handleNextPhoto}
+              onPrev={handlePrevPhoto}
+              onDoubleClick={handlePhotoDoubleClick}
+              onTouchStart={handleGalleryTouchStart}
+              onTouchMove={handleGalleryTouchMove}
+              onTouchEnd={handleGalleryTouchEnd}
+              onClosePress={handleGalleryClosePress}
+              onControlTouch={stopGalleryControlTouch}
+            />
+          )}
+
+          <FiltersModal
+            isOpen={filterOpen}
+            onClose={() => setFilterOpen(false)}
+            onApply={handleFiltersApply}
+            appliedFilters={activeFilters}
+            userAccess={access}
+            getFilteredCount={async (draftFilters: ActiveFilters) => {
+              try {
+                let countQuery = supabase.from("places").select("id", { count: 'exact', head: true });
+
+                if (draftFilters.categories.length > 0) {
+                  countQuery = countQuery.overlaps("categories", draftFilters.categories);
+                }
+
+                if (draftFilters.kinds && draftFilters.kinds.length > 0) {
+                  countQuery = countQuery.in("kind", draftFilters.kinds);
+                }
+
+                const { count, error } = await countQuery;
+                if (error) {
+                  if (isAbortLikeError(error)) return 0;
+                  console.error("Error counting filtered places:", {
+                    message: error.message,
+                    code: error.code,
+                    details: error.details,
+                    hint: error.hint,
+                    categories: draftFilters.categories,
+                  });
+                  return 0;
+                }
+                return count || 0;
+              } catch (error: unknown) {
+                const err = toErrorLike(error);
+                if (isAbortLikeError(error)) return 0;
+                console.error("Error in getFilteredCount:", {
+                  message: err.message,
+                  name: err.name,
+                  code: err.code,
+                  string: String(error),
+                });
+                return 0;
+              }
+            }}
+          />
+        </main>
+      </SectionErrorBoundary>
+    );
+  }
+
   return (
     <SectionErrorBoundary>
     <main className="min-h-screen bg-white">
@@ -1424,6 +2247,27 @@ export default function PlacePage(props: PageProps) {
                 >
                   <Icon name="edit" size={16} />
                   Edit
+                </button>
+              )}
+              {hasLocationContactDetails && (
+                <button
+                  onClick={scrollToContact}
+                  className="h-11 px-5 rounded-xl bg-[#8F9E4F] hover:bg-[#7E8C45] transition-colors flex items-center justify-center gap-2 text-sm font-semibold text-white"
+                  aria-label="Contact"
+                >
+                  <Icon name="external-link" size={16} />
+                  Contact
+                </button>
+              )}
+              {hasMapTarget && (
+                <button
+                  onClick={handleOpenGoogleMaps}
+                  disabled={resolvingPlaceId}
+                  className="h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-sm font-medium text-[#1F2A1F] disabled:opacity-50"
+                  aria-label="Open in Google Maps"
+                >
+                  <Icon name="location" size={16} />
+                  {resolvingPlaceId ? "Opening..." : "Open in Maps"}
                 </button>
               )}
               <button
@@ -1578,6 +2422,34 @@ export default function PlacePage(props: PageProps) {
                   <div className="px-3 py-1.5 rounded-lg bg-[#FAFAF7] border border-[#ECEEE4] text-[#6F7A5A] text-xs font-medium">
                     {`Haunted Gem #${getPseudoPlaceNumber(place.id)}`}
                   </div>
+                )}
+              </div>
+            )}
+            {(hasLocationContactDetails || hasMapTarget) && (
+              <div
+                className={cx(
+                  "mt-5 grid w-full grid-cols-1 gap-2",
+                  hasLocationContactDetails && hasMapTarget && "min-[390px]:grid-cols-2"
+                )}
+              >
+                {hasLocationContactDetails && (
+                  <button
+                    onClick={scrollToContact}
+                    className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#8F9E4F] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#7E8C45]"
+                  >
+                    <Icon name="external-link" size={16} />
+                    Contact
+                  </button>
+                )}
+                {hasMapTarget && (
+                  <button
+                    onClick={handleOpenGoogleMaps}
+                    disabled={resolvingPlaceId}
+                    className="flex h-11 items-center justify-center gap-2 rounded-xl border border-[#ECEEE4] bg-white px-4 text-sm font-medium text-[#1F2A1F] transition-colors hover:bg-[#FAFAF7] disabled:opacity-50"
+                  >
+                    <Icon name="location" size={16} />
+                    {resolvingPlaceId ? "Opening..." : "Open in Maps"}
+                  </button>
                 )}
               </div>
             )}
@@ -2117,7 +2989,7 @@ export default function PlacePage(props: PageProps) {
               )}
 
               {/* Show on Map (Google Link) */}
-              {place.lat && place.lng && (
+              {hasMapTarget && (
                 <button
                   onClick={handleOpenGoogleMaps}
                   disabled={resolvingPlaceId}
@@ -2140,15 +3012,19 @@ export default function PlacePage(props: PageProps) {
               </button>
 
               {/* Contacts (desktop sidebar) — скрывается полностью если все поля пустые */}
-              <PlaceContacts
-                phone={place.phone}
-                website={place.website}
-                instagram={place.instagram}
-                youtube={place.youtube}
-                telegram={place.telegram}
-                title="Contact"
-                variant="card"
-              />
+              {hasLocationContactDetails && (
+                <div ref={desktopContactRef}>
+                  <PlaceContacts
+                    phone={place.phone}
+                    website={place.website}
+                    instagram={place.instagram}
+                    youtube={place.youtube}
+                    telegram={place.telegram}
+                    title="Contact"
+                    variant="card"
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -2252,8 +3128,8 @@ export default function PlacePage(props: PageProps) {
           )}
 
           {/* Contacts (mobile/tablet) — обёртка только если хотя бы одно поле заполнено */}
-          {(place.phone || place.website || place.instagram || place.youtube || place.telegram) && (
-            <div className="pb-6 mb-6 border-b border-[#ECEEE4]">
+          {hasLocationContactDetails && (
+            <div ref={mobileContactRef} className="pb-6 mb-6 border-b border-[#ECEEE4]">
               <PlaceContacts
                 phone={place.phone}
                 website={place.website}
@@ -2854,6 +3730,139 @@ export default function PlacePage(props: PageProps) {
 
     </main>
     </SectionErrorBoundary>
+  );
+}
+
+type PhotoGalleryModalProps = {
+  photos: string[];
+  title: string;
+  currentIndex: number;
+  isTransitioning: boolean;
+  zoom: number;
+  position: { x: number; y: number };
+  onClose: () => void;
+  onNext: () => void;
+  onPrev: () => void;
+  onDoubleClick: () => void;
+  onTouchStart: (e: React.TouchEvent) => void;
+  onTouchMove: (e: React.TouchEvent) => void;
+  onTouchEnd: (e: React.TouchEvent) => void;
+  onClosePress: (e: React.SyntheticEvent) => void;
+  onControlTouch: (e: React.TouchEvent) => void;
+};
+
+function PhotoGalleryModal({
+  photos,
+  title,
+  currentIndex,
+  isTransitioning,
+  zoom,
+  position,
+  onClose,
+  onNext,
+  onPrev,
+  onDoubleClick,
+  onTouchStart,
+  onTouchMove,
+  onTouchEnd,
+  onClosePress,
+  onControlTouch,
+}: PhotoGalleryModalProps) {
+  if (photos.length === 0) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] bg-black"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    >
+      <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-3 sm:p-4 pt-safe-top">
+        <div className="absolute left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-sm rounded-lg px-3 py-1.5 badge-shadow pointer-events-none">
+          <span className="text-white text-sm font-medium">
+            {currentIndex + 1} / {photos.length}
+          </span>
+        </div>
+        <button
+          type="button"
+          data-gallery-control="true"
+          onPointerDownCapture={onClosePress}
+          onTouchStartCapture={onClosePress}
+          onClick={onClosePress}
+          onTouchStart={onControlTouch}
+          onTouchMove={onControlTouch}
+          onTouchEnd={onControlTouch}
+          className="fixed right-3 z-[120] flex h-16 w-16 min-h-16 min-w-16 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm transition-colors touch-manipulation active:bg-black/70 sm:right-4 sm:h-14 sm:w-14 sm:min-h-14 sm:min-w-14 before:absolute before:content-[''] before:-inset-2 before:rounded-full"
+          style={{ top: 'calc(env(safe-area-inset-top) + 0.75rem)' }}
+          aria-label="Close"
+        >
+          <Icon name="close" size={24} className="pointer-events-none text-white" />
+        </button>
+      </div>
+
+      <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+        <div
+          className="relative w-full h-full flex items-center justify-center"
+          style={{
+            transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
+            transition: 'transform 0.3s ease-out',
+          }}
+        >
+          <Image
+            src={photos[currentIndex]}
+            alt={`${title} - Photo ${currentIndex + 1}`}
+            fill
+            sizes="100vw"
+            className="object-contain transition-opacity duration-300 ease-in-out"
+            style={{ opacity: isTransitioning ? 0 : 1 }}
+            onDoubleClick={onDoubleClick}
+            draggable={false}
+          />
+        </div>
+      </div>
+
+      {photos.length > 1 && (
+        <>
+          <button
+            type="button"
+            data-gallery-control="true"
+            onClick={onPrev}
+            onTouchStart={onControlTouch}
+            onTouchMove={onControlTouch}
+            onTouchEnd={onControlTouch}
+            className="absolute left-2 sm:left-4 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm transition-all touch-manipulation hover:bg-black/70 active:bg-black/80"
+            aria-label="Previous photo"
+          >
+            <Icon name="back" size={24} className="pointer-events-none text-white" />
+          </button>
+          <button
+            type="button"
+            data-gallery-control="true"
+            onClick={onNext}
+            onTouchStart={onControlTouch}
+            onTouchMove={onControlTouch}
+            onTouchEnd={onControlTouch}
+            className="absolute right-2 sm:right-4 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm transition-all touch-manipulation hover:bg-black/70 active:bg-black/80"
+            aria-label="Next photo"
+          >
+            <Icon name="forward" size={24} className="pointer-events-none text-white" />
+          </button>
+        </>
+      )}
+
+      {typeof window !== 'undefined' && (
+        <div
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowLeft') onPrev();
+            if (e.key === 'ArrowRight') onNext();
+            if (e.key === 'Escape') onClose();
+          }}
+          className="pointer-events-none absolute inset-0"
+          style={{ outline: 'none' }}
+        />
+      )}
+    </div>
   );
 }
 

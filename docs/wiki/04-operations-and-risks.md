@@ -1,6 +1,6 @@
 # Operations And Risks
 
-Последнее обновление: 2026-05-15.
+Последнее обновление: 2026-05-27.
 
 ## Production Deployment Target
 
@@ -10,6 +10,37 @@ Live production traffic for Maporia is served by the Vercel project `maporia_ful
 - Vercel project: `maporia_full`.
 - Project id for clean temp deploys: `prj_7h0OXlw5rrbQuREEIso0NGkkLsxp`.
 - Deployment rule: when asked to deploy the live site, run production deploy against `maporia_full`. Deploying only to `maporia` / `https://maporia.vercel.app` will not update the customer-facing site.
+
+## 2026-05-27 Creator Listing Links And Social Previews
+
+Service/experience listings are increasingly used as standalone mini-sites that creators send directly to clients.
+
+Actions taken:
+
+- `/id/[id]` now has server metadata generated from the listing title, description, and `cover_url`, so social previews can use the service/experience cover instead of the generic Maporia card.
+- Added root vanity route `/[slug]`, which resolves visible `places.slug` rows and redirects to `/id/[id]`.
+- Added `scripts/sql/add-place-slugs.sql` to add/backfill unique `places.slug` values and keep new rows normalized.
+
+Follow-up:
+
+- Apply `scripts/sql/add-place-slugs.sql` in Supabase before relying on vanity links in production.
+- Add creator/editor UI for reviewing or customizing the public slug before heavily promoting `/[slug]` links.
+
+## 2026-05-27 Location Story Layout Prototype
+
+Some locations, for example Devil's Tree, need a read/photo-led public page where the description and photo tour are the primary experience, while map/action UI is secondary.
+
+Actions taken:
+
+- Added `places.place_page_layout` model support with `standard` default and `story` alternate layout.
+- `/places/[id]/edit` now exposes a Page layout selector for locations.
+- `/id/[id]` renders `story` locations with the same existing content in an editorial order: title/location, full description, highlights, child listings, photos, collections, reviews, contacts, and map.
+- Added `scripts/sql/add-place-page-layout.sql`.
+
+Follow-up:
+
+- Apply `scripts/sql/add-place-page-layout.sql` in Supabase before turning on `story` in production.
+- Set Devil's Tree to `place_page_layout = 'story'` from the editor after the migration is applied.
 
 ## 2026-05-15 Places Price Options Schema Drift
 

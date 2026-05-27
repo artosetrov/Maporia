@@ -55,6 +55,11 @@ import { useUserAccessContext } from "../../../../contexts/UserAccessContext";
 import { isUserAdmin, canUserCreatePremiumPlace, type AccessLevel } from "../../../../lib/access";
 import { getPublicStoragePath, PLACE_PHOTOS_BUCKET } from "../../../../lib/storagePaths";
 import { getPlaceCatalogHref } from "../../../../lib/navigation";
+import {
+  PLACE_PAGE_LAYOUT_OPTIONS,
+  type PlacePageLayout,
+  normalizePlacePageLayout,
+} from "../../../../config/placeLayout";
 
 type PlacePhotoUrlRow = Pick<Database["public"]["Tables"]["place_photos"]["Row"], "url">;
 import Icon from "../../../../components/Icon";
@@ -91,6 +96,7 @@ type Place = {
   manually_hidden?: boolean | null;
   // Place kind + offer-specific fields (для service / experience)
   kind?: "location" | "service" | "experience" | null;
+  place_page_layout?: PlacePageLayout | null;
   price_amount?: number | null;
   price_currency?: string | null;
   price_unit?: string | null;
@@ -148,6 +154,12 @@ const PLACE_SELECT_BASE =
 const PLACE_SELECT_WITH_PRICE_OPTIONS =
   "id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, is_hidden, manually_hidden, google_place_id, comments_enabled, kind, price_amount, price_currency, price_unit, price_options, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items";
 
+const PLACE_SELECT_WITH_LAYOUT =
+  "id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, is_hidden, manually_hidden, google_place_id, comments_enabled, kind, place_page_layout, price_amount, price_currency, price_unit, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items";
+
+const PLACE_SELECT_WITH_OPTIONAL_COLUMNS =
+  "id, title, description, address, city, city_id, city_name_cached, country, cover_url, photo_urls, video_url, categories, tags, link, phone, website, instagram, youtube, telegram, created_by, created_at, lat, lng, access_level, visibility, is_hidden, manually_hidden, google_place_id, comments_enabled, kind, place_page_layout, price_amount, price_currency, price_unit, price_options, duration_minutes, schedule, host_qualification, service_mode, max_guests, min_guests, meeting_point, cancellation_policy, included_items, bring_items";
+
 function isMissingPriceOptionsColumn(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const err = error as ErrorLike;
@@ -158,10 +170,20 @@ function isMissingPriceOptionsColumn(error: unknown): boolean {
   );
 }
 
+function isMissingPlaceLayoutColumn(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as ErrorLike;
+  return (
+    err.code === "42703" &&
+    (err.message?.includes("places.place_page_layout") === true ||
+      err.message?.includes("place_page_layout") === true)
+  );
+}
+
 async function loadEditablePlace(placeId: string): Promise<PlaceLoadResult> {
   const primary = (await supabase
     .from("places")
-    .select(PLACE_SELECT_WITH_PRICE_OPTIONS)
+    .select(PLACE_SELECT_WITH_OPTIONAL_COLUMNS)
     .eq("id", placeId)
     .single()) as PlaceLoadResult;
 
@@ -169,7 +191,41 @@ async function loadEditablePlace(placeId: string): Promise<PlaceLoadResult> {
     return { data: primary.data as Place, error: null };
   }
 
-  if (!isMissingPriceOptionsColumn(primary.error)) {
+  if (isMissingPlaceLayoutColumn(primary.error)) {
+    const priceOnly = (await supabase
+      .from("places")
+      .select(PLACE_SELECT_WITH_PRICE_OPTIONS)
+      .eq("id", placeId)
+      .single()) as PlaceLoadResult;
+
+    if (!priceOnly.error) {
+      return {
+        data: { ...(priceOnly.data as Place), place_page_layout: "standard" },
+        error: null,
+      };
+    }
+
+    if (!isMissingPriceOptionsColumn(priceOnly.error)) {
+      return { data: null, error: priceOnly.error };
+    }
+  } else if (isMissingPriceOptionsColumn(primary.error)) {
+    const layoutOnly = (await supabase
+      .from("places")
+      .select(PLACE_SELECT_WITH_LAYOUT)
+      .eq("id", placeId)
+      .single()) as PlaceLoadResult;
+
+    if (!layoutOnly.error) {
+      return {
+        data: { ...(layoutOnly.data as Place), price_options: null },
+        error: null,
+      };
+    }
+
+    if (!isMissingPlaceLayoutColumn(layoutOnly.error)) {
+      return { data: null, error: layoutOnly.error };
+    }
+  } else {
     return { data: null, error: primary.error };
   }
 
@@ -184,7 +240,7 @@ async function loadEditablePlace(placeId: string): Promise<PlaceLoadResult> {
   }
 
   return {
-    data: { ...(fallback.data as Place), price_options: null },
+    data: { ...(fallback.data as Place), price_options: null, place_page_layout: "standard" },
     error: null,
   };
 }
@@ -360,6 +416,7 @@ export default function PlaceEditorHub(props: PageProps) {
   const [commentsEnabled, setCommentsEnabled] = useState(true); // Default to enabled
   const [togglingComments, setTogglingComments] = useState(false);
   const [togglingAccess, setTogglingAccess] = useState(false);
+  const [togglingLayout, setTogglingLayout] = useState<PlacePageLayout | null>(null);
   const [currentOwner, setCurrentOwner] = useState<AdminOwnerUser | null>(null);
   const [ownerSearchQuery, setOwnerSearchQuery] = useState("");
   const [ownerSearchResults, setOwnerSearchResults] = useState<AdminOwnerUser[]>([]);
@@ -949,6 +1006,47 @@ export default function PlaceEditorHub(props: PageProps) {
     if (updateData?.[0]) {
       setPlace((prev) => (prev ? { ...prev, access_level: newLevel } : prev));
     }
+    setTimeout(() => { isUpdatingRef.current = false; }, 2000);
+    if (navigator.vibrate) navigator.vibrate(10);
+  }
+
+  async function handleChangePageLayout(nextLayout: PlacePageLayout) {
+    if (!placeId || !user || !place) return;
+    const currentLayout = normalizePlacePageLayout(place.place_page_layout);
+    if (nextLayout === currentLayout) return;
+
+    isUpdatingRef.current = true;
+    setTogglingLayout(nextLayout);
+    setError(null);
+
+    const currentIsAdmin = isUserAdmin(access);
+    const updateQuery = supabase
+      .from("places")
+      // @ts-expect-error Supabase generated types infer update payload as never
+      .update({ place_page_layout: nextLayout })
+      .eq("id", placeId);
+    if (!currentIsAdmin) updateQuery.eq("created_by", user.id);
+
+    const { error: updateError, data: updateData } = await updateQuery.select();
+    setTogglingLayout(null);
+
+    if (updateError) {
+      if (updateError.message?.includes("place_page_layout")) {
+        setError("Database migration required. Please run scripts/sql/add-place-page-layout.sql in Supabase SQL Editor.");
+      } else {
+        setError(updateError.message || "Failed to update page layout");
+      }
+      isUpdatingRef.current = false;
+      return;
+    }
+
+    if (!updateData || updateData.length === 0) {
+      setError("No rows were updated. Please check your permissions or run the database migration.");
+      isUpdatingRef.current = false;
+      return;
+    }
+
+    setPlace((prev) => (prev ? { ...prev, place_page_layout: nextLayout } : prev));
     setTimeout(() => { isUpdatingRef.current = false; }, 2000);
     if (navigator.vibrate) navigator.vibrate(10);
   }
@@ -2072,6 +2170,58 @@ export default function PlaceEditorHub(props: PageProps) {
                 Settings
               </h2>
             </div>
+
+            {place.kind === "location" && (
+              <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">
+                <div className="mb-4">
+                  <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Page layout</h3>
+                  <p className="text-sm text-[#6F7A5A]">
+                    Choose how this location reads on the public page.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {PLACE_PAGE_LAYOUT_OPTIONS.map((option) => {
+                    const isSelected = normalizePlacePageLayout(place.place_page_layout) === option.value;
+                    const isSaving = togglingLayout === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handleChangePageLayout(option.value)}
+                        disabled={togglingLayout !== null}
+                        className={cx(
+                          "rounded-xl border p-4 text-left transition",
+                          isSelected
+                            ? "border-[#8F9E4F] bg-[#F4F7EA]"
+                            : "border-[#ECEEE4] bg-[#FAFAF7] hover:border-[#DDE5C2] hover:bg-white",
+                          togglingLayout !== null && "cursor-wait opacity-70"
+                        )}
+                        aria-pressed={isSelected}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-fraunces text-base font-semibold text-[#1F2A1F]">
+                            {option.label}
+                          </span>
+                          <span
+                            className={cx(
+                              "flex h-6 w-6 items-center justify-center rounded-full border",
+                              isSelected
+                                ? "border-[#8F9E4F] bg-[#8F9E4F] text-white"
+                                : "border-[#DADDD0] bg-white text-transparent"
+                            )}
+                          >
+                            <Icon name="check" size={14} />
+                          </span>
+                        </div>
+                        <p className="mt-2 text-sm leading-5 text-[#6F7A5A]">
+                          {isSaving ? "Saving..." : option.description}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Visibility (moved from Place settings) */}
             <div className="rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm">

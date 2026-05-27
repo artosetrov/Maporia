@@ -47,6 +47,7 @@ export type Profile = {
  * См. docs/PRICING_V2_PLAN.md § 1.
  */
 import type { PlanId } from "./lib/pricing/registry";
+import type { PlacePageLayout } from "./config/placeLayout";
 
 export type Plan = PlanId;
 
@@ -72,6 +73,8 @@ export type CreatorPlan =
  */
 export type Place = {
   id: string;
+  /** Stable public URL slug. `/slug` redirects to `/id/<id>` when present. */
+  slug?: string | null;
   title: string;
   description?: string | null;
   address?: string | null;
@@ -122,6 +125,11 @@ export type Place = {
    * считаются как primary OR secondary. См. docs/PRICING_V2_PLAN.md § 3.
    */
   secondary_kinds?: ('location' | 'service' | 'experience')[] | null;
+  /**
+   * Public detail page template. Defaults to `standard`; `story` is for
+   * read/photo-led locations such as Devil's Tree.
+   */
+  place_page_layout?: PlacePageLayout | null;
 };
 
 /**
@@ -206,6 +214,7 @@ export type PlaceCollection = {
  */
 export type PlaceListItem = {
   id: string;
+  slug?: string | null;
   title: string;
   description: string | null;
   city: string | null;

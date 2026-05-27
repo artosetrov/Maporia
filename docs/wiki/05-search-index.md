@@ -1,6 +1,6 @@
 # Search Index
 
-Последнее обновление: 2026-05-15.
+Последнее обновление: 2026-05-27.
 
 ## По Доменам
 
@@ -14,6 +14,8 @@
 | Creator plans | `creator_location`, `creator_pro`, `creator_all`, legacy `creator_service`, `creator_experience` | `app/lib/pricing/registry.ts`, `app/lib/access.ts` |
 | Quota | `checkQuota`, `bonus_listing_credits`, `EXTRA_LISTING` | `app/lib/access.ts`, `app/lib/plans.ts` |
 | Places | `places`, `Place`, `PlaceListItem`, `kind` | `app/types.ts`, `app/types/supabase.ts`, `app/(auth)/places/**` |
+| Place page layouts | `place_page_layout`, `PlacePageLayout`, `story`, `add-place-page-layout` | `app/config/placeLayout.ts`, `app/id/[id]/page.tsx`, `app/(auth)/places/[id]/edit/page.tsx`, `scripts/sql/add-place-page-layout.sql` |
+| Place vanity links | `slug`, `places.slug`, `normalizePlaceSlug`, `add-place-slugs` | `app/[slug]/page.tsx`, `app/lib/placeSlugs.ts`, `scripts/sql/add-place-slugs.sql` |
 | Draft cleanup | `orphan`, `cleanup-drafts`, `ORPHAN_ADD_DRAFT` | `app/lib/placeDrafts.ts`, `app/api/maintenance/cleanup-drafts/route.ts`, `app/(auth)/add/page.tsx` |
 | Service/Experience | `OfferPlaceView`, `price_amount`, `price_options`, `schedule`, `host_qualification` | `app/id/[id]/_views/`, edit pages |
 | Collections | `collections`, `place_collections` | `app/collections/**`, `app/(auth)/admin/collections/**` |
@@ -77,6 +79,7 @@ npm run docs:check
 | Роли, доступ, квоты | `app/lib/access.ts` |
 | Shared domain types | `app/types.ts` |
 | Generated Supabase schema | `app/types/supabase.ts` |
+| Place vanity slugs | `app/lib/placeSlugs.ts`, `scripts/sql/add-place-slugs.sql` |
 | Категории и города | `app/constants.ts` |
 | Home sections | `app/constants/homeSections.ts` |
 | Supabase browser client | `app/lib/supabase.ts` |

@@ -686,18 +686,19 @@ function HomePageInner() {
         // раздела «Места» → в TYPE предвыбран Locations.
         appliedFilters={{ ...activeFilters, kinds: [activeKind] }}
         userAccess={access}
-        // С 2026-05-08: убрали singleKindMode — везде в приложении TYPE multi-select.
-        // См. docs/FILTERS_UNIFICATION_PLAN.md. На главной таб ?tab= остаётся как
-        // отдельный навигационный механизм; при открытии модала kinds инициализируются
-        // активным табом (см. appliedFilters выше), но юзер может снять/добавить
-        // другие kinds и при apply всё уйдёт в /map?kinds=…
-        getCategoryCount={async (category: string, premiumOnly?: boolean) => {
+        // TYPE в модалке — одиночный выбор; открываем её с активным табом
+        // главной и при apply отправляем этот kind на /map?kinds=…
+        singleKindMode
+        getCategoryCount={async (category: string, premiumOnly?: boolean, kinds?: ActiveFilters["kinds"]) => {
           try {
             let query = supabase
               .from("places")
               .select("id", { count: 'exact', head: true })
               .overlaps("categories", [category])
               .eq("is_hidden", false);
+            if (kinds && kinds.length > 0) {
+              query = query.in("kind", kinds);
+            }
             if (premiumOnly) {
               query = query.eq("access_level", "premium");
             }

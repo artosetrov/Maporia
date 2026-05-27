@@ -5,10 +5,10 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
-  CATEGORIES,
   LOCATION_CATEGORIES,
   SERVICE_CATEGORIES,
   EXPERIENCE_CATEGORIES,
+  getCategoriesByKind,
   getTagEmoji,
   stripTagEmoji,
 } from "../constants";
@@ -33,6 +33,41 @@ export type ActiveFilters = {
    */
   kinds?: ('location' | 'service' | 'experience')[];
 };
+
+type PlaceKind = NonNullable<ActiveFilters["kinds"]>[number];
+
+const KIND_OPTIONS = [
+  { value: "location", icon: "location", label: "Locations" },
+  { value: "experience", icon: "sparkles", label: "Experiences" },
+  { value: "service", icon: "wrench", label: "Services" },
+] as const satisfies Array<{ value: PlaceKind; icon: string; label: string }>;
+
+function isPlaceKind(value: string | null | undefined): value is PlaceKind {
+  return value === "location" || value === "service" || value === "experience";
+}
+
+function getCategoryKind(category: string): PlaceKind | null {
+  if ((LOCATION_CATEGORIES as readonly string[]).includes(category)) return "location";
+  if ((SERVICE_CATEGORIES as readonly string[]).includes(category)) return "service";
+  if ((EXPERIENCE_CATEGORIES as readonly string[]).includes(category)) return "experience";
+  return null;
+}
+
+function normalizeSingleKindFilters(filters: ActiveFilters, fallbackKind: PlaceKind = "location"): ActiveFilters {
+  const validKinds = (filters.kinds ?? []).filter(isPlaceKind);
+  const inferredKind = filters.categories.map(getCategoryKind).find((kind): kind is PlaceKind => kind !== null);
+  const kind = validKinds.length === 1 ? validKinds[0] : inferredKind ?? validKinds[0] ?? fallbackKind;
+  const allowedCategories = new Set(getCategoriesByKind(kind));
+  const categories = filters.categories.filter((category) => allowedCategories.has(category));
+  const categoriesChanged = categories.length !== filters.categories.length;
+
+  return {
+    ...filters,
+    kinds: [kind],
+    categories,
+    tags: categoriesChanged ? [] : filters.tags ?? [],
+  };
+}
 
 type FiltersModalProps = {
   isOpen: boolean;
@@ -104,8 +139,8 @@ type FiltersModalProps = {
    * Если TYPE показан, но страница игнорирует `activeFilters.kinds` —
    * это бага: юзер выбирает «Experiences», а в результатах локации.
    *
-   * NB: на главной TYPE НЕ скрывают — там вместо этого `singleKindMode` +
-   * страница перехватывает изменение kinds и синхронизирует с табом.
+   * NB: на главной TYPE НЕ скрывают — страница инициализирует модалку
+   * текущим табом и при apply отправляет выбранный kind на /map.
    */
   hideKindFilter?: boolean;
   /**
@@ -114,6 +149,10 @@ type FiltersModalProps = {
    * страницах, где тип карточки — это первичный навигационный признак
    * (главная: ?tab=places|services|experiences). Категории при этом
    * показываются только для выбранного типа.
+   *
+   * По умолчанию включён: фильтр TYPE в Maporia является одиночным выбором.
+   * Передайте false только если конкретный экран осознанно поддерживает
+   * multi-kind фильтрацию.
    */
   singleKindMode?: boolean;
 };
@@ -137,6 +176,7 @@ export default function FiltersModal({
   hideKindFilter,
   singleKindMode,
 }: FiltersModalProps) {
+  const useSingleKindSelection = !hideKindFilter && singleKindMode !== false;
   // Ensure appliedFilters is always defined
   const safeAppliedFilters: ActiveFilters = useMemo(
     () =>
@@ -198,16 +238,45 @@ export default function FiltersModal({
           premium: false,
         };
       }
+      if (useSingleKindSelection) {
+        filtersToSet = normalizeSingleKindFilters(filtersToSet);
+      }
       setDraftFilters(filtersToSet);
       setDraftCities(appliedCitiesRef.current);
     }
-  }, [isOpen, userAccess]);
+  }, [isOpen, userAccess, useSingleKindSelection]);
 
   
   const draftPremium = !!draftFilters.premium;
-  const draftKinds = draftFilters.kinds ?? [];
-  // Стабильный ключ массива kinds, чтобы избежать лишних re-fetch'ей.
-  const draftKindsKey = [...draftKinds].sort().join(",");
+  const draftKinds = (draftFilters.kinds ?? []).filter(isPlaceKind);
+  const effectiveDraftKinds: PlaceKind[] =
+    useSingleKindSelection
+      ? [draftKinds[0] ?? "location"]
+      : draftKinds;
+  const effectiveDraftKindsKey = [...effectiveDraftKinds].sort().join(",");
+
+  // Видимые секции категорий зависят от выбранного TYPE.
+  // В single-kind режиме показываем только таксономию выбранного типа.
+  // В legacy multi-kind режиме пустой выбор всё ещё может показать все три таксономии.
+  const visibleCategorySections = useMemo<
+    Array<{ key: PlaceKind; heading: string; categories: readonly string[] }>
+  >(() => {
+    const all: Array<{ key: PlaceKind; heading: string; categories: readonly string[] }> = [
+      { key: 'location',   heading: 'PLACES',      categories: LOCATION_CATEGORIES },
+      { key: 'service',    heading: 'SERVICES',    categories: SERVICE_CATEGORIES },
+      { key: 'experience', heading: 'EXPERIENCES', categories: EXPERIENCE_CATEGORIES },
+    ];
+    if (effectiveDraftKinds.length === 0) return all;
+    return all.filter((section) => effectiveDraftKinds.includes(section.key));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveDraftKindsKey]);
+
+  // Плоский список всех видимых категорий — для fallback counts и computeFilterCounts.
+  const visibleCategoriesFlat = useMemo<string[]>(() => {
+    const out: string[] = [];
+    for (const section of visibleCategorySections) out.push(...section.categories);
+    return out;
+  }, [visibleCategorySections]);
 
   // Спринт 2.1: один SELECT при открытии модала. Загруженные места живут до закрытия.
   // Это убирает 12+ round-trip'ов на category/kind counts.
@@ -241,11 +310,11 @@ export default function FiltersModal({
     if (!getCategoryCount) return;
     let cancelled = false;
     const loadCategoryCounts = async () => {
-      const kindsParam = draftKindsKey
-        ? (draftKindsKey.split(",") as ('location' | 'service' | 'experience')[])
+      const kindsParam = effectiveDraftKindsKey
+        ? (effectiveDraftKindsKey.split(",") as PlaceKind[])
         : undefined;
       const counts: Record<string, number> = {};
-      for (const category of CATEGORIES) {
+      for (const category of visibleCategoriesFlat) {
         try {
           const count = await getCategoryCount(category, draftPremium, kindsParam);
           if (cancelled) return;
@@ -258,7 +327,7 @@ export default function FiltersModal({
     };
     loadCategoryCounts();
     return () => { cancelled = true; };
-  }, [isOpen, getCategoryCount, draftPremium, draftKindsKey, useClientReduce]);
+  }, [isOpen, getCategoryCount, draftPremium, effectiveDraftKindsKey, visibleCategoriesFlat, useClientReduce]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -283,29 +352,6 @@ export default function FiltersModal({
     return () => { cancelled = true; };
   }, [isOpen, getKindCount, draftPremium, useClientReduce]);
 
-  // Видимые секции категорий зависят от выбранного TYPE (Спринт 1.1).
-  // Если kinds пустой → показываем все три таксономии с подзаголовками.
-  // Если выбран один или несколько kinds → только их таксономии.
-  const visibleCategorySections = useMemo<
-    Array<{ key: 'location' | 'service' | 'experience'; heading: string; categories: readonly string[] }>
-  >(() => {
-    const all: Array<{ key: 'location' | 'service' | 'experience'; heading: string; categories: readonly string[] }> = [
-      { key: 'location',   heading: 'PLACES',      categories: LOCATION_CATEGORIES },
-      { key: 'service',    heading: 'SERVICES',    categories: SERVICE_CATEGORIES },
-      { key: 'experience', heading: 'EXPERIENCES', categories: EXPERIENCE_CATEGORIES },
-    ];
-    if (draftKinds.length === 0) return all;
-    return all.filter((s) => draftKinds.includes(s.key));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftKindsKey]);
-
-  // Плоский список всех видимых категорий — для computeFilterCounts.
-  const visibleCategoriesFlat = useMemo<string[]>(() => {
-    const out: string[] = [];
-    for (const s of visibleCategorySections) out.push(...s.categories);
-    return out;
-  }, [visibleCategorySections]);
-
   // Ref for stable getAvailableTags / getTagCounts to avoid re-triggering on every render
   const getAvailableTagsRef = useRef(getAvailableTags);
   useEffect(() => { getAvailableTagsRef.current = getAvailableTags; }, [getAvailableTags]);
@@ -321,7 +367,7 @@ export default function FiltersModal({
       premium: draftPremium,
       categories: draftFilters.categories.length > 0 ? draftFilters.categories : undefined,
       tags: (draftFilters.tags ?? []).length > 0 ? (draftFilters.tags ?? []) : undefined,
-      kinds: draftKinds.length > 0 ? draftKinds : undefined,
+      kinds: effectiveDraftKinds.length > 0 ? effectiveDraftKinds : undefined,
       // Города интегрируем здесь же, чтобы счётчики реагировали на city-фильтр.
       cities: draftCities.length > 0 ? draftCities : undefined,
       cityCoordsMap,
@@ -348,7 +394,7 @@ export default function FiltersModal({
     draftPremium,
     draftFilters.categories,
     draftFilters.tags,
-    draftKindsKey,
+    effectiveDraftKindsKey,
     visibleCategoriesFlat,
     availableTags,
     draftCities,
@@ -590,6 +636,7 @@ export default function FiltersModal({
       sort: null,
       tags: [],
       premium: false,
+      ...(useSingleKindSelection ? { kinds: ["location" as PlaceKind] } : {}),
     };
     setDraftFilters(clearedFilters);
     // Immediately apply cleared filters and close modal
@@ -614,8 +661,11 @@ export default function FiltersModal({
   };
 
   const handleApply = () => {
+    const filtersToApply = useSingleKindSelection
+      ? normalizeSingleKindFilters(draftFilters)
+      : draftFilters;
     // Применяем фильтры и обновляем родительский компонент
-    onApply(draftFilters);
+    onApply(filtersToApply);
     
     // Обновляем города в родительском компоненте
     // Важно: вызываем это ДО onClose, чтобы состояние обновилось до закрытия модального окна
@@ -633,7 +683,7 @@ export default function FiltersModal({
 
   const handleClose = () => {
     // Reset draft to applied state
-    setDraftFilters(safeAppliedFilters);
+    setDraftFilters(useSingleKindSelection ? normalizeSingleKindFilters(safeAppliedFilters) : safeAppliedFilters);
     onClose();
   };
 
@@ -743,14 +793,10 @@ export default function FiltersModal({
           <div>
             <h3 className="text-xs font-semibold text-[#6F7A5A] uppercase tracking-wide mb-4">TYPE</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {([
-                { value: "location", icon: "location", label: "Locations" },
-                { value: "experience", icon: "sparkles", label: "Experiences" },
-                { value: "service", icon: "wrench", label: "Services" },
-              ] as const).map((opt) => {
-                const isSelected = (draftFilters.kinds ?? []).includes(opt.value);
+              {KIND_OPTIONS.map((opt) => {
+                const isSelected = effectiveDraftKinds.includes(opt.value);
                 const count = kindCounts[opt.value];
-                const isDisabled = !isSelected && count === 0;
+                const isDisabled = !useSingleKindSelection && !isSelected && count === 0;
                 return (
                   <button
                     key={opt.value}
@@ -761,11 +807,11 @@ export default function FiltersModal({
                       if (isDisabled) return;
                       setDraftFilters((prev) => {
                         const current = prev.kinds ?? [];
-                        // singleKindMode: ровно один тип всегда выбран → клик
+                        // Single kind: ровно один тип всегда выбран → клик
                         // по другому всегда replace, deselect невозможен.
-                        if (singleKindMode) {
+                        if (useSingleKindSelection) {
                           if (current.length === 1 && current[0] === opt.value) return prev;
-                          return { ...prev, kinds: [opt.value] };
+                          return { ...prev, kinds: [opt.value], categories: [], tags: [] };
                         }
                         // Обычный режим — multi-toggle.
                         return {
@@ -795,8 +841,8 @@ export default function FiltersModal({
                 );
               })}
             </div>
-            {/* В singleKindMode ровно один выбран — хинт неуместен. */}
-            {!singleKindMode && (
+            {/* В single-kind режиме ровно один выбран — хинт неуместен. */}
+            {!useSingleKindSelection && (
               <p className="mt-3 text-xs text-[#6F7A5A]">
                 Leave empty to show all types.
               </p>

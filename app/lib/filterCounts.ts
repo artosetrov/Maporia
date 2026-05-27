@@ -50,8 +50,14 @@ export function computeFilterCounts<P extends FilterablePlace>(
   // Total — все фильтры применяются.
   const total = filterPlaces(places, filters).length;
 
-  // KIND counts: применяем premium + cities + categories + tags. Пропускаем kinds.
-  const kindBase = filterPlaces(places, withoutGroup(filters, 'kinds'));
+  // KIND counts are stable entry points: switching kind replaces dependent
+  // categories/tags in the modal, so count only premium + city constraints here.
+  const kindBase = filterPlaces(places, {
+    premium: filters.premium,
+    premiumOnly: filters.premiumOnly,
+    cities: filters.cities,
+    cityCoordsMap: filters.cityCoordsMap,
+  });
   const kinds: Record<PlaceKind, number> = { location: 0, service: 0, experience: 0 };
   for (const p of kindBase) {
     const k = (p.kind ?? 'location') as PlaceKind;

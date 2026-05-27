@@ -1,6 +1,6 @@
 # Architecture
 
-Последнее обновление: 2026-05-23.
+Последнее обновление: 2026-05-27.
 
 ## Stack
 
@@ -32,7 +32,7 @@
 | Table | Назначение |
 | --- | --- |
 | `profiles` | Профиль, роль, admin flag, Stripe customer, plan, interests, Google/provider fields |
-| `places` | Главная сущность каталога: location/service/experience, access, coordinates, contacts, price/schedule/details |
+| `places` | Главная сущность каталога: location/service/experience, access, coordinates, contacts, price/schedule/details, public `slug` for vanity listing URLs, public `place_page_layout` |
 | `place_photos` | Фото карточек с сортировкой |
 | `reactions` | Likes/favorites |
 | `comments` | Комментарии и rating |
@@ -51,6 +51,10 @@ Storage buckets из README:
 - `place-photos` - public place photos.
 
 Offer pricing for service/experience cards uses `places.price_amount`, `places.price_currency`, and `places.price_unit` as the compact summary price. Detailed pricing menus live in `places.price_options` as a JSON array. Each option supports the legacy fields `label`, `amount`, `currency`, `unit`, and `note`, plus `group_label`, `compare_at_amount`, `duration_minutes`, `badge`, `is_featured`, and `sort_order` for grouped packages, trial lessons, memberships, discounts, and highlighted options. Supported `price_unit` values are `fixed`, `from`, `per_hour`, `per_person`, `per_day`, `per_month`, and `per_session`; the database check constraint is updated by `scripts/sql/add-price-unit-per-month.sql`.
+
+Creator-facing listing links use `places.slug` when present. The root route `/[slug]` validates a normalized slug, looks up a visible listing, and redirects to the canonical `/id/[id]` detail page. The SQL setup/backfill lives in `scripts/sql/add-place-slugs.sql`; `/id/[id]` remains the stable fallback and canonical detail route.
+
+Location detail pages can opt into alternate public layouts through `places.place_page_layout`. The default `standard` keeps the existing map/action-led detail page. The `story` layout is for read/photo-led locations such as Devil's Tree, using the same title, description, photos, collections, map, contacts, and reviews in a more editorial order. The SQL setup lives in `scripts/sql/add-place-page-layout.sql`.
 
 Category source of truth is `app/constants.ts` (`LOCATION_CATEGORIES`, `SERVICE_CATEGORIES`, `EXPERIENCE_CATEGORIES`). The `places.categories` database check constraint must be kept in sync when categories change; `scripts/sql/update-places-categories-check-business-club.sql` updates the current constraint for `💼 Business Club`.
 
@@ -203,5 +207,6 @@ Google Places photo previews must go through `/api/google/photo`. The route vali
 | `scripts/sql/fix-profiles-rls-recursion.sql` | Manual SQL patch for recursive `profiles` UPDATE policy |
 | `scripts/sql/admin-place-owner-transfers.sql` | Audit table/RLS for admin owner transfer history |
 | `scripts/sql/fix-place-editor-admin-and-price-options.sql` | Admin edit RLS plus `places.price_options` schema repair |
+| `scripts/sql/add-place-page-layout.sql` | Adds `places.place_page_layout` for standard/story public page layouts |
 
 SQL scripts live in `scripts/sql/`. They are not a single ordered migration chain, so before applying manually, read names and current DB state.
