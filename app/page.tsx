@@ -981,7 +981,7 @@ function HomePageInner() {
         style={{
           bottom: "calc(24px + env(safe-area-inset-bottom, 0px))",
         }}
-        className="fixed left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full bg-[#8F9E4F] px-6 py-3 text-white shadow-lg transition-all hover:bg-[#7A8A3F] lg:hidden"
+        className="fixed left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full bg-[#8F9E4F] px-6 py-3 text-white shadow-lg transition-all hover:bg-[#7A8A3F] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8F9E4F] focus-visible:ring-offset-2"
         aria-label="Show all places on the map"
       >
         <Icon name="map" size={20} className="text-white" />
