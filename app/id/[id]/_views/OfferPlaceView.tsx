@@ -698,40 +698,18 @@ export default function OfferPlaceView({
           <div className="min-w-0">
             {/* Title row */}
             <div className="flex flex-col gap-3 mb-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-              <h1 className="font-fraunces text-2xl sm:text-3xl font-semibold text-[#1F2A1F] leading-tight">
-                {place.title || "Untitled"}
-              </h1>
-              <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setContactModalOpen(true)}
-                  className={cx(
-                    "inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition-colors sm:flex-none lg:hidden",
-                    hasContactDetails
-                      ? "bg-[#8F9E4F] text-white hover:bg-[#556036]"
-                      : "bg-[#ECEEE4] text-[#6F7A5A] hover:bg-[#E2E5D8]"
-                  )}
-                >
-                  Contact
-                  <Icon name="forward" size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={onToggleFavorite}
-                  disabled={favoriteLoading}
-                  className={cx(
-                    "inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-medium transition-colors sm:flex-none lg:hidden",
-                    isFavorite
-                      ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#8F9E4F] hover:bg-[#ECEEE4]"
-                      : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:bg-[#FAFAF7]",
-                    favoriteLoading && "opacity-50"
-                  )}
-                  aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                >
-                  <FavoriteIcon isActive={isFavorite} size={16} />
-                  {isFavorite ? "Saved" : "Add to favorites"}
-                </button>
-                {canEdit && (
+              <div className="min-w-0 flex-1">
+                <h1 className="font-fraunces text-2xl sm:text-3xl font-semibold text-[#1F2A1F] leading-tight">
+                  {place.title || "Untitled"}
+                </h1>
+                {place.description && (
+                  <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-[#4E5A45] line-clamp-3 sm:text-base">
+                    {place.description}
+                  </p>
+                )}
+              </div>
+              {canEdit && (
+                <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
                   <Link
                     href={`/places/${place.id}/edit`}
                     className="inline-flex h-10 flex-1 shrink-0 items-center justify-center gap-2 rounded-xl border border-[#ECEEE4] bg-white px-4 text-sm font-medium text-[#1F2A1F] no-underline transition-colors hover:bg-[#FAFAF7] hover:text-[#556036] sm:flex-none lg:h-11 lg:px-5"
@@ -739,8 +717,8 @@ export default function OfferPlaceView({
                     <Icon name="edit" size={16} />
                     Edit
                   </Link>
-                )}
-              </div>
+                </div>
+              )}
             </div>
         {/* Aggregate rating под title — Airbnb-style. Скрыт пока нет отзывов. */}
         {rating && (
@@ -791,6 +769,124 @@ export default function OfferPlaceView({
               )}
             </div>
           </div>
+        )}
+
+        <section className="mb-6 rounded-lg border border-[#ECEEE4] bg-white p-4 shadow-sm lg:hidden">
+          <h2 className="mb-3 font-fraunces text-xl font-semibold text-[#1F2A1F]">
+            Contact
+          </h2>
+          {hasContactDetails ? (
+            <div className="space-y-3">
+              <PlaceContacts
+                phone={place.phone}
+                website={place.website}
+                instagram={place.instagram}
+                youtube={place.youtube}
+                telegram={place.telegram}
+                title={null}
+                variant="inline"
+              />
+              {showContactLink && contactLink && (
+                <a
+                  href={normalizeExternalUrl(contactLink)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] px-4 py-3 text-sm font-medium text-[#1F2A1F] transition hover:bg-[#ECEEE4]"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#556036]">
+                    <Icon name="external-link" size={18} />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {stripUrlForCompare(contactLink) || "Contact link"}
+                  </span>
+                  <Icon name="forward" size={16} className="text-[#6F7A5A]" />
+                </a>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] p-4 text-sm leading-relaxed text-[#6F7A5A]">
+              Contact details have not been added yet.
+            </div>
+          )}
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={handleShare}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#ECEEE4] bg-white px-4 text-sm font-medium text-[#1F2A1F] transition hover:bg-[#FAFAF7]"
+            >
+              <Icon name="share" size={16} />
+              Share
+            </button>
+            <button
+              type="button"
+              onClick={onToggleFavorite}
+              disabled={favoriteLoading}
+              className={cx(
+                "inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-medium transition-colors",
+                isFavorite
+                  ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#8F9E4F] hover:bg-[#ECEEE4]"
+                  : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:bg-[#FAFAF7]",
+                favoriteLoading && "opacity-50"
+              )}
+              aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+            >
+              <FavoriteIcon isActive={isFavorite} size={16} />
+              {isFavorite ? "Saved" : "Add to favorites"}
+            </button>
+          </div>
+        </section>
+
+        {allPhotos.length > 0 && (
+          <section className="mb-6 overflow-hidden rounded-lg border border-[#ECEEE4] bg-white p-4 shadow-sm lg:hidden">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="font-fraunces text-xl font-semibold text-[#1F2A1F]">
+                  Photos
+                </h2>
+                <div className="text-sm text-[#6F7A5A]">
+                  {allPhotos.length} photo{allPhotos.length === 1 ? "" : "s"}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => openPhotoGallery(0)}
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-[#ECEEE4] bg-white px-4 text-sm font-medium text-[#1F2A1F] transition hover:bg-[#FAFAF7]"
+              >
+                View all
+              </button>
+            </div>
+            <div className={cx("grid gap-2", allPhotos.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
+              {allPhotos.slice(0, 4).map((photo, index) => {
+                const remainingCount = allPhotos.length - 4;
+                const showRemaining = index === 3 && remainingCount > 0;
+                return (
+                  <button
+                    key={`${photo}-${index}`}
+                    type="button"
+                    onClick={() => openPhotoGallery(index)}
+                    className={cx(
+                      "relative overflow-hidden rounded-xl bg-[#ECEEE4]",
+                      index === 0 && allPhotos.length > 2 ? "col-span-2 aspect-[16/10]" : "aspect-[4/3]"
+                    )}
+                    aria-label={`Open photo ${index + 1}`}
+                  >
+                    <Image
+                      src={photo}
+                      alt={`${place.title || "Photo"} - Photo ${index + 1}`}
+                      fill
+                      sizes="(max-width: 1024px) 100vw, 0vw"
+                      className="object-cover"
+                    />
+                    {showRemaining && (
+                      <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-base font-semibold text-white">
+                        +{remainingCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
         )}
 
         {/* Offer snapshot — one price anchor, with package details below. */}
@@ -1119,8 +1215,7 @@ export default function OfferPlaceView({
           </section>
         )}
 
-            {/* Reviews — pb для запаса под sticky-CTA снизу */}
-            <div className="pb-8">
+            <div className="pb-28 lg:pb-8">
               <ReviewsSection placeId={place.id} commentsEnabled={place.comments_enabled} />
             </div>
           </div>
@@ -1193,7 +1288,7 @@ export default function OfferPlaceView({
         </div>
       </div>
 
-      {/* Bottom CTA bar — sticky */}
+      {/* Bottom CTA bar — mobile contact shortcut */}
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#ECEEE4] bg-white/95 backdrop-blur pb-safe-bottom lg:hidden">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
@@ -1224,6 +1319,7 @@ export default function OfferPlaceView({
           </button>
         </div>
       </div>
+
     </main>
   );
 }
