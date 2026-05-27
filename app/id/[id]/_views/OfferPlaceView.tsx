@@ -721,9 +721,9 @@ export default function OfferPlaceView({
                 {canEdit && (
                   <Link
                     href={`/places/${place.id}/edit`}
-                    className="shrink-0 text-sm text-[#8F9E4F] underline hover:text-[#556036] lg:inline-flex lg:h-11 lg:items-center lg:justify-center lg:gap-2 lg:rounded-xl lg:border lg:border-[#ECEEE4] lg:bg-white lg:px-5 lg:font-medium lg:text-[#1F2A1F] lg:no-underline lg:transition-colors lg:hover:bg-[#FAFAF7]"
+                    className="inline-flex h-10 flex-1 shrink-0 items-center justify-center gap-2 rounded-xl border border-[#ECEEE4] bg-white px-4 text-sm font-medium text-[#1F2A1F] no-underline transition-colors hover:bg-[#FAFAF7] hover:text-[#556036] sm:flex-none lg:h-11 lg:px-5"
                   >
-                    <Icon name="edit" size={16} className="hidden lg:block" />
+                    <Icon name="edit" size={16} />
                     Edit
                   </Link>
                 )}
