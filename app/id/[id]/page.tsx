@@ -992,9 +992,7 @@ export default function PlacePage(props: PageProps) {
       if (authError || !auth.user) {
         setSending(false);
         setCommentError("You need to sign in to post comments.");
-        setTimeout(() => {
-          redirectToAuth("place_comment_auth_required");
-        }, 2000);
+        redirectToAuth("place_comment_auth_required");
         return;
       }
 
@@ -1003,9 +1001,7 @@ export default function PlacePage(props: PageProps) {
       if (!user || !user.id) {
         setSending(false);
         setCommentError("User ID is missing. Please sign in again.");
-        setTimeout(() => {
-          redirectToAuth("place_comment_user_missing");
-        }, 2000);
+        redirectToAuth("place_comment_user_missing");
         return;
       }
 
@@ -1076,6 +1072,11 @@ export default function PlacePage(props: PageProps) {
       setSending(false);
       setCommentError("An unexpected error occurred. Please try again.");
     }
+  }
+
+  function requestAuthForComment(trigger: string) {
+    setCommentError(null);
+    redirectToAuth(trigger);
   }
 
   async function deleteComment(commentId: string) {
@@ -1958,12 +1959,25 @@ export default function PlacePage(props: PageProps) {
               </div>
             </div>
           ) : (
-            <div className="mb-6 rounded-xl border border-[#ECEEE4] bg-white p-4 text-center">
-              <div className="text-sm text-[#8F9E4F]/60 mb-2">Sign in to post comments</div>
-              <AuthCTA variant="sign-in" trigger="place_comments_desktop" showToastBeforeRedirect={false}>
-                Sign In
-              </AuthCTA>
-            </div>
+            <button
+              type="button"
+              onClick={() => requestAuthForComment("place_comments_desktop")}
+              className="mb-6 block w-full rounded-xl border border-[#ECEEE4] bg-white p-4 text-left transition hover:border-[#DCE4C6] hover:bg-[#FAFAF7] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]/40"
+              aria-label="Log in or sign up to post a comment"
+            >
+              <div className="mb-3">
+                <div className="text-xs uppercase tracking-wide text-[#6F7A5A] mb-1.5">Your rating</div>
+                <StarRating value={0} size={28} />
+              </div>
+              <div className="min-h-[82px] w-full rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-2 text-sm text-[#8F9E4F]/40">
+                Share your thoughts...
+              </div>
+              <div className="mt-3 flex justify-end">
+                <span className="inline-flex h-11 items-center justify-center rounded-xl bg-[#8F9E4F] px-5 text-sm font-medium text-white">
+                  Post
+                </span>
+              </div>
+            </button>
           )}
 
           {/* Comments list */}
@@ -2530,12 +2544,25 @@ export default function PlacePage(props: PageProps) {
                 </div>
               </div>
             ) : (
-              <div className="mb-6 rounded-xl border border-[#ECEEE4] bg-white p-4 text-center">
-                <div className="text-sm text-[#8F9E4F]/60 mb-2">Sign in to post comments</div>
-                <AuthCTA variant="sign-in" trigger="place_comments_mobile" showToastBeforeRedirect={false}>
-                  Sign In
-                </AuthCTA>
-              </div>
+              <button
+                type="button"
+                onClick={() => requestAuthForComment("place_comments_mobile")}
+                className="mb-6 block w-full rounded-xl border border-[#ECEEE4] bg-white p-4 text-left transition hover:border-[#DCE4C6] hover:bg-[#FAFAF7] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]/40"
+                aria-label="Log in or sign up to post a comment"
+              >
+                <div className="mb-3">
+                  <div className="text-xs uppercase tracking-wide text-[#6F7A5A] mb-1.5">Your rating</div>
+                  <StarRating value={0} size={28} />
+                </div>
+                <div className="min-h-[82px] w-full rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] px-3 py-2 text-sm text-[#8F9E4F]/40">
+                  Share your thoughts...
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <span className="inline-flex h-11 items-center justify-center rounded-xl bg-[#8F9E4F] px-5 text-sm font-medium text-white">
+                    Post
+                  </span>
+                </div>
+              </button>
             )}
 
             {commentsLoading ? (

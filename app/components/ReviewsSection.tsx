@@ -132,6 +132,11 @@ export default function ReviewsSection({ placeId, commentsEnabled }: ReviewsSect
     count: rated.length,
   };
 
+  function requestAuthForReview() {
+    setError(null);
+    redirectToAuth("reviews_guest_composer");
+  }
+
   async function submit() {
     setError(null);
     if (!userId) {
@@ -259,16 +264,25 @@ export default function ReviewsSection({ placeId, commentsEnabled }: ReviewsSect
               </div>
             </div>
           ) : (
-            <div className="rounded-2xl border border-[#ECEEE4] bg-[#FAFAF7] p-4 mb-5 text-center">
-              <p className="text-sm text-[#3F4A35] mb-2">Sign in to leave a review</p>
-              <button
-                type="button"
-                onClick={() => redirectToAuth("reviews_sign_in")}
-                className="h-10 px-5 rounded-xl bg-[#8F9E4F] text-white text-sm font-medium hover:bg-[#556036] transition"
-              >
-                Sign in
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={requestAuthForReview}
+              className="block w-full rounded-2xl border border-[#ECEEE4] bg-[#FAFAF7] p-4 mb-5 text-left transition hover:border-[#DCE4C6] hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#8F9E4F]/40"
+              aria-label="Log in or sign up to leave a review"
+            >
+              <div className="mb-3">
+                <div className="text-xs uppercase tracking-wide text-[#6F7A5A] mb-1.5">Your rating</div>
+                <StarRating value={0} size={26} />
+              </div>
+              <div className="min-h-[78px] w-full rounded-xl border border-[#ECEEE4] bg-white px-3 py-2 text-sm text-[#A8B096]">
+                Share your experience...
+              </div>
+              <div className="mt-3 flex justify-end">
+                <span className="inline-flex h-10 items-center justify-center rounded-xl bg-[#8F9E4F] px-5 text-sm font-medium text-white">
+                  Post review
+                </span>
+              </div>
+            </button>
           )}
 
           {/* List */}
