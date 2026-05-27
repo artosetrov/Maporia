@@ -845,6 +845,15 @@ export default function SearchModal({
     query.trim() !== "" ||
     tempSelectedTags.length > 0 ||
     tempSelectedKind !== null;
+  const hasSearchQuery = query.trim() !== "";
+  const modalTitle =
+    step === "where"
+      ? hasSearchQuery
+        ? "Search places"
+        : "Search Maporia"
+      : step === "kind"
+        ? "What are you looking for?"
+        : "What's your vibe?";
   const hasChanges =
     step === "vibe"
       ? tempSelectedTags.length > 0
@@ -932,11 +941,7 @@ export default function SearchModal({
             )}
           </button>
           <h2 className="text-2xl font-semibold font-fraunces text-[#1F2A1F]">
-            {step === "where"
-              ? "Where?"
-              : step === "kind"
-                ? "What are you looking for?"
-                : "What's your vibe?"}
+            {modalTitle}
           </h2>
           <button
             onClick={onClose}
@@ -958,7 +963,7 @@ export default function SearchModal({
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search destinations"
+                  placeholder="Coffee, restaurants, hidden gems, cities..."
                   className="w-full px-4 py-3.5 pl-12 rounded-xl border border-[#E5E8DB] focus:border-[#8F9E4F] focus:outline-none focus:ring-2 focus:ring-[#8F9E4F] focus:ring-opacity-20 text-[#1F2A1F] text-base bg-white placeholder:text-[#A8B096]"
                   autoFocus
                 />
@@ -973,7 +978,7 @@ export default function SearchModal({
           {query.trim() === "" ? (
             // Suggested content when input is empty (Airbnb-style)
             <div className="px-6 py-4 space-y-0">
-              <h3 className="text-sm font-medium text-[#1F2A1F] mb-4 px-0">Suggested destinations</h3>
+              <h3 className="text-sm font-medium text-[#1F2A1F] mb-4 px-0">Choose a location</h3>
               
               <div className="space-y-0">
                 {/* Nearby */}
