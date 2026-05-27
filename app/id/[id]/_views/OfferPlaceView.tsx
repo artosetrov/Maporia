@@ -430,6 +430,7 @@ export default function OfferPlaceView({
     place.telegram?.trim() ||
     showContactLink
   );
+  const hostName = hostProfile?.display_name?.trim() || hostProfile?.username?.trim() || "your host";
 
   const handleShare = async () => {
     const url = `${window.location.origin}/id/${place.id}`;
@@ -770,7 +771,7 @@ export default function OfferPlaceView({
             </div>
             <div className="min-w-0">
               <div className="text-sm font-semibold text-[#1F2A1F]">
-                Hosted by {hostProfile?.display_name || hostProfile?.username || "your host"}
+                Hosted by {hostName}
               </div>
               {place.host_qualification && (
                 <div className="text-xs text-[#6F7A5A] truncate">{place.host_qualification}</div>
@@ -1182,12 +1183,19 @@ export default function OfferPlaceView({
       {/* Bottom CTA bar — sticky */}
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#ECEEE4] bg-white/95 backdrop-blur pb-safe-bottom lg:hidden">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <div className="min-w-0">
-            {leadPriceText ? (
-              <div className="font-fraunces text-lg font-semibold text-[#1F2A1F]">{leadPriceText}</div>
-            ) : (
-              <div className="text-sm text-[#6F7A5A]">Price on request</div>
-            )}
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#ECEEE4] bg-[#FAFAF7] text-xs font-semibold text-[#8F9E4F]">
+              {hostProfile?.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={hostProfile.avatar_url} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span>{initialsFromHost(hostProfile?.display_name, hostProfile?.username)}</span>
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-medium text-[#6F7A5A]">Hosted by</div>
+              <div className="truncate text-sm font-semibold text-[#1F2A1F]">{hostName}</div>
+            </div>
           </div>
           <button
             type="button"
