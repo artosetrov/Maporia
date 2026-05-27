@@ -16,6 +16,7 @@ import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../../lib/access";
 import Icon from "../../../../../components/Icon";
+import type { IconName } from "../../../../../components/Icon";
 import { ErrorBoundary } from "../../../../../components/ErrorBoundary";
 
 type PlaceContactsRow = Pick<
@@ -128,6 +129,8 @@ function ContactsEditorPageContent(props: PageProps) {
   const [instagram, setInstagram] = useState("");
   const [youtube, setYoutube] = useState("");
   const [telegram, setTelegram] = useState("");
+  const [placeKind, setPlaceKind] = useState<"location" | "service" | "experience">("location");
+  const [showMoreContacts, setShowMoreContacts] = useState(false);
 
   const [original, setOriginal] = useState({
     phone: "",
@@ -168,12 +171,14 @@ function ContactsEditorPageContent(props: PageProps) {
       if (cancelled) return;
 
       const init = toContactFormState(data);
+      setPlaceKind(data.kind === "service" || data.kind === "experience" ? data.kind : "location");
       setPhone(init.phone);
       setWebsite(init.website);
       setInstagram(init.instagram);
       setYoutube(init.youtube);
       setTelegram(init.telegram);
       setOriginal(init);
+      setShowMoreContacts(Boolean(init.youtube || init.telegram));
 
       if (data.kind === "service" || data.kind === "experience") {
         const { data: rawLinks } = await supabase
@@ -234,6 +239,16 @@ function ContactsEditorPageContent(props: PageProps) {
     telegram.length > MAX_LEN;
 
   const canSave = hasChanges && !tooLong && !saving;
+  const isOfferKind = placeKind === "service" || placeKind === "experience";
+  const contactCount = [phone, website, instagram, youtube, telegram].filter((value) => value.trim()).length;
+  const primaryContactCount = [phone, website, instagram].filter((value) => value.trim()).length;
+  const contactRequirementMet = !isOfferKind || contactCount > 0;
+  const contactRequirementLabel = isOfferKind
+    ? `${Math.min(contactCount, 1)}/1 contact required`
+    : `${contactCount}/5 contacts added`;
+  const contactIntro = isOfferKind
+    ? `Add at least one way clients can reach you. Phone, website, or Instagram is enough to publish this ${placeKind}.`
+    : "Add contact details if visitors need them. These fields are optional for locations.";
 
   function fillContactsFromLocation(location: LinkedLocationContacts) {
     setPhone((current) => location.phone || current);
@@ -325,10 +340,29 @@ function ContactsEditorPageContent(props: PageProps) {
 
       {/* Body */}
       <div className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-8">
-        <p className="text-sm text-[#6F7A5A] mb-6">
-          Add ways for visitors to reach you. All fields are optional — leave empty what you
-          don&apos;t want to share.
-        </p>
+        <div className="mb-6 rounded-2xl border border-[#DDE5C2] bg-[#F4F7EA] p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                Contacts
+              </div>
+              <h2 className="mt-1 font-fraunces text-lg font-semibold text-[#1F2A1F]">
+                {isOfferKind ? "Add at least one contact method" : "Add contact details"}
+              </h2>
+              <p className="mt-1 text-sm text-[#6F7A5A]">{contactIntro}</p>
+            </div>
+            <span
+              className={cx(
+                "inline-flex h-8 shrink-0 items-center justify-center rounded-full px-3 text-xs font-semibold ring-1",
+                contactRequirementMet
+                  ? "bg-white text-[#3F4A35] ring-[#DDE5C2]"
+                  : "bg-white text-[#C96A5B] ring-[#C96A5B]/25",
+              )}
+            >
+              {contactRequirementLabel}
+            </span>
+          </div>
+        </div>
 
         {linkedLocations.length > 0 && (
           <div className="mb-6 rounded-xl border border-[#ECEEE4] bg-[#FAFAF7] p-4">
@@ -382,16 +416,16 @@ function ContactsEditorPageContent(props: PageProps) {
         <div className="space-y-5">
           <ContactField
             label="Phone"
-            iconLeft={<PhoneIcon />}
+            iconName="phone"
             inputType="tel"
             placeholder="+1 555 123 4567"
             value={phone}
             onChange={setPhone}
-            hint="Any format. Will be opened as tel: on click."
+            hint={isOfferKind ? "Fastest for bookings and questions." : "Any format. Opens as a phone link."}
           />
           <ContactField
             label="Website"
-            iconLeft={<WebsiteIcon />}
+            iconName="website"
             inputType="url"
             placeholder="example.com"
             value={website}
@@ -400,28 +434,48 @@ function ContactsEditorPageContent(props: PageProps) {
           />
           <ContactField
             label="Instagram"
-            iconLeft={<InstagramIcon />}
+            iconName="instagram"
             inputType="text"
             placeholder="@yourhandle or instagram.com/yourhandle"
             value={instagram}
             onChange={setInstagram}
+            hint={primaryContactCount === 0 && isOfferKind ? "One of these first three fields is usually enough." : undefined}
           />
-          <ContactField
-            label="YouTube"
-            iconLeft={<YouTubeIcon />}
-            inputType="text"
-            placeholder="@yourchannel or youtube.com/@yourchannel"
-            value={youtube}
-            onChange={setYoutube}
-          />
-          <ContactField
-            label="Telegram"
-            iconLeft={<TelegramIcon />}
-            inputType="text"
-            placeholder="@yourhandle or t.me/yourhandle"
-            value={telegram}
-            onChange={setTelegram}
-          />
+
+          {!showMoreContacts ? (
+            <button
+              type="button"
+              onClick={() => setShowMoreContacts(true)}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#ECEEE4] bg-white px-4 text-sm font-medium text-[#1F2A1F] transition hover:border-[#8F9E4F] hover:bg-[#FAFAF7]"
+            >
+              <Icon name="add" size={16} className="text-[#8F9E4F]" />
+              More contact options
+            </button>
+          ) : (
+            <div className="rounded-2xl border border-[#ECEEE4] bg-[#FAFAF7] p-4">
+              <div className="mb-4 text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
+                Optional channels
+              </div>
+              <div className="space-y-5">
+                <ContactField
+                  label="YouTube"
+                  iconName="youtube"
+                  inputType="text"
+                  placeholder="@yourchannel or youtube.com/@yourchannel"
+                  value={youtube}
+                  onChange={setYoutube}
+                />
+                <ContactField
+                  label="Telegram"
+                  iconName="telegram"
+                  inputType="text"
+                  placeholder="@yourhandle or t.me/yourhandle"
+                  value={telegram}
+                  onChange={setTelegram}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {tooLong && (
@@ -464,7 +518,7 @@ function ContactsEditorPageContent(props: PageProps) {
 
 function ContactField({
   label,
-  iconLeft,
+  iconName,
   inputType,
   placeholder,
   value,
@@ -472,7 +526,7 @@ function ContactField({
   hint,
 }: {
   label: string;
-  iconLeft: React.ReactNode;
+  iconName: IconName;
   inputType: "text" | "tel" | "url";
   placeholder: string;
   value: string;
@@ -484,7 +538,7 @@ function ContactField({
       <label className="block text-sm font-medium text-[#1F2A1F] mb-2">{label}</label>
       <div className="relative">
         <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[#6F7A5A]">
-          {iconLeft}
+          <Icon name={iconName} size={18} strokeWidth={1.8} />
         </div>
         <input
           type={inputType}
@@ -497,52 +551,5 @@ function ContactField({
       </div>
       {hint && <p className="mt-1.5 text-xs text-[#6F7A5A]">{hint}</p>}
     </div>
-  );
-}
-
-// ─── Простые SVG-иконки соцсетей ──────────────────────────────────────────
-// Локальные иконки, чтобы не тащить новый пакет ради 5 значков.
-
-function PhoneIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z" />
-    </svg>
-  );
-}
-
-function WebsiteIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-    </svg>
-  );
-}
-
-function InstagramIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="5" ry="5" />
-      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
-    </svg>
-  );
-}
-
-function YouTubeIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z" />
-      <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" />
-    </svg>
-  );
-}
-
-function TelegramIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21.5 4.5L2.5 11.5l6 2 2 7 3-4 5 5 3-17z" />
-    </svg>
   );
 }

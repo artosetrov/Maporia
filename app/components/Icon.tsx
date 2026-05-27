@@ -17,8 +17,10 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
+  Globe2,
   Heart,
   Image as ImageIcon,
+  AtSign,
   KeyRound,
   LayoutGrid,
   Link as LinkIcon,
@@ -38,8 +40,11 @@ import {
   MoreVertical,
   Package,
   Pencil,
+  Phone,
+  PlaySquare,
   Plus,
   Search,
+  Send,
   Settings,
   Share2,
   Sparkles,
@@ -90,6 +95,11 @@ export type IconName =
   | "map"
   | "location"
   | "photo"
+  | "phone"
+  | "website"
+  | "instagram"
+  | "youtube"
+  | "telegram"
   | "add"
   | "remove"
   | "check"
@@ -167,6 +177,11 @@ const iconMap: Record<IconName, LucideIcon> = {
   map: MapIcon,
   location: MapPin,
   photo: ImageIcon,
+  phone: Phone,
+  website: Globe2,
+  instagram: AtSign,
+  youtube: PlaySquare,
+  telegram: Send,
   add: Plus,
   remove: Minus,
   check: Check,
