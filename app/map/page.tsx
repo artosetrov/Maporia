@@ -1475,6 +1475,7 @@ function MapPageContent() {
     <HomeTabsSegmented
       active={activeMapKind}
       onChange={handleMapKindChange}
+      mobileFullWidth
     />
   );
 
