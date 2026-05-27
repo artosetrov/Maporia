@@ -502,7 +502,7 @@ export default function OfferPlaceView({
       </div>
 
       {/* HERO — same gallery system used by location pages */}
-      <section className="relative w-full bg-[#FAFAF7]">
+      <section className="relative w-full bg-[#FAFAF7] lg:pt-[80px]">
         <div className="lg:hidden relative">
           <MobileCarousel
             photos={allPhotos}
