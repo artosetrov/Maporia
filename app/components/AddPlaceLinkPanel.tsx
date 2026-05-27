@@ -24,6 +24,7 @@ import {
   type PlaceKindLite,
 } from "../lib/placeLinks";
 import type { PlaceListItem } from "../types";
+import Icon, { type IconName } from "./Icon";
 
 type Props = {
   /** ID карточки, к которой добавляем link (parent если kind=location, иначе child). */
@@ -49,10 +50,10 @@ function searchTargetKinds(currentKind: PlaceKindLite): PlaceKindLite[] {
   return ["location"];
 }
 
-function emojiFor(k: PlaceKindLite | null | undefined): string {
-  if (k === "location") return "📍";
-  if (k === "experience") return "✨";
-  return "🛠";
+function iconFor(k: PlaceKindLite | null | undefined): IconName {
+  if (k === "location") return "location";
+  if (k === "experience") return "sparkles";
+  return "wrench";
 }
 
 export default function AddPlaceLinkPanel({
@@ -143,13 +144,13 @@ export default function AddPlaceLinkPanel({
 
   // "Create new" options. Для location parent — две: experience и service.
   // Для child (service/experience) — одна: location.
-  const createNewOptions: Array<{ kind: PlaceKindLite; label: string; emoji: string }> =
+  const createNewOptions: Array<{ kind: PlaceKindLite; label: string; icon: IconName }> =
     isLocationParent
       ? [
-          { kind: "experience", label: "Create new experience", emoji: "✨" },
-          { kind: "service", label: "Create new service", emoji: "🛠" },
+          { kind: "experience", label: "Create new experience", icon: "sparkles" },
+          { kind: "service", label: "Create new service", icon: "wrench" },
         ]
-      : [{ kind: "location", label: "Create new location", emoji: "📍" }];
+      : [{ kind: "location", label: "Create new location", icon: "location" }];
 
   return (
     <section className="rounded-2xl border border-[#ECEEE4] bg-white p-4 sm:p-5 mb-4">
@@ -210,7 +211,7 @@ export default function AddPlaceLinkPanel({
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  emojiFor(r.kind)
+                  <Icon name={iconFor(r.kind)} size={18} className="text-[#8F9E4F]" strokeWidth={1.8} />
                 )}
               </div>
               <div className="flex-1 min-w-0">
@@ -271,9 +272,7 @@ export default function AddPlaceLinkPanel({
                 "hover:border-[#8F9E4F] hover:bg-[#FAFAF7] transition-colors",
               )}
             >
-              <span aria-hidden className="mr-1.5">
-                {opt.emoji}
-              </span>
+              <Icon name={opt.icon} size={16} className="mr-1.5 inline-block text-[#8F9E4F]" strokeWidth={1.8} />
               {opt.label}
             </button>
           ))}

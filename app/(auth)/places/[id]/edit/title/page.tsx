@@ -9,7 +9,7 @@ import type { Database } from "../../../../../types/supabase";
 import { useUserAccessContext } from "../../../../../contexts/UserAccessContext";
 import { isUserAdmin } from "../../../../../lib/access";
 
-type PlaceTitleRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "title">;
+type PlaceTitleRow = Pick<Database["public"]["Tables"]["places"]["Row"], "created_by" | "title" | "kind">;
 import Icon from "../../../../../components/Icon";
 import UnifiedGoogleImportField from "../../../../../components/UnifiedGoogleImportField";
 import { resolveCity } from "../../../../../lib/cityResolver";
@@ -29,6 +29,7 @@ export default function TitleEditorPage(props: PageProps) {
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
   const [originalTitle, setOriginalTitle] = useState("");
+  const [placeKind, setPlaceKind] = useState<"location" | "service" | "experience">("location");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,7 +131,7 @@ export default function TitleEditorPage(props: PageProps) {
       setLoading(true);
       const { data: rawData, error: placeError } = await supabase
         .from("places")
-        .select("title, created_by")
+        .select("title, created_by, kind")
         .eq("id", placeId)
         .single();
 
@@ -151,9 +152,24 @@ export default function TitleEditorPage(props: PageProps) {
       const currentTitle = data.title || "";
       setTitle(currentTitle);
       setOriginalTitle(currentTitle);
+      setPlaceKind(data.kind === "service" || data.kind === "experience" ? data.kind : "location");
       setLoading(false);
     })();
   }, [placeId, user, router, access, accessLoading]);
+
+  const isService = placeKind === "service";
+  const isExperience = placeKind === "experience";
+  const titleLabel = isService ? "Service name" : isExperience ? "Experience name" : "Place title";
+  const titlePlaceholder = isService
+    ? "e.g. Mobile massage in Miami"
+    : isExperience
+      ? "e.g. Little Havana food walk"
+      : "e.g. Secret rooftop bar";
+  const titleHelp = isService
+    ? "Use the name clients would search for, not a long description."
+    : isExperience
+      ? "Use a clear, specific name that tells people what they will do."
+      : "Choose a title that captures the essence of your place";
 
   const hasChanges = title.trim() !== originalTitle.trim();
   const isValid = title.trim().length >= 4 && title.trim().length <= 50;
@@ -248,7 +264,7 @@ export default function TitleEditorPage(props: PageProps) {
         )}
 
         <div className="space-y-4">
-          {user && placeId && (
+          {user && placeId && placeKind === "location" && (
             <UnifiedGoogleImportField
               userId={user.id}
               context="place"
@@ -258,7 +274,7 @@ export default function TitleEditorPage(props: PageProps) {
           )}
           <div>
             <label className="block text-sm font-medium text-[#1F2A1F] mb-2">
-              Place title
+              {titleLabel}
             </label>
             <input
               type="text"
@@ -267,7 +283,7 @@ export default function TitleEditorPage(props: PageProps) {
                 setTitle(e.target.value);
                 setError(null);
               }}
-              placeholder="e.g. Secret rooftop bar"
+              placeholder={titlePlaceholder}
               className={cx(
                 "w-full rounded-xl border px-4 py-4 text-lg font-medium text-[#1F2A1F] placeholder:text-[#A8B096] outline-none transition",
                 isValid || title.length === 0
@@ -284,7 +300,7 @@ export default function TitleEditorPage(props: PageProps) {
               )}>
                 {title.length < 4 && title.length > 0
                   ? "Title must be at least 4 characters"
-                  : "Choose a title that captures the essence of your place"}
+                  : titleHelp}
               </p>
               <span className="text-xs text-[#6F7A5A]">
                 {title.length}/50

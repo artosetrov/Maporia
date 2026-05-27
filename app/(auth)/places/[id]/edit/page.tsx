@@ -1147,16 +1147,8 @@ export default function PlaceEditorHub(props: PageProps) {
     const isOfferKind = isService || isExperience;
 
     steps.push({
-      id: "cover",
-      label: "Add a cover photo",
-      completed: photos.length > 0,
-      route: `/places/${placeId}/edit/photos`,
-      priority: "required",
-    });
-
-    steps.push({
       id: "title",
-      label: "Add a title",
+      label: isService ? "Name your service" : isExperience ? "Name your experience" : "Add a title",
       completed: !!(place.title && place.title.trim().length > 0),
       route: `/places/${placeId}/edit/title`,
       priority: "required",
@@ -1164,7 +1156,7 @@ export default function PlaceEditorHub(props: PageProps) {
 
     steps.push({
       id: "category",
-      label: "Select a category",
+      label: isService ? "Choose a service category" : isExperience ? "Choose an experience category" : "Select a category",
       completed: !!(place.categories && place.categories.length > 0),
       route: `/places/${placeId}/edit/categories`,
       priority: "required",
@@ -1172,9 +1164,27 @@ export default function PlaceEditorHub(props: PageProps) {
 
     steps.push({
       id: "location",
-      label: isOfferKind ? "Set city or address" : "Set location",
+      label: isOfferKind ? "Set service area" : "Set location",
       completed: isOfferKind ? hasOfferLocation(place) : !!(place.lat && place.lng),
       route: `/places/${placeId}/edit/location`,
+      priority: "required",
+    });
+
+    if (isOfferKind) {
+      steps.push({
+        id: "contacts",
+        label: "Add a contact method",
+        completed: hasContactInfo(place),
+        route: `/places/${placeId}/edit/contacts`,
+        priority: "required",
+      });
+    }
+
+    steps.push({
+      id: "cover",
+      label: isOfferKind ? "Add a photo" : "Add a cover photo",
+      completed: photos.length > 0,
+      route: `/places/${placeId}/edit/photos`,
       priority: "required",
     });
 
@@ -1187,14 +1197,6 @@ export default function PlaceEditorHub(props: PageProps) {
     });
 
     if (isOfferKind) {
-      steps.push({
-        id: "contacts",
-        label: "Add a contact method",
-        completed: hasContactInfo(place),
-        route: `/places/${placeId}/edit/contacts`,
-        priority: "required",
-      });
-
       steps.push({
         id: "price",
         label: "Set price or keep By request",
@@ -1416,8 +1418,8 @@ export default function PlaceEditorHub(props: PageProps) {
           </div>
         )}
         <div className="space-y-4">
-            {/* Import from Google Maps — самостоятельный блок перед Progress */}
-            {user && placeId && (
+            {/* Google import is useful for physical locations, but it makes services/experiences feel like a place-import flow. */}
+            {user && placeId && place.kind === "location" && (
               <GoogleImportField userId={user.id} targetPlaceId={placeId} redirectToPreview />
             )}
 
@@ -1641,55 +1643,6 @@ export default function PlaceEditorHub(props: PageProps) {
               </div>
             )}
 
-            {/* Photo Tour Card */}
-            <Link
-              href={`/places/${placeId}/edit/photos`}
-              className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 flex-1">
-                  {/* Status Icon */}
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    photos.length > 0 ? 'bg-[#7FA35C]' : 'bg-[#ECEEE4]'
-                  }`}>
-                    <Icon 
-                      name="check" 
-                      size={16} 
-                      className={photos.length > 0 ? 'text-white' : 'text-[#A8B096]'} 
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">Photo tour</h3>
-                    {photos.length > 0 ? (
-                      <div className="flex items-center gap-3">
-                        <div className="flex -space-x-2">
-                          {photos.slice(0, 3).map((photo, idx) => (
-                            <div
-                              key={idx}
-                              className="w-12 h-12 rounded-lg border-2 border-white overflow-hidden bg-[#FAFAF7]"
-                            >
-                              <Image
-                                src={photo.url}
-                                alt=""
-                                width={48}
-                                height={48}
-                                sizes="48px"
-                                className="h-full w-full object-cover"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                        <span className="text-sm text-[#6F7A5A]">{photos.length} photos</span>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-[#6F7A5A]">No photos yet</p>
-                    )}
-                  </div>
-                </div>
-                <Icon name="forward" size={20} className="text-[#6F7A5A]" />
-              </div>
-            </Link>
-
             {/* Title Card */}
             <Link
               href={`/places/${placeId}/edit/title`}
@@ -1875,6 +1828,57 @@ export default function PlaceEditorHub(props: PageProps) {
                       </>
                     );
                   })()}
+                </div>
+                <Icon name="forward" size={20} className="text-[#6F7A5A]" />
+              </div>
+            </Link>
+
+            {/* Photo Tour Card */}
+            <Link
+              href={`/places/${placeId}/edit/photos`}
+              className="block rounded-2xl border border-[#ECEEE4] bg-white p-5 shadow-sm hover:shadow-md transition"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 flex-1">
+                  {/* Status Icon */}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    photos.length > 0 ? 'bg-[#7FA35C]' : 'bg-[#ECEEE4]'
+                  }`}>
+                    <Icon 
+                      name="check" 
+                      size={16} 
+                      className={photos.length > 0 ? 'text-white' : 'text-[#A8B096]'} 
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-fraunces font-semibold text-[#1F2A1F] mb-1">
+                      {place.kind === "service" || place.kind === "experience" ? "Photos" : "Photo tour"}
+                    </h3>
+                    {photos.length > 0 ? (
+                      <div className="flex items-center gap-3">
+                        <div className="flex -space-x-2">
+                          {photos.slice(0, 3).map((photo, idx) => (
+                            <div
+                              key={idx}
+                              className="w-12 h-12 rounded-lg border-2 border-white overflow-hidden bg-[#FAFAF7]"
+                            >
+                              <Image
+                                src={photo.url}
+                                alt=""
+                                width={48}
+                                height={48}
+                                sizes="48px"
+                                className="h-full w-full object-cover"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <span className="text-sm text-[#6F7A5A]">{photos.length} photos</span>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-[#6F7A5A]">No photos yet</p>
+                    )}
+                  </div>
                 </div>
                 <Icon name="forward" size={20} className="text-[#6F7A5A]" />
               </div>
