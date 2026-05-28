@@ -16,7 +16,11 @@ import { createClient } from "@supabase/supabase-js";
 import type { MetadataRoute } from "next";
 import type { Database } from "./types/supabase";
 
-// Регенерация раз в час — достаточно для нашего темпа добавления карточек.
+// Force runtime generation: build-time prerender фейлится из-за того,
+// что SUPABASE_SERVICE_ROLE_KEY и/или network к Supabase недоступны
+// в Vercel build-runner. На runtime — всё работает.
+// CDN-кеш Vercel держит результат сам (s-maxage по умолчанию).
+export const dynamic = "force-dynamic";
 export const revalidate = 3600;
 
 const SITE_URL = "https://www.maporia.co";
