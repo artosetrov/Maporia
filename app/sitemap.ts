@@ -22,11 +22,16 @@ export const revalidate = 3600;
 const SITE_URL = "https://www.maporia.co";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+// Service-role клиент обходит RLS — гарантирует полный список visible places.
+// Anon fallback на случай если service key недоступен на build/runtime.
+const supabaseKey = supabaseServiceKey || supabaseAnonKey;
+
 const supabaseClient =
-  supabaseUrl && supabaseAnonKey
-    ? createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  supabaseUrl && supabaseKey
+    ? createClient<Database>(supabaseUrl, supabaseKey, {
         auth: { persistSession: false, autoRefreshToken: false },
         global: { headers: { "x-client-info": "maporia-sitemap" } },
       })
@@ -50,16 +55,22 @@ const STATIC_ROUTES: readonly StaticEntry[] = [
 ];
 
 async function fetchVisiblePlaces(): Promise<PlaceForSitemap[]> {
-  if (!supabaseClient) return [];
+  if (!supabaseClient) {
+    console.error("[sitemap] supabase client unavailable — env missing");
+    return [];
+  }
 
   // Фильтр: только публичные, не скрытые места.
   // Совпадает с предикатом в `get_top_cities` RPC и фильтром главной.
+  // NOTE: NOT IN через два neq() надёжнее чем `.not(col,'in',…)` — синтаксис
+  // последнего в supabase-js v2.93 неустойчив, иногда возвращает 0 строк.
   const { data, error } = await supabaseClient
     .from("places")
     .select("id,updated_at")
     .eq("manually_hidden", false)
     .eq("is_hidden", false)
-    .not("visibility", "in", "(hidden,private)")
+    .neq("visibility", "hidden")
+    .neq("visibility", "private")
     .order("updated_at", { ascending: false })
     .limit(50000); // Google sitemap limit = 50K URL.
 
@@ -67,6 +78,7 @@ async function fetchVisiblePlaces(): Promise<PlaceForSitemap[]> {
     console.error("[sitemap] fetch places failed:", error.message);
     return [];
   }
+  console.log(`[sitemap] fetched ${data?.length ?? 0} visible places`);
   return (data ?? []) as PlaceForSitemap[];
 }
 
