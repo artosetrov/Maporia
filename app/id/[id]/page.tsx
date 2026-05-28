@@ -2238,8 +2238,14 @@ export default function PlacePage(props: PageProps) {
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {canEdit && (
+            {/*
+              Десктопный hero-ряд: оставляем ТОЛЬКО Edit для владельца/админа.
+              Open in Maps / Share / Add to favorites дублировались sticky-карточкой
+              справа (см. Right: Sticky Actions Card ниже), поэтому удалены.
+              Контактный CTA («Contact») по той же причине вынесен в sticky-карточку.
+            */}
+            {canEdit && (
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <button
                   onClick={() => router.push(`/places/${id}/edit`)}
                   className="h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-sm font-medium text-[#1F2A1F]"
@@ -2248,64 +2254,8 @@ export default function PlacePage(props: PageProps) {
                   <Icon name="edit" size={16} />
                   Edit
                 </button>
-              )}
-              {hasLocationContactDetails && (
-                <button
-                  onClick={scrollToContact}
-                  className="h-11 px-5 rounded-xl bg-[#8F9E4F] hover:bg-[#7E8C45] transition-colors flex items-center justify-center gap-2 text-sm font-semibold text-white"
-                  aria-label="Contact"
-                >
-                  <Icon name="external-link" size={16} />
-                  Contact
-                </button>
-              )}
-              {hasMapTarget && (
-                <button
-                  onClick={handleOpenGoogleMaps}
-                  disabled={resolvingPlaceId}
-                  className="h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-sm font-medium text-[#1F2A1F] disabled:opacity-50"
-                  aria-label="Open in Google Maps"
-                >
-                  <Icon name="location" size={16} />
-                  {resolvingPlaceId ? "Opening..." : "Open in Maps"}
-                </button>
-              )}
-              <button
-                onClick={handleShare}
-                className="h-11 px-5 rounded-xl border border-[#ECEEE4] bg-white hover:bg-[#FAFAF7] transition-colors flex items-center justify-center gap-2 text-sm font-medium text-[#1F2A1F]"
-                aria-label="Share"
-              >
-                <Icon name="share" size={16} />
-                Share
-              </button>
-              {userId ? (
-                <button
-                  onClick={toggleFavorite}
-                  disabled={favoriteLoading}
-                  className={cx(
-                    "h-11 px-5 rounded-xl border transition-colors flex items-center justify-center gap-2 text-sm font-medium",
-                    isFavorite
-                      ? "border-[#8F9E4F] bg-[#FAFAF7] text-[#8F9E4F] hover:bg-[#ECEEE4]"
-                      : "border-[#ECEEE4] bg-white text-[#1F2A1F] hover:bg-[#FAFAF7]",
-                    favoriteLoading && "opacity-50"
-                  )}
-                  aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                >
-                  <FavoriteIcon isActive={isFavorite} size={16} />
-                  Add to favorites
-                </button>
-              ) : (
-                <AuthCTA
-                  variant="sign-in"
-                  appearance="secondary"
-                  trigger="place_favorites_hero"
-                  className="gap-2"
-                >
-                  <FavoriteIcon isActive={false} size={16} />
-                  Add to favorites
-                </AuthCTA>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
