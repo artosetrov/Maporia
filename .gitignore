@@ -50,3 +50,4 @@ health-report.json
 # notify-all-in-repricing.mjs sent log (contains customer emails)
 scripts/.notify-all-in-sent.json
 
+.cowork/
