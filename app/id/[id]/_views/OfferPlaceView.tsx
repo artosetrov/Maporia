@@ -112,7 +112,8 @@ type PriceOption = {
   id?: string | null;
   group_label?: string | null;
   label?: string | null;
-  amount: number;
+  /** `null`, если включён режим `on_request`. */
+  amount: number | null;
   compare_at_amount?: number | null;
   currency?: string | null;
   unit?: string | null;
@@ -121,6 +122,10 @@ type PriceOption = {
   is_featured?: boolean | null;
   note?: string | null;
   sort_order?: number | null;
+  /** Цена по запросу — числовая цена не используется. */
+  on_request?: boolean | null;
+  /** Свободный текст-замена цены. */
+  request_text?: string | null;
 };
 
 const SERVICE_MODE_LABELS: Record<string, string> = {
@@ -170,14 +175,22 @@ function formatPrice(amount: number | null | undefined, currency: string | null 
   return symbol ? `${symbol}${formatted}` : `${formatted} ${cur}`;
 }
 
+const PRICE_ON_REQUEST_FALLBACK = "Contact for price";
+
 function normalizePriceOptions(raw: unknown): PriceOption[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .map((item): PriceOption | null => {
       if (!item || typeof item !== "object") return null;
       const option = item as Record<string, unknown>;
-      const amount = typeof option.amount === "number" ? option.amount : Number(option.amount);
-      if (!Number.isFinite(amount)) return null;
+      const onRequest = option.on_request === true;
+      const requestText =
+        typeof option.request_text === "string" ? option.request_text : null;
+      const rawAmount =
+        typeof option.amount === "number" ? option.amount : Number(option.amount);
+      const amount = Number.isFinite(rawAmount) ? rawAmount : null;
+      // Опция считается «пустой», если нет ни числа, ни on_request — отбрасываем.
+      if (amount === null && !onRequest) return null;
       const compareAtAmount =
         typeof option.compare_at_amount === "number" && Number.isFinite(option.compare_at_amount)
           ? option.compare_at_amount
@@ -203,13 +216,20 @@ function normalizePriceOptions(raw: unknown): PriceOption[] {
         is_featured: option.is_featured === true,
         note: typeof option.note === "string" ? option.note : null,
         sort_order: sortOrder,
+        on_request: onRequest,
+        request_text: requestText,
       };
     })
     .filter((item): item is PriceOption => Boolean(item))
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 }
 
+function getOnRequestText(option: PriceOption): string {
+  return option.request_text?.trim() || PRICE_ON_REQUEST_FALLBACK;
+}
+
 function formatPriceOption(option: PriceOption): string {
+  if (option.on_request) return getOnRequestText(option);
   const text = formatPrice(option.amount, option.currency) ?? "";
   const unit = option.unit ? PRICE_UNIT_LABEL[option.unit] ?? "" : "";
   const suffix = unit && option.unit !== "from" ? ` ${unit}` : "";
@@ -256,6 +276,7 @@ function getPriceOptionMetaLabel(option: PriceOption, title: string): string | n
 }
 
 function getPriceOptionAmountText(option: PriceOption): string {
+  if (option.on_request) return getOnRequestText(option);
   const text = formatPrice(option.amount, option.currency) ?? "";
   const unit = option.unit ? PRICE_UNIT_LABEL[option.unit] ?? "" : "";
   const suffix = unit && option.unit !== "from" ? ` ${unit}` : "";
@@ -984,11 +1005,11 @@ export default function OfferPlaceView({
               {priceOptions.map((option, index) => {
                 const title = getPriceOptionTitle(option, index);
                 const metaLabel = getPriceOptionMetaLabel(option, title);
-                const oldPrice = option.compare_at_amount != null
-                  ? formatPrice(option.compare_at_amount, option.currency)
-                  : null;
+                const oldPrice = option.on_request || option.compare_at_amount == null
+                  ? null
+                  : formatPrice(option.compare_at_amount, option.currency);
                 const amountText = getPriceOptionAmountText(option);
-                const showFromPrefix = option.unit === "from";
+                const showFromPrefix = !option.on_request && option.unit === "from";
                 const duration = formatDuration(option.duration_minutes);
                 const badgeKey = option.badge?.trim().toLowerCase();
                 const showBadge = Boolean(
@@ -1048,9 +1069,16 @@ export default function OfferPlaceView({
                       </div>
                       <div className="shrink-0 pl-1 text-left sm:min-w-[148px] sm:text-right">
                         <div className="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#6F7A5A]">
-                          {showFromPrefix ? "Starts at" : "Price"}
+                          {option.on_request ? "On request" : showFromPrefix ? "Starts at" : "Price"}
                         </div>
-                        <div className="flex items-baseline gap-1.5 font-fraunces text-[30px] font-semibold leading-none text-[#1F2A1F] sm:justify-end">
+                        <div
+                          className={cx(
+                            "flex items-baseline gap-1.5 font-fraunces font-semibold leading-tight text-[#1F2A1F] sm:justify-end",
+                            option.on_request
+                              ? "text-lg italic sm:text-xl"
+                              : "text-[30px] leading-none"
+                          )}
+                        >
                           <span>{amountText}</span>
                         </div>
                         {oldPrice && (

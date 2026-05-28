@@ -50,7 +50,12 @@ export type PriceOption = {
   id?: string | null
   group_label?: string | null
   label?: string | null
-  amount: number
+  /**
+   * Числовая цена в `currency`. Может быть `null`, если включён режим
+   * «цена по запросу» (`on_request === true`) — в этом случае показываем
+   * `request_text` либо дефолт «Contact for price».
+   */
+  amount: number | null
   compare_at_amount?: number | null
   currency?: string | null
   unit?: PriceUnit | null
@@ -59,6 +64,10 @@ export type PriceOption = {
   is_featured?: boolean | null
   note?: string | null
   sort_order?: number | null
+  /** Если true — цена не указана числом, показываем `request_text` / «Contact for price». */
+  on_request?: boolean | null
+  /** Свободный текст-замена цены (напр. «По запросу», «От 1000»). Активно только при `on_request`. */
+  request_text?: string | null
 };
 
 /**

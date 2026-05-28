@@ -116,7 +116,13 @@ type PriceOptionDraft = {
   badge: string;
   isFeatured: boolean;
   note: string;
+  /** Включает «цена по запросу» — числовая цена не используется. */
+  onRequest: boolean;
+  /** Текст-замена для «цена по запросу» (если пусто — fallback «Contact for price»). */
+  requestText: string;
 };
+
+const DEFAULT_REQUEST_TEXT = "Contact for price";
 
 function cx(...a: Array<string | false | undefined | null>) {
   return a.filter(Boolean).join(" ");
@@ -180,11 +186,13 @@ function getOptionValidation(option: PriceOptionDraft): PriceOptionValidation {
   const parsedDuration =
     option.durationMinutes.trim() === "" ? null : Number(option.durationMinutes);
 
+  // В режиме on-request числовая цена не нужна — опция всегда валидна по amount.
   const amountValid =
-    parsedAmount !== null &&
-    Number.isFinite(parsedAmount) &&
-    parsedAmount >= 0 &&
-    parsedAmount < 1_000_000;
+    option.onRequest ||
+    (parsedAmount !== null &&
+      Number.isFinite(parsedAmount) &&
+      parsedAmount >= 0 &&
+      parsedAmount < 1_000_000);
   const compareAtAmountValid =
     parsedCompareAtAmount === null ||
     (Number.isFinite(parsedCompareAtAmount) &&
@@ -209,16 +217,26 @@ function getOptionTitle(option: PriceOptionDraft, index: number): string {
 function getOptionSubtitle(option: PriceOptionDraft): string {
   const parts = [
     option.label.trim(),
-    getPriceUnitLabel(option.unit),
+    option.onRequest ? "On request" : getPriceUnitLabel(option.unit),
     option.durationMinutes.trim() ? `${option.durationMinutes.trim()} min` : "",
     option.note.trim(),
   ].filter(Boolean);
   return parts.join(" · ") || "Fill in amount and details";
 }
 
+function getOptionHeadlinePrice(option: PriceOptionDraft): string | null {
+  if (option.onRequest) {
+    const custom = option.requestText.trim();
+    return custom || DEFAULT_REQUEST_TEXT;
+  }
+  return formatPriceWithUnit(option.amount, option.currency, option.unit);
+}
+
 function getRailLabel(option: PriceOptionDraft, index: number): string {
   const title = getOptionTitle(option, index).replace("Monthly Membership", "Monthly");
-  const price = formatMoney(option.amount, option.currency) ?? "empty";
+  const price = option.onRequest
+    ? (option.requestText.trim() || DEFAULT_REQUEST_TEXT)
+    : formatMoney(option.amount, option.currency) ?? "empty";
   return `${title} · ${price}`;
 }
 
@@ -237,6 +255,8 @@ function newPriceOptionDraft(preset?: Partial<Omit<PriceOptionDraft, "id">>): Pr
     badge: preset?.badge ?? "",
     isFeatured: preset?.isFeatured ?? false,
     note: preset?.note ?? "",
+    onRequest: preset?.onRequest ?? false,
+    requestText: preset?.requestText ?? "",
   };
 }
 
@@ -271,6 +291,8 @@ function parsePriceOptions(raw: unknown): PriceOptionDraft[] {
         badge: typeof value.badge === "string" ? value.badge : "",
         isFeatured: value.is_featured === true,
         note: typeof value.note === "string" ? value.note : "",
+        onRequest: value.on_request === true,
+        requestText: typeof value.request_text === "string" ? value.request_text : "",
       };
     })
     .filter((item): item is PriceOptionDraft => Boolean(item));
@@ -279,7 +301,12 @@ function parsePriceOptions(raw: unknown): PriceOptionDraft[] {
 function normalizePriceOptions(options: PriceOptionDraft[]): PriceOptionRow[] {
   return options.flatMap((option, index): PriceOptionRow[] => {
     const parsed = Number(option.amount);
-    if (!Number.isFinite(parsed) || parsed < 0 || parsed >= 1_000_000) return [];
+    const hasValidAmount =
+      Number.isFinite(parsed) && parsed >= 0 && parsed < 1_000_000;
+
+    // Пропускаем опции без цены и без on_request — это «пустая» карточка.
+    if (!option.onRequest && !hasValidAmount) return [];
+
     const compareAtAmount = option.compareAtAmount.trim() === ""
       ? null
       : Number(option.compareAtAmount);
@@ -290,7 +317,7 @@ function normalizePriceOptions(options: PriceOptionDraft[]): PriceOptionRow[] {
       id: option.id,
       group_label: option.groupLabel.trim() || null,
       label: option.label.trim() || null,
-      amount: parsed,
+      amount: option.onRequest ? null : parsed,
       compare_at_amount:
         compareAtAmount !== null && Number.isFinite(compareAtAmount) && compareAtAmount >= 0
           ? compareAtAmount
@@ -305,6 +332,8 @@ function normalizePriceOptions(options: PriceOptionDraft[]): PriceOptionRow[] {
       is_featured: option.isFeatured,
       note: option.note.trim() || null,
       sort_order: index,
+      on_request: option.onRequest || null,
+      request_text: option.onRequest ? (option.requestText.trim() || null) : null,
     }];
   });
 }
@@ -734,8 +763,10 @@ function PriceEditorPageContent(props: PageProps) {
                   const isOpen = openOptionId === option.id;
                   const title = getOptionTitle(option, index);
                   const subtitle = getOptionSubtitle(option);
-                  const optionPriceText = formatPriceWithUnit(option.amount, option.currency, option.unit);
-                  const compareAtText = formatMoney(option.compareAtAmount, option.currency);
+                  const optionPriceText = getOptionHeadlinePrice(option);
+                  const compareAtText = option.onRequest
+                    ? null
+                    : formatMoney(option.compareAtAmount, option.currency);
 
                   return (
                     <article
@@ -784,7 +815,13 @@ function PriceEditorPageContent(props: PageProps) {
                           </div>
                         </div>
                         <div className="shrink-0 text-right">
-                          <div className="font-fraunces text-xl font-semibold leading-none text-[#1F2A1F]">
+                          <div
+                            className={cx(
+                              option.onRequest
+                                ? "text-sm font-semibold italic text-[#556036]"
+                                : "font-fraunces text-xl font-semibold leading-none text-[#1F2A1F]"
+                            )}
+                          >
                             {optionPriceText ?? "Empty"}
                           </div>
                           {compareAtText && (
@@ -800,6 +837,39 @@ function PriceEditorPageContent(props: PageProps) {
 
                       {isOpen && (
                         <div className="border-t border-[#ECEEE4] px-4 py-4">
+                          <div className="mb-3 flex flex-col gap-2 rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] p-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-[#1F2A1F]">
+                                Price on request
+                              </div>
+                              <div className="text-xs leading-snug text-[#6F7A5A]">
+                                Hide the number for this option — buyers will see custom text or “Contact for price”.
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={option.onRequest}
+                              onClick={() =>
+                                updatePriceOption(option.id, { onRequest: !option.onRequest })
+                              }
+                              className={cx(
+                                "relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border transition",
+                                option.onRequest
+                                  ? "border-[#8F9E4F] bg-[#8F9E4F]"
+                                  : "border-[#DADDD0] bg-white"
+                              )}
+                            >
+                              <span
+                                className={cx(
+                                  "inline-block h-5 w-5 rounded-full bg-white shadow transition",
+                                  option.onRequest ? "translate-x-6" : "translate-x-1"
+                                )}
+                              />
+                              <span className="sr-only">Toggle price on request</span>
+                            </button>
+                          </div>
+
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <label className="block">
                               <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Group</span>
@@ -819,54 +889,85 @@ function PriceEditorPageContent(props: PageProps) {
                                 className="min-h-12 w-full rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:border-[#8F9E4F] focus:bg-white"
                               />
                             </label>
-                            <label className="block">
-                              <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Amount</span>
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                step="0.01"
-                                min="0"
-                                value={option.amount}
-                                onChange={(e) => updatePriceOption(option.id, { amount: e.target.value })}
-                                placeholder="300"
-                                className={cx(
-                                  "min-h-12 w-full rounded-lg border bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:bg-white",
-                                  validation.amountValid
-                                    ? "border-[#ECEEE4] focus:border-[#8F9E4F]"
-                                    : "border-[#C96A5B]/50 focus:border-[#C96A5B]"
-                                )}
-                              />
-                            </label>
-                            <label className="block">
-                              <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Old price</span>
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                step="0.01"
-                                min="0"
-                                value={option.compareAtAmount}
-                                onChange={(e) => updatePriceOption(option.id, { compareAtAmount: e.target.value })}
-                                placeholder="75"
-                                className={cx(
-                                  "min-h-12 w-full rounded-lg border bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:bg-white",
-                                  validation.compareAtAmountValid
-                                    ? "border-[#ECEEE4] focus:border-[#8F9E4F]"
-                                    : "border-[#C96A5B]/50 focus:border-[#C96A5B]"
-                                )}
-                              />
-                            </label>
-                            <label className="block">
-                              <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Currency</span>
-                              <select
-                                value={option.currency}
-                                onChange={(e) => updatePriceOption(option.id, { currency: e.target.value as Currency })}
-                                className="min-h-12 w-full rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:border-[#8F9E4F] focus:bg-white"
-                              >
-                                {CURRENCIES.map((c) => (
-                                  <option key={c} value={c}>{c}</option>
-                                ))}
-                              </select>
-                            </label>
+                            {option.onRequest ? (
+                              <label className="block sm:col-span-2">
+                                <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">
+                                  Display text
+                                </span>
+                                <input
+                                  value={option.requestText}
+                                  onChange={(e) => updatePriceOption(option.id, { requestText: e.target.value })}
+                                  placeholder={DEFAULT_REQUEST_TEXT}
+                                  className="min-h-12 w-full rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:border-[#8F9E4F] focus:bg-white"
+                                />
+                                <span className="mt-1 block text-xs text-[#6F7A5A]">
+                                  Leave empty to show “{DEFAULT_REQUEST_TEXT}”.
+                                </span>
+                              </label>
+                            ) : (
+                              <>
+                                <label className="block">
+                                  <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Amount</span>
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="0.01"
+                                    min="0"
+                                    value={option.amount}
+                                    onChange={(e) => updatePriceOption(option.id, { amount: e.target.value })}
+                                    placeholder="300"
+                                    className={cx(
+                                      "min-h-12 w-full rounded-lg border bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:bg-white",
+                                      validation.amountValid
+                                        ? "border-[#ECEEE4] focus:border-[#8F9E4F]"
+                                        : "border-[#C96A5B]/50 focus:border-[#C96A5B]"
+                                    )}
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Old price</span>
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="0.01"
+                                    min="0"
+                                    value={option.compareAtAmount}
+                                    onChange={(e) => updatePriceOption(option.id, { compareAtAmount: e.target.value })}
+                                    placeholder="75"
+                                    className={cx(
+                                      "min-h-12 w-full rounded-lg border bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:bg-white",
+                                      validation.compareAtAmountValid
+                                        ? "border-[#ECEEE4] focus:border-[#8F9E4F]"
+                                        : "border-[#C96A5B]/50 focus:border-[#C96A5B]"
+                                    )}
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Currency</span>
+                                  <select
+                                    value={option.currency}
+                                    onChange={(e) => updatePriceOption(option.id, { currency: e.target.value as Currency })}
+                                    className="min-h-12 w-full rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:border-[#8F9E4F] focus:bg-white"
+                                  >
+                                    {CURRENCIES.map((c) => (
+                                      <option key={c} value={c}>{c}</option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="block">
+                                  <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Charged</span>
+                                  <select
+                                    value={option.unit}
+                                    onChange={(e) => updatePriceOption(option.id, { unit: e.target.value as PriceUnit })}
+                                    className="min-h-12 w-full rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:border-[#8F9E4F] focus:bg-white"
+                                  >
+                                    {PRICE_UNITS.map((u) => (
+                                      <option key={u.value} value={u.value}>{u.label}</option>
+                                    ))}
+                                  </select>
+                                </label>
+                              </>
+                            )}
                             <label className="block">
                               <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Duration</span>
                               <input
@@ -884,18 +985,6 @@ function PriceEditorPageContent(props: PageProps) {
                                     : "border-[#C96A5B]/50 focus:border-[#C96A5B]"
                                 )}
                               />
-                            </label>
-                            <label className="block">
-                              <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Charged</span>
-                              <select
-                                value={option.unit}
-                                onChange={(e) => updatePriceOption(option.id, { unit: e.target.value as PriceUnit })}
-                                className="min-h-12 w-full rounded-lg border border-[#ECEEE4] bg-[#FAFAF7] px-3 text-sm text-[#1F2A1F] outline-none transition focus:border-[#8F9E4F] focus:bg-white"
-                              >
-                                {PRICE_UNITS.map((u) => (
-                                  <option key={u.value} value={u.value}>{u.label}</option>
-                                ))}
-                              </select>
                             </label>
                             <label className="block">
                               <span className="mb-1 block text-xs font-semibold text-[#1F2A1F]">Badge</span>
